@@ -64,7 +64,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-20T04:23:18Z",
+        "generated_at": "2025-11-20T06:00:15Z",
         "max_scale": 0.06818182021379471,
         "min_scale": 0.051948051899671555,
         "recommended_percentages": [
@@ -119,7 +119,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-20T04:23:18Z",
+        "generated_at": "2025-11-20T06:00:15Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -172,7 +172,7 @@
       "asset_type": "texture",
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-20T04:23:18Z",
+        "generated_at": "2025-11-20T06:00:15Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -585,7 +585,7 @@
       ],
       "neighbor_search_distance": 500,
       "scaling_profile": {
-        "generated_at": "2025-11-20T04:23:18Z",
+        "generated_at": "2025-11-20T06:00:15Z",
         "max_scale": 0.1090909019112587,
         "min_scale": 0.1090909019112587,
         "recommended_percentages": [
@@ -715,7 +715,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-20T04:23:18Z",
+        "generated_at": "2025-11-20T06:00:15Z",
         "max_scale": 0.08658009022474289,
         "min_scale": 0.08658009022474289,
         "recommended_percentages": [
@@ -1419,7 +1419,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-20T04:23:18Z",
+        "generated_at": "2025-11-20T06:00:15Z",
         "max_scale": 0.11818180978298187,
         "min_scale": 0.11818180978298187,
         "recommended_percentages": [
@@ -1496,7 +1496,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-20T04:23:18Z",
+        "generated_at": "2025-11-20T06:00:15Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -1574,7 +1574,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-20T04:23:18Z",
+        "generated_at": "2025-11-20T06:00:15Z",
         "max_scale": 0.05000000074505806,
         "min_scale": 0.05000000074505806,
         "recommended_percentages": [
@@ -1737,7 +1737,7 @@
       "neighbor_search_distance": 500,
       "render_radius": 0,
       "scaling_profile": {
-        "generated_at": "2025-11-20T04:23:18Z",
+        "generated_at": "2025-11-20T06:00:15Z",
         "max_scale": 0.38181817531585693,
         "min_scale": 0.38181817531585693,
         "recommended_percentages": [
@@ -1868,6 +1868,23 @@
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
       "render_radius": 0,
+      "scaling_profile": {
+        "generated_at": "2025-11-20T06:00:15Z",
+        "max_scale": 0.9090908765792847,
+        "min_scale": 0.9090908765792847,
+        "recommended_percentages": [
+          100,
+          91,
+          91
+        ],
+        "recommended_steps": [
+          1.0,
+          0.9090908765792847,
+          0.9090908765792847
+        ],
+        "revision": 10642336998275347472,
+        "screen_aspect": 1.7777777777777777
+      },
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
       "shading_screen_brightness_multiplier": 1.0,
@@ -1919,18 +1936,16 @@
       },
       "camera_settings": {
         "background_plane_screen_y": 198.0,
-        "background_texture_max_opacity": 0,
-        "distance_scale_strength": 0.8299999833106995,
-        "foreground_plane_screen_y": 1037.0,
-        "foreground_texture_max_opacity": 0,
-        "foreshorten_strength": 0.7299999594688416,
+        "background_texture_max_opacity": 153,
+        "distance_scale_strength": 0.47999998927116394,
+        "foreground_plane_screen_y": 902.0,
+        "foreground_texture_max_opacity": 108,
+        "foreshorten_strength": 1.149999976158142,
         "grid_depth_offset_px": 880.0,
-        "grid_depth_strength": 0.0,
         "grid_pitch_degrees": 18.91875457763672,
-        "height_at_zoom1": -655.0,
-        "max_zoom_multiplier": 2.999999761581421,
+        "height_high_px": 960.0,
+        "height_low_px": 320.0,
         "min_visible_screen_ratio": 0.006000000052154064,
-        "min_zoom_multiplier": 0.550000011920929,
         "motion_smoothing_max_step": 300.0,
         "motion_smoothing_method": 1,
         "motion_smoothing_snap_threshold": 0.25,
@@ -1946,7 +1961,9 @@
         "scale_hysteresis_margin": 0.029999999329447746,
         "smooth_motion_zoom": true,
         "texture_opacity_falloff_method": 3,
-        "tripod_distance_y": 0.0
+        "tripod_distance_y": 0.0,
+        "zoom_high": 3.0,
+        "zoom_low": 0.75
       },
       "content_root": "MAPS/FORREST",
       "map_assets_data": {
@@ -2049,22 +2066,6 @@
               "max_instances": 1,
               "min_instances": 1,
               "name": "spawn",
-              "required_children": []
-            }
-          ]
-        },
-        {
-          "bounding_extent": 3000.0,
-          "level": 1,
-          "max_rooms": 1,
-          "min_rooms": 0,
-          "name": "layer_1",
-          "ring_radius": 6920.0,
-          "rooms": [
-            {
-              "max_instances": 1,
-              "min_instances": 0,
-              "name": "fountain",
               "required_children": []
             }
           ]
@@ -2262,9 +2263,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
+            132,
             242,
             36,
-            119,
             255
           ],
           "edge_smoothness": 43,
@@ -2315,9 +2316,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            242,
-            241,
+            185,
             36,
+            242,
             255
           ],
           "edge_smoothness": 68,
@@ -2449,6 +2450,31 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-bd44cd31a417"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 5.0,
+                  "name": "trail"
+                }
+              ],
+              "display_name": "New Spawn",
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "position": "Random",
+              "priority": 4,
+              "resolution": 4,
+              "resolve_geometry_to_room_size": false,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-1d25c6b86193"
             }
           ]
         }

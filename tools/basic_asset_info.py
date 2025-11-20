@@ -45,6 +45,8 @@ class Asset:
     size_variants: List[int] = field(default_factory=list)
     type: str = ""
     needs_regen: bool = True
+    is_shaded: bool = False
+    shadow_mask_settings: Dict[str, Any] = field(default_factory=dict)
 
     cache_dir: Optional[str] = None
 
@@ -92,6 +94,9 @@ class Asset:
 
         self.src_path = str(cleaned_entry.get("asset_directory", ""))
         self.type = str(cleaned_entry.get("asset_type", ""))
+        self.is_shaded = bool(cleaned_entry.get("has_shading", False))
+        if isinstance(cleaned_entry.get("shadow_mask_settings"), dict):
+            self.shadow_mask_settings = dict(cleaned_entry.get("shadow_mask_settings"))
 
         scaling_profile = cleaned_entry.get("scaling_profile", {})
         if isinstance(scaling_profile, dict):

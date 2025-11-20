@@ -20,6 +20,7 @@ Core behavior:
       3. If json_path does not exist, create it with snippet and return False.
 """
 
+import hashlib
 import json
 import logging
 import os
@@ -59,6 +60,18 @@ class CacheHelper:
         return obj
 
     @staticmethod
+    def stable_hash(snippet: Any) -> str:
+        """
+        Produce a stable hash for any JSON-serializable snippet.
+
+        The snippet is normalized first, then hashed with BLAKE2b to a short
+        hex string. Useful for lightweight fingerprinting.
+        """
+        normalized = CacheHelper._normalize(snippet)
+        payload = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
+        return hashlib.blake2b(payload.encode("utf-8"), digest_size=16).hexdigest()
+
+    @staticmethod
     def _load_json_file(path: str) -> Any:
         """
         Load JSON from file. Returns None on any error.
@@ -88,7 +101,9 @@ class CacheHelper:
             raise
 
     @staticmethod
-    def compare_and_update_json(snippet: Any, json_path: str) -> bool:
+    def compare_and_update_json(
+        snippet: Any, json_path: str, write_if_different: bool = True
+    ) -> bool:
         """
         Compare a JSON snippet against the content of json_path.
 
@@ -97,24 +112,25 @@ class CacheHelper:
             normalization.
 
             False if the file was missing or did not match. In that case,
-            the file is overwritten or created with the snippet content.
+            the file is overwritten or created with the snippet content unless
+            write_if_different is False.
 
         Behavior:
             - If json_path does not exist:
-                - Write snippet to json_path
-                - Log info about creation
+                - Write snippet to json_path (unless write_if_different is False)
+                - Log info about creation when writing
                 - Return False
 
             - If json_path exists but cannot be parsed as JSON:
                 - Log a warning
-                - Overwrite with snippet
+                - Overwrite with snippet (unless write_if_different is False)
                 - Return False
 
             - If parsed JSON matches snippet (after normalization):
                 - Return True
 
             - If parsed JSON does not match snippet:
-                - Overwrite json_path with snippet
+                - Overwrite json_path with snippet (unless write_if_different is False)
                 - Return False
         """
         snippet_norm = CacheHelper._normalize(snippet)
@@ -123,11 +139,12 @@ class CacheHelper:
 
         # File does not exist or could not be parsed
         if existing is None:
-            LOGGER.info(
-                "JSON cache file '%s' missing or unreadable. Creating or replacing with new snippet.",
-                json_path,
-            )
-            CacheHelper._write_json_file(json_path, snippet_norm)
+            if write_if_different:
+                LOGGER.info(
+                    "JSON cache file '%s' missing or unreadable. Creating or replacing with new snippet.",
+                    json_path,
+                )
+                CacheHelper._write_json_file(json_path, snippet_norm)
             return False
 
         existing_norm = CacheHelper._normalize(existing)
@@ -135,15 +152,18 @@ class CacheHelper:
         if existing_norm == snippet_norm:
             return True
 
-        LOGGER.info(
-            "JSON cache file '%s' differs from provided snippet. Updating cache.",
-            json_path,
-        )
-        CacheHelper._write_json_file(json_path, snippet_norm)
+        if write_if_different:
+            LOGGER.info(
+                "JSON cache file '%s' differs from provided snippet. Updating cache.",
+                json_path,
+            )
+            CacheHelper._write_json_file(json_path, snippet_norm)
         return False
 
 
-def compare_and_update_json(snippet: Any, json_path: str) -> bool:
+def compare_and_update_json(
+    snippet: Any, json_path: str, write_if_different: bool = True
+) -> bool:
     """
     Convenience module level wrapper for CacheHelper.compare_and_update_json.
 
@@ -154,7 +174,12 @@ def compare_and_update_json(snippet: Any, json_path: str) -> bool:
         else:
             print("Cache was updated")
     """
-    return CacheHelper.compare_and_update_json(snippet, json_path)
+    return CacheHelper.compare_and_update_json(snippet, json_path, write_if_different)
+
+
+def stable_hash(snippet: Any) -> str:
+    """Module level wrapper for CacheHelper.stable_hash."""
+    return CacheHelper.stable_hash(snippet)
 
 
 if __name__ == "__main__":

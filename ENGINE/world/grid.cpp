@@ -36,8 +36,6 @@ namespace {
 constexpr float  kDefaultParallaxDt = 1.0f / 60.0f;
 constexpr double kParallaxEpsilon   = 1e-6;
 constexpr double kParallaxMax       = 4000.0;
-// Depth reference as a fraction of the current view height.
-constexpr double kParallaxDepthRefFactor = 0.5;
 
 TransformSmoothingParams sanitize_smoothing(const TransformSmoothingParams& params) {
     TransformSmoothingParams out = params;
@@ -432,31 +430,21 @@ void Grid::update_parallax(const camera& cam, float dt) {
     const float clamped_dt = (std::isfinite(dt) && dt > 0.0f) ? dt : kDefaultParallaxDt;
     ++parallax_frame_counter_;
 
-    // Use camera zoom as a proxy for camera height.
-    const float raw_scale    = cam.get_scale();
-    const double scale_value = std::isfinite(raw_scale)
-        ? static_cast<double>(raw_scale)
-        : 0.0;
-    const double safe_scale  = std::max(kParallaxEpsilon, scale_value);
-
-    const Area& view         = cam.get_camera_area();
-    const double view_width  = std::max(1.0, static_cast<double>(width_from_area(view)));
-    const double view_height = std::max(1.0, static_cast<double>(height_from_area(view)));
-    (void)view_width; // currently unused, kept for future tuning
+    const double camera_height = std::max(kParallaxEpsilon, cam.current_camera_height());
 
     // Realism flag controls whether parallax runs at all.
     parallax_active_ = cam.realism_enabled();
-    if (!parallax_active_) {
+    if (!parallax_active_ || camera_height <= kParallaxEpsilon) {
         clear_parallax_state();
         return;
     }
 
     const auto& settings = cam.realism_settings();
 
-    // Camera pitch (in degrees) from settings, clamped to a sane range.
-    double pitch_deg = std::isfinite(settings.grid_pitch_degrees)
-        ? static_cast<double>(settings.grid_pitch_degrees)
-        : 0.0;
+    // Camera pitch (in degrees) from runtime, clamped to a sane range.
+    double pitch_deg = std::isfinite(cam.current_pitch_degrees())
+        ? static_cast<double>(cam.current_pitch_degrees())
+        : static_cast<double>(settings.grid_pitch_degrees);
     pitch_deg = std::clamp(pitch_deg, -60.0, 60.0);
 
     constexpr double PI_D = 3.14159265358979323846;
@@ -466,14 +454,13 @@ void Grid::update_parallax(const camera& cam, float dt) {
     // Camera position in world coordinates (same basis as world positions).
     const SDL_FPoint center_px = cam.get_view_center_f();
     const double base_x = static_cast<double>(center_px.x);
-    const double base_y = static_cast<double>(center_px.y) + (view_height * 0.5);
+    const double base_y = static_cast<double>(center_px.y);
 
-    // Depth reference shrinks as the camera ascends so distant lines compress toward the horizon.
-    const double depth_ref_base = view_height * kParallaxDepthRefFactor;
-    const double height_factor  = 1.0 / safe_scale;
-    const double pitch_adjust   = 1.0 + std::abs(std::tan(pitch_rad)) * 0.5;
-    const double depth_ref_effect =
-        std::max(kParallaxEpsilon, depth_ref_base * height_factor * pitch_adjust);
+    // Depth reference derived from camera height plus user depth offset.
+    const double depth_ref_effect = std::max(
+        kParallaxEpsilon,
+        camera_height + static_cast<double>(settings.grid_depth_offset_px)
+    );
 
     // Only use parallax_smoothing for temporal smoothing, not for strength.
     TransformSmoothingParams smoothing =
@@ -555,6 +542,7 @@ void Grid::update_parallax(const camera& cam, float dt) {
     constexpr double kParallaxAmountBase = 0.5;
     const double pitch_gain              = 1.0 + 0.5 * std::sin(std::abs(pitch_rad));
     const double parallax_amount         = kParallaxAmountBase * pitch_gain;
+    const double height_projection       = std::max(kParallaxEpsilon, camera_height * std::cos(pitch_rad));
 
     for (int cell_j = cell_j_min; cell_j <= cell_j_max; ++cell_j) {
         const double cell_cy = origin_y_d + (static_cast<double>(cell_j) + 0.5) * step_d;
@@ -567,18 +555,15 @@ void Grid::update_parallax(const camera& cam, float dt) {
             const double dx_world = cell_cx - base_x;
             const double dy_world = cell_cy - base_y;
 
-            const double depth_abs = std::abs(dy_world);
+            const double forward_depth = std::max(
+                kParallaxEpsilon,
+                camera_height + dy_world * std::cos(pitch_rad)
+            );
 
-            // Depth based attenuation:
-            // near the camera: depth_abs small -> depth_gain near 1
-            // far from camera: depth_abs large -> depth_gain falls toward 0
-            const double depth_ratio = depth_abs / depth_ref_effect;
-            const double depth_gain  = 1.0 / (1.0 + depth_ratio);
+            // Depth based attenuation driven by real camera height and pitch.
+            const double depth_gain  = height_projection / (forward_depth + depth_ref_effect);
 
-            // Convert world dx to screen pixels with the same mapping as map_to_screen.
-            const double screen_dx = dx_world / safe_scale;
-
-            double parallax_px = screen_dx * depth_gain * parallax_amount;
+            double parallax_px = dx_world * depth_gain * parallax_amount;
             parallax_px = std::clamp(parallax_px, -kParallaxMax, kParallaxMax);
             const float target = static_cast<float>(parallax_px);
 

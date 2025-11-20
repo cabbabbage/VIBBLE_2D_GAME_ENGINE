@@ -1070,7 +1070,9 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
     auto apply_result = [&](const RouteResult& result, bool& pointer_blocked) -> bool {
         if (result.handled) {
             if (input_) {
-                input_->consumeEvent(event);
+                if (!pointer_based || result.pointer_blocked) {
+                    input_->consumeEvent(event);
+                }
             }
             return true;
         }
@@ -1171,9 +1173,6 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
     }
 
     if (pointer_based && pointer_blocked) {
-        if (input_) {
-            input_->consumeEvent(event);
-        }
         return true;
     }
 

@@ -17,6 +17,7 @@ class Input;
 class FloatSliderWidget;
 class SectionToggleWidget;
 class DiscreteSliderWidget;
+class CameraSideViewPanel;
 
 class CameraUIPanel : public DockableCollapsible {
 public:
@@ -46,6 +47,9 @@ private:
     void apply_settings_to_camera(const camera::RealismSettings& settings, bool effects_enabled, bool depthcue_enabled);
     camera::RealismSettings read_settings_from_ui() const;
     void on_control_value_changed();
+    void refresh_side_view_preview();
+    void update_side_view_visibility(int screen_w, int screen_h);
+    void position_side_view_panel(int screen_w, int screen_h);
 
 private:
     Assets* assets_ = nullptr;
@@ -63,11 +67,9 @@ private:
     std::unique_ptr<SectionToggleWidget> visibility_section_header_;
     std::unique_ptr<SectionToggleWidget> depth_section_header_;
     std::unique_ptr<SectionToggleWidget> depthcue_section_header_;
-    std::unique_ptr<SectionToggleWidget> zoom_section_header_;
     std::unique_ptr<SectionToggleWidget> smoothing_section_header_;
 
-    std::unique_ptr<FloatSliderWidget> height_zoom1_slider_;
-    std::unique_ptr<FloatSliderWidget> depth_offset_slider_;
+    std::unique_ptr<CameraSideViewPanel> side_view_panel_;
     std::unique_ptr<FloatSliderWidget> foreshorten_strength_slider_;
     std::unique_ptr<FloatSliderWidget> distance_strength_slider_;
     std::unique_ptr<FloatSliderWidget> min_render_size_slider_;
@@ -92,17 +94,15 @@ private:
     std::unique_ptr<FloatSliderWidget> motion_snap_slider_;
     std::unique_ptr<FloatSliderWidget> parallax_smoothing_slider_;
     std::unique_ptr<FloatSliderWidget> hysteresis_margin_slider_;
-    std::unique_ptr<FloatSliderWidget> min_zoom_multiplier_slider_;
-    std::unique_ptr<FloatSliderWidget> max_zoom_multiplier_slider_;
-
     bool visibility_section_expanded_ = true;
     bool depth_section_expanded_ = true;
     bool depthcue_section_expanded_ = false;
-    bool zoom_section_expanded_ = false;
     bool smoothing_section_expanded_ = false;
 
     bool last_depthcue_enabled_ = false;
     std::function<void()> open_image_effects_cb_;
+    int last_screen_w_ = 0;
+    int last_screen_h_ = 0;
 
 protected:
     std::string_view lock_settings_namespace() const override { return "camera"; }

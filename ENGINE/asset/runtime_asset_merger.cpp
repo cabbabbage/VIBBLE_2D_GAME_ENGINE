@@ -14,7 +14,6 @@
 #include "Asset.hpp"
 #include "animation.hpp"
 #include "asset_info.hpp"
-#include "asset/surface_utils.hpp"
 
 #include "render/camera.hpp"
 #include "render/render.hpp"
@@ -29,8 +28,6 @@ namespace runtime {
 namespace {
 
 namespace fs = std::filesystem;
-
-constexpr int kAnimationCacheVersion     = 3;
 
 SDL_Surface* texture_to_surface(SDL_Renderer* renderer, SDL_Texture* texture, int width, int height) {
     if (!renderer || !texture || width <= 0 || height <= 0) {
@@ -496,9 +493,6 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
         merged_name = samples.front().asset->info->name + "_merged";
     }
 
-    const std::string animation_id = "merged_static";
-    const fs::path cache_root = fs::path("cache") / merged_name / "animations" / animation_id;
-
     SDL_Surface* base_surface = texture_to_surface(renderer_, composite, base_width, base_height);
     SDL_Surface* base_mask_surface = composite_mask ? texture_to_surface(renderer_, composite_mask, base_width, base_height) : nullptr;
     SDL_DestroyTexture(composite);
@@ -557,42 +551,9 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
 
     // Do not generate foreground/background overlay stacks at runtime.
 
-    const std::vector<int> percent_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps);
-    const std::string cache_root_str = cache_root.string();
+    vibble::log::debug("[AssetMerger] Skipping disk cache writes for merged asset; Python handles cache generation.");
 
-    auto save_stack = [&](const std::string& folder, const std::vector<SDL_Surface*>& stack, const char* label) {
-        if (!CacheManager::save_surface_sequence(folder, stack)) {
-            cleanup_surfaces();
-            throw std::runtime_error(std::string("Failed to save ") + label + " surfaces to '" + folder + "'");
-        }
-    };
-
-    for (std::size_t idx = 0; idx < variant_count; ++idx) {
-        const std::string scale_folder = render_pipeline::ScalingLogic::VariantFolder(cache_root_str, variant_steps, idx);
-        const fs::path scale_root(scale_folder);
-        const std::string normal_folder = (scale_root / "normal").string();
-        const std::string foreground_folder = (scale_root / "foreground").string();
-        const std::string background_folder = (scale_root / "background").string();
-
-        save_stack(normal_folder, variant_surfaces[idx], "normal");
-        // Skip saving overlay layers at runtime.
-    }
-
-    nlohmann::json metadata;
-    metadata["cache_version"] = kAnimationCacheVersion;
-    metadata["frame_count"] = 1;
-    metadata["original_width"] = base_width;
-    metadata["original_height"] = base_height;
-    nlohmann::json steps_json = nlohmann::json::array();
-    for (int step : percent_steps) {
-        steps_json.push_back(step);
-    }
-    metadata["scale_steps"] = std::move(steps_json);
-    metadata["scale_profile_revision"] = static_cast<std::uint64_t>(0);
-    metadata["has_masks"] = (base_mask_surface != nullptr);
-    // Skip recording foreground/background effect hashes for runtime-merged assets.
-    metadata["source_signature"] = asset::surface_utils::compute_surface_signature(variant_surfaces);
-    CacheManager::save_metadata((cache_root / "metadata.json").string(), metadata);
+    const std::string animation_id = "merged_static";
 
     std::vector<Animation::FrameCache> caches(1);
     caches[0].resize(variant_count);

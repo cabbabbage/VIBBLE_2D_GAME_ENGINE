@@ -281,6 +281,11 @@ inline SDL_Texture* Section_Shading::resolve_preview_sprite() const {
 }
 
 inline SDL_Texture* Section_Shading::resolve_preview_mask() const {
+    if (ui_) {
+        if (SDL_Texture* preview = ui_->mask_preview_texture()) {
+            return preview;
+        }
+    }
     const Animation* animation = find_preview_animation();
     if (!animation) {
         return nullptr;

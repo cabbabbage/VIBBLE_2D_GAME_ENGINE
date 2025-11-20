@@ -2290,13 +2290,19 @@ std::shared_ptr<AssetInfo> AssetLibraryUI::consume_selection() {
 }
 
 bool AssetLibraryUI::is_input_blocking_at(int mx, int my) const {
-    if (showing_delete_popup_) {
-        return true;
-    }
     if (!floating_ || !floating_->is_visible() || !floating_->is_expanded())
         return false;
     SDL_Point p{ mx, my };
-    return SDL_PointInRect(&p, &floating_->rect());
+    if (showing_delete_popup_) {
+        if (delete_modal_rect_.w > 0 && delete_modal_rect_.h > 0) {
+            if (SDL_PointInRect(&p, &delete_modal_rect_) == SDL_TRUE) {
+                return true;
+            }
+        }
+        // Fallback to panel bounds while the delete modal is anchored to it
+        return SDL_PointInRect(&p, &floating_->rect()) == SDL_TRUE;
+    }
+    return SDL_PointInRect(&p, &floating_->rect()) == SDL_TRUE;
 }
 
 bool AssetLibraryUI::is_dragging_asset() const {

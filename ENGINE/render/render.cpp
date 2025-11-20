@@ -1509,7 +1509,9 @@ void SceneRenderer::render(){
         const camera::RealismSettings cam_settings = camera_state
             ? camera_state->realism_settings()
             : camera::RealismSettings{};
-        const bool depthcue_setting_enabled = devmode::camera_prefs::load_depthcue_enabled();
+        const bool depthcue_setting_enabled = assets_
+            ? assets_->depth_effects_enabled()
+            : devmode::camera_prefs::load_depthcue_enabled();
         const int effective_quality_percent = assets_
                                                   ? assets_->effective_render_quality_percent() : cam_settings.render_quality_percent;
         const float quality_percent =

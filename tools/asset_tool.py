@@ -29,11 +29,13 @@ Behavior:
         * Load frames from its source directory.
         * For each animation and each size variant:
             - Generate normal, foreground, and background variants.
+            - If the asset has shading enabled, also generate shadow masks.
             - Save to:
                   <cache_root>/<AssetName>/animations/<anim_id>/scale_<pct>/
                       normal/<frame_idx>.png
                       foreground/<frame_idx>.png
                       background/<frame_idx>.png
+                      mask/<frame_idx>.png   (only when has_shading is true)
 """
 
 import json
@@ -42,6 +44,7 @@ import os
 import sys
 import time
 import math
+import shutil
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 
@@ -52,6 +55,8 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from basic_asset_info import Asset
 from apply_color_effects import ApplyEffects
 from effects import Effects, EffectsParser
+from cache_helper import compare_and_update_json, stable_hash
+from shadow_mask import ShadowMaskGenerator, ShadowMaskSettings
 
 
 def normalize_variant_steps(steps):
@@ -155,6 +160,8 @@ def process_frame_task(task):
           bg_path,
           fg_effects,
           bg_effects,
+          mask_path,
+          mask_settings,
         )
 
     fg_effects and bg_effects are Effects instances.
@@ -171,6 +178,8 @@ def process_frame_task(task):
         bg_path,
         fg_effects,
         bg_effects,
+        mask_path,
+        mask_settings,
     ) = task
 
     try:
@@ -195,6 +204,10 @@ def process_frame_task(task):
             # Background
             bg_img = _APPLY_EFFECTS.apply_effects(img, bg_effects)
             bg_img.save(bg_path, "PNG", optimize=False)
+
+            if mask_settings is not None and mask_path:
+                mask_img = ShadowMaskGenerator.generate_mask_image(img, mask_settings)
+                mask_img.save(mask_path, "PNG", optimize=False)
 
         return f"Frame {frame_idx}: OK"
     except Exception as exc:
@@ -266,6 +279,79 @@ class AssetTool:
         if src_path.is_absolute():
             return src_path
         return self._manifest_dir() / src_path
+
+    def _animation_meta_path(self, asset_name: str, anim_id: str) -> Path:
+        """Location for per-animation cache fingerprints."""
+        return (
+            self.cache_root
+            / ".asset_cache"
+            / "animations"
+            / asset_name
+            / f"{anim_id}.json"
+        )
+
+    def _compute_animation_signature(
+        self,
+        asset: Asset,
+        anim_id: str,
+        anim_dir: Path,
+        frame_count: int,
+        orig_w: int,
+        orig_h: int,
+        scale_pcts: List[int],
+        mask_enabled: bool,
+        mask_settings: Optional[Dict],
+    ) -> Dict:
+        """
+        Build a lightweight fingerprint for an animation so we can skip
+        regenerating unchanged animations.
+        """
+        frame_meta = []
+        for frame_idx in range(frame_count):
+            frame_path = anim_dir / f"{frame_idx}.png"
+            if not frame_path.exists():
+                break
+            try:
+                stat_res = frame_path.stat()
+                mtime_ns = getattr(stat_res, "st_mtime_ns", int(stat_res.st_mtime * 1e9))
+                size = stat_res.st_size
+            except OSError:
+                mtime_ns = 0
+                size = -1
+
+            frame_meta.append(
+                {
+                    "idx": frame_idx,
+                    "size": size,
+                    "mtime_ns": mtime_ns,
+                }
+            )
+
+        effects_digest = stable_hash(
+            {
+                "foreground": vars(self.fg_effects),
+                "background": vars(self.bg_effects),
+            }
+        )
+
+        signature_payload = {
+            "asset": asset.name,
+            "animation": anim_id,
+            "source": {
+                "dir": str(anim_dir),
+                "frame_count": frame_count,
+                "orig_size": [orig_w, orig_h],
+                "frames_digest": stable_hash(frame_meta),
+            },
+            "scales": scale_pcts,
+            "mask": {
+                "enabled": mask_enabled,
+                "settings": mask_settings or {},
+            },
+            "effects_digest": effects_digest,
+        }
+        signature_payload["digest"] = stable_hash(signature_payload)
+        return signature_payload
 
     def collect_assets_to_regen(self, asset_list_str: Optional[str]) -> List[Asset]:
         """
@@ -377,6 +463,15 @@ class AssetTool:
 
         print(f"[AssetTool] Regenerating asset '{asset.name}' from {asset_src_dir}")
 
+        mask_enabled = bool(asset.is_shaded)
+        mask_settings = None
+        if mask_enabled:
+            mask_settings = ShadowMaskSettings.sanitize(asset.shadow_mask_settings).as_dict()
+
+        steps = self.get_normalized_steps_for_asset(asset.name)
+        scale_pcts = [round(s * 100) for s in steps]
+        scale_pcts = sorted(set(scale_pcts), reverse=True)
+
         for anim_dir, anim_id in animations:
             frame_count, orig_w, orig_h = scan_animation_frames(anim_dir)
             if frame_count == 0:
@@ -393,19 +488,37 @@ class AssetTool:
             )
 
             anim_cache_root = asset_cache_root / anim_id
+            anim_meta_path = self._animation_meta_path(asset.name, anim_id)
 
-            # Wipe old content
+            anim_signature = self._compute_animation_signature(
+                asset,
+                anim_id,
+                anim_dir,
+                frame_count,
+                orig_w,
+                orig_h,
+                scale_pcts,
+                mask_enabled,
+                mask_settings,
+            )
+
+            cache_match = compare_and_update_json(
+                anim_signature, str(anim_meta_path), write_if_different=False
+            )
+            cache_exists = anim_cache_root.exists()
+
+            if cache_match and cache_exists:
+                print(
+                    f"  Animation '{anim_id}': no changes detected, skipping regeneration."
+                )
+                continue
+
             if anim_cache_root.exists():
-                import shutil
-
                 shutil.rmtree(anim_cache_root)
 
-            # For each size variant
-            steps = self.get_normalized_steps_for_asset(asset.name)
-            scales = [round(s * 100) for s in steps]
-            scales = sorted(set(scales), reverse=True)
+            had_errors = False
 
-            for scale_pct in scales:
+            for scale_pct in scale_pcts:
                 scale_factor = scale_pct / 100.0
                 target_w = max(1, int(orig_w * scale_factor))
                 target_h = max(1, int(orig_h * scale_factor))
@@ -418,11 +531,17 @@ class AssetTool:
                 normal_dir = scale_dir / "normal"
                 fg_dir = scale_dir / "foreground"
                 bg_dir = scale_dir / "background"
+                mask_dir = scale_dir / "mask"
 
                 # Create directories once, not per frame
                 os.makedirs(normal_dir, exist_ok=True)
                 os.makedirs(fg_dir, exist_ok=True)
                 os.makedirs(bg_dir, exist_ok=True)
+                if mask_enabled:
+                    os.makedirs(mask_dir, exist_ok=True)
+                else:
+                    if mask_dir.exists():
+                        shutil.rmtree(mask_dir, ignore_errors=True)
 
                 # Prepare tasks
                 tasks = []
@@ -431,6 +550,7 @@ class AssetTool:
                     normal_path = str(normal_dir / f"{frame_idx}.png")
                     fg_path = str(fg_dir / f"{frame_idx}.png")
                     bg_path = str(bg_dir / f"{frame_idx}.png")
+                    mask_path = str(mask_dir / f"{frame_idx}.png") if mask_enabled else None
 
                     tasks.append(
                         (
@@ -443,6 +563,8 @@ class AssetTool:
                             bg_path,
                             fg_cfg,
                             bg_cfg,
+                            mask_path,
+                            mask_settings,
                         )
                     )
 
@@ -451,7 +573,16 @@ class AssetTool:
                 for fut in as_completed(futures):
                     result = fut.result()
                     if "Error" in result:
+                        had_errors = True
                         print("      " + result, file=sys.stderr)
+
+            if not had_errors:
+                compare_and_update_json(anim_signature, str(anim_meta_path))
+            else:
+                LOGGER.warning(
+                    "Animation '%s' had errors during processing; cache fingerprint not updated.",
+                    anim_id,
+                )
 
         elapsed = time.time() - start_time
         print(f"[AssetTool] Finished asset '{asset.name}' in {elapsed:.2f} seconds")

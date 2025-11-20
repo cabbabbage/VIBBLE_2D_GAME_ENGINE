@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <filesystem>
 
 #include <nlohmann/json_fwd.hpp>
 
@@ -64,6 +65,9 @@ class AssetInfoUI {
     void notify_spawn_group_entry_changed(const nlohmann::json& entry);
     void notify_spawn_group_removed(const std::string& spawn_id);
     void regenerate_shadow_masks();
+    SDL_Texture* mask_preview_texture() const { return mask_preview_texture_; }
+    int mask_preview_width() const { return mask_preview_w_; }
+    int mask_preview_height() const { return mask_preview_h_; }
     // Begin an interactive color sampling flow from the world view
     void begin_color_sampling(const utils::color::RangedColor& current,
                               std::function<void(SDL_Color)> on_sample,
@@ -89,6 +93,10 @@ class AssetInfoUI {
     void clear_section_focus();
     DockableCollapsible* section_at_point(SDL_Point p) const;
     bool handle_section_focus_event(const SDL_Event& e);
+    bool generate_mask_preview();
+    void destroy_mask_preview_texture();
+    bool load_mask_preview_texture(const std::filesystem::path& png_path);
+    std::filesystem::path resolve_mask_preview_frame_path() const;
 
   private:
     bool visible_ = false;
@@ -157,6 +165,11 @@ class AssetInfoUI {
     bool light_drag_active_ = false;
     int  light_drag_index_ = -1;
     int  hovered_light_index_ = -1;
+
+    // Mask preview cache
+    SDL_Texture* mask_preview_texture_ = nullptr;
+    int mask_preview_w_ = 0;
+    int mask_preview_h_ = 0;
 
     // Color sampling state (used by lighting color picker)
     bool color_sampling_active_ = false;

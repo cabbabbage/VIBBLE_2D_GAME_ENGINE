@@ -36,9 +36,14 @@ public:
         // Parallax and perspective sliders
         float foreshorten_strength         = 0.0f;
         float distance_scale_strength      = 0.0f;
-        float height_at_zoom1              = 0.0f;
         float tripod_distance_y            = 0.0f;
         float min_visible_screen_ratio     = 0.015f;
+
+        // Camera height mapping: interpret zoom as a height parameter between two anchors.
+        float zoom_low                     = 0.75f;
+        float zoom_high                    = 3.0f;
+        float height_low_px                = 320.0f;
+        float height_high_px               = 960.0f;
 
         int   render_quality_percent       = 100;
         bool  smooth_motion_zoom           = true;
@@ -53,8 +58,6 @@ public:
         float motion_smoothing_snap_threshold  = 0.0f;
 
         float scale_variant_hysteresis_margin = 0.05f;
-        float min_zoom_multiplier             = 0.7f;
-        float max_zoom_multiplier             = 1.3f;
 
         // Depth cue texture blending
         int   foreground_texture_max_opacity  = 255;
@@ -65,7 +68,6 @@ public:
 
         // New grid depth parameters
         // Strength of vertical grid line compression with depth.
-        float grid_depth_strength            = 0.0f;   // 0 to roughly 1.5
         // How steep the camera is pitched over the floor. Positive means more tilt.
         float grid_pitch_degrees             = 0.0f;   // about -60 to +60
         // Distance (in screen px) to place the depth offset below the bottom of the screen.

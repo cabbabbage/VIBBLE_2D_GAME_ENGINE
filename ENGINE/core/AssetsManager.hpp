@@ -109,6 +109,8 @@ public:
     void on_camera_settings_changed();
     void reload_camera_settings();
     void apply_camera_runtime_settings();
+    void set_depth_effects_enabled(bool enabled);
+    bool depth_effects_enabled() const { return depth_effects_enabled_; }
 
     void focus_camera_on_asset(Asset* a, double zoom_factor = 0.8, int duration_steps = 25);
     // In-world frame editor session for animation frames
@@ -253,6 +255,7 @@ private:
     bool suppress_render_ = false;
     bool force_high_quality_rendering_ = false;
     bool render_dark_mask_enabled_ = true;
+    bool depth_effects_enabled_ = false;
     bool asset_boundary_box_display_enabled_ = false;
     world::Grid world_grid_{};
     std::vector<Asset*> removal_queue;

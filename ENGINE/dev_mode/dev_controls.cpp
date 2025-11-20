@@ -131,19 +131,14 @@ bool consume_modal_event(Modal* modal,
     if (!modal || !modal->visible()) {
         return false;
     }
-    if (modal->handle_event(event)) {
-        if (input) {
+    const bool handled = modal->handle_event(event);
+    const bool pointer_inside = pointer_relevant && modal->is_point_inside(pointer.x, pointer.y);
+    if (handled && input) {
+        if (!pointer_relevant || pointer_inside) {
             input->consumeEvent(event);
         }
-        return true;
     }
-    if (pointer_relevant && modal->is_point_inside(pointer.x, pointer.y)) {
-        if (input) {
-            input->consumeEvent(event);
-        }
-        return true;
-    }
-    return false;
+    return handled || pointer_inside;
 }
 
 std::string normalize_area_name_base(const std::string& raw) {
@@ -631,11 +626,16 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     // Set up grid controls in footer bar
     if (map_mode_ui_) {
         if (auto* footer = map_mode_ui_->get_footer_bar()) {
-            footer->set_depth_effects_enabled(devmode::camera_prefs::load_depthcue_enabled());
+            const bool depth_effects_enabled = assets_
+                ? assets_->depth_effects_enabled()
+                : devmode::camera_prefs::load_depthcue_enabled();
+            footer->set_depth_effects_enabled(depth_effects_enabled);
             footer->set_depth_effects_callbacks([this](bool enabled) {
-                devmode::camera_prefs::save_depthcue_enabled(enabled);
                 if (assets_) {
+                    assets_->set_depth_effects_enabled(enabled);
                     assets_->apply_camera_runtime_settings();
+                } else {
+                    devmode::camera_prefs::save_depthcue_enabled(enabled);
                 }
             });
             footer->set_grid_overlay_enabled(grid_overlay_enabled_);
@@ -1240,7 +1240,6 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     }
     const bool modal_hide_pre = is_modal_blocking_panels();
     const bool layers_panel_open_pre = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
-    // Only hide headers when modals block panels or the layers panel is open
     const bool hide_headers_pre = modal_hide_pre || sliding_headers_hidden_ || layers_panel_open_pre;
     header_rect = hide_headers_pre ? SDL_Rect{0, 0, 0, 0} : asset_filter_.header_rect();
     SDL_Rect usable_rect = FloatingPanelLayoutManager::instance().computeUsableRect(
@@ -1263,26 +1262,25 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     const bool modal_hide = is_modal_blocking_panels();
     const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
     modal_headers_hidden_ = modal_hide;
-    // Suppress header when hidden by sliding panels, modals, or when the Layers panel is open
     const bool hide_headers = modal_hide || sliding_headers_hidden_ || layers_panel_open;
-    // Keep header always visible in dev mode unless explicitly suppressed
     asset_filter_.set_enabled(enabled_);
     asset_filter_.set_header_suppressed(hide_headers);
     apply_header_suppression();
 
-    auto consume = [&](bool used) {
-        if (used && input_) {
-            input_->consumeEvent(event);
+    auto consume_if_handled = [&](bool handled, bool pointer_inside) {
+        if (handled && input_) {
+            if (!pointer_relevant || pointer_inside) {
+                input_->consumeEvent(event);
+            }
         }
-        return used;
-};
+        return handled;
+    };
 
     auto handle_floating_panels = [&]() -> bool {
         auto floating = FloatingDockableManager::instance().open_panels();
         if (floating.empty()) {
             return false;
         }
-        bool used = false;
         SDL_Point wheel_point{0, 0};
         bool wheel_point_valid = false;
         for (auto it = floating.rbegin(); it != floating.rend(); ++it) {
@@ -1290,10 +1288,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
             if (!panel || !panel->is_visible()) {
                 continue;
             }
-            if (panel->handle_event(event)) {
-                used = true;
-                break;
-            }
+            bool pointer_inside = false;
             if (pointer_relevant) {
                 SDL_Point probe = pointer;
                 if (!pointer_event) {
@@ -1303,15 +1298,14 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                     }
                     probe = wheel_point;
                 }
-                if (panel->is_point_inside(probe.x, probe.y)) {
-                    used = true;
-                    break;
-                }
+                pointer_inside = panel->is_point_inside(probe.x, probe.y);
             }
-        }
-        if (used) {
-            consume(true);
-            return true;
+            if (consume_if_handled(panel->handle_event(event), pointer_inside)) {
+                return true;
+            }
+            if (pointer_relevant && pointer_inside) {
+                return true;
+            }
         }
         return false;
     };
@@ -1320,33 +1314,32 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         return;
     }
 
-    // If Layers panel is open, allow ESC to close it and consume the key so main menu does not open
     if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
         if (layers_panel_open && map_mode_ui_) {
             map_mode_ui_->toggle_layers_panel();
-            consume(true);
+            if (input_) {
+                input_->consumeEvent(event);
+            }
             return;
         }
     }
 
-    // Route the rest of header events to AssetFilterBar only when header is not suppressed;
-    // extra grid panel events are handled via its extra event handler.
     if (!asset_filter_.header_suppressed()) {
-        if (pointer_event && consume(asset_filter_.handle_event(event))) {
+        const bool pointer_inside_header = pointer_relevant && enabled_ && asset_filter_.contains_point(pointer.x, pointer.y);
+        if (pointer_event && consume_if_handled(asset_filter_.handle_event(event), pointer_inside_header)) {
             return;
         }
-    }
-    if (pointer_relevant && enabled_ && asset_filter_.contains_point(pointer.x, pointer.y) && !asset_filter_.header_suppressed()) {
-        consume(true);
-        return;
+        if (pointer_inside_header) {
+            return;
+        }
     }
 
     if (trail_suite_ && trail_suite_->is_open()) {
-        if (consume(trail_suite_->handle_event(event))) {
+        bool pointer_inside_trail = pointer_relevant && trail_suite_->contains_point(pointer.x, pointer.y);
+        if (consume_if_handled(trail_suite_->handle_event(event), pointer_inside_trail)) {
             return;
         }
-        if (pointer_relevant && trail_suite_->contains_point(pointer.x, pointer.y)) {
-            consume(true);
+        if (pointer_inside_trail) {
             return;
         }
     }
@@ -1361,20 +1354,15 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         return;
     }
 
-    // Ensure the Dev footer bar always intercepts pointer input first.
-    // This guarantees clicks over the footer (e.g., grid snap widgets)
-    // never leak into scene interactions or the frame editor session.
     if (map_mode_ui_) {
         if (DevFooterBar* footer = map_mode_ui_->get_footer_bar()) {
             if (footer->visible()) {
-                if (consume(footer->handle_event(event))) {
+                const bool pointer_in_footer = pointer_relevant && footer->contains(pointer.x, pointer.y);
+                if (consume_if_handled(footer->handle_event(event), pointer_in_footer)) {
                     return;
                 }
-                if (pointer_relevant) {
-                    if (footer->contains(pointer.x, pointer.y)) {
-                        consume(true);
-                        return;
-                    }
+                if (pointer_in_footer) {
+                    return;
                 }
             }
         }
@@ -1387,8 +1375,10 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                                       room_editor_->is_room_ui_blocking_point(pointer.x, pointer.y);
 
     if (pointer_over_room_ui) {
-        room_editor_->handle_sdl_event(event);
-        consume(true);
+        const bool handled = room_editor_->handle_sdl_event(event);
+        if (handled && input_) {
+            input_->consumeEvent(event);
+        }
         return;
     }
 
@@ -1436,23 +1426,20 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     }
 
     if (camera_panel_ && camera_panel_->is_visible()) {
-        if (consume(camera_panel_->handle_event(event))) {
+        if (consume_if_handled(camera_panel_->handle_event(event), pointer_event_inside_camera)) {
             return;
         }
     }
     if (image_effect_panel_ && image_effect_panel_->is_visible()) {
-        if (consume(image_effect_panel_->handle_event(event))) {
+        if (consume_if_handled(image_effect_panel_->handle_event(event), pointer_event_inside_image_effect_panel)) {
             return;
         }
     }
 
-    // Route events to in-world frame editor session after footer UI has a chance to consume them
     if (frame_editor_session_ && frame_editor_session_->is_active()) {
-        if (consume(frame_editor_session_->handle_event(event))) {
+        if (consume_if_handled(frame_editor_session_->handle_event(event), pointer_relevant)) {
             return;
         }
-        // While frame editor is active, prevent RoomEditor from consuming input to avoid
-        // asset highlighting/selection changes.
     }
 
     bool block_for_camera = pointer_event_inside_camera;
@@ -1460,21 +1447,26 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         block_for_camera = true;
     }
     if (block_for_camera) {
-        consume(true);
+        if (!pointer_relevant && input_) {
+            input_->consumeEvent(event);
+        }
         return;
     }
-    if (pointer_event_inside_image_effect_panel ||
-        ((event.type == SDL_KEYDOWN || event.type == SDL_KEYUP || event.type == SDL_TEXTINPUT) && pointer_over_image_effect_panel_)) {
-        consume(true);
+    const bool block_image_effect = pointer_event_inside_image_effect_panel ||
+        ((event.type == SDL_KEYDOWN || event.type == SDL_KEYUP || event.type == SDL_TEXTINPUT) && pointer_over_image_effect_panel_);
+    if (block_image_effect) {
+        if (!pointer_relevant && input_) {
+            input_->consumeEvent(event);
+        }
         return;
     }
 
     if (!pointer_over_room_ui && map_mode_ui_) {
-        if (consume(map_mode_ui_->handle_event(event))) {
+        const bool pointer_inside_map_mode = pointer_relevant && map_mode_ui_->is_point_inside(pointer.x, pointer.y);
+        if (consume_if_handled(map_mode_ui_->handle_event(event), pointer_inside_map_mode)) {
             return;
         }
-        if (pointer_relevant && map_mode_ui_->is_point_inside(pointer.x, pointer.y)) {
-            consume(true);
+        if (pointer_inside_map_mode) {
             return;
         }
     }
@@ -1485,7 +1477,6 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         return;
     }
 
-    // Room mode: route area interactions without relying on legacy AreaMode
     if (mode_ == Mode::RoomEditor && assets_ && current_room_) {
         const auto& area_list = room_area_polygons();
         auto point_in_poly = [](const std::vector<SDL_Point>& poly, SDL_Point pt) -> bool {
@@ -1496,7 +1487,8 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                 const int yi = poly[i].y;
                 const int xj = poly[j].x;
                 const int yj = poly[j].y;
-                const bool intersect = ((yi > pt.y) != (yj > pt.y)) && (pt.x < (xj - xi) * (pt.y - yi) / (double)(yj - yi + 1e-12) + xi);
+                const bool intersect = ((yi > pt.y) != (yj > pt.y)) &&
+                                       (pt.x < (xj - xi) * (pt.y - yi) / (double)(yj - yi + 1e-12) + xi);
                 if (intersect) inside = !inside;
             }
             return inside;
@@ -1527,12 +1519,16 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                 hovered_room_area_name_ = hovered.name;
                 if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT && event.button.clicks <= 1) {
                     selected_room_area_name_ = hovered.name;
-                    consume(true);
+                    if (input_) {
+                        input_->consumeEvent(event);
+                    }
                     return;
                 }
                 if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {
                     selected_room_area_name_ = hovered.name;
-                    consume(true);
+                    if (input_) {
+                        input_->consumeEvent(event);
+                    }
                     return;
                 }
             } else {
@@ -1546,7 +1542,6 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         }
     }
 
-    // Depth cue on-screen manipulation
     if (depthcue_drag_state_ == DepthCueDragState::None) {
         if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT &&
             camera_panel_ && camera_panel_->is_blur_section_visible() && assets_ && enabled_) {
@@ -1561,14 +1556,18 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                 const camera::RealismSettings& settings = assets_->getView().realism_settings();
                 depthcue_drag_start_y_ = clamp_line(settings.foreground_plane_screen_y);
                 depthcue_drag_mouse_start_ = event.button.y;
-                consume(true);
+                if (input_) {
+                    input_->consumeEvent(event);
+                }
                 return;
             } else if (hover_depthcue_background_) {
                 depthcue_drag_state_ = DepthCueDragState::Background;
                 const camera::RealismSettings& settings = assets_->getView().realism_settings();
                 depthcue_drag_start_y_ = clamp_line(settings.background_plane_screen_y);
                 depthcue_drag_mouse_start_ = event.button.y;
-                consume(true);
+                if (input_) {
+                    input_->consumeEvent(event);
+                }
                 return;
             }
         }
@@ -1591,15 +1590,24 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
             depthcue_drag_state_ = DepthCueDragState::None;
         }
         if (depthcue_drag_state_ != DepthCueDragState::None) {
-            consume(true);
+            if (input_) {
+                input_->consumeEvent(event);
+            }
             return;
         }
     }
 
-    // Do not route to RoomEditor while the in-world Frame Editor is active
-    if (!(frame_editor_session_ && frame_editor_session_->is_active()) && can_route_room_editor && camera_panel_->is_visible() && room_editor_->handle_sdl_event(event)) {
-        consume(true);
-        return;
+    if (!(frame_editor_session_ && frame_editor_session_->is_active()) && can_route_room_editor && camera_panel_->is_visible()) {
+        const bool handled = room_editor_ && room_editor_->handle_sdl_event(event);
+        if (handled && input_) {
+            const bool pointer_inside_room_ui = pointer_relevant && room_editor_ && room_editor_->is_room_ui_blocking_point(pointer.x, pointer.y);
+            if (!pointer_relevant || pointer_inside_room_ui) {
+                input_->consumeEvent(event);
+            }
+        }
+        if (handled) {
+            return;
+        }
     }
 }
 

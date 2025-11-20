@@ -611,9 +611,10 @@ nlohmann::json build_default_map_manifest(const std::string& map_name) {
     map_info["camera_settings"] = nlohmann::json::object({
         {"render_quality_percent", 80},
         {"smooth_motion_zoom", true},
-        {"min_zoom_multiplier", 0.75},
-        {"max_zoom_multiplier", 3.0},
-        {"height_at_zoom1", 320.0},
+        {"zoom_low", 0.75},
+        {"zoom_high", 3.0},
+        {"height_low_px", 320.0},
+        {"height_high_px", 960.0},
         {"distance_scale_strength", 0.1},
         {"foreshorten_strength", 0.5},
         {"motion_smoothing_method", 1},
@@ -901,6 +902,33 @@ int main(int argc, char* argv[]) {
                         std::string("[Main] Exception while regenerating assets: ") +
                         ex.what());
                 // Keep going so the engine can still start even if this fails
+        }
+
+        // Regenerate light caches using the same manifest-driven flow
+        try {
+                std::string manifest_path_str = manifest::manifest_path();
+                vibble::log::info("[Main] Regenerating lights via light_tool.py...");
+#if defined(_WIN32)
+                std::string light_cmd = "python tools\\light_tool.py \"" +
+                                        manifest_path_str + "\" cache";
+#else
+                std::string light_cmd = "python tools/light_tool.py \"" +
+                                        manifest_path_str + "\" cache";
+#endif
+                int light_ret = std::system(light_cmd.c_str());
+                if (light_ret != 0) {
+                        vibble::log::warn(
+                                std::string("[Main] Light regeneration script returned non-zero: ") +
+                                std::to_string(light_ret));
+                } else {
+                        vibble::log::info("[Main] Light regeneration complete.");
+                }
+        } catch (const std::exception& ex) {
+                vibble::log::warn(
+                        std::string("[Main] Exception while running light_tool.py: ") +
+                        ex.what());
+        } catch (...) {
+                vibble::log::warn("[Main] Unknown exception while running light_tool.py");
         }
 
         if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {

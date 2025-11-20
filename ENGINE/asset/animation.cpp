@@ -3,7 +3,6 @@
 #include "asset/asset_types.hpp"
 #include "asset/surface_utils.hpp"
 #include "utils/cache_manager.hpp"
-#include "utils/generate_faded_mask.hpp"
 #include "render/render.hpp"
 #include "utils/loading_status_notifier.hpp"
 #include "utils/log.hpp"
@@ -174,6 +173,7 @@ struct VariantLayerPaths {
         std::string normal_folder;
         std::string foreground_folder;
         std::string background_folder;
+        std::string mask_folder;
 };
 
 VariantLayerPaths build_variant_layer_paths(const std::string& cache_folder,
@@ -185,6 +185,7 @@ VariantLayerPaths build_variant_layer_paths(const std::string& cache_folder,
         paths.normal_folder     = (scale_root / "normal").string();
         paths.foreground_folder = (scale_root / "foreground").string();
         paths.background_folder = (scale_root / "background").string();
+        paths.mask_folder       = (scale_root / "mask").string();
         
         // Log constructed paths for debugging
         std::cout << "[Animation] build_variant_layer_paths idx=" << index 
@@ -1042,9 +1043,10 @@ void Animation::load(const std::string& trigger,
                 std::vector<std::vector<SDL_Surface*>> variant_surfaces(variant_count);
                 std::vector<std::vector<SDL_Surface*>> foreground_surfaces(variant_count);
                 std::vector<std::vector<SDL_Surface*>> background_surfaces(variant_count);
-                GenerateFadedMask::MaskVariants mask_surfaces;
+                std::vector<std::vector<SDL_Surface*>> mask_surfaces(variant_count);
 
                 bool all_surfaces_loaded = true;
+                const bool needs_masks = info.is_shaded;
                 for (std::size_t idx = 0; idx < variant_count; ++idx) {
                         const VariantLayerPaths& paths = variant_paths[idx];
                         std::vector<SDL_Surface*> loaded;
@@ -1071,6 +1073,18 @@ void Animation::load(const std::string& trigger,
                             static_cast<int>(bg_loaded.size()) == frame_count) {
                                 background_surfaces[idx] = std::move(bg_loaded);
                         }
+
+                        // Load mask sequences if present
+                        std::vector<SDL_Surface*> mask_loaded;
+                        if (CacheManager::load_surface_sequence(paths.mask_folder, frame_count, mask_loaded) &&
+                            static_cast<int>(mask_loaded.size()) == frame_count) {
+                                mask_surfaces[idx] = std::move(mask_loaded);
+                        } else if (needs_masks) {
+                                all_surfaces_loaded = false;
+                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                          << " missing masks for variant " << idx << " at " << paths.mask_folder << "\n";
+                                break;
+                        }
                 }
 
                 if (!all_surfaces_loaded || variant_surfaces[0].empty() || !variant_surfaces[0][0]) {
@@ -1079,6 +1093,8 @@ void Animation::load(const std::string& trigger,
                         free_surface_lists(variant_surfaces);
                         free_surface_lists(foreground_surfaces);
                         free_surface_lists(background_surfaces);
+                        free_surface_lists(mask_surfaces);
+                        cache_invalid_detected = true;
                         flush_diagnostics();
                         return;
                 }
@@ -1106,9 +1122,7 @@ void Animation::load(const std::string& trigger,
                         scaled_sprite_h = fallback_h;
                 }
 
-                // Initialize mask surfaces (disabled for cached loading)
-                mask_surfaces.resize(variant_surfaces.size());
-                bool masks_loaded_from_cache = false;
+                // Mask load handled above for cache path
 
                 frames.clear();
                 mask_frames.clear();
@@ -1159,13 +1173,25 @@ void Animation::load(const std::string& trigger,
                                 }
                                 cache_entry.background_textures[variant_idx] = bg_tex;
 
-                                // Masks disabled for cached loading
-                                cache_entry.mask_textures[variant_idx] = nullptr;
-                                cache_entry.mask_widths[variant_idx]   = 0;
-                                cache_entry.mask_heights[variant_idx]  = 0;
+                                SDL_Texture* mask_tex = nullptr;
+                                if (frame_idx < mask_surfaces[variant_idx].size() && mask_surfaces[variant_idx][frame_idx]) {
+                                        SDL_Surface* mask_surface = mask_surfaces[variant_idx][frame_idx];
+                                        mask_tex = CacheManager::surface_to_texture(renderer, mask_surface);
+                                        if (mask_tex) {
+                                                apply_scale_mode(mask_tex, info);
+                                        }
+                                        int mask_w = mask_surface->w;
+                                        int mask_h = mask_surface->h;
+                                        cache_entry.mask_widths[variant_idx]  = mask_w;
+                                        cache_entry.mask_heights[variant_idx] = mask_h;
+                                } else {
+                                        cache_entry.mask_widths[variant_idx]  = 0;
+                                        cache_entry.mask_heights[variant_idx] = 0;
+                                }
+                                cache_entry.mask_textures[variant_idx] = mask_tex;
 
                                 if (variant_idx == 0) {
-                                        variant0_mask = nullptr;
+                                        variant0_mask = mask_tex;
                                 }
                                 if (variant_idx == 0) {
                                         frames.push_back(tex_variant);
@@ -1178,6 +1204,7 @@ void Animation::load(const std::string& trigger,
                 free_surface_lists(variant_surfaces);
                 free_surface_lists(foreground_surfaces);
                 free_surface_lists(background_surfaces);
+                free_surface_lists(mask_surfaces);
 
                 // Flip processing disabled for cached loading
                 if (reverse_source && !frames.empty()) {

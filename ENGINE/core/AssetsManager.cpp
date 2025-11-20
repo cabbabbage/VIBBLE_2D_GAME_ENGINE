@@ -10,6 +10,7 @@
 #include "asset/asset_types.hpp"
 #include "audio/audio_engine.hpp"
 #include "dev_mode/dev_controls.hpp"
+#include "dev_mode/depth_cue_settings.hpp"
 #include "render/render.hpp"
 #include "world/chunk.hpp"
 #include "map_generation/room.hpp"
@@ -181,6 +182,7 @@ Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
 
     hydrate_map_info_sections();
     load_camera_settings_from_json();
+    depth_effects_enabled_ = devmode::camera_prefs::load_depthcue_enabled();
 
     InitializeAssets::initialize(*this, std::move(loaded), std::move(rooms), screen_width_, screen_height_, screen_center_x, screen_center_y, map_radius);
 
@@ -440,6 +442,14 @@ void Assets::apply_camera_runtime_settings() {
     const camera::RealismSettings& settings = camera_.realism_settings();
     update_motion_smoothing_settings(settings);
     // Image effects are now handled by Python, so no longer setting global state here
+}
+
+void Assets::set_depth_effects_enabled(bool enabled) {
+    if (depth_effects_enabled_ == enabled) {
+        return;
+    }
+    depth_effects_enabled_ = enabled;
+    devmode::camera_prefs::save_depthcue_enabled(enabled);
 }
 
 TransformSmoothingParams Assets::sanitize_smoothing(const TransformSmoothingParams& params) {

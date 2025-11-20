@@ -25,6 +25,7 @@
 
 namespace {
     constexpr float kMinTau = 1e-4f;
+    constexpr float kPi     = 3.14159265358979323846f;
 
     float rate_from_tau(float tau) {
         if (!std::isfinite(tau) || tau <= kMinTau) {
@@ -38,6 +39,16 @@ namespace {
             return 0.0f;
         }
         return 1.0f / rate;
+    }
+
+    float interpolate_height_for_ui(const camera::RealismSettings& settings, float zoom) {
+        const float low_zoom  = std::max(0.0001f, settings.zoom_low);
+        const float high_zoom = std::max(low_zoom + 0.0001f, settings.zoom_high);
+        const float low_h     = std::max(1.0f, settings.height_low_px);
+        const float high_h    = std::max(low_h, settings.height_high_px);
+        float t = (zoom - low_zoom) / std::max(0.0001f, high_zoom - low_zoom);
+        t = std::clamp(t, 0.0f, 1.0f);
+        return low_h + (high_h - low_h) * t;
     }
 
     int method_to_index(TransformSmoothingMethod method) {
@@ -93,6 +104,332 @@ private:
     std::string text_{};
     DMLabelStyle style_{};
     SDL_Rect rect_{0,0,0,DMCheckbox::height()};
+};
+
+struct CameraDepthViewValues {
+    float zoom_low         = 1.0f;
+    float zoom_high        = 2.0f;
+    float height_low_px    = 320.0f;
+    float height_high_px   = 960.0f;
+    float current_zoom     = 1.0f;
+    float current_height   = 320.0f;
+    float pitch_degrees    = 0.0f;
+    float depth_offset_px  = 240.0f;
+};
+
+class CameraSideViewWidget : public Widget {
+public:
+    using ChangeCallback = std::function<void(const CameraDepthViewValues&)>;
+    explicit CameraSideViewWidget(ChangeCallback cb) : on_change_(std::move(cb)) {}
+
+    void set_rect(const SDL_Rect& r) override { rect_ = r; }
+    const SDL_Rect& rect() const override { return rect_; }
+    int height_for_width(int) const override { return preferred_height_; }
+    bool handle_event(const SDL_Event& e) override {
+        if (!render_rect_valid_) {
+            return false;
+        }
+        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+            if (is_over_depth_handle(e.button.x, e.button.y)) {
+                dragging_depth_offset_ = true;
+                update_depth_offset_from_pointer(e.button.x, e.button.y);
+                return true;
+            }
+        }
+        if (e.type == SDL_MOUSEMOTION && dragging_depth_offset_) {
+            update_depth_offset_from_pointer(e.motion.x, e.motion.y);
+            return true;
+        }
+        if (e.type == SDL_MOUSEBUTTONUP && dragging_depth_offset_) {
+            dragging_depth_offset_ = false;
+            return true;
+        }
+        return false;
+    }
+    void render(SDL_Renderer* renderer) const override {
+        if (!renderer) return;
+        if (rect_.w <= 0 || rect_.h <= 0) return;
+        render_rect_valid_ = false;
+
+        SDL_SetRenderDrawColor(renderer, 18, 22, 30, 255);
+        SDL_RenderFillRect(renderer, &rect_);
+        SDL_SetRenderDrawColor(renderer, 64, 82, 102, 255);
+        SDL_RenderDrawRect(renderer, &rect_);
+
+        const int inner_pad = padding_;
+        SDL_Rect content{
+            rect_.x + inner_pad,
+            rect_.y + inner_pad,
+            rect_.w - inner_pad * 2,
+            rect_.h - inner_pad * 2
+        };
+        if (content.w <= 0 || content.h <= 0) return;
+        render_rect_valid_ = true;
+
+        const int icon_size = std::max(18, static_cast<int>(std::round(std::min(content.w, content.h) * 0.15f)));
+
+        const float span_above = std::max({values_.height_low_px, values_.height_high_px, values_.current_height, 1.0f});
+        const float span_below = std::max(1.0f, values_.depth_offset_px);
+        const float total_span = std::max(1.0f, span_above + span_below);
+        const float unit_to_px = static_cast<float>(content.h) / total_span;
+
+        const int ground_y  = content.y + static_cast<int>(std::lround(span_below * unit_to_px));
+        const int subject_y = ground_y - icon_size;
+
+        auto height_to_y = [&](float h) {
+            const float clamped = std::max(0.0f, h);
+            return ground_y - static_cast<int>(std::lround(clamped * unit_to_px));
+        };
+
+        // Depth origin (grid offset) line + handle
+        depth_handle_rect_ = SDL_Rect{0,0,0,0};
+        int depth_origin_y = ground_y + static_cast<int>(std::lround(values_.depth_offset_px * unit_to_px));
+        depth_origin_y = std::clamp(depth_origin_y, content.y, content.y + content.h - 1);
+        const int handle_w = std::max(10, icon_size / 2);
+        const int handle_h = std::max(10, icon_size / 2);
+        depth_handle_rect_ = SDL_Rect{
+            content.x + content.w - handle_w - inner_pad / 2,
+            depth_origin_y - handle_h / 2,
+            handle_w,
+            handle_h
+        };
+
+        SDL_SetRenderDrawColor(renderer, 78, 108, 146, 110);
+        SDL_RenderDrawLine(renderer, content.x, depth_origin_y, content.x + content.w, depth_origin_y);
+        SDL_SetRenderDrawColor(renderer, 128, 180, 230, 210);
+        SDL_RenderFillRect(renderer, &depth_handle_rect_);
+        SDL_SetRenderDrawColor(renderer, 30, 38, 48, 255);
+        SDL_RenderDrawRect(renderer, &depth_handle_rect_);
+
+        // Height band from min to max camera height
+        const int height_low_y  = height_to_y(values_.height_low_px);
+        const int height_high_y = height_to_y(values_.height_high_px);
+        SDL_Rect height_band{
+            content.x + content.w / 2 - icon_size / 3,
+            std::min(height_low_y, height_high_y),
+            std::max(icon_size / 2, content.w / 14),
+            std::max(4, std::abs(height_low_y - height_high_y))
+        };
+        SDL_SetRenderDrawColor(renderer, 82, 156, 214, 40);
+        SDL_RenderFillRect(renderer, &height_band);
+        SDL_SetRenderDrawColor(renderer, 104, 174, 228, 150);
+        SDL_RenderDrawRect(renderer, &height_band);
+
+        // Ground line
+        SDL_SetRenderDrawColor(renderer, 120, 144, 168, 255);
+        SDL_RenderDrawLine(renderer, content.x, ground_y, content.x + content.w, ground_y);
+
+        // Small grid markers up the height band
+        const int tick_count = 5;
+        for (int i = 0; i <= tick_count; ++i) {
+            const float t = static_cast<float>(i) / static_cast<float>(tick_count);
+            const float height_sample = values_.height_low_px + (values_.height_high_px - values_.height_low_px) * t;
+            const int y = height_to_y(height_sample);
+            SDL_RenderDrawLine(renderer, content.x, y, content.x + content.w, y);
+        }
+
+        const DMLabelStyle label_style = DMStyles::Label();
+        auto draw_label = [&](const std::string& text, int x, int y) {
+            DrawLabelText(renderer, text, x, y, label_style);
+        };
+
+        // Info labels
+        char buffer[128] = {0};
+        std::snprintf(buffer, sizeof(buffer), "Zoom %.2fx · Pitch %.1f°", values_.current_zoom, values_.pitch_degrees);
+        draw_label(buffer, content.x, content.y);
+        std::snprintf(buffer, sizeof(buffer), "Height %.0f-%.0f px · Offset %.0f px", values_.height_low_px, values_.height_high_px, values_.depth_offset_px);
+        draw_label(buffer, content.x, content.y + label_style.font_size + 4);
+
+        // Icon helpers
+        auto fill_circle = [&](int cx, int cy, int r, SDL_Color color) {
+            SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+            for (int dy = -r; dy <= r; ++dy) {
+                int span = static_cast<int>(std::sqrt(std::max(0, r * r - dy * dy)));
+                SDL_RenderDrawLine(renderer, cx - span, cy + dy, cx + span, cy + dy);
+            }
+        };
+
+        auto draw_camera_icon = [&](int cx, int cy) {
+            SDL_Rect body{
+                cx - icon_size / 2,
+                cy - icon_size / 2,
+                icon_size,
+                icon_size
+            };
+            SDL_SetRenderDrawColor(renderer, 66, 104, 160, 235);
+            SDL_RenderFillRect(renderer, &body);
+            SDL_SetRenderDrawColor(renderer, 18, 22, 30, 255);
+            SDL_RenderDrawRect(renderer, &body);
+            const int lens_r = std::max(2, icon_size / 6);
+            fill_circle(body.x + body.w - lens_r * 2, body.y + body.h / 2, lens_r, SDL_Color{214, 238, 255, 255});
+            SDL_SetRenderDrawColor(renderer, 66, 104, 160, 235);
+            SDL_RenderDrawLine(renderer, body.x, body.y + body.h - 2, body.x - icon_size / 3, body.y + body.h + icon_size / 3);
+            SDL_RenderDrawLine(renderer, body.x + body.w, body.y + body.h - 2, body.x + body.w + icon_size / 3, body.y + body.h + icon_size / 3);
+        };
+
+        auto draw_subject_icon = [&](int cx, int cy) {
+            const int head_r = std::max(3, icon_size / 6);
+            const int head_cy = cy + head_r / 2;
+            fill_circle(cx, head_cy, head_r, SDL_Color{238, 200, 120, 255});
+            SDL_Rect torso{
+                cx - icon_size / 6,
+                head_cy + head_r,
+                icon_size / 3,
+                icon_size - head_r
+            };
+            SDL_SetRenderDrawColor(renderer, 120, 190, 255, 230);
+            SDL_RenderFillRect(renderer, &torso);
+            SDL_SetRenderDrawColor(renderer, 32, 42, 56, 255);
+            SDL_RenderDrawRect(renderer, &torso);
+        };
+
+        const int camera_y = height_to_y(values_.current_height);
+        const int camera_x = content.x + content.w / 4;
+        const int subject_x = content.x + (content.w * 3) / 4;
+
+        // Pitch line hint from camera
+        const float clamped_pitch = std::clamp(values_.pitch_degrees, -85.0f, 85.0f);
+        const float pitch_radians = clamped_pitch * (kPi / 180.0f);
+        const int line_length = std::max(icon_size * 2, content.w / 5);
+        const int pitch_dx = line_length;
+        const int pitch_dy = static_cast<int>(std::round(std::tan(pitch_radians) * static_cast<float>(line_length) * 0.35f));
+        SDL_SetRenderDrawColor(renderer, 154, 203, 255, 180);
+        SDL_RenderDrawLine(renderer, camera_x, camera_y, camera_x + pitch_dx, camera_y - pitch_dy);
+
+        draw_camera_icon(camera_x, camera_y);
+        draw_subject_icon(subject_x, subject_y);
+    }
+    bool wants_full_row() const override { return true; }
+
+    void set_values(const CameraDepthViewValues& v) { values_ = v; }
+    CameraDepthViewValues values() const { return values_; }
+    void set_on_change(ChangeCallback cb) { on_change_ = std::move(cb); }
+    void set_preferred_height(int h) { preferred_height_ = std::max(160, h); }
+
+private:
+    void notify() { if (on_change_) on_change_(values_); }
+
+    bool is_over_depth_handle(int px, int py) const {
+        if (depth_handle_rect_.w <= 0 || depth_handle_rect_.h <= 0) return false;
+        const int pad = std::max(6, depth_handle_rect_.h / 2);
+        SDL_Rect hit{
+            depth_handle_rect_.x - pad,
+            depth_handle_rect_.y - pad,
+            depth_handle_rect_.w + pad * 2,
+            depth_handle_rect_.h + pad * 2
+        };
+        return px >= hit.x && px <= hit.x + hit.w &&
+               py >= hit.y && py <= hit.y + hit.h;
+    }
+
+    void update_depth_offset_from_pointer(int px, int py) {
+        if (!render_rect_valid_ || depth_handle_rect_.w <= 0) return;
+        const int inner_pad = padding_;
+        SDL_Rect content{
+            rect_.x + inner_pad,
+            rect_.y + inner_pad,
+            rect_.w - inner_pad * 2,
+            rect_.h - inner_pad * 2
+        };
+        if (content.w <= 0 || content.h <= 0) return;
+
+        const float span_above = std::max({values_.height_low_px, values_.height_high_px, values_.current_height, 1.0f});
+        const float span_below = std::max(1.0f, values_.depth_offset_px);
+        const float total_span = std::max(1.0f, span_above + span_below);
+        const float unit_to_px = static_cast<float>(content.h) / total_span;
+        const int ground_y  = content.y + static_cast<int>(std::lround(span_below * unit_to_px));
+        const int clamped_py = std::clamp(py, content.y, content.y + content.h);
+        const float offset_px = std::max(0.0f, static_cast<float>(clamped_py - ground_y) / unit_to_px);
+        values_.depth_offset_px = std::clamp(offset_px, 0.0f, 4000.0f);
+        notify();
+    }
+
+    SDL_Rect rect_{0,0,0,0};
+    int preferred_height_ = 320;
+    int padding_ = 14;
+    CameraDepthViewValues values_{};
+    ChangeCallback on_change_{};
+    mutable SDL_Rect depth_handle_rect_{0,0,0,0};
+    mutable bool render_rect_valid_ = false;
+    bool dragging_depth_offset_ = false;
+};
+
+class CameraSideViewPanel : public DockableCollapsible {
+public:
+    CameraSideViewPanel()
+        : DockableCollapsible("Depth Side View", true, 0, 0) {
+        widget_ = std::make_unique<CameraSideViewWidget>(
+            [this](const CameraDepthViewValues& vals) {
+                values_ = vals;
+                if (on_change_) {
+                    on_change_(vals);
+                }
+            });
+        if (widget_) {
+            widget_->set_preferred_height(340);
+        }
+        set_rows({ { widget_.get() } });
+        set_padding(DMSpacing::panel_padding());
+        set_row_gap(DMSpacing::item_gap());
+        set_col_gap(DMSpacing::small_gap());
+        set_close_button_enabled(true);
+        set_scroll_enabled(false);
+        set_floating_content_width(520);
+        set_visible_height(360);
+        set_cell_width(480);
+        set_expanded(true);
+        set_visible(false);
+    }
+
+    void set_values(const CameraDepthViewValues& values) {
+        values_ = values;
+        if (widget_) widget_->set_values(values);
+    }
+
+    CameraDepthViewValues values() const {
+        if (widget_) return widget_->values();
+        return values_;
+    }
+
+    void set_on_change(CameraSideViewWidget::ChangeCallback cb) {
+        on_change_ = std::move(cb);
+        if (widget_) widget_->set_on_change(on_change_);
+    }
+
+    bool handle_event(const SDL_Event& e) override {
+        bool handled = DockableCollapsible::handle_event(e);
+        if (handled) {
+            return true;
+        }
+        if (!is_visible()) {
+            return false;
+        }
+        int px = 0;
+        int py = 0;
+        bool have_point = false;
+        switch (e.type) {
+        case SDL_MOUSEMOTION:
+            px = e.motion.x; py = e.motion.y; have_point = true; break;
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP:
+            px = e.button.x; py = e.button.y; have_point = true; break;
+        case SDL_MOUSEWHEEL:
+            SDL_GetMouseState(&px, &py);
+            have_point = true;
+            break;
+        default:
+            break;
+        }
+        if (have_point) {
+            return is_point_inside(px, py);
+        }
+        return false;
+    }
+
+private:
+    CameraDepthViewValues values_{};
+    std::unique_ptr<CameraSideViewWidget> widget_;
+    CameraSideViewWidget::ChangeCallback on_change_{};
 };
 
 class PanelBannerWidget : public Widget {
@@ -436,12 +773,10 @@ void CameraUIPanel::open() {
     visibility_section_expanded_ = false;
     depth_section_expanded_ = false;
     depthcue_section_expanded_ = false;
-    zoom_section_expanded_ = false;
     smoothing_section_expanded_ = false;
     if (visibility_section_header_) visibility_section_header_->set_expanded(false);
     if (depth_section_header_)      depth_section_header_->set_expanded(false);
     if (depthcue_section_header_)   depthcue_section_header_->set_expanded(false);
-    if (zoom_section_header_)       zoom_section_header_->set_expanded(false);
     if (smoothing_section_header_)  smoothing_section_header_->set_expanded(false);
     rebuild_rows();
     sync_from_camera();
@@ -449,6 +784,9 @@ void CameraUIPanel::open() {
 
 void CameraUIPanel::close() {
     set_visible(false);
+    if (side_view_panel_) {
+        side_view_panel_->close();
+    }
 }
 
 void CameraUIPanel::toggle() {
@@ -456,16 +794,27 @@ void CameraUIPanel::toggle() {
     if (is_visible()) {
         suppress_apply_once_ = true;
         sync_from_camera();
+    } else if (side_view_panel_) {
+        side_view_panel_->close();
     }
 }
 
 bool CameraUIPanel::is_point_inside(int x, int y) const {
+    if (side_view_panel_ && side_view_panel_->is_visible() && side_view_panel_->is_point_inside(x, y)) {
+        return true;
+    }
     return DockableCollapsible::is_point_inside(x, y);
 }
 
 void CameraUIPanel::update(const Input& input, int screen_w, int screen_h) {
+    last_screen_w_ = screen_w;
+    last_screen_h_ = screen_h;
     const bool previously_visible = was_visible_;
     DockableCollapsible::update(input, screen_w, screen_h);
+    update_side_view_visibility(screen_w, screen_h);
+    if (side_view_panel_ && side_view_panel_->is_visible()) {
+        side_view_panel_->update(input, screen_w, screen_h);
+    }
     const bool currently_visible = is_visible();
     if (currently_visible && !previously_visible) {
         // Panel might be shown via base-class helpers; always resync when this happens.
@@ -474,12 +823,10 @@ void CameraUIPanel::update(const Input& input, int screen_w, int screen_h) {
         visibility_section_expanded_ = false;
         depth_section_expanded_ = false;
         depthcue_section_expanded_ = false;
-        zoom_section_expanded_ = false;
         smoothing_section_expanded_ = false;
         if (visibility_section_header_) visibility_section_header_->set_expanded(false);
         if (depth_section_header_)      depth_section_header_->set_expanded(false);
         if (depthcue_section_header_)   depthcue_section_header_->set_expanded(false);
-        if (zoom_section_header_)       zoom_section_header_->set_expanded(false);
         if (smoothing_section_header_)  smoothing_section_header_->set_expanded(false);
         rebuild_rows();
         sync_from_camera();
@@ -490,15 +837,45 @@ void CameraUIPanel::update(const Input& input, int screen_w, int screen_h) {
     if (!assets_) return;
     if (suppress_apply_once_) {
         suppress_apply_once_ = false;
+        refresh_side_view_preview();
         return;
     }
+    refresh_side_view_preview();
     apply_settings_if_needed();
 }
 
 bool CameraUIPanel::handle_event(const SDL_Event& e) {
+    if (side_view_panel_ && side_view_panel_->is_visible()) {
+        bool handled = side_view_panel_->handle_event(e);
+        if (!handled) {
+            int px = 0;
+            int py = 0;
+            bool pointer_event = false;
+            switch (e.type) {
+            case SDL_MOUSEMOTION:
+                px = e.motion.x; py = e.motion.y; pointer_event = true; break;
+            case SDL_MOUSEBUTTONDOWN:
+            case SDL_MOUSEBUTTONUP:
+                px = e.button.x; py = e.button.y; pointer_event = true; break;
+            case SDL_MOUSEWHEEL:
+                SDL_GetMouseState(&px, &py);
+                pointer_event = true;
+                break;
+            default:
+                break;
+            }
+            if (pointer_event && side_view_panel_->is_point_inside(px, py)) {
+                handled = true;
+            }
+        }
+        if (handled) {
+            return true;
+        }
+    }
     if (!is_visible()) return false;
     bool used = DockableCollapsible::handle_event(e);
     if (used) {
+        refresh_side_view_preview();
         apply_settings_if_needed();
     }
     return used;
@@ -506,8 +883,12 @@ bool CameraUIPanel::handle_event(const SDL_Event& e) {
 
 void CameraUIPanel::render(SDL_Renderer* renderer) const {
     if (!renderer) return;
-    if (!is_visible()) return;
-    DockableCollapsible::render(renderer);
+    if (is_visible()) {
+        DockableCollapsible::render(renderer);
+    }
+    if (side_view_panel_ && side_view_panel_->is_visible()) {
+        side_view_panel_->render(renderer);
+    }
     // Ensure expanded dropdown options render above the panel
     DMDropdown::render_active_options(renderer);
 }
@@ -529,8 +910,6 @@ void CameraUIPanel::sync_from_camera() {
     last_realism_enabled_ = effects_enabled;
 
     if (min_render_size_slider_) min_render_size_slider_->set_value(last_settings_.min_visible_screen_ratio);
-    if (height_zoom1_slider_) height_zoom1_slider_->set_value(last_settings_.height_at_zoom1);
-    if (depth_offset_slider_) depth_offset_slider_->set_value(last_settings_.grid_depth_offset_px);
     if (foreshorten_strength_slider_) foreshorten_strength_slider_->set_value(last_settings_.foreshorten_strength);
     if (distance_strength_slider_) distance_strength_slider_->set_value(last_settings_.distance_scale_strength);
     if (render_quality_slider_) render_quality_slider_->set_value(last_settings_.render_quality_percent);
@@ -547,8 +926,6 @@ void CameraUIPanel::sync_from_camera() {
         parallax_smoothing_slider_->set_value(slider_value);
     }
     if (hysteresis_margin_slider_) hysteresis_margin_slider_->set_value(last_settings_.scale_variant_hysteresis_margin);
-    if (min_zoom_multiplier_slider_) min_zoom_multiplier_slider_->set_value(last_settings_.min_zoom_multiplier);
-    if (max_zoom_multiplier_slider_) max_zoom_multiplier_slider_->set_value(last_settings_.max_zoom_multiplier);
 
     if (foreground_texture_opacity_slider_) {
         foreground_texture_opacity_slider_->set_value(static_cast<float>(last_settings_.foreground_texture_max_opacity));
@@ -559,7 +936,8 @@ void CameraUIPanel::sync_from_camera() {
     if (texture_opacity_interp_dropdown_) {
         texture_opacity_interp_dropdown_->set_selected(static_cast<int>(last_settings_.texture_opacity_falloff_method));
     }
-    
+
+    refresh_side_view_preview();
 }
 
 void CameraUIPanel::build_ui() {
@@ -594,19 +972,18 @@ void CameraUIPanel::build_ui() {
     configure_section(visibility_section_header_, "Visibility & Performance", &visibility_section_expanded_);
     configure_section(depth_section_header_,      "Depth & Perspective",      &depth_section_expanded_);
     configure_section(depthcue_section_header_,   "Depth Cue",               &depthcue_section_expanded_);
-    configure_section(zoom_section_header_,       "Zoom Range",               &zoom_section_expanded_);
     configure_section(smoothing_section_header_,  "Motion & Smoothing",       &smoothing_section_expanded_);
+    if (depth_section_header_) {
+        depth_section_header_->set_on_toggle([this](bool expanded) {
+            depth_section_expanded_ = expanded;
+            rebuild_rows();
+            update_side_view_visibility(last_screen_w_, last_screen_h_);
+        });
+    }
 
     min_render_size_slider_ = std::make_unique<FloatSliderWidget>("Min On-Screen Size", 0.0f, 0.05f, 0.001f, defaults.min_visible_screen_ratio, 3);
     min_render_size_slider_->set_tooltip("Cull sprites once their height drops below this fraction of the screen (0.01 = 1%).");
     min_render_size_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
-    height_zoom1_slider_ = std::make_unique<FloatSliderWidget>("Base Camera Height Offset (px)", -1000.0f, 1000.0f, 1.0f, defaults.height_at_zoom1, 0);
-    height_zoom1_slider_->set_tooltip("Add or subtract pixels from the baseline camera height before zoom scaling.");
-    height_zoom1_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
-    depth_offset_slider_ = std::make_unique<FloatSliderWidget>(
-        "Depth Offset (px below screen)", 0.0f, 2000.0f, 5.0f, defaults.grid_depth_offset_px, 0);
-    depth_offset_slider_->set_tooltip("Push the grid depth origin below the screen to stabilize perspective lines.");
-    depth_offset_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
     foreshorten_strength_slider_ = std::make_unique<FloatSliderWidget>("Vertical Stretch", 0.0f, 2.0f, 0.01f, defaults.foreshorten_strength, 2);
     foreshorten_strength_slider_->set_tooltip("Controls how much tall sprites stretch or compress with depth.");
     foreshorten_strength_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
@@ -616,6 +993,14 @@ void CameraUIPanel::build_ui() {
     render_quality_slider_ = std::make_unique<DiscreteSliderWidget>("Render Quality (%)", std::vector<int>{100, 75, 50, 25, 10}, defaults.render_quality_percent);
     render_quality_slider_->set_tooltip("Trade fidelity for speed; lowers the number of sprites drawn each frame.");
     render_quality_slider_->set_on_value_changed([this](int) { on_control_value_changed(); });
+
+    side_view_panel_ = std::make_unique<CameraSideViewPanel>();
+    if (side_view_panel_) {
+        side_view_panel_->set_on_change([this](const CameraDepthViewValues&) {
+            this->on_control_value_changed();
+        });
+        side_view_panel_->set_work_area(SDL_Rect{0, 0, last_screen_w_, last_screen_h_});
+    }
 
 
 
@@ -713,18 +1098,6 @@ void CameraUIPanel::build_ui() {
         "Padding before swapping between pre-scaled sprite variants to avoid flicker.");
     hysteresis_margin_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
-    min_zoom_multiplier_slider_ = std::make_unique<FloatSliderWidget>(
-        "Minimum Zoom", 0.1f, 2.0f, 0.01f, defaults.min_zoom_multiplier, 2);
-    min_zoom_multiplier_slider_->set_tooltip(
-        "Lower bound for automatic zooming (smaller = closer look).");
-    min_zoom_multiplier_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
-
-    max_zoom_multiplier_slider_ = std::make_unique<FloatSliderWidget>(
-        "Maximum Zoom", 0.1f, 20.0f, 0.01f, defaults.max_zoom_multiplier, 2);
-    max_zoom_multiplier_slider_->set_tooltip(
-        "Upper bound for automatic zooming (larger = wider view).");
-    max_zoom_multiplier_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
-
     rebuild_rows();
 }
 
@@ -732,6 +1105,7 @@ void CameraUIPanel::on_control_value_changed() {
     if (!assets_ || !is_visible()) {
         return;
     }
+    refresh_side_view_preview();
     apply_settings_if_needed();
 }
 
@@ -749,8 +1123,6 @@ void CameraUIPanel::rebuild_rows() {
 
     if (depth_section_header_) rows.push_back({ depth_section_header_.get() });
     if (depth_section_expanded_) {
-        if (height_zoom1_slider_) rows.push_back({ height_zoom1_slider_.get() });
-        if (depth_offset_slider_) rows.push_back({ depth_offset_slider_.get() });
         if (foreshorten_strength_slider_) rows.push_back({ foreshorten_strength_slider_.get() });
         if (distance_strength_slider_) rows.push_back({ distance_strength_slider_.get() });
     }
@@ -761,12 +1133,6 @@ void CameraUIPanel::rebuild_rows() {
         if (background_texture_opacity_slider_) rows.push_back({ background_texture_opacity_slider_.get() });
         if (texture_opacity_interp_widget_) rows.push_back({ texture_opacity_interp_widget_.get() });
         if (image_effect_widget_) rows.push_back({ image_effect_widget_.get() });
-    }
-
-    if (zoom_section_header_) rows.push_back({ zoom_section_header_.get() });
-    if (zoom_section_expanded_) {
-        if (min_zoom_multiplier_slider_) rows.push_back({ min_zoom_multiplier_slider_.get() });
-        if (max_zoom_multiplier_slider_) rows.push_back({ max_zoom_multiplier_slider_.get() });
     }
 
     if (smoothing_section_header_) rows.push_back({ smoothing_section_header_.get() });
@@ -791,6 +1157,69 @@ void CameraUIPanel::rebuild_rows() {
     set_rows(rows);
 }
 
+void CameraUIPanel::refresh_side_view_preview() {
+    if (!side_view_panel_) {
+        return;
+    }
+    CameraDepthViewValues vals{};
+    camera::RealismSettings settings = last_settings_;
+    vals.zoom_low = settings.zoom_low;
+    vals.zoom_high = settings.zoom_high;
+    vals.height_low_px = settings.height_low_px;
+    vals.height_high_px = settings.height_high_px;
+    vals.depth_offset_px = settings.grid_depth_offset_px;
+    vals.pitch_degrees = settings.grid_pitch_degrees;
+    if (assets_) {
+        camera& cam = assets_->getView();
+        vals.current_zoom = cam.get_scale();
+        vals.pitch_degrees = cam.current_pitch_degrees();
+    } else {
+        vals.current_zoom = settings.zoom_low;
+    }
+    vals.current_height = interpolate_height_for_ui(settings, vals.current_zoom);
+    side_view_panel_->set_values(vals);
+}
+
+void CameraUIPanel::update_side_view_visibility(int screen_w, int screen_h) {
+    if (!side_view_panel_) {
+        return;
+    }
+    side_view_panel_->set_work_area(SDL_Rect{0, 0, screen_w, screen_h});
+    const bool should_show = is_visible() && depth_section_expanded_;
+    if (should_show) {
+        SDL_Rect bounds = side_view_panel_->rect();
+        const bool needs_reposition =
+            !side_view_panel_->is_visible() ||
+            bounds.w <= 0 || bounds.h <= 0 ||
+            bounds.x + bounds.w > screen_w ||
+            bounds.y + bounds.h > screen_h;
+        if (needs_reposition && screen_w > 0 && screen_h > 0) {
+            position_side_view_panel(screen_w, screen_h);
+        }
+        if (!side_view_panel_->is_visible()) {
+            side_view_panel_->open();
+        }
+    } else if (side_view_panel_->is_visible()) {
+        side_view_panel_->close();
+    }
+}
+
+void CameraUIPanel::position_side_view_panel(int screen_w, int screen_h) {
+    if (!side_view_panel_) {
+        return;
+    }
+    SDL_Rect anchor = rect();
+    SDL_Rect target = side_view_panel_->rect();
+    const int gap = DMSpacing::item_gap();
+    target.x = anchor.x + anchor.w + gap;
+    target.y = anchor.y;
+    const int max_x = std::max(0, screen_w - target.w);
+    const int max_y = std::max(0, screen_h - target.h);
+    target.x = std::clamp(target.x, 0, max_x);
+    target.y = std::clamp(target.y, 0, max_y);
+    side_view_panel_->set_rect(target);
+}
+
 void CameraUIPanel::apply_settings_if_needed() {
     if (!assets_) return;
     camera::RealismSettings settings = read_settings_from_ui();
@@ -799,11 +1228,13 @@ void CameraUIPanel::apply_settings_if_needed() {
 
     auto differs = [](float a, float b) {
         return std::fabs(a - b) > 0.0001f;
-};
+    };
 
     bool changed = (effects_enabled != last_realism_enabled_) || (depthcue_enabled != last_depthcue_enabled_);
     const camera::RealismSettings& prev = last_settings_;
-    changed = changed || differs(settings.height_at_zoom1, prev.height_at_zoom1) || differs(settings.foreshorten_strength, prev.foreshorten_strength) || differs(settings.distance_scale_strength, prev.distance_scale_strength) || differs(settings.min_visible_screen_ratio, prev.min_visible_screen_ratio);
+    changed = changed || differs(settings.zoom_low, prev.zoom_low) || differs(settings.zoom_high, prev.zoom_high);
+    changed = changed || differs(settings.height_low_px, prev.height_low_px) || differs(settings.height_high_px, prev.height_high_px);
+    changed = changed || differs(settings.foreshorten_strength, prev.foreshorten_strength) || differs(settings.distance_scale_strength, prev.distance_scale_strength) || differs(settings.min_visible_screen_ratio, prev.min_visible_screen_ratio);
     if (render_quality_slider_) {
         changed = changed || settings.render_quality_percent != prev.render_quality_percent;
     }
@@ -815,8 +1246,6 @@ void CameraUIPanel::apply_settings_if_needed() {
     changed = changed || differs(settings.motion_smoothing_max_step, prev.motion_smoothing_max_step);
     changed = changed || differs(settings.motion_smoothing_snap_threshold, prev.motion_smoothing_snap_threshold);
     changed = changed || differs(settings.scale_variant_hysteresis_margin, prev.scale_variant_hysteresis_margin);
-    changed = changed || differs(settings.min_zoom_multiplier, prev.min_zoom_multiplier);
-    changed = changed || differs(settings.max_zoom_multiplier, prev.max_zoom_multiplier);
     changed = changed || settings.parallax_smoothing.method != prev.parallax_smoothing.method ||
         differs(settings.parallax_smoothing.lerp_rate, prev.parallax_smoothing.lerp_rate) ||
         differs(settings.parallax_smoothing.spring_frequency, prev.parallax_smoothing.spring_frequency);
@@ -851,23 +1280,22 @@ void CameraUIPanel::apply_settings_to_camera(const camera::RealismSettings& sett
     cam.set_realism_enabled(effects_enabled);
     cam.set_parallax_enabled(effects_enabled);
     if (assets_) {
+        assets_->set_depth_effects_enabled(depthcue_enabled);
         assets_->apply_camera_runtime_settings();
+    } else if (depthcue_enabled != last_depthcue_enabled_) {
+        devmode::camera_prefs::save_depthcue_enabled(depthcue_enabled);
     }
     last_settings_ = settings;
     last_realism_enabled_ = effects_enabled;
-    if (depthcue_enabled != last_depthcue_enabled_) {
-        devmode::camera_prefs::save_depthcue_enabled(depthcue_enabled);
-    }
     devmode::camera_prefs::save_foreground_texture_max_opacity(settings.foreground_texture_max_opacity);
     devmode::camera_prefs::save_background_texture_max_opacity(settings.background_texture_max_opacity);
     last_depthcue_enabled_ = depthcue_enabled;
+    refresh_side_view_preview();
 }
 
 camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
     camera::RealismSettings settings = last_settings_;
     if (min_render_size_slider_) settings.min_visible_screen_ratio = std::clamp(min_render_size_slider_->value(), 0.0f, 0.5f);
-    if (height_zoom1_slider_) settings.height_at_zoom1 = height_zoom1_slider_->value();
-    if (depth_offset_slider_) settings.grid_depth_offset_px = std::max(1.0f, depth_offset_slider_->value());
     if (foreshorten_strength_slider_) settings.foreshorten_strength = std::max(0.0f, foreshorten_strength_slider_->value());
     if (distance_strength_slider_) settings.distance_scale_strength = std::max(0.0f, distance_strength_slider_->value());
     if (render_quality_slider_) settings.render_quality_percent = render_quality_slider_->value();
@@ -898,11 +1326,14 @@ camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
     if (hysteresis_margin_slider_) {
         settings.scale_variant_hysteresis_margin = std::max(0.0f, hysteresis_margin_slider_->value());
     }
-    if (min_zoom_multiplier_slider_) {
-        settings.min_zoom_multiplier = std::max(0.1f, min_zoom_multiplier_slider_->value());
-    }
-    if (max_zoom_multiplier_slider_) {
-        settings.max_zoom_multiplier = std::max(0.1f, max_zoom_multiplier_slider_->value());
+    if (side_view_panel_) {
+        const CameraDepthViewValues vals = side_view_panel_->values();
+        settings.zoom_low        = vals.zoom_low;
+        settings.zoom_high       = vals.zoom_high;
+        settings.height_low_px   = vals.height_low_px;
+        settings.height_high_px  = vals.height_high_px;
+        settings.grid_pitch_degrees   = vals.pitch_degrees;
+        settings.grid_depth_offset_px = vals.depth_offset_px;
     }
     // Depth cue texture settings
     auto slider_to_opacity = [](const FloatSliderWidget* slider) -> int {

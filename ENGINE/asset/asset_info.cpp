@@ -4,10 +4,12 @@
 #include "asset_info_methods/asset_child_loader.hpp"
 #include "asset_info_methods/lighting_loader.hpp"
 #include "utils/cache_manager.hpp"
+#include "core/manifest/manifest_loader.hpp"
 #include <algorithm>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <cstdlib>
 #include <random>
 #include <limits>
 #include <cmath>
@@ -46,7 +48,7 @@ std::vector<std::string> parse_string_array(const nlohmann::json& json_value) {
     return values;
 }
 
-constexpr int kLightTextureCacheVersion = 2;
+constexpr int kLightTextureCacheVersion = 3;
 
 std::string light_signature(const LightSource& light) {
     std::ostringstream oss;
@@ -235,6 +237,65 @@ bool build_and_cache_light_textures(const fs::path& cache_dir,
         return false;
     }
     return true;
+}
+
+bool try_load_cached_lights(const fs::path& cache_dir,
+                            SDL_Renderer* renderer,
+                            std::vector<LightSource>& lights,
+                            const std::vector<std::string>& signatures) {
+    const fs::path meta_path = cache_dir / "metadata.json";
+    std::vector<std::string> cached_signatures;
+    if (!load_light_cache_metadata(meta_path, cached_signatures)) {
+        return false;
+    }
+    if (cached_signatures != signatures) {
+        return false;
+    }
+    return load_cached_light_textures(cache_dir, renderer, lights);
+}
+
+bool regenerate_lights_via_python(const std::string& asset_name) {
+    try {
+        const fs::path manifest_path = manifest::manifest_path();
+        const fs::path root          = manifest_path.parent_path();
+        const fs::path script        = root / "tools" / "light_tool.py";
+        const fs::path cache_root    = root / "cache";
+
+        if (!fs::exists(script)) {
+            std::cerr << "[AssetInfo] Cannot regenerate lights for '" << asset_name
+                      << "' because light_tool.py is missing at " << script << "\n";
+            return false;
+        }
+
+        std::string command =
+            "python \"" + script.string() + "\" \"" +
+            manifest_path.string() + "\" \"" + cache_root.string() + "\" \"" +
+            asset_name + "\"";
+
+#if defined(_WIN32)
+        command =
+            "set \"PATH=%PATH%;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.0\\bin\" && " +
+            command;
+#endif
+
+        std::cout << "[AssetInfo] Regenerating lights via light_tool.py for '"
+                  << asset_name << "'\n";
+        const int ret = std::system(command.c_str());
+        if (ret != 0) {
+            std::cerr << "[AssetInfo] light_tool.py exited with code " << ret
+                      << " while rebuilding lights for '" << asset_name << "'\n";
+            return false;
+        }
+        return true;
+    } catch (const std::exception& ex) {
+        std::cerr << "[AssetInfo] Failed to run light_tool.py for '" << asset_name
+                  << "': " << ex.what() << "\n";
+    } catch (...) {
+        std::cerr << "[AssetInfo] Failed to run light_tool.py for '" << asset_name
+                  << "' (unknown error)\n";
+    }
+
+    return false;
 }
 
 float read_float_field(const nlohmann::json& data, const char* key, float fallback) {
@@ -870,20 +931,25 @@ void AssetInfo::generate_lights(SDL_Renderer* renderer) {
 	}
 
 	const fs::path cache_dir = fs::path("cache") / name / "lights";
-	const fs::path meta_path = cache_dir / "metadata.json";
 
-	std::vector<std::string> cached_signatures;
-	bool loaded_from_cache = false;
-	if (load_light_cache_metadata(meta_path, cached_signatures) &&
-	    cached_signatures == signatures) {
-		loaded_from_cache = load_cached_light_textures(cache_dir, renderer, light_sources);
+	auto load_from_cache = [&]() -> bool {
+		return try_load_cached_lights(cache_dir, renderer, light_sources, signatures);
+	};
+
+	bool loaded = load_from_cache();
+	if (!loaded) {
+		if (regenerate_lights_via_python(name)) {
+			loaded = load_from_cache();
+		}
 	}
 
-	if (!loaded_from_cache) {
-		if (!build_and_cache_light_textures(cache_dir, renderer, light_sources, signatures)) {
-			clear_light_textures();
-			std::cerr << "[AssetInfo] Failed to rebuild light texture cache for '" << name << "'\n";
-		}
+	if (loaded) {
+		return;
+	}
+
+	if (!build_and_cache_light_textures(cache_dir, renderer, light_sources, signatures)) {
+		clear_light_textures();
+		std::cerr << "[AssetInfo] Failed to rebuild light texture cache for '" << name << "'\n";
 	}
 }
 

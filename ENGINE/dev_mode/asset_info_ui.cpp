@@ -9,6 +9,7 @@
 #include <iostream>
 #include <SDL_log.h>
 #include <stdexcept>
+#include <sstream>
 #include <vector>
 #include <unordered_set>
 #include <unordered_map>
@@ -20,6 +21,7 @@
 #include "utils/input.hpp"
 #include "utils/area.hpp"
 #include "utils/string_utils.hpp"
+#include "utils/cache_manager.hpp"
 #include "widgets.hpp"
 #include "tag_utils.hpp"
 
@@ -38,6 +40,7 @@
 #include "asset_sections/Section_SpawnGroups.hpp"
 #include "map_generation/room.hpp"
 #include "core/AssetsManager.hpp"
+#include "core/manifest/manifest_loader.hpp"
 #include "world/grid.hpp"
 #include "world/chunk.hpp"
 #include "utils/map_grid_settings.hpp"
@@ -355,6 +358,7 @@ AssetInfoUI::~AssetInfoUI() {
         SDL_FreeCursor(color_sampling_cursor_handle_);
         color_sampling_cursor_handle_ = nullptr;
     }
+    destroy_mask_preview_texture();
 }
 
 void AssetInfoUI::set_assets(Assets* a) {
@@ -406,6 +410,7 @@ void AssetInfoUI::set_target_asset(Asset* a) {
 }
 
 void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
+    destroy_mask_preview_texture();
     info_ = info;
     container_.reset_scroll();
     if (asset_selector_) asset_selector_->close();
@@ -461,6 +466,7 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
 
 void AssetInfoUI::clear_info() {
     sync_map_light_panel_visibility(false);
+    destroy_mask_preview_texture();
     if (assets_) {
         if (auto* gl = assets_->map_light_source()) {
             gl->set_alpha_override(std::nullopt);
@@ -1718,6 +1724,8 @@ void AssetInfoUI::regenerate_shadow_masks() {
         return;
     }
 
+    destroy_mask_preview_texture();
+
     SDL_Renderer* renderer = last_renderer_;
     if (!renderer && assets_) {
         renderer = assets_->renderer();
@@ -1726,9 +1734,196 @@ void AssetInfoUI::regenerate_shadow_masks() {
     if (!renderer) {
         return;
     }
+    last_renderer_ = renderer;
+
+    try {
+        const std::filesystem::path manifest_path = manifest::manifest_path();
+        const std::filesystem::path root          = manifest_path.parent_path();
+        const std::filesystem::path script        = root / "tools" / "asset_tool.py";
+        const std::filesystem::path cache_root    = root / "cache";
+
+        if (std::filesystem::exists(script)) {
+    #if defined(_WIN32)
+            std::string python_cmd = "python \"" + script.string() + "\" \"" +
+                                     manifest_path.string() + "\" \"" + cache_root.string() + "\" \"" +
+                                     info_->name + "\"";
+            python_cmd = "set \"PATH=%PATH%;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.0\\bin\" && " + python_cmd;
+    #else
+            std::string python_cmd = "python \"" + script.string() + "\" \"" +
+                                     manifest_path.string() + "\" \"" + cache_root.string() + "\" \"" +
+                                     info_->name + "\"";
+    #endif
+            std::cout << "[AssetInfoUI] Regenerating masks via asset_tool.py for "
+                      << info_->name << "\n";
+            int ret = std::system(python_cmd.c_str());
+            if (ret != 0) {
+                std::cerr << "[AssetInfoUI] asset_tool.py returned " << ret
+                          << " while regenerating masks for " << info_->name << "\n";
+            }
+        } else {
+            std::cerr << "[AssetInfoUI] asset_tool.py missing; cannot regenerate masks for "
+                      << info_->name << "\n";
+        }
+    } catch (const std::exception& ex) {
+        std::cerr << "[AssetInfoUI] Failed to regenerate masks for " << info_->name
+                  << ": " << ex.what() << "\n";
+    } catch (...) {
+        std::cerr << "[AssetInfoUI] Unknown error while regenerating masks for "
+                  << info_->name << "\n";
+    }
 
     info_->loadAnimations(renderer);
+    (void)generate_mask_preview();
     refresh_loaded_asset_instances();
+}
+
+void AssetInfoUI::destroy_mask_preview_texture() {
+    if (mask_preview_texture_) {
+        SDL_DestroyTexture(mask_preview_texture_);
+        mask_preview_texture_ = nullptr;
+    }
+    mask_preview_w_ = 0;
+    mask_preview_h_ = 0;
+}
+
+bool AssetInfoUI::load_mask_preview_texture(const std::filesystem::path& png_path) {
+    if (!last_renderer_) {
+        return false;
+    }
+    SDL_Surface* surface = CacheManager::load_surface(png_path.generic_string());
+    if (!surface) {
+        return false;
+    }
+    SDL_Texture* tex = CacheManager::surface_to_texture(last_renderer_, surface);
+    int w = surface->w;
+    int h = surface->h;
+    SDL_FreeSurface(surface);
+    if (!tex) {
+        return false;
+    }
+    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+    destroy_mask_preview_texture();
+    mask_preview_texture_ = tex;
+    mask_preview_w_ = w;
+    mask_preview_h_ = h;
+    return true;
+}
+
+std::filesystem::path AssetInfoUI::resolve_mask_preview_frame_path() const {
+    if (!info_) {
+        return {};
+    }
+    const std::filesystem::path root = std::filesystem::path(manifest::manifest_path()).parent_path();
+    std::filesystem::path cache_root = root / "cache" / info_->name / "animations";
+    auto try_animation = [&](const std::string& anim_id) -> std::filesystem::path {
+        if (anim_id.empty()) return {};
+        std::filesystem::path candidate = cache_root / anim_id / "scale_100" / "normal" / "0.png";
+        std::error_code ec;
+        if (std::filesystem::exists(candidate, ec) && !ec) {
+            return candidate;
+        }
+        std::filesystem::path anim_root = cache_root / anim_id;
+        if (!std::filesystem::exists(anim_root, ec) || ec) {
+            return {};
+        }
+        for (const auto& entry : std::filesystem::directory_iterator(anim_root, ec)) {
+            if (ec) break;
+            if (!entry.is_directory()) continue;
+            std::filesystem::path alt = entry.path() / "normal" / "0.png";
+            if (std::filesystem::exists(alt, ec) && !ec) {
+                return alt;
+            }
+        }
+        return {};
+    };
+
+    std::string preferred = info_->start_animation.empty() ? std::string{"default"} : info_->start_animation;
+    std::filesystem::path path = try_animation(preferred);
+    if (!path.empty()) {
+        return path;
+    }
+    if (preferred != "default") {
+        path = try_animation("default");
+        if (!path.empty()) return path;
+    }
+    std::error_code ec;
+    if (std::filesystem::exists(cache_root, ec) && !ec) {
+        for (const auto& entry : std::filesystem::directory_iterator(cache_root, ec)) {
+            if (ec) break;
+            if (!entry.is_directory()) continue;
+            std::filesystem::path alt = entry.path() / "scale_100" / "normal" / "0.png";
+            if (std::filesystem::exists(alt, ec) && !ec) {
+                return alt;
+            }
+        }
+    }
+    return {};
+}
+
+bool AssetInfoUI::generate_mask_preview() {
+    if (!info_ || !info_->is_shaded) {
+        destroy_mask_preview_texture();
+        return false;
+    }
+    SDL_Renderer* renderer = last_renderer_;
+    if (!renderer && assets_) {
+        renderer = assets_->renderer();
+    }
+    if (!renderer) {
+        return false;
+    }
+    last_renderer_ = renderer;
+
+    std::filesystem::path input_png = resolve_mask_preview_frame_path();
+    if (input_png.empty()) {
+        std::cerr << "[AssetInfoUI] Unable to locate cached frame for mask preview of "
+                  << info_->name << "\n";
+        return false;
+    }
+
+    try {
+        const ShadowMaskSettings settings = SanitizeShadowMaskSettings(info_->shadow_mask_settings);
+        const std::filesystem::path manifest_path = manifest::manifest_path();
+        const std::filesystem::path root          = manifest_path.parent_path();
+        const std::filesystem::path script        = root / "tools" / "shadow_mask.py";
+        const std::filesystem::path output_png    = root / "cache" / info_->name / "mask_preview.png";
+        const std::filesystem::path meta_path     = root / "cache" / info_->name / "mask_preview_meta.json";
+
+        if (!std::filesystem::exists(script)) {
+            std::cerr << "[AssetInfoUI] shadow_mask.py missing; cannot generate mask preview for "
+                      << info_->name << "\n";
+            return false;
+        }
+
+        std::ostringstream cmd;
+        cmd << "python \"" << script.string() << "\" "
+            << "\"" << input_png.string() << "\" "
+            << "\"" << output_png.string() << "\" "
+            << settings.expansion_ratio << " "
+            << settings.blur_scale << " "
+            << settings.falloff_start << " "
+            << settings.falloff_exponent << " "
+            << settings.alpha_multiplier << " "
+            << "\"" << meta_path.string() << "\"";
+
+        const std::string command = cmd.str();
+        std::cout << "[AssetInfoUI] Generating mask preview with: " << command << "\n";
+        int ret = std::system(command.c_str());
+        if (ret != 0) {
+            std::cerr << "[AssetInfoUI] shadow_mask.py exited with " << ret
+                      << " while generating mask preview for " << info_->name << "\n";
+            return false;
+        }
+
+        return load_mask_preview_texture(output_png);
+    } catch (const std::exception& ex) {
+        std::cerr << "[AssetInfoUI] Failed to generate mask preview for " << info_->name
+                  << ": " << ex.what() << "\n";
+    } catch (...) {
+        std::cerr << "[AssetInfoUI] Unknown error while generating mask preview for "
+                  << info_->name << "\n";
+    }
+    return false;
 }
 
 const char* AssetInfoUI::section_display_name(AssetInfoSectionId section_id) {
