@@ -1877,6 +1877,9 @@ void FrameEditorSession::ensure_widgets() const {
             dd_animation_select_.reset();
             animation_dropdown_options_cache_.clear();
         }
+    } else {
+        dd_animation_select_.reset();
+        animation_dropdown_options_cache_.clear();
     }
     if (!btn_apply_all_movement_) btn_apply_all_movement_ = std::make_unique<DMButton>("Apply To All Frames", &header, 180, DMButton::height());
     if (!btn_apply_all_children_) btn_apply_all_children_ = std::make_unique<DMButton>("Apply To All Frames", &header, 180, DMButton::height());
