@@ -84,5 +84,8 @@ inline void rename_room_references_in_layers(nlohmann::json& map_info,
     }
 }
 
+inline double map_radius_from_map_info(const nlohmann::json&) {
+    return 0.0;
 }
 
+}
