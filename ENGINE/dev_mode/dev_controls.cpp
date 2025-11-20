@@ -1760,12 +1760,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                 }
             }
 
-            if (!horizon_screen_y) {
-                if (depth_params.enabled) {
-                    horizon_screen_y = static_cast<float>(depth_params.horizon_screen_y);
-                }
-            } else if (depth_params.enabled) {
-                horizon_screen_y = std::min(*horizon_screen_y, static_cast<float>(depth_params.horizon_screen_y));
+            if (depth_params.enabled) {
+                // Always reflect the camera-computed horizon so the guide matches pitch direction.
+                horizon_screen_y = static_cast<float>(depth_params.horizon_screen_y);
             }
         }
 

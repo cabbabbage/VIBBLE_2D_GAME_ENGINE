@@ -1227,8 +1227,13 @@ camera::FloorDepthParams camera::compute_floor_depth_params() const {
     const double min_horizon    = top_margin + 1.0;
     const double horizon_span   = std::max(1.0, max_horizon - min_horizon);
 
-    const double pitch_abs   = std::abs(geom.pitch_radians);
-    const double pitch_norm  = std::clamp(pitch_abs / (PI_D / 3.0), 0.0, 1.0);
+    double pitch_norm = geom.pitch_radians / (PI_D / 3.0);
+    pitch_norm = std::clamp(pitch_norm, -1.0, 1.0);
+    if (pitch_norm < 0.0 && pitch_norm > -1e-4) {
+        // Snap tiny negative values to flat to avoid an unintended downward bias.
+        pitch_norm = 0.0;
+    }
+
     const double horizon_y   = max_horizon - horizon_span * pitch_norm;
     const double depth_px    = std::max(1.0, static_cast<double>(settings_.grid_depth_offset_px));
     const double depth_y     = screen_h + depth_px;
@@ -1266,9 +1271,10 @@ float camera::warp_floor_screen_y(float world_y, float linear_screen_y) const {
     }
     y = std::max(y, horizon_y);
 
-    const double pitch_norm = std::clamp(p.pitch_norm, 0.0, 1.0);
-    const double compression_power = 1.0 + 1.35 * pitch_norm;
-    const double compression_mix   = 0.35 + 0.55 * pitch_norm;
+    const double pitch_norm_signed = std::clamp(p.pitch_norm, -1.0, 1.0);
+    const double pitch_strength    = std::abs(pitch_norm_signed);
+    const double compression_power = 1.0 + 1.35 * pitch_strength;
+    const double compression_mix   = 0.35 + 0.55 * pitch_strength;
     double warped = screen_h;
 
     if (y <= screen_h) {
@@ -1291,7 +1297,7 @@ float camera::warp_floor_screen_y(float world_y, float linear_screen_y) const {
     } else {
         double extra_t = (y - screen_h) / offscreen_span;
         extra_t = std::clamp(extra_t, 0.0, 1.0);
-        const double offscreen_power = 1.0 + 0.5 * pitch_norm;
+        const double offscreen_power = 1.0 + 0.5 * pitch_strength;
         const double eased_extra = std::pow(extra_t, offscreen_power);
         warped = screen_h + offscreen_span * eased_extra;
     }
