@@ -31,6 +31,10 @@ class AssetInfoUI;
 class RenderAsset;
 class AssetList;
 
+namespace devmode {
+class AnimationRegenerator;
+}
+
 class Asset {
 
         public:
@@ -232,7 +236,6 @@ public:
 private:
     static std::unordered_map<std::string, std::pair<bool,bool>> s_flip_overrides_;
     static std::mutex s_flip_overrides_mutex_;
-        private:
     friend class AnimationUpdate;
     friend class AnimationRuntime;
     friend class Move;
@@ -240,6 +243,7 @@ private:
     friend class RenderAsset;
     friend class FrameEditorSession;
     friend class Assets;
+    friend class devmode::AnimationRegenerator;
     camera* window = nullptr;
     bool highlighted = false;
     bool hidden = false;
