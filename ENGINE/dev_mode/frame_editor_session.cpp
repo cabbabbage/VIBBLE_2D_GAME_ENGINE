@@ -7,6 +7,7 @@
 #include <cmath>
 #include <optional>
 #include <array>
+#include <exception>
 #include <sstream>
 #include <utility>
 #include <iomanip>
@@ -682,21 +683,45 @@ void FrameEditorSession::end() {
                 if (anim_id.empty()) {
                     continue;
                 }
-                auto result = devmode::AnimationRegenerator::regenerate_animation(
-                    saved_assets, info_to_reload, anim_id);
-                refreshed = refreshed || result.refreshed_instances || result.reloaded;
-                regen_failed = regen_failed || (result.python_launched && !result.python_success);
+                try {
+                    auto result = devmode::AnimationRegenerator::regenerate_animation(
+                        saved_assets, info_to_reload, anim_id);
+                    refreshed = refreshed || result.refreshed_instances || result.reloaded;
+                    regen_failed = regen_failed || (result.python_launched && !result.python_success);
+                } catch (const std::exception& ex) {
+                    regen_failed = true;
+                    std::cerr << "[FrameEditorSession] regenerate_animation threw for '" << anim_id
+                              << "': " << ex.what() << "\n";
+                } catch (...) {
+                    regen_failed = true;
+                    std::cerr << "[FrameEditorSession] regenerate_animation threw for '" << anim_id
+                              << "' (unknown error)\n";
+                }
             }
         }
 
-        // Fallback reload when regeneration was not attempted or when reload failed without
-        // a python error (e.g., missing renderer).
-        if (!refreshed && !regen_failed) {
-            const bool ok = info_to_reload->reload_animations_from_disk();
-            SDL_Renderer* renderer = saved_assets->renderer();
-            if (ok && renderer) {
-                info_to_reload->loadAnimations(renderer);
-                saved_assets->mark_active_assets_dirty();
+        // Fallback reload when regeneration was not attempted or when reload failed
+        // unexpectedly (e.g., python error). Rebuild via AnimationRegenerator is preferred,
+        // but a straight reload keeps the editor stable when regeneration cannot run.
+        if (!refreshed) {
+            try {
+                const bool ok = info_to_reload->reload_animations_from_disk();
+                SDL_Renderer* renderer = saved_assets->renderer();
+                if (ok && renderer) {
+                    info_to_reload->loadAnimations(renderer);
+                    saved_assets->mark_active_assets_dirty();
+                    refreshed = true;
+                }
+            } catch (const std::exception& ex) {
+                std::cerr << "[FrameEditorSession] Safe animation reload failed for '" << asset_name_for_cache
+                          << "': " << ex.what() << "\n";
+            } catch (...) {
+                std::cerr << "[FrameEditorSession] Safe animation reload failed for '" << asset_name_for_cache
+                          << "' (unknown error)\n";
+            }
+            if (regen_failed) {
+                std::cerr << "[FrameEditorSession] Animation regeneration failed; applied fallback reload for '"
+                          << asset_name_for_cache << "'\n";
             }
         }
     }
