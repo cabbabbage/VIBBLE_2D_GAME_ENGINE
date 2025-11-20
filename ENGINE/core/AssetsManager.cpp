@@ -2212,25 +2212,6 @@ void Assets::focus_camera_on_asset(Asset* a, double zoom_factor, int duration_st
     }
 }
 
-void Assets::begin_area_edit_for_selected_asset(const std::string& area_name) {
-    if (dev_controls_ && dev_controls_->is_enabled()) {
-        dev_controls_->begin_area_edit_for_selected_asset(area_name);
-    }
-}
-
-void Assets::begin_room_area_edit(const std::string& area_name) {
-    if (dev_controls_ && dev_controls_->is_enabled()) {
-        // New helper to start room-scoped Area edit
-        // We rely on DevControls to resolve current room
-        // and open AreaOverlayEditor in room mode
-        try {
-            // Implemented in DevControls
-            dev_controls_->begin_room_area_edit(area_name);
-        } catch (...) {
-        }
-    }
-}
-
 void Assets::begin_frame_editor_session(Asset* asset,
                                         std::shared_ptr<animation_editor::AnimationDocument> document,
                                         std::shared_ptr<animation_editor::PreviewProvider> preview,

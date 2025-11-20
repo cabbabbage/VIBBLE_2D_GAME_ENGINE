@@ -111,8 +111,6 @@ public:
     void apply_camera_runtime_settings();
 
     void focus_camera_on_asset(Asset* a, double zoom_factor = 0.8, int duration_steps = 25);
-    void begin_area_edit_for_selected_asset(const std::string& area_name);
-    void begin_room_area_edit(const std::string& area_name);
     // In-world frame editor session for animation frames
     void begin_frame_editor_session(Asset* asset,
                                     std::shared_ptr<animation_editor::AnimationDocument> document,

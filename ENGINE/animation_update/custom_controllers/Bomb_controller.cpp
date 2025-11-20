@@ -155,18 +155,30 @@ void BombController::update(const Input&) {
     const double distance = Range::get_distance(self_, player);
     if (!std::isfinite(distance) || neighbor_radius <= 0) {
         self_->anim_->clear_movement_plan();
+        current_target_ = nullptr;
+        pursuit_locked_ = false;
         return;
+    }
+
+    const bool target_changed = current_target_ != player;
+    current_target_           = player;
+    if (target_changed) {
+        pursuit_locked_              = false;
+        self_->anim_->path_requested = true;
     }
 
     if (distance <= static_cast<double>(neighbor_radius)) {
         // Only plan a new path when requested by the runtime
-        if (self_->anim_->path_requested) {
+        if (self_->anim_->path_requested || target_changed || !pursuit_locked_) {
             const auto path = controller_paths::pursue_path(self_, player);
             self_->anim_->auto_move(path, controller_utils::controller_visit_threshold(self_, path));
+            pursuit_locked_ = true;
         }
     } else {
         // Outside neighbor radius: cancel any pending movement plan
         self_->anim_->clear_movement_plan();
+        current_target_ = nullptr;
+        pursuit_locked_ = false;
     }
 }
 

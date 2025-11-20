@@ -126,15 +126,11 @@ public:
     void set_map_light_panel_visible(bool visible);
     bool is_map_light_panel_visible() const;
 
-    void begin_area_edit_for_selected_asset(const std::string& area_name);
-    void begin_room_area_edit(const std::string& area_name);
     void focus_camera_on_asset(Asset* asset, double zoom_factor = 0.8, int duration_steps = 0);
 
     void reset_click_state();
     void clear_selection();
     void purge_asset(Asset* asset);
-
-    void create_room_area();
 
     void notify_spawn_group_config_changed(const nlohmann::json& entry);
     void notify_spawn_group_removed(const std::string& spawn_id);
@@ -197,7 +193,6 @@ private:
     void apply_camera_area_render_flag();
     void set_mode_from_header(int header_mode);
     void set_mode(Mode new_mode);
-    std::string generate_unique_room_area_name(const std::string& base) const;
     void restore_filter_hidden_assets() const;
     void apply_dark_mask_visibility();
     bool lighting_section_forces_dark_mask() const;
@@ -256,8 +251,6 @@ private:
 
     std::unique_ptr<SingleSpawnGroupModal> map_assets_modal_;
     std::unique_ptr<SingleSpawnGroupModal> boundary_assets_modal_;
-
-    std::unique_ptr<class AreaOverlayEditor>   asset_area_editor_;
     std::optional<std::string> selected_room_area_name_;
     std::optional<std::string> hovered_room_area_name_;
 

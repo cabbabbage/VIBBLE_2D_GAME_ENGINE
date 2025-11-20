@@ -7,7 +7,6 @@
 #include "asset/asset_types.hpp"
 #include "asset/asset_utils.hpp"
 #include "core/AssetsManager.hpp"
-#include "dev_mode/area_overlay_editor.hpp"
 #include "dev_mode/room_editor_map_info.hpp"
 #include "dev_mode/asset_info_ui.hpp"
 #include "dev_mode/dev_controls_persistence.hpp"
@@ -43,7 +42,6 @@
 #include "util/grid_occupancy.hpp"
 #include "utils/map_grid_settings.hpp"
 #include "utils/relative_room_position.hpp"
-#include "map_generation/map_layers_geometry.hpp"
 
 #include <algorithm>
 #include <array>
@@ -653,7 +651,6 @@ void RoomEditor::mark_highlight_dirty() {
 
 void RoomEditor::set_input(Input* input) {
     input_ = input;
-    ensure_area_editor();
 }
 
 void RoomEditor::set_player(Asset* player) {
@@ -803,7 +800,6 @@ void RoomEditor::set_enabled(bool enabled, bool preserve_camera_state) {
 
     camera* cam = assets_ ? &assets_->getView() : nullptr;
     if (enabled_) {
-        apply_area_editor_camera_override(false);
         if (cam && !preserve_camera_state) {
             cam->set_manual_zoom_override(false);
         }
@@ -815,7 +811,6 @@ void RoomEditor::set_enabled(bool enabled, bool preserve_camera_state) {
         }
         configure_shared_panel();
     } else {
-        apply_area_editor_camera_override(false);
         if (cam && !preserve_camera_state) {
             cam->set_manual_zoom_override(false);
             cam->clear_focus_override();
@@ -824,12 +819,8 @@ void RoomEditor::set_enabled(bool enabled, bool preserve_camera_state) {
         if (info_ui_) info_ui_->close();
         if (spawn_group_panel_) spawn_group_panel_->set_visible(false);
         clear_active_spawn_group_target();
-        if (area_editor_) area_editor_->cancel();
         clear_selection();
         reset_click_state();
-        reopen_info_after_area_edit_ = false;
-        info_for_reopen_.reset();
-        last_area_editor_active_ = false;
         set_room_config_visible(false);
         refresh_room_config_visibility();
     }
@@ -1044,46 +1035,11 @@ void RoomEditor::update_ui(const Input& input) {
         }
     }
 
-        ensure_area_editor();
-    if (area_editor_) {
-        const bool was = last_area_editor_active_;
-        const bool now = area_editor_->is_active();
-        if (!was && now) {
-            apply_area_editor_camera_override(true);
-        }
-        if (now) {
-            area_editor_->update(input, screen_w_, screen_h_);
-
-            if (assets_) {
-                camera& cam = assets_->getView();
-                if (should_enable_mouse_controls()) {
-                    pan_zoom_.handle_input(cam, input, false);
-                } else {
-                    pan_zoom_.cancel(cam);
-                }
-            }
-        }
-        if (was && !now) {
-            apply_area_editor_camera_override(false);
-            if (area_editor_->consume_saved_flag() && reopen_info_after_area_edit_ && info_for_reopen_) {
-                open_asset_info_editor(info_for_reopen_);
-                reopen_info_after_area_edit_ = false;
-                info_for_reopen_.reset();
-            } else {
-                reopen_info_after_area_edit_ = false;
-                info_for_reopen_.reset();
-            }
-        }
-        last_area_editor_active_ = now;
-    }
-
     if (info_ui_ && info_ui_->is_visible()) {
         info_ui_->update(input, screen_w_, screen_h_);
     } else if (active_modal_ == ActiveModal::AssetInfo) {
         active_modal_ = ActiveModal::None;
     }
-
-    update_area_editor_focus();
 
     room_config_was_visible_ = config_visible_now;
 }
@@ -1205,16 +1161,6 @@ bool RoomEditor::handle_sdl_event(const SDL_Event& event) {
         return true;
     }
 
-    ensure_area_editor();
-    if ((!pointer_blocked || !pointer_based) && area_editor_ && area_editor_->is_active()) {
-        if (area_editor_->handle_event(event)) {
-            if (pointer_event && input_) {
-                input_->clearClickBuffer();
-            }
-            return true;
-        }
-    }
-
     if (auto* dropdown = DMDropdown::active_dropdown()) {
         if (dropdown->handle_event(event)) {
             if (pointer_event && input_) {
@@ -1265,10 +1211,6 @@ bool RoomEditor::is_room_ui_blocking_point(int x, int y) const {
     }
 
     if (library_ui_ && library_ui_->is_visible() && library_ui_->is_input_blocking_at(x, y)) {
-        return true;
-    }
-
-    if (area_editor_ && area_editor_->is_point_blocking_ui(x, y)) {
         return true;
     }
 
@@ -1738,11 +1680,6 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
         }
         render_room_labels(renderer);
     }
-    ensure_area_editor();
-    // Draw area editor overlay before dev UI panels so UI stays on top
-    if (area_editor_ && area_editor_->is_active()) {
-        area_editor_->render(renderer);
-    }
     // Now render dev-mode UI panels
     if (library_ui_ && library_ui_->is_visible()) {
         library_ui_->render(renderer, screen_w_, screen_h_);
@@ -2139,34 +2076,6 @@ void RoomEditor::regenerate_room_from_template(Room* source_room) {
 
     rebuild_room_spawn_id_cache();
     save_current_room_assets_json();
-}
-
-void RoomEditor::begin_area_edit_for_selected_asset(const std::string& area_name) {
-    ensure_area_editor();
-    if (!area_editor_) return;
-
-    Asset* target = nullptr;
-    if (!selected_assets_.empty()) target = selected_assets_.front();
-    if (!target) target = hovered_asset_;
-    if (!target && info_ui_) target = info_ui_->get_target_asset();
-    if (!target || !target->info) return;
-
-    if (info_ui_ && info_ui_->is_visible()) {
-        reopen_info_after_area_edit_ = true;
-        info_for_reopen_ = target->info;
-        info_target_for_reopen_ = target;
-        info_ui_->close();
-    } else {
-        reopen_info_after_area_edit_ = false;
-        info_for_reopen_.reset();
-        info_target_for_reopen_ = nullptr;
-    }
-
-    focus_camera_on_asset(target, 0.8, 0);
-    if (area_editor_->begin(target->info.get(), target, area_name)) {
-        apply_area_editor_camera_override(true);
-        last_area_editor_active_ = true;
-    }
 }
 
 void RoomEditor::focus_camera_on_asset(Asset* asset, double zoom_factor, int duration_steps) {
@@ -3123,31 +3032,19 @@ void RoomEditor::handle_click(const Input& input) {
             open_asset_info_editor_for_asset(hovered_asset_);
         }
         } else {
-            bool handled_area_interaction = false;
-            if (current_room_) {
-                if (auto area_name = find_room_area_at_point(world_mouse)) {
-                    ensure_area_editor();
-                    if (area_editor_ && area_editor_->begin_for_room(current_room_, *area_name)) {
-                        handled_area_interaction = true;
-                    }
-                }
+            bool inside_room = true;
+            if (current_room_ && current_room_->room_area) {
+                inside_room = current_room_->room_area->contains_point(world_mouse);
             }
-
-            if (!handled_area_interaction) {
-                bool inside_room = true;
-                if (current_room_ && current_room_->room_area) {
-                    inside_room = current_room_->room_area->contains_point(world_mouse);
+            // CHANGED: only open asset library to add when Ctrl is held
+            if (inside_room && ctrl_down) {
+                pending_spawn_world_pos_ = world_mouse;
+                open_asset_library();
+                if (!is_asset_library_open()) {
+                    pending_spawn_world_pos_.reset();
                 }
-                // CHANGED: only open asset library to add when Ctrl is held
-                if (inside_room && ctrl_down) {
-                    pending_spawn_world_pos_ = world_mouse;
-                    open_asset_library();
-                    if (!is_asset_library_open()) {
-                        pending_spawn_world_pos_.reset();
-                    }
-                } else {
-                    open_asset_library();
-                }
+            } else {
+                open_asset_library();
             }
         }
         return;
@@ -3223,8 +3120,6 @@ void RoomEditor::handle_click(const Input& input) {
 
         const bool asset_info_open2 = (active_modal_ == ActiveModal::AssetInfo);
         const bool floating_modal_open2 = FloatingDockableManager::instance().active_panel() != nullptr;
-
-        const bool area_editor_active = area_editor_ && area_editor_->is_active();
 
         bool inside_room = true;
         if (current_room_ && current_room_->room_area) {
@@ -3477,9 +3372,6 @@ bool RoomEditor::is_ui_blocking_input(int mx, int my) const {
             return true;
         }
     }
-    if (area_editor_ && area_editor_->is_point_blocking_ui(mx, my)) {
-        return true;
-    }
 
     return false;
 }
@@ -3533,37 +3425,6 @@ void RoomEditor::handle_shortcuts(const Input& input) {
             toggle_room_config();
         }
     }
-}
-
-void RoomEditor::update_area_editor_focus() {
-    ensure_area_editor();
-    if (!area_editor_) return;
-
-    const bool editing_overlay_active = area_editor_->is_active();
-    if (!assets_) return;
-
-    camera& cam = assets_->getView();
-    if (editing_overlay_active) {
-        Asset* focus = nullptr;
-        if (!selected_assets_.empty()) focus = selected_assets_.front();
-        if (!focus) focus = hovered_asset_;
-        if (focus) {
-            cam.set_manual_zoom_override(true);
-            cam.set_focus_override(SDL_Point{focus->pos.x, focus->pos.y});
-        }
-
-    }
-}
-
-void RoomEditor::ensure_area_editor() {
-    if (!area_editor_) {
-        area_editor_ = std::make_unique<AreaOverlayEditor>();
-        if (area_editor_) area_editor_->attach_assets(assets_);
-    }
-}
-
-void RoomEditor::apply_area_editor_camera_override(bool enable) {
-    area_editor_override_active_ = enable;
 }
 
 void RoomEditor::ensure_room_configurator() {

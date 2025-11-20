@@ -23,7 +23,6 @@ class Input;
 class Assets;
 class AssetLibraryUI;
 class AssetInfoUI;
-class AreaOverlayEditor;
 class Area;
 class RoomConfigurator;
 class SpawnGroupConfig;
@@ -96,7 +95,6 @@ public:
     using RoomAssetsSavedCallback = std::function<void()>;
     void set_room_assets_saved_callback(RoomAssetsSavedCallback cb);
 
-    void begin_area_edit_for_selected_asset(const std::string& area_name);
     void focus_camera_on_asset(Asset* asset, double zoom_factor = 0.8, int duration_steps = 0);
     void focus_camera_on_room_center(bool reframe_zoom = true);
 
@@ -172,9 +170,6 @@ private:
     bool should_enable_mouse_controls() const;
     void handle_shortcuts(const Input& input);
     void handle_delete_shortcut(const Input& input);
-    void update_area_editor_focus();
-    void ensure_area_editor();
-    void apply_area_editor_camera_override(bool enable);
     void ensure_room_configurator();
     void ensure_spawn_group_config_ui();
     void update_room_config_bounds();
@@ -298,7 +293,6 @@ private:
     std::unique_ptr<AssetLibraryUI> library_ui_;
     std::unique_ptr<AssetInfoUI> info_ui_;
 
-    std::unique_ptr<AreaOverlayEditor> area_editor_;
     std::unique_ptr<RoomConfigurator> room_cfg_ui_;
     SDL_Rect room_config_bounds_{0, 0, 0, 0};
     DevFooterBar* shared_footer_bar_ = nullptr;
@@ -313,12 +307,6 @@ private:
     bool asset_info_panel_visible_ = false;
 
     std::array<bool, static_cast<size_t>(BlockingPanel::Count)> blocking_panel_visible_{};
-
-    bool last_area_editor_active_ = false;
-    bool area_editor_override_active_ = false;
-    bool reopen_info_after_area_edit_ = false;
-    std::shared_ptr<AssetInfo> info_for_reopen_;
-    Asset* info_target_for_reopen_ = nullptr;
 
     Asset* hovered_asset_ = nullptr;
     std::vector<Asset*> selected_assets_;

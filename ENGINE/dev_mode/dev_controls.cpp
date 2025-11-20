@@ -20,7 +20,6 @@
 #include "dev_mode/foreground_background_effect_panel.hpp"
 #include "dev_mode/font_cache.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"
-#include "dev_mode/area_overlay_editor.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
 #include "asset/asset_info.hpp"
 #include "dm_styles.hpp"
@@ -1069,10 +1068,6 @@ void DevControls::update(const Input& input) {
             if (camera_panel_ && camera_panel_->is_visible() && !pointer_over_camera_panel_ && !pointer_over_image_effect_panel_) {
                 room_editor_->update(input);
             }
-            // Update Area Tool overlay/editor if active
-            if (asset_area_editor_ && asset_area_editor_->is_active()) {
-                asset_area_editor_->update(input, screen_w_, screen_h_);
-            }
         } else {
             room_editor_->clear_highlighted_assets();
         }
@@ -1523,30 +1518,13 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
             if (hover >= 0 && hover < static_cast<int>(area_list.size())) {
                 const auto& hovered = area_list[hover];
                 hovered_room_area_name_ = hovered.name;
-                // Left click -> begin shape edit
                 if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT && event.button.clicks <= 1) {
                     selected_room_area_name_ = hovered.name;
-                    hovered_room_area_name_ = hovered.name;
-                    if (!asset_area_editor_) asset_area_editor_ = std::make_unique<AreaOverlayEditor>();
-                    if (asset_area_editor_) {
-                        asset_area_editor_->attach_assets(assets_);
-                        asset_area_editor_->set_on_saved([this]() { this->notify_room_area_data_changed(); });
-                        if (asset_area_editor_->begin_for_room(current_room_, hovered.name)) {
-                            if (map_mode_ui_) {
-                                if (auto* footer = map_mode_ui_->get_footer_bar()) {
-                                    std::string label = std::string("Editing Area: ") + hovered.name;
-                                    footer->set_title(label);
-                                }
-                            }
-                            consume(true);
-                            return;
-                        }
-                    }
+                    consume(true);
+                    return;
                 }
-                // Right click -> open the Area Tool for this area
                 if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {
                     selected_room_area_name_ = hovered.name;
-                    begin_room_area_edit(hovered.name);
                     consume(true);
                     return;
                 }
@@ -1557,15 +1535,6 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                 if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT && event.button.clicks <= 1) {
                     selected_room_area_name_.reset();
                 }
-            }
-        }
-    }
-
-    if (mode_ == Mode::RoomEditor) {
-        if (asset_area_editor_ && asset_area_editor_->is_active()) {
-            if (asset_area_editor_->handle_event(event)) {
-                consume(true);
-                return;
             }
         }
     }
@@ -1736,7 +1705,11 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                 const float screen_y = sample_screen.y;
                 if (apply_spacing_cutoff && std::isfinite(last_screen_y)) {
                     if (std::fabs(screen_y - last_screen_y) < kMinHorizontalLineScreenSpacing) {
-                        horizon_screen_y = screen_y;
+                        if (horizon_screen_y) {
+                            horizon_screen_y = std::min(*horizon_screen_y, screen_y);
+                        } else {
+                            horizon_screen_y = screen_y;
+                        }
                         break;
                     }
                 }
@@ -1805,7 +1778,13 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         };
 
         if (depth_offset_screen_y) {
-            draw_labeled_line(*depth_offset_screen_y, SDL_Color{255, 32, 32, 220}, "Depth Offset");
+            const bool offscreen = *depth_offset_screen_y > static_cast<float>(screen_h_);
+            const int safe_screen_h = std::max(1, screen_h_);
+            const float display_y = offscreen
+                ? static_cast<float>(safe_screen_h - 1)
+                : *depth_offset_screen_y;
+            const char* label = offscreen ? "Depth Offset (off-screen)" : "Depth Offset";
+            draw_labeled_line(display_y, SDL_Color{255, 32, 32, 220}, label);
         }
         if (horizon_screen_y) {
             draw_labeled_line(*horizon_screen_y, SDL_Color{255, 140, 0, 220}, "Horizon");
@@ -1819,10 +1798,6 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         if (map_editor_) map_editor_->render(renderer);
     } else if (renderer && mode_ == Mode::RoomEditor && room_editor_) {
         room_editor_->render_overlays(renderer);
-        // Render Area Tool overlay/editor if active
-        if (asset_area_editor_ && asset_area_editor_->is_active()) {
-            asset_area_editor_->render(renderer);
-        }
         // Frame editor session (in-world)
         if (frame_editor_session_ && frame_editor_session_->is_active()) {
             frame_editor_session_->render(renderer);
@@ -2212,31 +2187,6 @@ bool DevControls::is_room_config_open() const {
     return room_editor_->is_room_config_open();
 }
 
-void DevControls::begin_area_edit_for_selected_asset(const std::string& area_name) {
-    if (!can_use_room_editor_ui()) return;
-    room_editor_->begin_area_edit_for_selected_asset(area_name);
-}
-
-void DevControls::begin_room_area_edit(const std::string& area_name) {
-    // Open AreaOverlayEditor for a room-scoped Area by name in current room
-    if (!assets_ || !current_room_) return;
-    // Legacy panel removed
-    selected_room_area_name_ = area_name;
-    hovered_room_area_name_.reset();
-    if (!asset_area_editor_) asset_area_editor_ = std::make_unique<AreaOverlayEditor>();
-    if (!asset_area_editor_) return;
-    asset_area_editor_->attach_assets(assets_);
-    asset_area_editor_->set_on_saved([this]() { this->notify_room_area_data_changed(); });
-    if (asset_area_editor_->begin_for_room(current_room_, area_name)) {
-        if (map_mode_ui_) {
-            if (auto* footer = map_mode_ui_->get_footer_bar()) {
-                std::string label = std::string("Editing Area: ") + area_name;
-                footer->set_title(label);
-            }
-        }
-    }
-}
-
 void DevControls::focus_camera_on_asset(Asset* asset, double zoom_factor, int duration_steps) {
     if (!room_editor_) return;
     room_editor_->focus_camera_on_asset(asset, zoom_factor, duration_steps);
@@ -2496,23 +2446,6 @@ void DevControls::configure_header_button_sets() {
         sync_header_button_states();
 };
     room_buttons.push_back(std::move(regenerate_btn));
-
-    // Add Area: open Area Tool immediately (legacy type chooser removed)
-    {
-        MapModeUI::HeaderButtonConfig add_area_btn;
-        add_area_btn.id = "add_area";
-        add_area_btn.label = "Add Area";
-        add_area_btn.momentary = true;
-        add_area_btn.style_override = &DMStyles::CreateButton();
-        add_area_btn.on_toggle = [this](bool) {
-            if (!assets_ || !current_room_) {
-                return;
-            }
-            // Open the Area Tool directly; no type selection
-            this->create_room_area();
-        };
-        room_buttons.push_back(std::move(add_area_btn));
-    }
 
     map_mode_ui_->set_mode_button_sets(std::move(map_buttons), std::move(room_buttons));
     asset_filter_.ensure_layout();
@@ -3001,28 +2934,6 @@ void DevControls::set_mode(Mode new_mode) {
     apply_camera_area_render_flag();
 }
 
-std::string DevControls::generate_unique_room_area_name(const std::string& base) const {
-    std::unordered_set<std::string> used_names;
-    if (current_room_) {
-        for (const auto& entry : current_room_->areas) {
-            used_names.insert(entry.name);
-        }
-    }
-
-    std::string prefix = base.empty() ? std::string("area") : base;
-    const std::string suffix = "_area";
-    if (prefix.size() < suffix.size() || prefix.substr(prefix.size() - suffix.size()) != suffix) {
-        prefix += suffix;
-    }
-
-    std::string candidate = prefix;
-    int counter = 1;
-    while (used_names.count(candidate) > 0) {
-        candidate = prefix + "_" + std::to_string(counter++);
-    }
-    return candidate;
-}
-
 void DevControls::restore_filter_hidden_assets() const {
     for (auto& kv : filter_hidden_assets_) {
         if (Asset* asset = kv.first) {
@@ -3276,59 +3187,6 @@ const DevControls::RoomAreaCache::PolygonList& DevControls::room_area_polygons()
         hovered_room_area_name_.reset();
     }
     return list;
-}
-
-void DevControls::create_room_area() {
-    if (!assets_ || !current_room_) {
-        return;
-    }
-
-    std::string area_name = generate_unique_room_area_name("");
-
-    try {
-        nlohmann::json& root = current_room_->assets_data();
-        if (!root.contains("areas") || !root["areas"].is_array()) {
-            root["areas"] = nlohmann::json::array();
-        }
-        auto& areas = root["areas"];
-        bool exists = false;
-        for (const auto& entry : areas) {
-            if (!entry.is_object()) continue;
-            if (entry.value("name", std::string{}) == area_name) {
-                exists = true;
-                break;
-            }
-        }
-        if (!exists) {
-            nlohmann::json stub = nlohmann::json::object({
-                {"name", area_name},
-                {"resolution", 3},
-                {"points", nlohmann::json::array()}
-            });
-            areas.push_back(std::move(stub));
-            current_room_->save_assets_json();
-            notify_room_area_data_changed();
-        }
-    } catch (...) {
-    }
-
-    selected_room_area_name_ = area_name;
-    hovered_room_area_name_.reset();
-
-    if (!asset_area_editor_) {
-        asset_area_editor_ = std::make_unique<AreaOverlayEditor>();
-    }
-    if (asset_area_editor_) {
-        asset_area_editor_->attach_assets(assets_);
-        asset_area_editor_->set_on_saved([this]() { this->notify_room_area_data_changed(); });
-        if (asset_area_editor_->begin_for_room(current_room_, area_name)) {
-            if (map_mode_ui_) {
-                if (auto* footer = map_mode_ui_->get_footer_bar()) {
-                    footer->set_title(std::string("Editing Area: ") + area_name);
-                }
-            }
-        }
-    }
 }
 
 void DevControls::toggle_map_light_panel() {

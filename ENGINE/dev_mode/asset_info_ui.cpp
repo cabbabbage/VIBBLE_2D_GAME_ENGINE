@@ -1757,12 +1757,6 @@ void AssetInfoUI::save_now() const {
     }
     if (info_) (void)info_->commit_manifest();
 }
-
-void AssetInfoUI::open_area_editor(const std::string& name) {
-    if (!info_ || !assets_) return;
-    assets_->begin_area_edit_for_selected_asset(name);
-}
-
 void AssetInfoUI::rebuild_default_sections() {
     sections_.clear();
     section_bounds_.clear();
@@ -1791,35 +1785,6 @@ void AssetInfoUI::rebuild_default_sections() {
             SDL_Log("AssetInfoUI: failed to build section during initialization due to unknown error.");
         }
     };
-
-    // Zone Asset quick tools section
-    auto add_zone_tools = [this, &adopt_section, &finalize_section]() {
-        if (!info_) return;
-        std::string t = info_->type;
-        std::transform(t.begin(), t.end(), t.begin(), [](unsigned char ch){ return static_cast<char>(std::tolower(ch)); });
-        if (t != std::string{"zone_asset"}) return;
-        class Section_ZoneTools : public DockableCollapsible {
-        public:
-            AssetInfoUI* ui = nullptr;
-            std::unique_ptr<DMButton> btn_edit; std::unique_ptr<ButtonWidget> btn_edit_w;
-            Section_ZoneTools(): DockableCollapsible("Zone Asset", false) { set_scroll_enabled(false); }
-            void set_ui(AssetInfoUI* owner) { ui = owner; }
-            void build() override {
-                Rows rows;
-                if (!btn_edit) btn_edit = std::make_unique<DMButton>("Edit Zone Geometry", &DMStyles::CreateButton(), 200, DMButton::height());
-                if (!btn_edit_w) btn_edit_w = std::make_unique<ButtonWidget>(btn_edit.get(), [this](){ if (ui) ui->open_area_editor("zone"); });
-                rows.push_back({ btn_edit_w.get() });
-                set_rows(rows);
-            }
-        };
-        auto zone = std::make_unique<Section_ZoneTools>();
-        zone->set_ui(this);
-        adopt_section(zone.get());
-        finalize_section(zone.get());
-        sections_.push_back(std::move(zone));
-    };
-
-    add_zone_tools();
 
     auto basic = std::make_unique<Section_BasicInfo>();
     basic_info_section_ = basic.get();

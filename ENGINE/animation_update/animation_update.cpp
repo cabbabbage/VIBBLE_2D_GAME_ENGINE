@@ -302,6 +302,13 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
     final_dest = plan_.final_dest;
     plan_.override_non_locked = override_non_locked;
 
+    // If no viable strides were produced, immediately request another plan so controllers
+    // can try alternative inputs instead of getting stuck with a cleared request flag.
+    if (plan_.strides.empty()) {
+        path_requested = true;
+        return;
+    }
+
     if (runtime_) {
         runtime_->reset_plan_progress();
     }
