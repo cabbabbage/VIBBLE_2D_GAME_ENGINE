@@ -823,6 +823,14 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         const int max_scroll = max_scroll_offset();
         scroll_offset_ = std::clamp(static_cast<int>(std::round(ratio * static_cast<float>(max_scroll))), 0, max_scroll);
     };
+    auto point_over_toolbox_widget = [&](const SDL_Point& p) -> bool {
+        for (const auto& r : toolbox_widget_rects_) {
+            if (r.w > 0 && r.h > 0 && SDL_PointInRect(&p, &r)) {
+                return true;
+            }
+        }
+        return false;
+    };
 
     // Handle dragging (motion and release)
     if (dragging_dir_ || dragging_toolbox_ || dragging_nav_ || dragging_scrollbar_thumb_) {
@@ -902,66 +910,10 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         }
         // Toolbox panel drag: avoid interactive controls (buttons/checkbox/textboxes)
         const bool has_toolbox = toolbox_rect_.w > 0 && toolbox_rect_.h > 0;
-        if (has_toolbox && SDL_PointInRect(&p, &toolbox_rect_)) {
-            auto pointer_over_widget = [&](const auto* widget) -> bool {
-                if (!widget) return false;
-                const SDL_Rect& r = widget->rect();
-                if (r.w <= 0 || r.h <= 0) return false;
-                return SDL_PointInRect(&p, &r) != 0;
-            };
-            bool over_interactive = false;
-            auto guard_widget = [&](const auto* widget) {
-                if (over_interactive) return;
-                if (pointer_over_widget(widget)) {
-                    over_interactive = true;
-                }
-            };
-            if (mode_ == Mode::Movement || mode_ == Mode::Children) {
-                guard_widget(cb_smooth_.get());
-                if (smooth_enabled_) guard_widget(cb_curve_.get());
-                guard_widget(cb_show_anim_.get());
-                guard_widget(tb_total_dx_.get());
-                guard_widget(tb_total_dy_.get());
-                if (mode_ == Mode::Movement) guard_widget(btn_apply_all_movement_.get());
-            }
-            if (mode_ == Mode::Children) {
-                guard_widget(dd_child_select_.get());
-                guard_widget(cb_show_child_.get());
-                guard_widget(tb_child_dx_.get());
-                guard_widget(tb_child_dy_.get());
-                guard_widget(tb_child_deg_.get());
-                guard_widget(cb_child_visible_.get());
-                guard_widget(cb_child_render_front_.get());
-                guard_widget(btn_apply_all_children_.get());
-            }
-            if (mode_ == Mode::HitGeometry) {
-                guard_widget(dd_hitbox_type_.get());
-                guard_widget(btn_hitbox_add_remove_.get());
-                guard_widget(btn_hitbox_copy_next_.get());
-                guard_widget(tb_hit_center_x_.get());
-                guard_widget(tb_hit_center_y_.get());
-                guard_widget(tb_hit_width_.get());
-                guard_widget(tb_hit_height_.get());
-                guard_widget(tb_hit_rotation_.get());
-                guard_widget(btn_apply_all_hit_.get());
-            } else if (mode_ == Mode::AttackGeometry) {
-                guard_widget(dd_attack_type_.get());
-                guard_widget(btn_attack_add_remove_.get());
-                guard_widget(btn_attack_copy_next_.get());
-                guard_widget(tb_attack_start_x_.get());
-                guard_widget(tb_attack_start_y_.get());
-                guard_widget(tb_attack_control_x_.get());
-                guard_widget(tb_attack_control_y_.get());
-                guard_widget(tb_attack_end_x_.get());
-                guard_widget(tb_attack_end_y_.get());
-                guard_widget(tb_attack_damage_.get());
-                guard_widget(btn_apply_all_attack_.get());
-            }
-            if (!over_interactive) {
-                dragging_toolbox_ = true;
-                drag_offset_toolbox_ = SDL_Point{ p.x - toolbox_rect_.x, p.y - toolbox_rect_.y };
-                return true;
-            }
+        if (has_toolbox && SDL_PointInRect(&p, &toolbox_rect_) && !point_over_toolbox_widget(p)) {
+            dragging_toolbox_ = true;
+            drag_offset_toolbox_ = SDL_Point{ p.x - toolbox_rect_.x, p.y - toolbox_rect_.y };
+            return true;
         }
         // Nav panel drag: avoid prev/next buttons and thumbnails
         if (SDL_PointInRect(&p, &nav_rect_)) {
@@ -1911,6 +1863,7 @@ void FrameEditorSession::rebuild_layout() const {
     (void)cam; // anchor-based layout replaced by draggable screen-space positions
     DirectoryPanelMetrics dir_metrics = build_directory_panel_metrics();
     directory_rect_ = SDL_Rect{ dir_pos_.x, dir_pos_.y, dir_metrics.width, dir_metrics.height };
+    toolbox_widget_rects_.clear();
     const int dir_padding = DMSpacing::small_gap();
     const int button_gap = DMSpacing::small_gap();
     auto button_width = [](const std::unique_ptr<DMButton>& btn) -> int {
@@ -1920,6 +1873,13 @@ void FrameEditorSession::rebuild_layout() const {
             w = btn->preferred_width();
         }
         return w;
+    };
+    auto register_toolbox_widget = [&](const auto* widget) {
+        if (!widget) return;
+        const SDL_Rect& r = widget->rect();
+        if (r.w > 0 && r.h > 0) {
+            toolbox_widget_rects_.push_back(r);
+        }
     };
     int total_button_width = 0;
     auto accumulate_width = [&](const std::unique_ptr<DMButton>& btn) {
@@ -1994,6 +1954,7 @@ void FrameEditorSession::rebuild_layout() const {
                 const int y = row_top + (metrics.row_height - h) / 2;
                 const int x = reserve(w);
                 cb_smooth_->set_rect(SDL_Rect{ x, y, w, h });
+                register_toolbox_widget(cb_smooth_.get());
             }
             if (smooth_enabled_ && cb_curve_) {
                 const int w = std::max(metrics.curve_checkbox_width, DMCheckbox::height());
@@ -2001,6 +1962,7 @@ void FrameEditorSession::rebuild_layout() const {
                 const int y = row_top + (metrics.row_height - h) / 2;
                 const int x = reserve(w);
                 cb_curve_->set_rect(SDL_Rect{ x, y, w, h });
+                register_toolbox_widget(cb_curve_.get());
             }
             if (cb_show_anim_) {
                 const int w = std::max(metrics.show_checkbox_width, DMCheckbox::height());
@@ -2008,6 +1970,7 @@ void FrameEditorSession::rebuild_layout() const {
                 const int y = row_top + (metrics.row_height - h) / 2;
                 const int x = reserve(w);
                 cb_show_anim_->set_rect(SDL_Rect{ x, y, w, h });
+                register_toolbox_widget(cb_show_anim_.get());
             }
             if (tb_total_dx_) {
                 const int field_height = metrics.total_dx_height > 0 ? metrics.total_dx_height
@@ -2015,6 +1978,7 @@ void FrameEditorSession::rebuild_layout() const {
                 const int y = row_top + (metrics.row_height - field_height) / 2;
                 const int x = reserve(metrics.totals_width);
                 tb_total_dx_->set_rect(SDL_Rect{ x, y, metrics.totals_width, field_height });
+                register_toolbox_widget(tb_total_dx_.get());
             }
             if (tb_total_dy_) {
                 const int field_height = metrics.total_dy_height > 0 ? metrics.total_dy_height
@@ -2022,12 +1986,14 @@ void FrameEditorSession::rebuild_layout() const {
                 const int y = row_top + (metrics.row_height - field_height) / 2;
                 const int x = reserve(metrics.totals_width);
                 tb_total_dy_->set_rect(SDL_Rect{ x, y, metrics.totals_width, field_height });
+                register_toolbox_widget(tb_total_dy_.get());
             }
             // Bottom-row: Apply-to-all button spans full width
             if (btn_apply_all_movement_) {
                 const int inner_w = std::max(0, toolbox_rect_.w - metrics.padding * 2);
                 const int y = row_top + metrics.row_height + metrics.gap;
                 btn_apply_all_movement_->set_rect(SDL_Rect{ toolbox_rect_.x + metrics.padding, y, inner_w, DMButton::height() });
+                register_toolbox_widget(btn_apply_all_movement_.get());
             }
         }
     } else if (mode_ == Mode::Children) {
@@ -2061,6 +2027,7 @@ void FrameEditorSession::rebuild_layout() const {
                         content_width,
                         metrics.dropdown_row_height
                     });
+                    register_toolbox_widget(dd_child_select_.get());
                 }
             }
 
@@ -2079,6 +2046,7 @@ void FrameEditorSession::rebuild_layout() const {
                         const int y = row_top + (metrics.movement_row_height - h) / 2;
                         const int x = reserve(w);
                         cb_smooth_->set_rect(SDL_Rect{ x, y, w, h });
+                        register_toolbox_widget(cb_smooth_.get());
                     }
                     if (smooth_enabled_ && cb_curve_) {
                         const int w = std::max(metrics.curve_checkbox_width, DMCheckbox::height());
@@ -2086,18 +2054,21 @@ void FrameEditorSession::rebuild_layout() const {
                         const int y = row_top + (metrics.movement_row_height - h) / 2;
                         const int x = reserve(w);
                         cb_curve_->set_rect(SDL_Rect{ x, y, w, h });
+                        register_toolbox_widget(cb_curve_.get());
                     }
                     if (tb_total_dx_) {
                         const int field_height = metrics.total_dx_height > 0 ? metrics.total_dx_height : tb_total_dx_->height_for_width(metrics.totals_width);
                         const int y = row_top + (metrics.movement_row_height - field_height) / 2;
                         const int x = reserve(metrics.totals_width);
                         tb_total_dx_->set_rect(SDL_Rect{ x, y, metrics.totals_width, field_height });
+                        register_toolbox_widget(tb_total_dx_.get());
                     }
                     if (tb_total_dy_) {
                         const int field_height = metrics.total_dy_height > 0 ? metrics.total_dy_height : tb_total_dy_->height_for_width(metrics.totals_width);
                         const int y = row_top + (metrics.movement_row_height - field_height) / 2;
                         const int x = reserve(metrics.totals_width);
                         tb_total_dy_->set_rect(SDL_Rect{ x, y, metrics.totals_width, field_height });
+                        register_toolbox_widget(tb_total_dy_.get());
                     }
                 }
             }
@@ -2111,6 +2082,7 @@ void FrameEditorSession::rebuild_layout() const {
                         const int h = DMCheckbox::height();
                         const int y = row_top + (metrics.toggle_row_height - h) / 2;
                         cb->set_rect(SDL_Rect{ tx, y, width, h });
+                        register_toolbox_widget(cb);
                         tx += width + metrics.gap;
                     };
                     place_checkbox(cb_show_anim_.get(), metrics.show_parent_checkbox_width);
@@ -2135,6 +2107,7 @@ void FrameEditorSession::rebuild_layout() const {
                         const int y = row_top + (metrics.form_row_height - h) / 2;
                         const int x = reserve(w);
                         tb->set_rect(SDL_Rect{ x, y, w, h });
+                        register_toolbox_widget(tb);
                     };
                     place_textbox(tb_child_dx_.get(), metrics.child_dx_height);
                     place_textbox(tb_child_dy_.get(), metrics.child_dy_height);
@@ -2146,6 +2119,7 @@ void FrameEditorSession::rebuild_layout() const {
                         const int y = row_top + (metrics.form_row_height - h) / 2;
                         const int x = reserve(w);
                         cb->set_rect(SDL_Rect{ x, y, w, h });
+                        register_toolbox_widget(cb);
                     };
                     place_checkbox(cb_child_visible_.get(), metrics.child_visible_checkbox_width);
                     place_checkbox(cb_child_render_front_.get(), metrics.child_render_checkbox_width);
@@ -2157,6 +2131,7 @@ void FrameEditorSession::rebuild_layout() const {
                 const int apply_top = allocate_row(DMButton::height());
                 if (apply_top >= 0) {
                     btn_apply_all_children_->set_rect(SDL_Rect{ row_left, apply_top, content_width, DMButton::height() });
+                    register_toolbox_widget(btn_apply_all_children_.get());
                 }
             }
         }
@@ -2174,6 +2149,7 @@ void FrameEditorSession::rebuild_layout() const {
         if (dd_hitbox_type_) {
             const int h = DMDropdown::height();
             dd_hitbox_type_->set_rect(place_row(h));
+            register_toolbox_widget(dd_hitbox_type_.get());
         }
         if (btn_hitbox_add_remove_ || btn_hitbox_copy_next_) {
             const int row_h = DMButton::height();
@@ -2181,9 +2157,11 @@ void FrameEditorSession::rebuild_layout() const {
             const int button_width = (row.w - gap) / 2;
             if (btn_hitbox_add_remove_) {
                 btn_hitbox_add_remove_->set_rect(SDL_Rect{ row.x, row.y, button_width, row_h });
+                register_toolbox_widget(btn_hitbox_add_remove_.get());
             }
             if (btn_hitbox_copy_next_) {
                 btn_hitbox_copy_next_->set_rect(SDL_Rect{ row.x + button_width + gap, row.y, button_width, row_h });
+                register_toolbox_widget(btn_hitbox_copy_next_.get());
             }
         }
         auto place_pair = [&](DMTextBox* left, DMTextBox* right) {
@@ -2193,17 +2171,25 @@ void FrameEditorSession::rebuild_layout() const {
             const int right_h = right ? right->height_for_width(col_width) : DMTextBox::height();
             const int row_h = std::max(left_h, right_h);
             SDL_Rect row = place_row(row_h);
-            if (left) left->set_rect(SDL_Rect{ row.x, row.y, col_width, row_h });
-            if (right) right->set_rect(SDL_Rect{ row.x + col_width + gap, row.y, col_width, row_h });
+            if (left) {
+                left->set_rect(SDL_Rect{ row.x, row.y, col_width, row_h });
+                register_toolbox_widget(left);
+            }
+            if (right) {
+                right->set_rect(SDL_Rect{ row.x + col_width + gap, row.y, col_width, row_h });
+                register_toolbox_widget(right);
+            }
         };
         place_pair(tb_hit_center_x_.get(), tb_hit_center_y_.get());
         place_pair(tb_hit_width_.get(), tb_hit_height_.get());
         if (tb_hit_rotation_) {
             const int rot_height = tb_hit_rotation_->height_for_width(inner_width);
             tb_hit_rotation_->set_rect(place_row(rot_height));
+            register_toolbox_widget(tb_hit_rotation_.get());
         }
         if (btn_apply_all_hit_) {
             btn_apply_all_hit_->set_rect(place_row(DMButton::height()));
+            register_toolbox_widget(btn_apply_all_hit_.get());
         }
         int total_height = content_y > padding ? content_y - gap + padding : padding * 2;
         toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, width, total_height };
@@ -2221,6 +2207,7 @@ void FrameEditorSession::rebuild_layout() const {
         if (dd_attack_type_) {
             const int h = DMDropdown::height();
             dd_attack_type_->set_rect(place_row(h));
+            register_toolbox_widget(dd_attack_type_.get());
         }
         if (btn_attack_add_remove_ || btn_attack_copy_next_) {
             const int row_h = DMButton::height();
@@ -2228,9 +2215,11 @@ void FrameEditorSession::rebuild_layout() const {
             const int button_width = (row.w - gap) / 2;
             if (btn_attack_add_remove_) {
                 btn_attack_add_remove_->set_rect(SDL_Rect{ row.x, row.y, button_width, row_h });
+                register_toolbox_widget(btn_attack_add_remove_.get());
             }
             if (btn_attack_copy_next_) {
                 btn_attack_copy_next_->set_rect(SDL_Rect{ row.x + button_width + gap, row.y, button_width, row_h });
+                register_toolbox_widget(btn_attack_copy_next_.get());
             }
         }
         auto place_pair = [&](DMTextBox* left, DMTextBox* right) {
@@ -2240,8 +2229,14 @@ void FrameEditorSession::rebuild_layout() const {
             const int right_h = right ? right->height_for_width(col_width) : DMTextBox::height();
             const int row_h = std::max(left_h, right_h);
             SDL_Rect row = place_row(row_h);
-            if (left) left->set_rect(SDL_Rect{ row.x, row.y, col_width, row_h });
-            if (right) right->set_rect(SDL_Rect{ row.x + col_width + gap, row.y, col_width, row_h });
+            if (left) {
+                left->set_rect(SDL_Rect{ row.x, row.y, col_width, row_h });
+                register_toolbox_widget(left);
+            }
+            if (right) {
+                right->set_rect(SDL_Rect{ row.x + col_width + gap, row.y, col_width, row_h });
+                register_toolbox_widget(right);
+            }
         };
         place_pair(tb_attack_start_x_.get(), tb_attack_start_y_.get());
         place_pair(tb_attack_control_x_.get(), tb_attack_control_y_.get());
@@ -2249,9 +2244,11 @@ void FrameEditorSession::rebuild_layout() const {
         if (tb_attack_damage_) {
             const int dmg_height = tb_attack_damage_->height_for_width(inner_width);
             tb_attack_damage_->set_rect(place_row(dmg_height));
+            register_toolbox_widget(tb_attack_damage_.get());
         }
         if (btn_apply_all_attack_) {
             btn_apply_all_attack_->set_rect(place_row(DMButton::height()));
+            register_toolbox_widget(btn_apply_all_attack_.get());
         }
         int total_height = content_y > padding ? content_y - gap + padding : padding * 2;
         toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, width, total_height };

@@ -191,6 +191,7 @@ private:
     mutable SDL_Rect directory_rect_{0,0,0,0};
     mutable SDL_Rect toolbox_rect_{0,0,0,0};
     mutable SDL_Rect nav_rect_{0,0,0,0};
+    mutable std::vector<SDL_Rect> toolbox_widget_rects_;
     SDL_Point dir_pos_{0, 0};
     SDL_Point toolbox_pos_{0, 0};
     SDL_Point nav_pos_{0, 0};

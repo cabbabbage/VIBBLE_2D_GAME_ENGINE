@@ -12,6 +12,7 @@
 #include <string>
 #include <functional>
 #include <sstream>
+#include <SDL_image.h>
 
 #include "core/AssetsManager.hpp"
 #include "dev_mode/depth_cue_settings.hpp"
@@ -122,26 +123,77 @@ public:
     using ChangeCallback = std::function<void(const CameraDepthViewValues&)>;
     explicit CameraSideViewWidget(ChangeCallback cb) : on_change_(std::move(cb)) {}
 
+    ~CameraSideViewWidget() override {
+        if (subject_texture_) SDL_DestroyTexture(subject_texture_);
+        if (camera_texture_) SDL_DestroyTexture(camera_texture_);
+    }
+
     void set_rect(const SDL_Rect& r) override { rect_ = r; }
     const SDL_Rect& rect() const override { return rect_; }
     int height_for_width(int) const override { return preferred_height_; }
     bool handle_event(const SDL_Event& e) override {
+        update_layout_cache();
         if (!render_rect_valid_) {
             return false;
         }
-        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-            if (is_over_depth_handle(e.button.x, e.button.y)) {
-                dragging_depth_offset_ = true;
-                update_depth_offset_from_pointer(e.button.x, e.button.y);
+
+        const SDL_Point p = event_point(e);
+        const bool mouse_inside = (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN ||
+                                   e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEWHEEL) &&
+                                  point_in_rect(p, rect_);
+
+        if (low_height_box_) {
+            const bool was_editing = low_height_box_->is_editing();
+            if (low_height_box_->handle_event(e)) {
+                if (!low_height_box_->is_editing() && (was_editing || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_KEYDOWN)) {
+                    apply_height_from_textbox(*low_height_box_, true);
+                }
                 return true;
             }
         }
-        if (e.type == SDL_MOUSEMOTION && dragging_depth_offset_) {
-            update_depth_offset_from_pointer(e.motion.x, e.motion.y);
+        if (high_height_box_) {
+            const bool was_editing = high_height_box_->is_editing();
+            if (high_height_box_->handle_event(e)) {
+                if (!high_height_box_->is_editing() && (was_editing || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_KEYDOWN)) {
+                    apply_height_from_textbox(*high_height_box_, false);
+                }
+                return true;
+            }
+        }
+
+        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+            if (hit_line(low_line_hitbox_, e.button.x, e.button.y)) {
+                dragging_ = DragTarget::LowLine;
+                update_anchor_from_pointer(e.button.y, true);
+                return true;
+            }
+            if (hit_line(high_line_hitbox_, e.button.x, e.button.y)) {
+                dragging_ = DragTarget::HighLine;
+                update_anchor_from_pointer(e.button.y, false);
+                return true;
+            }
+            if (hit_depth_handle(p)) {
+                dragging_ = DragTarget::DepthOffset;
+                update_depth_offset_from_pointer(e.button.x);
+                return true;
+            }
+        }
+        if (e.type == SDL_MOUSEMOTION && dragging_ != DragTarget::None) {
+            if (dragging_ == DragTarget::DepthOffset) {
+                update_depth_offset_from_pointer(e.motion.x);
+            } else if (dragging_ == DragTarget::LowLine) {
+                update_anchor_from_pointer(e.motion.y, true);
+            } else if (dragging_ == DragTarget::HighLine) {
+                update_anchor_from_pointer(e.motion.y, false);
+            }
             return true;
         }
-        if (e.type == SDL_MOUSEBUTTONUP && dragging_depth_offset_) {
-            dragging_depth_offset_ = false;
+        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+            dragging_ = DragTarget::None;
+            if (mouse_inside) return true;
+        }
+
+        if (mouse_inside) {
             return true;
         }
         return false;
@@ -150,209 +202,339 @@ public:
         if (!renderer) return;
         if (rect_.w <= 0 || rect_.h <= 0) return;
         render_rect_valid_ = false;
+        update_layout_cache(renderer);
+        if (!render_rect_valid_) return;
 
         SDL_SetRenderDrawColor(renderer, 18, 22, 30, 255);
         SDL_RenderFillRect(renderer, &rect_);
         SDL_SetRenderDrawColor(renderer, 64, 82, 102, 255);
         SDL_RenderDrawRect(renderer, &rect_);
 
-        const int inner_pad = padding_;
-        SDL_Rect content{
-            rect_.x + inner_pad,
-            rect_.y + inner_pad,
-            rect_.w - inner_pad * 2,
-            rect_.h - inner_pad * 2
-        };
-        if (content.w <= 0 || content.h <= 0) return;
-        render_rect_valid_ = true;
+        SDL_SetRenderDrawColor(renderer, 90, 105, 125, 255);
+        SDL_RenderDrawLine(renderer, layout_.content.x, layout_.ground_y, layout_.content.x + layout_.content.w, layout_.ground_y);
+        SDL_Rect ground_thick{layout_.content.x, layout_.ground_y, layout_.content.w, 2};
+        SDL_RenderFillRect(renderer, &ground_thick);
 
-        const int icon_size = std::max(18, static_cast<int>(std::round(std::min(content.w, content.h) * 0.15f)));
+        SDL_SetRenderDrawColor(renderer, 120, 186, 255, 255);
+        SDL_RenderDrawLine(renderer, layout_.content.x, layout_.low_y, layout_.content.x + layout_.content.w, layout_.low_y);
+        SDL_SetRenderDrawColor(renderer, 120, 186, 255, 40);
+        SDL_RenderFillRect(renderer, &low_line_hitbox_);
 
-        const float span_above = std::max({values_.height_low_px, values_.height_high_px, values_.current_height, 1.0f});
-        const float span_below = std::max(1.0f, values_.depth_offset_px);
-        const float total_span = std::max(1.0f, span_above + span_below);
-        const float unit_to_px = static_cast<float>(content.h) / total_span;
+        SDL_SetRenderDrawColor(renderer, 166, 116, 255, 255);
+        SDL_RenderDrawLine(renderer, layout_.content.x, layout_.high_y, layout_.content.x + layout_.content.w, layout_.high_y);
+        SDL_SetRenderDrawColor(renderer, 166, 116, 255, 32);
+        SDL_RenderFillRect(renderer, &high_line_hitbox_);
 
-        const int ground_y  = content.y + static_cast<int>(std::lround(span_below * unit_to_px));
-        const int subject_y = ground_y - icon_size;
-
-        auto height_to_y = [&](float h) {
-            const float clamped = std::max(0.0f, h);
-            return ground_y - static_cast<int>(std::lround(clamped * unit_to_px));
-        };
-
-        // Depth origin (grid offset) line + handle
-        depth_handle_rect_ = SDL_Rect{0,0,0,0};
-        int depth_origin_y = ground_y + static_cast<int>(std::lround(values_.depth_offset_px * unit_to_px));
-        depth_origin_y = std::clamp(depth_origin_y, content.y, content.y + content.h - 1);
-        const int handle_w = std::max(10, icon_size / 2);
-        const int handle_h = std::max(10, icon_size / 2);
-        depth_handle_rect_ = SDL_Rect{
-            content.x + content.w - handle_w - inner_pad / 2,
-            depth_origin_y - handle_h / 2,
-            handle_w,
-            handle_h
-        };
-
-        SDL_SetRenderDrawColor(renderer, 78, 108, 146, 110);
-        SDL_RenderDrawLine(renderer, content.x, depth_origin_y, content.x + content.w, depth_origin_y);
-        SDL_SetRenderDrawColor(renderer, 128, 180, 230, 210);
-        SDL_RenderFillRect(renderer, &depth_handle_rect_);
-        SDL_SetRenderDrawColor(renderer, 30, 38, 48, 255);
-        SDL_RenderDrawRect(renderer, &depth_handle_rect_);
-
-        // Height band from min to max camera height
-        const int height_low_y  = height_to_y(values_.height_low_px);
-        const int height_high_y = height_to_y(values_.height_high_px);
-        SDL_Rect height_band{
-            content.x + content.w / 2 - icon_size / 3,
-            std::min(height_low_y, height_high_y),
-            std::max(icon_size / 2, content.w / 14),
-            std::max(4, std::abs(height_low_y - height_high_y))
-        };
-        SDL_SetRenderDrawColor(renderer, 82, 156, 214, 40);
-        SDL_RenderFillRect(renderer, &height_band);
-        SDL_SetRenderDrawColor(renderer, 104, 174, 228, 150);
-        SDL_RenderDrawRect(renderer, &height_band);
-
-        // Ground line
-        SDL_SetRenderDrawColor(renderer, 120, 144, 168, 255);
-        SDL_RenderDrawLine(renderer, content.x, ground_y, content.x + content.w, ground_y);
-
-        // Small grid markers up the height band
-        const int tick_count = 5;
-        for (int i = 0; i <= tick_count; ++i) {
-            const float t = static_cast<float>(i) / static_cast<float>(tick_count);
-            const float height_sample = values_.height_low_px + (values_.height_high_px - values_.height_low_px) * t;
-            const int y = height_to_y(height_sample);
-            SDL_RenderDrawLine(renderer, content.x, y, content.x + content.w, y);
+        SDL_SetRenderDrawColor(renderer, 255, 210, 120, 200);
+        for (int y = layout_.camera_y; y <= layout_.ground_y; y += 6) {
+            SDL_RenderDrawLine(renderer, layout_.camera_x, y, layout_.camera_x, std::min(y + 3, layout_.ground_y));
         }
 
-        const DMLabelStyle label_style = DMStyles::Label();
-        auto draw_label = [&](const std::string& text, int x, int y) {
-            DrawLabelText(renderer, text, x, y, label_style);
-        };
-
-        // Info labels
+        DMLabelStyle label_style = DMStyles::Label();
+        label_style.font_size = std::max(10, label_style.font_size - 2);
         char buffer[128] = {0};
-        std::snprintf(buffer, sizeof(buffer), "Zoom %.2fx · Pitch %.1f°", values_.current_zoom, values_.pitch_degrees);
-        draw_label(buffer, content.x, content.y);
-        std::snprintf(buffer, sizeof(buffer), "Height %.0f-%.0f px · Offset %.0f px", values_.height_low_px, values_.height_high_px, values_.depth_offset_px);
-        draw_label(buffer, content.x, content.y + label_style.font_size + 4);
+        std::snprintf(buffer, sizeof(buffer), "Height: %.0f px", values_.current_height);
+        DrawLabelText(renderer, buffer, layout_.camera_x + 8, (layout_.camera_y + layout_.ground_y) / 2 - label_style.font_size / 2, label_style);
+        std::snprintf(buffer, sizeof(buffer), "Offset: %.0f px", values_.depth_offset_px);
+        DrawLabelText(renderer, buffer, layout_.camera_x - 20, layout_.ground_y - label_style.font_size - 6, label_style);
 
-        // Icon helpers
-        auto fill_circle = [&](int cx, int cy, int r, SDL_Color color) {
-            SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
-            for (int dy = -r; dy <= r; ++dy) {
-                int span = static_cast<int>(std::sqrt(std::max(0, r * r - dy * dy)));
-                SDL_RenderDrawLine(renderer, cx - span, cy + dy, cx + span, cy + dy);
-            }
-        };
+        std::snprintf(buffer, sizeof(buffer), "Pitch: %.1f°", values_.pitch_degrees);
+        DrawLabelText(renderer, buffer, layout_.camera_x + 8, layout_.camera_y - layout_.icon_size - 6, label_style);
 
-        auto draw_camera_icon = [&](int cx, int cy) {
-            SDL_Rect body{
-                cx - icon_size / 2,
-                cy - icon_size / 2,
-                icon_size,
-                icon_size
-            };
-            SDL_SetRenderDrawColor(renderer, 66, 104, 160, 235);
-            SDL_RenderFillRect(renderer, &body);
-            SDL_SetRenderDrawColor(renderer, 18, 22, 30, 255);
-            SDL_RenderDrawRect(renderer, &body);
-            const int lens_r = std::max(2, icon_size / 6);
-            fill_circle(body.x + body.w - lens_r * 2, body.y + body.h / 2, lens_r, SDL_Color{214, 238, 255, 255});
-            SDL_SetRenderDrawColor(renderer, 66, 104, 160, 235);
-            SDL_RenderDrawLine(renderer, body.x, body.y + body.h - 2, body.x - icon_size / 3, body.y + body.h + icon_size / 3);
-            SDL_RenderDrawLine(renderer, body.x + body.w, body.y + body.h - 2, body.x + body.w + icon_size / 3, body.y + body.h + icon_size / 3);
-        };
+        DrawLabelText(renderer, "Low", layout_.content.x + 6, layout_.low_y - label_style.font_size - 2, label_style);
+        std::snprintf(buffer, sizeof(buffer), "Zoom: %.2f", values_.zoom_low);
+        DrawLabelText(renderer, buffer, layout_.content.x + 6, layout_.low_y + 6, label_style);
+        DrawLabelText(renderer, "High", layout_.content.x + 6, layout_.high_y - label_style.font_size - 2, label_style);
+        std::snprintf(buffer, sizeof(buffer), "Zoom: %.2f", values_.zoom_high);
+        DrawLabelText(renderer, buffer, layout_.content.x + 6, layout_.high_y + 6, label_style);
 
-        auto draw_subject_icon = [&](int cx, int cy) {
-            const int head_r = std::max(3, icon_size / 6);
-            const int head_cy = cy + head_r / 2;
-            fill_circle(cx, head_cy, head_r, SDL_Color{238, 200, 120, 255});
-            SDL_Rect torso{
-                cx - icon_size / 6,
-                head_cy + head_r,
-                icon_size / 3,
-                icon_size - head_r
-            };
-            SDL_SetRenderDrawColor(renderer, 120, 190, 255, 230);
-            SDL_RenderFillRect(renderer, &torso);
-            SDL_SetRenderDrawColor(renderer, 32, 42, 56, 255);
-            SDL_RenderDrawRect(renderer, &torso);
-        };
+        SDL_SetRenderDrawColor(renderer, 255, 210, 120, 180);
+        SDL_RenderFillRect(renderer, &depth_handle_rect_);
+        SDL_SetRenderDrawColor(renderer, 60, 50, 30, 255);
+        SDL_RenderDrawRect(renderer, &depth_handle_rect_);
 
-        const int camera_y = height_to_y(values_.current_height);
-        const int camera_x = content.x + content.w / 4;
-        const int subject_x = content.x + (content.w * 3) / 4;
-
-        // Pitch line hint from camera
         const float clamped_pitch = std::clamp(values_.pitch_degrees, -85.0f, 85.0f);
         const float pitch_radians = clamped_pitch * (kPi / 180.0f);
-        const int line_length = std::max(icon_size * 2, content.w / 5);
+        const int line_length = std::max(layout_.icon_size * 2, layout_.content.w / 4);
         const int pitch_dx = line_length;
-        const int pitch_dy = static_cast<int>(std::round(std::tan(pitch_radians) * static_cast<float>(line_length) * 0.35f));
+        const int pitch_dy = static_cast<int>(std::round(std::tan(pitch_radians) * static_cast<float>(line_length) * 0.45f));
         SDL_SetRenderDrawColor(renderer, 154, 203, 255, 180);
-        SDL_RenderDrawLine(renderer, camera_x, camera_y, camera_x + pitch_dx, camera_y - pitch_dy);
+        SDL_RenderDrawLine(renderer, layout_.camera_x, layout_.camera_y, layout_.camera_x + pitch_dx, layout_.camera_y - pitch_dy);
 
-        draw_camera_icon(camera_x, camera_y);
-        draw_subject_icon(subject_x, subject_y);
+        draw_icon(renderer, subject_texture_, subject_texture_failed_, layout_.subject_rect, "Subject");
+        draw_icon(renderer, camera_texture_, camera_texture_failed_, layout_.camera_rect, "Camera", values_.pitch_degrees);
+
+        if (low_height_box_) low_height_box_->render(renderer);
+        if (high_height_box_) high_height_box_->render(renderer);
     }
     bool wants_full_row() const override { return true; }
 
-    void set_values(const CameraDepthViewValues& v) { values_ = v; }
+    void set_values(const CameraDepthViewValues& v) {
+        values_ = v;
+        enforce_height_constraints();
+        enforce_zoom_constraints();
+        sync_text_fields();
+    }
     CameraDepthViewValues values() const { return values_; }
     void set_on_change(ChangeCallback cb) { on_change_ = std::move(cb); }
     void set_preferred_height(int h) { preferred_height_ = std::max(160, h); }
 
 private:
+    struct LayoutState {
+        SDL_Rect content{0,0,0,0};
+        int ground_y = 0;
+        int low_y = 0;
+        int high_y = 0;
+        int camera_x = 0;
+        int camera_y = 0;
+        int icon_size = 0;
+        SDL_Rect subject_rect{0,0,0,0};
+        SDL_Rect camera_rect{0,0,0,0};
+        float pixels_per_unit = 1.0f;
+        int offset_range_x = 0;
+        int offset_range_w = 1;
+    };
+
+    enum class DragTarget { None, LowLine, HighLine, DepthOffset };
+
     void notify() { if (on_change_) on_change_(values_); }
 
-    bool is_over_depth_handle(int px, int py) const {
-        if (depth_handle_rect_.w <= 0 || depth_handle_rect_.h <= 0) return false;
-        const int pad = std::max(6, depth_handle_rect_.h / 2);
-        SDL_Rect hit{
-            depth_handle_rect_.x - pad,
-            depth_handle_rect_.y - pad,
-            depth_handle_rect_.w + pad * 2,
-            depth_handle_rect_.h + pad * 2
-        };
-        return px >= hit.x && px <= hit.x + hit.w &&
-               py >= hit.y && py <= hit.y + hit.h;
+    bool hit_line(const SDL_Rect& rect, int px, int py) const {
+        return px >= rect.x && px <= rect.x + rect.w && py >= rect.y && py <= rect.y + rect.h;
     }
 
-    void update_depth_offset_from_pointer(int px, int py) {
-        if (!render_rect_valid_ || depth_handle_rect_.w <= 0) return;
+    static SDL_Point event_point(const SDL_Event& e) {
+        SDL_Point p{0,0};
+        switch (e.type) {
+        case SDL_MOUSEMOTION: p = SDL_Point{e.motion.x, e.motion.y}; break;
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP: p = SDL_Point{e.button.x, e.button.y}; break;
+        case SDL_MOUSEWHEEL: SDL_GetMouseState(&p.x, &p.y); break;
+        default: break;
+        }
+        return p;
+    }
+
+    static bool point_in_rect(SDL_Point p, const SDL_Rect& r) {
+        return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+    }
+
+    float parse_px_value(const std::string& text, float fallback) const {
+        char* end = nullptr;
+        const float parsed = std::strtof(text.c_str(), &end);
+        if (end == text.c_str()) return fallback;
+        if (!std::isfinite(parsed)) return fallback;
+        return parsed;
+    }
+
+    void apply_height_from_textbox(const DMTextBox& box, bool low_line) {
+        const float preserved_slope = safe_height_per_zoom();
+        const float parsed = parse_px_value(box.value(), low_line ? values_.height_low_px : values_.height_high_px);
+        if (low_line) {
+            values_.height_low_px = std::clamp(parsed, 0.0f, values_.height_high_px);
+        } else {
+            values_.height_high_px = std::max(parsed, values_.height_low_px);
+        }
+        enforce_height_constraints();
+        sync_zoom_from_height_change(low_line, preserved_slope);
+        sync_text_fields();
+        notify();
+    }
+
+    void update_anchor_from_pointer(int py, bool low_line) {
+        if (!render_rect_valid_) return;
+        const float preserved_slope = safe_height_per_zoom();
+        const int clamped_py = std::clamp(py, layout_.content.y, layout_.content.y + layout_.content.h);
+        const int dy = std::max(0, layout_.ground_y - clamped_py);
+        const float height_px = static_cast<float>(dy) / std::max(0.001f, layout_.pixels_per_unit);
+        if (low_line) {
+            values_.height_low_px = std::clamp(height_px, 0.0f, values_.height_high_px);
+        } else {
+            values_.height_high_px = std::max(height_px, values_.height_low_px);
+        }
+        enforce_height_constraints();
+        sync_zoom_from_height_change(low_line, preserved_slope);
+        sync_text_fields();
+        notify();
+    }
+
+    void update_depth_offset_from_pointer(int px) {
+        if (!render_rect_valid_) return;
+        const int clamped_px = std::clamp(px, layout_.offset_range_x, layout_.offset_range_x + layout_.offset_range_w);
+        const float t = static_cast<float>(clamped_px - layout_.offset_range_x) / std::max(1, layout_.offset_range_w);
+        const float offset_px = std::clamp(t * kMaxDepthOffsetPx, 0.0f, kMaxDepthOffsetPx);
+        values_.depth_offset_px = offset_px;
+        notify();
+    }
+
+    bool hit_depth_handle(SDL_Point p) const {
+        if (!render_rect_valid_) return false;
+        if (hit_line(camera_drag_hitbox_, p.x, p.y)) return true;
+        return hit_line(depth_handle_rect_, p.x, p.y);
+    }
+
+    void enforce_height_constraints() {
+        values_.height_low_px = std::max(0.0f, values_.height_low_px);
+        values_.height_high_px = std::max(values_.height_low_px, values_.height_high_px);
+    }
+
+    void enforce_zoom_constraints() {
+        constexpr float kMinZoom      = 0.05f;
+        constexpr float kMinZoomDelta = 0.0001f;
+        values_.zoom_low = std::max(kMinZoom, values_.zoom_low);
+        values_.zoom_high = std::max(values_.zoom_low + kMinZoomDelta, values_.zoom_high);
+    }
+
+    float safe_height_per_zoom() const {
+        const float dz = std::max(0.0001f, values_.zoom_high - values_.zoom_low);
+        const float slope = (values_.height_high_px - values_.height_low_px) / dz;
+        return (std::fabs(slope) < 1e-4f) ? 1.0f : slope;
+    }
+
+    void sync_zoom_from_height_change(bool low_line, float preserved_slope) {
+        const float slope = (std::fabs(preserved_slope) < 1e-4f) ? 1.0f : preserved_slope;
+        const float height_span = values_.height_high_px - values_.height_low_px;
+        const float new_delta_zoom = height_span / slope;
+        if (low_line) {
+            values_.zoom_low = values_.zoom_high - new_delta_zoom;
+        } else {
+            values_.zoom_high = values_.zoom_low + new_delta_zoom;
+        }
+        enforce_zoom_constraints();
+    }
+
+    void sync_text_fields() {
+        if (low_height_box_) low_height_box_->set_value(format_height(values_.height_low_px));
+        if (high_height_box_) high_height_box_->set_value(format_height(values_.height_high_px));
+    }
+
+    std::string format_height(float value) const {
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "%.0f", value);
+        return buf;
+    }
+
+    void draw_icon(SDL_Renderer* renderer,
+                   SDL_Texture*& tex,
+                   bool& failed_flag,
+                   const SDL_Rect& rect,
+                   const char* fallback_label,
+                   float angle_degrees = 0.0f) const {
+        if (!renderer) return;
+        if (!tex && !failed_flag) {
+            const bool is_camera = std::string(fallback_label) == "Camera";
+            tex = IMG_LoadTexture(renderer, is_camera ? "SRC/icons/camera.png" : "SRC/icons/subject.png");
+            if (!tex) {
+                failed_flag = true;
+            }
+        }
+        if (tex) {
+            SDL_RenderCopyEx(renderer, tex, nullptr, &rect, angle_degrees, nullptr, SDL_FLIP_NONE);
+            return;
+        }
+        SDL_SetRenderDrawColor(renderer, 180, 110, 120, 230);
+        SDL_RenderFillRect(renderer, &rect);
+        SDL_SetRenderDrawColor(renderer, 30, 30, 40, 255);
+        SDL_RenderDrawRect(renderer, &rect);
+        const DMLabelStyle ls = DMStyles::Label();
+        DrawLabelText(renderer, fallback_label, rect.x + 4, rect.y + rect.h / 2 - ls.font_size / 2, ls);
+    }
+
+    void update_layout_cache(SDL_Renderer* renderer = nullptr) const {
         const int inner_pad = padding_;
-        SDL_Rect content{
+        layout_.content = SDL_Rect{
             rect_.x + inner_pad,
             rect_.y + inner_pad,
             rect_.w - inner_pad * 2,
             rect_.h - inner_pad * 2
         };
-        if (content.w <= 0 || content.h <= 0) return;
+        render_rect_valid_ = layout_.content.w > 0 && layout_.content.h > 0;
+        if (!render_rect_valid_) {
+            camera_drag_hitbox_ = SDL_Rect{0,0,0,0};
+            return;
+        }
 
-        const float span_above = std::max({values_.height_low_px, values_.height_high_px, values_.current_height, 1.0f});
-        const float span_below = std::max(1.0f, values_.depth_offset_px);
-        const float total_span = std::max(1.0f, span_above + span_below);
-        const float unit_to_px = static_cast<float>(content.h) / total_span;
-        const int ground_y  = content.y + static_cast<int>(std::lround(span_below * unit_to_px));
-        const int clamped_py = std::clamp(py, content.y, content.y + content.h);
-        const float offset_px = std::max(0.0f, static_cast<float>(clamped_py - ground_y) / unit_to_px);
-        values_.depth_offset_px = std::clamp(offset_px, 0.0f, 4000.0f);
-        notify();
+        layout_.icon_size = std::max(28, static_cast<int>(std::round(std::min(layout_.content.w, layout_.content.h) * 0.18f)));
+
+        const float max_height = std::max({values_.height_low_px, values_.height_high_px, values_.current_height, 1.0f});
+        const float span_px = std::max(max_height, 120.0f);
+        const int top_padding = layout_.icon_size;
+        const int usable_height = std::max(1, layout_.content.h - top_padding);
+        layout_.pixels_per_unit = static_cast<float>(usable_height) / span_px;
+        layout_.ground_y = layout_.content.y + layout_.content.h - 1;
+        auto height_to_y = [&](float h) {
+            const int y = layout_.ground_y - static_cast<int>(std::lround(std::max(0.0f, h) * layout_.pixels_per_unit));
+            return std::clamp(y, layout_.content.y, layout_.ground_y - 2);
+        };
+        layout_.low_y  = height_to_y(values_.height_low_px);
+        layout_.high_y = height_to_y(values_.height_high_px);
+        if (layout_.high_y > layout_.low_y) layout_.high_y = layout_.low_y;
+
+        const int drag_pad = std::max(6, layout_.icon_size / 4);
+        low_line_hitbox_ = SDL_Rect{layout_.content.x, layout_.low_y - drag_pad, layout_.content.w, drag_pad * 2};
+        high_line_hitbox_ = SDL_Rect{layout_.content.x, layout_.high_y - drag_pad, layout_.content.w, drag_pad * 2};
+
+        layout_.offset_range_x = layout_.content.x + layout_.icon_size * 2;
+        layout_.offset_range_w = std::max(layout_.content.w - layout_.icon_size * 3, layout_.icon_size);
+        const float t = std::clamp(values_.depth_offset_px / kMaxDepthOffsetPx, 0.0f, 1.0f);
+        layout_.camera_x = layout_.offset_range_x + static_cast<int>(std::round(t * layout_.offset_range_w));
+        layout_.camera_y = height_to_y(values_.current_height);
+
+        layout_.subject_rect = SDL_Rect{layout_.content.x + layout_.icon_size / 2, layout_.ground_y - layout_.icon_size, layout_.icon_size, layout_.icon_size};
+        layout_.camera_rect = SDL_Rect{layout_.camera_x - layout_.icon_size / 2, layout_.camera_y - layout_.icon_size / 2, layout_.icon_size, layout_.icon_size};
+
+        const int handle_w = std::max(14, layout_.icon_size / 2);
+        const int handle_h = std::max(14, layout_.icon_size / 2);
+        int handle_y = std::min(layout_.content.y + layout_.content.h - handle_h, layout_.ground_y + 6);
+        handle_y = std::max(layout_.content.y, handle_y);
+        depth_handle_rect_ = SDL_Rect{layout_.camera_x - handle_w / 2, handle_y, handle_w, handle_h};
+        const int drag_w = std::max(handle_w * 2, layout_.icon_size + 12);
+        camera_drag_hitbox_ = SDL_Rect{
+            layout_.camera_x - drag_w / 2,
+            layout_.content.y,
+            drag_w,
+            layout_.content.h
+        };
+
+        const int box_w = std::max(120, layout_.content.w / 4);
+        const int box_h = DMTextBox::height();
+        SDL_Rect low_box{layout_.content.x + layout_.content.w - box_w - padding_, layout_.low_y - box_h / 2, box_w, box_h};
+        SDL_Rect high_box{layout_.content.x + layout_.content.w - box_w - padding_, layout_.high_y - box_h / 2, box_w, box_h};
+        low_box.y = std::clamp(low_box.y, layout_.content.y, layout_.content.y + layout_.content.h - box_h);
+        high_box.y = std::clamp(high_box.y, layout_.content.y, layout_.content.y + layout_.content.h - box_h);
+        if (!low_height_box_) {
+            low_height_box_ = std::make_unique<DMTextBox>("Height (px)", format_height(values_.height_low_px));
+        }
+        if (!high_height_box_) {
+            high_height_box_ = std::make_unique<DMTextBox>("Height (px)", format_height(values_.height_high_px));
+        }
+        if (low_height_box_) low_height_box_->set_rect(low_box);
+        if (high_height_box_) high_height_box_->set_rect(high_box);
+
+        (void)renderer;
+        render_rect_valid_ = true;
     }
 
     SDL_Rect rect_{0,0,0,0};
-    int preferred_height_ = 320;
+    int preferred_height_ = 420;
     int padding_ = 14;
     CameraDepthViewValues values_{};
     ChangeCallback on_change_{};
     mutable SDL_Rect depth_handle_rect_{0,0,0,0};
+    mutable SDL_Rect low_line_hitbox_{0,0,0,0};
+    mutable SDL_Rect high_line_hitbox_{0,0,0,0};
+    mutable SDL_Rect camera_drag_hitbox_{0,0,0,0};
     mutable bool render_rect_valid_ = false;
-    bool dragging_depth_offset_ = false;
-};
+    mutable LayoutState layout_{};
+    mutable std::unique_ptr<DMTextBox> low_height_box_{};
+    mutable std::unique_ptr<DMTextBox> high_height_box_{};
+    mutable SDL_Texture* subject_texture_ = nullptr;
+    mutable SDL_Texture* camera_texture_ = nullptr;
+    mutable bool subject_texture_failed_ = false;
+    mutable bool camera_texture_failed_ = false;
+    DragTarget dragging_ = DragTarget::None;
+    inline static constexpr float kMaxDepthOffsetPx = 4000.0f;
+}; 
 
 class CameraSideViewPanel : public DockableCollapsible {
 public:
@@ -366,7 +548,7 @@ public:
                 }
             });
         if (widget_) {
-            widget_->set_preferred_height(340);
+            widget_->set_preferred_height(420);
         }
         set_rows({ { widget_.get() } });
         set_padding(DMSpacing::panel_padding());
@@ -374,9 +556,9 @@ public:
         set_col_gap(DMSpacing::small_gap());
         set_close_button_enabled(true);
         set_scroll_enabled(false);
-        set_floating_content_width(520);
-        set_visible_height(360);
-        set_cell_width(480);
+        set_floating_content_width(560);
+        set_visible_height(420);
+        set_cell_width(520);
         set_expanded(true);
         set_visible(false);
     }
@@ -946,7 +1128,7 @@ void CameraUIPanel::build_ui() {
     set_padding(DMSpacing::panel_padding());
     set_row_gap(DMSpacing::item_gap());
     set_col_gap(DMSpacing::item_gap());
-    set_floating_content_width(420);
+    set_floating_content_width(460);
 
     header_spacer_ = std::make_unique<SpacerWidget>(DMSpacing::header_gap());
     hero_banner_widget_ = std::make_unique<PanelBannerWidget>(
@@ -1105,8 +1287,8 @@ void CameraUIPanel::on_control_value_changed() {
     if (!assets_ || !is_visible()) {
         return;
     }
-    refresh_side_view_preview();
     apply_settings_if_needed();
+    refresh_side_view_preview();
 }
 
 void CameraUIPanel::rebuild_rows() {

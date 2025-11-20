@@ -1939,6 +1939,16 @@ const char* AssetInfoUI::section_display_name(AssetInfoSectionId section_id) {
 bool AssetInfoUI::is_point_inside(int x, int y) const {
     if (!visible_) return false;
     SDL_Point p{ x, y };
+
+    // Treat the embedded animation editor area as part of this UI so it
+    // receives pointer routing/blocking like the rest of the panel.
+    if (animation_editor_window_ && animation_editor_window_->is_visible()) {
+        if (animation_editor_rect_.w > 0 && animation_editor_rect_.h > 0 &&
+            SDL_PointInRect(&p, &animation_editor_rect_)) {
+            return true;
+        }
+    }
+
     if (container_.is_point_inside(x, y)) return true;
     if (asset_selector_ && asset_selector_->visible() && asset_selector_->is_point_inside(x, y)) return true;
     return false;

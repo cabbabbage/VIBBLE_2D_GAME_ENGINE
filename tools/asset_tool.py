@@ -4,26 +4,29 @@ VIBBLE 2D Game Engine Asset Generation Tool.
 
 New usage:
 
-    python asset_tool.py <manifest_path> <cache_root> [asset_list]
+    python asset_tool.py <manifest_path> <cache_root> [asset_list] [animation_list]
 
-    <manifest_path>  path to manifest.json
-    <cache_root>     directory where cache will be written and where cache_helper
-                     will store its json snippets
-    [asset_list]     optional comma separated list of asset names to regenerate
+    <manifest_path>   path to manifest.json
+    <cache_root>      directory where cache will be written and where cache_helper
+                      will store its json snippets
+    [asset_list]      optional comma separated list of asset names to regenerate
+    [animation_list]  optional comma separated list of animation ids to regenerate
+                      for the selected assets
 
 Behavior:
 
     - Always parses foreground and background effects via EffectsParser using a
       cache file inside <cache_root>.
 
+    - If asset_list is provided:
+        * Regenerate exactly those assets, even if effects changed.
+        * When animation_list is provided, only regenerate the listed
+          animations for those assets.
+
     - If asset_list is omitted:
         * If effects changed: regenerate all assets in the manifest.
         * If effects did not change: regenerate only assets whose snippets
           changed according to basic_asset_info.Asset and cache_helper.
-
-    - If asset_list is provided:
-        * Regenerate exactly those assets, even if effects changed, but only for
-          those requested assets.
 
     - For each asset to regenerate:
         * Load frames from its source directory.
@@ -46,7 +49,7 @@ import time
 import math
 import shutil
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Set
 
 from PIL import Image
 import multiprocessing
@@ -219,10 +222,13 @@ class AssetTool:
     Main class for asset generation tool.
     """
 
-    def __init__(self, manifest_path: str, cache_root: str):
+    def __init__(self, manifest_path: str, cache_root: str, animation_filter: Optional[Set[str]] = None):
         self.manifest_path = os.path.abspath(manifest_path)
         self.cache_root = Path(os.path.abspath(cache_root))
         self.manifest = self.load_manifest()
+        self.animation_filter: Optional[Set[str]] = (
+            set(animation_filter) if animation_filter else None
+        )
 
         # Parse effects with cache located in cache_root
         effects_cache = self.cache_root / "effects_cache.json"
@@ -377,19 +383,7 @@ class AssetTool:
 
         result: List[Asset] = []
 
-        # Prioritize effects changed: regenerate all if effects changed
-        if self.effects_changed:
-            LOGGER.info("Effects changed. Regenerating all assets.")
-            for name in all_asset_names:
-                asset = Asset(
-                    name=name,
-                    manifest_path=self.manifest_path,
-                    cache_dir=str(self.cache_root / ".asset_cache"),
-                )
-                result.append(asset)
-            return result
-
-        # Effects unchanged, honor asset_list or snippet changes
+        # Honor explicit asset list first, regardless of effects changes
         if asset_list_str is not None:
             # User explicitly requested a set of assets
             requested_names = [
@@ -414,6 +408,18 @@ class AssetTool:
                 )
                 result.append(asset)
 
+            return result
+
+        # No explicit list; if effects changed, regenerate everything
+        if self.effects_changed:
+            LOGGER.info("Effects changed. Regenerating all assets.")
+            for name in all_asset_names:
+                asset = Asset(
+                    name=name,
+                    manifest_path=self.manifest_path,
+                    cache_dir=str(self.cache_root / ".asset_cache"),
+                )
+                result.append(asset)
             return result
 
         # Auto mode: regenerate only assets whose snippet changed
@@ -460,6 +466,19 @@ class AssetTool:
             animations = [(d, d.name) for d in subdirs]
         else:
             animations = [(asset_src_dir, "default")]
+
+        if self.animation_filter:
+            animations = [
+                (path, anim_id)
+                for path, anim_id in animations
+                if anim_id in self.animation_filter
+            ]
+            if not animations:
+                print(
+                    f"[AssetTool] Asset '{asset.name}' has no animations matching filter "
+                    f"{sorted(self.animation_filter)}. Skipping."
+                )
+                return
 
         print(f"[AssetTool] Regenerating asset '{asset.name}' from {asset_src_dir}")
 
@@ -604,7 +623,7 @@ class AssetTool:
 def main():
     if len(sys.argv) < 3:
         print(
-            "Usage: python asset_tool.py <manifest_path> <cache_root> [asset_list]",
+            "Usage: python asset_tool.py <manifest_path> <cache_root> [asset_list] [animation_list]",
             file=sys.stderr,
         )
         print("  <manifest_path>  path to manifest.json", file=sys.stderr)
@@ -613,13 +632,25 @@ def main():
             "  [asset_list]     optional comma separated asset names to regen",
             file=sys.stderr,
         )
+        print(
+            "  [animation_list] optional comma separated animation ids to regen for selected assets",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     manifest_path = sys.argv[1]
     cache_root = sys.argv[2]
     asset_list_str = sys.argv[3] if len(sys.argv) > 3 else None
+    animation_list_str = sys.argv[4] if len(sys.argv) > 4 else None
+    animation_filter = None
+    if animation_list_str:
+        animation_filter = [
+            name.strip()
+            for name in animation_list_str.split(",")
+            if name.strip()
+        ] or None
 
-    tool = AssetTool(manifest_path, cache_root)
+    tool = AssetTool(manifest_path, cache_root, set(animation_filter) if animation_filter else None)
     assets_to_regen = tool.collect_assets_to_regen(asset_list_str)
     tool.process_assets(assets_to_regen)
 
