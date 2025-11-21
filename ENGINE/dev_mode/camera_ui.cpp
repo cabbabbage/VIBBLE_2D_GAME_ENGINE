@@ -1507,7 +1507,9 @@ void CameraUIPanel::rebuild_rows() {
 void CameraUIPanel::apply_settings_if_needed() {
     if (!assets_) return;
     camera::RealismSettings settings = read_settings_from_ui();
-    const bool effects_enabled = assets_->getView().realism_enabled();
+    const bool effects_enabled = realism_enabled_checkbox_
+        ? realism_enabled_checkbox_->value()
+        : last_realism_enabled_;
     const bool depthcue_enabled = depthcue_checkbox_ ? depthcue_checkbox_->value() : last_depthcue_enabled_;
 
     auto differs = [](float a, float b) {
