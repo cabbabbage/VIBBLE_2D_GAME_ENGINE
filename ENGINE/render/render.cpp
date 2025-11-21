@@ -1646,18 +1646,20 @@ void SceneRenderer::render(){
                             continue;
                         }
                         slot.visible = child_data.visible;
-                        slot.render_in_front = child_data.render_in_front;
-                        const int dx = parent->flipped ? -child_data.dx : child_data.dx;
-                        slot.world_pos = SDL_Point{ parent->pos.x + dx, parent->pos.y + child_data.dy };
-                        slot.rotation_degrees = ::mirrored_child_rotation(parent->flipped, child_data.degree);
-                        if (slot.visible && (!frame_ptr || !slot_animation)) {
-                            slot_animation = resolve_child_animation(slot);
-                            if (slot_animation) {
-                                slot.current_frame = slot_animation->get_first_frame();
-                                slot.frame_progress = 0.0f;
-                                slot.cached_w = 0;
-                                slot.cached_h = 0;
-                                frame_ptr = slot.current_frame;
+                        if (child_data.visible) {
+                            slot.render_in_front = child_data.render_in_front;
+                            const int dx = parent->flipped ? -child_data.dx : child_data.dx;
+                            slot.world_pos = SDL_Point{ parent->pos.x + dx, parent->pos.y + child_data.dy };
+                            slot.rotation_degrees = ::mirrored_child_rotation(parent->flipped, child_data.degree);
+                            if (!frame_ptr || !slot_animation) {
+                                slot_animation = resolve_child_animation(slot);
+                                if (slot_animation) {
+                                    slot.current_frame = slot_animation->get_first_frame();
+                                    slot.frame_progress = 0.0f;
+                                    slot.cached_w = 0;
+                                    slot.cached_h = 0;
+                                    frame_ptr = slot.current_frame;
+                                }
                             }
                         }
                         break;

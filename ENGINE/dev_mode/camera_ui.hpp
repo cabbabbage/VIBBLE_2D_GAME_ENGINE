@@ -17,6 +17,8 @@ class Input;
 class FloatSliderWidget;
 class SectionToggleWidget;
 class DiscreteSliderWidget;
+class PitchDialWidget;
+class ZoomKeyPointWidget;
 
 class CameraUIPanel : public DockableCollapsible {
 public:
@@ -46,9 +48,7 @@ private:
     void apply_settings_to_camera(const camera::RealismSettings& settings, bool effects_enabled, bool depthcue_enabled);
     camera::RealismSettings read_settings_from_ui() const;
     void on_control_value_changed();
-    void on_zoom_anchor_value_changed(bool use_min_zoom);
     void snap_zoom_to_anchor(float target_zoom, bool anchor_is_min_section);
-    void enforce_zoom_section_exclusivity(bool expanding_min_section);
 
 private:
     Assets* assets_ = nullptr;
@@ -65,22 +65,12 @@ private:
     std::unique_ptr<Widget> controls_spacer_;
     std::unique_ptr<SectionToggleWidget> visibility_section_header_;
     std::unique_ptr<SectionToggleWidget> depth_section_header_;
-    std::unique_ptr<SectionToggleWidget> zoom_in_settings_header_;
-    std::unique_ptr<SectionToggleWidget> zoom_out_settings_header_;
     std::unique_ptr<SectionToggleWidget> depthcue_section_header_;
     std::unique_ptr<SectionToggleWidget> smoothing_section_header_;
 
-    std::unique_ptr<FloatSliderWidget> zoom_in_slider_;
-    std::unique_ptr<FloatSliderWidget> zoom_out_slider_;
+    std::unique_ptr<ZoomKeyPointWidget> zoom_in_keypoint_;
+    std::unique_ptr<ZoomKeyPointWidget> zoom_out_keypoint_;
     std::unique_ptr<FloatSliderWidget> base_height_slider_;
-    std::unique_ptr<FloatSliderWidget> tilt_in_slider_;
-    std::unique_ptr<FloatSliderWidget> tilt_out_slider_;
-    std::unique_ptr<Widget> tilt_hint_label_;
-    std::unique_ptr<FloatSliderWidget> horizon_near_slider_;
-    std::unique_ptr<FloatSliderWidget> horizon_far_slider_;
-    std::unique_ptr<FloatSliderWidget> depth_offset_slider_;
-    std::unique_ptr<FloatSliderWidget> foreshorten_strength_slider_;
-    std::unique_ptr<FloatSliderWidget> distance_strength_slider_;
     std::unique_ptr<FloatSliderWidget> min_render_size_slider_;
 
     std::unique_ptr<FloatSliderWidget> foreground_texture_opacity_slider_;

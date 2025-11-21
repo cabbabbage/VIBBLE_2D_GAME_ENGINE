@@ -257,12 +257,13 @@ namespace {
         return changed;
     }
 
-    bool remove_asset_from_animation_children(nlohmann::json& animation_json, const std::string& asset_name) {
-        if (!animation_json.is_object()) {
+    bool remove_asset_from_animation_children(nlohmann::json& asset_json, const std::string& asset_name) {
+        if (!asset_json.is_object()) {
             return false;
         }
-        auto children_it = animation_json.find("children");
-        if (children_it == animation_json.end() || !children_it->is_array()) {
+
+        auto children_it = asset_json.find("animation_children");
+        if (children_it == asset_json.end() || !children_it->is_array()) {
             return false;
         }
         std::vector<int> removed_indices;
@@ -281,16 +282,36 @@ namespace {
             children.erase(children.begin() + *it);
         }
         if (children.empty()) {
-            animation_json.erase(children_it);
+            asset_json.erase(children_it);
         }
-        auto movement_it = animation_json.find("movement");
-        if (movement_it != animation_json.end()) {
-            adjust_movement_entries(*movement_it, removed_indices);
-        }
-        auto paths_it = animation_json.find("movement_paths");
-        if (paths_it != animation_json.end() && paths_it->is_array()) {
-            for (auto& path : *paths_it) {
-                adjust_movement_entries(path, removed_indices);
+
+        auto animations_it = asset_json.find("animations");
+        if (animations_it != asset_json.end() && animations_it->is_object()) {
+            for (auto anim_it = animations_it->begin(); anim_it != animations_it->end(); ++anim_it) {
+                if (!anim_it.value().is_object()) continue;
+                auto& anim_json = anim_it.value();
+                auto anim_children_it = anim_json.find("children");
+                if (anim_children_it != anim_json.end() && anim_children_it->is_array()) {
+                    auto& child_arr = *anim_children_it;
+                    for (auto it = removed_indices.rbegin(); it != removed_indices.rend(); ++it) {
+                        if (*it >= 0 && *it < static_cast<int>(child_arr.size())) {
+                            child_arr.erase(child_arr.begin() + *it);
+                        }
+                    }
+                    if (child_arr.empty()) {
+                        anim_json.erase(anim_children_it);
+                    }
+                }
+                auto movement_it = anim_json.find("movement");
+                if (movement_it != anim_json.end()) {
+                    adjust_movement_entries(*movement_it, removed_indices);
+                }
+                auto paths_it = anim_json.find("movement_paths");
+                if (paths_it != anim_json.end() && paths_it->is_array()) {
+                    for (auto& path : *paths_it) {
+                        adjust_movement_entries(path, removed_indices);
+                    }
+                }
             }
         }
         return true;
@@ -2128,11 +2149,6 @@ void AssetLibraryUI::update(const Input& input,
 
     if (showing_delete_popup_) {
         update_delete_modal_geometry(screen_w, screen_h);
-        SDL_StopTextInput();
-    } else if (search_box_ && search_box_->is_editing()) {
-        SDL_StartTextInput();
-    } else {
-        SDL_StopTextInput();
     }
 }
 

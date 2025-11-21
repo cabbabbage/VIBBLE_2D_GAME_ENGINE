@@ -147,11 +147,16 @@ void apply_frame_data(std::vector<Asset::AnimationChildAttachment>& slots,
         if (!slot.animation) {
             continue;
         }
-        const bool became_visible = child_data.visible && !slot.was_visible;
+        if (!child_data.visible) {
+            slot.visible = false;
+            slot.render_in_front = child_data.render_in_front;
+            continue;
+        }
+        const bool became_visible = !slot.was_visible;
         if (became_visible) {
             restart(slot);
         }
-        slot.visible = child_data.visible;
+        slot.visible = true;
         const int dx = parent_state.flipped ? -child_data.dx : child_data.dx;
         slot.world_pos.x = parent_state.position.x + dx;
         slot.world_pos.y = parent_state.position.y + child_data.dy;

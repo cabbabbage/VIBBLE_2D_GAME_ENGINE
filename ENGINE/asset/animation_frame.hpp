@@ -11,7 +11,7 @@ struct AnimationChildFrameData {
     int   dy          = 0;
     float degree      = 0.0f;
     bool  render_in_front = true;
-    bool  visible     = true;
+    bool  visible     = false;
 };
 
 class AnimationFrame {

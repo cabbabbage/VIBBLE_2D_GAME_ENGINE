@@ -18,7 +18,6 @@ struct SDL_Renderer;
 #include "dev_mode/widgets.hpp"
 #include "EditorUIPrimitives.hpp"
 #include "PreviewTimeline.hpp"
-#include "ChildrenPanel.hpp"
 #include "AudioPanel.hpp"
 #include "OnEndSelector.hpp"
 #include "MovementSummaryWidget.hpp"
@@ -46,7 +45,6 @@ class CroppingService;
 class AsyncTaskQueue;
 class AudioImporter;
 class PreviewTimeline;
-class ChildrenPanel;
 
 using DMButton = ::DMButton;
 using DMTextBox = ::DMTextBox;
@@ -138,7 +136,6 @@ class AnimationInspectorPanel {
     std::unique_ptr<MovementSummaryWidget> movement_summary_;
     std::unique_ptr<OnEndSelector> on_end_selector_;
     std::unique_ptr<AudioPanel> audio_panel_;
-    std::unique_ptr<ChildrenPanel> children_panel_;
     std::unique_ptr<DMTextBox> name_box_;
     std::unique_ptr<DMButton> start_button_;
     std::unique_ptr<DMButton> source_frames_button_;
@@ -154,7 +151,6 @@ class AnimationInspectorPanel {
     mutable SDL_Rect movement_rect_{0, 0, 0, 0};
     mutable SDL_Rect on_end_rect_{0, 0, 0, 0};
     mutable SDL_Rect audio_rect_{0, 0, 0, 0};
-    mutable SDL_Rect children_rect_{0, 0, 0, 0};
     mutable SDL_Rect scrollbar_track_{0, 0, 0, 0};
     mutable SDL_Rect scrollbar_thumb_{0, 0, 0, 0};
     mutable bool layout_dirty_ = true;

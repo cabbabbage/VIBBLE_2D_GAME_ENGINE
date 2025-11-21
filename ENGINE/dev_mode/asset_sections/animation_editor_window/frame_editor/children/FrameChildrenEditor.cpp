@@ -146,6 +146,7 @@ void FrameChildrenEditor::update() {
     }
     auto payload_dump = document_->animation_payload(animation_id_);
     std::string signature = payload_dump.has_value() ? *payload_dump : std::string{};
+    signature += "|" + document_->animation_children_signature();
     if (payload_signature_ != signature) {
         payload_signature_ = signature;
         reload_from_document();
@@ -301,6 +302,9 @@ void FrameChildrenEditor::reload_from_document() {
     frames_.clear();
     child_ids_.clear();
     selected_child_index_ = 0;
+    if (document_) {
+        child_ids_ = document_->animation_children();
+    }
 
     if (payload_signature_.empty()) {
         frames_.push_back(MovementFrame{});
@@ -311,15 +315,6 @@ void FrameChildrenEditor::reload_from_document() {
     nlohmann::json payload = nlohmann::json::parse(payload_signature_, nullptr, false);
     if (!payload.is_object()) {
         payload = nlohmann::json::object();
-    }
-
-    if (payload.contains("children") && payload["children"].is_array()) {
-        for (const auto& entry : payload["children"]) {
-            if (!entry.is_string()) continue;
-            std::string name = entry.get<std::string>();
-            if (name.empty()) continue;
-            child_ids_.push_back(std::move(name));
-        }
     }
 
     nlohmann::json movement = nlohmann::json::array();
@@ -372,7 +367,7 @@ void FrameChildrenEditor::reload_from_document() {
                             child.dx = static_cast<float>(child_entry.value("dx", 0.0));
                             child.dy = static_cast<float>(child_entry.value("dy", 0.0));
                             child.rotation = static_cast<float>(child_entry.value("rotation", 0.0));
-                            child.visible = child_entry.value("visible", true);
+                            child.visible = child_entry.value("visible", false);
                             child.render_in_front = child_entry.value("render_in_front", true);
                         } else if (child_entry.is_array()) {
                             try { child.child_index = child_entry[0].get<int>(); } catch (...) { child.child_index = -1; }
@@ -386,7 +381,7 @@ void FrameChildrenEditor::reload_from_document() {
                                 child.rotation = static_cast<float>(child_entry[3].get<double>());
                             }
                             if (child_entry.size() > 4) {
-                                child.visible = is_true(child_entry[4], true);
+                                child.visible = is_true(child_entry[4], false);
                             }
                             if (child_entry.size() > 5) {
                                 child.render_in_front = is_true(child_entry[5], true);
@@ -428,7 +423,7 @@ void FrameChildrenEditor::ensure_child_vectors() {
         std::vector<ChildFrame> normalized(child_ids_.size());
         for (std::size_t i = 0; i < normalized.size(); ++i) {
             normalized[i].child_index = static_cast<int>(i);
-            normalized[i].visible = true;
+            normalized[i].visible = false;
             normalized[i].render_in_front = true;
         }
         for (const auto& existing : frame.children) {
@@ -518,14 +513,7 @@ void FrameChildrenEditor::persist_changes() {
             payload = parsed;
         }
     }
-
-    nlohmann::json children_json = nlohmann::json::array();
-    for (const auto& child_name : child_ids_) {
-        children_json.push_back(child_name);
-    }
-    if (!children_json.empty()) {
-        payload["children"] = std::move(children_json);
-    }
+    payload.erase("children");
 
     nlohmann::json movement_json = nlohmann::json::array();
     for (std::size_t i = 0; i < frames_.size(); ++i) {

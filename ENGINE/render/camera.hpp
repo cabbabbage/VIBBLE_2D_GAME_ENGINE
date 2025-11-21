@@ -24,8 +24,8 @@ class CurrentRoomFinder;
 
 class camera {
 public:
-    static constexpr float kMinPitchDegrees = -60.0f;
-    static constexpr float kMaxPitchDegrees = 0.0f;
+    static constexpr float kMinPitchDegrees = 0.0f;
+    static constexpr float kMaxPitchDegrees = 359.0f;
     static constexpr float kMinZoomAnchors = 0.0f;
     static constexpr float kMaxZoomAnchors = 20.0f;
 
@@ -52,8 +52,8 @@ public:
         float base_height_px               = 720.0f;
 
         // Tilt mapping: zooming in lifts the horizon, zooming out tilts downward.
-        float tilt_zoom_in_degrees         = -15.0f;
-        float tilt_zoom_out_degrees        = -50.0f;
+        float tilt_zoom_in_degrees         = 345.0f;
+        float tilt_zoom_out_degrees        = 310.0f;
 
         // Screen-space horizon placement (distance from the top in px).
         // When unset, the pitch-derived horizon is used.
@@ -84,6 +84,14 @@ public:
         // Grid depth parameters
         // Distance (in screen px) to place the depth offset below the bottom of the screen.
         float grid_depth_offset_px           = 240.0f;
+
+        // Per-zoom interpolation values
+        float foreshorten_at_zoom_low  = 0.0f;
+        float foreshorten_at_zoom_high = 0.0f;
+        float distance_scale_at_zoom_low  = 0.0f;
+        float distance_scale_at_zoom_high = 0.0f;
+        float depth_offset_at_zoom_low  = 240.0f;
+        float depth_offset_at_zoom_high = 240.0f;
 
         // Image effects for foreground and background
         camera_effects::ImageEffectSettings foreground_effects{};
@@ -184,6 +192,9 @@ public:
     float  current_pitch_degrees() const { return runtime_pitch_deg_; }
     double current_camera_height() const { return runtime_camera_height_; }
     double current_anchor_world_y() const { return runtime_anchor_world_y_; }
+    float  current_foreshorten_strength() const { return runtime_foreshorten_strength_; }
+    float  current_distance_scale_strength() const { return runtime_distance_scale_strength_; }
+    float  current_depth_offset_px() const { return runtime_depth_offset_px_; }
 
     // Override controls for dev mode
     void set_manual_zoom_override(bool enabled) { manual_zoom_override_ = enabled; }
@@ -215,6 +226,9 @@ private:
     double anchor_world_y() const;
     double zoom_lerp_t_for_scale(double scale_value) const;
     CameraGeometry compute_geometry_for_scale(double scale_value) const;
+    float foreshorten_for_scale(double scale_value) const;
+    float distance_scale_for_scale(double scale_value) const;
+    float depth_offset_for_scale(double scale_value) const;
 
     struct TransformSmoother1D {
         TransformSmoothingParams params{};
@@ -259,6 +273,9 @@ private:
     double     runtime_focus_ndc_offset_ = 0.0;
     double     runtime_pitch_rad_     = 0.0;
     float      runtime_pitch_deg_     = 0.0f;
+    float      runtime_foreshorten_strength_ = 0.0f;
+    float      runtime_distance_scale_strength_ = 0.0f;
+    float      runtime_depth_offset_px_ = 0.0f;
     bool       geometry_valid_        = false;
 
     RealismSettings settings_{};

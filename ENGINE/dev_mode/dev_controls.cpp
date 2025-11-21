@@ -1653,7 +1653,6 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         const bool need_grid_helpers = assets_ && (grid_overlay_enabled_ || show_depth_guides);
         if (renderer && need_grid_helpers) {
             const camera& cam = assets_->getView();
-            const camera::RealismSettings& cam_settings = cam.realism_settings();
             const camera::FloorDepthParams depth_params = cam.compute_floor_depth_params();
             world::Grid& grid = assets_->world_grid();
         SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
@@ -1676,7 +1675,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         int cell = std::max(1, grid_cell_size_px_);
         if (cell > 0) {
             const float world_padding = static_cast<float>(cell) * 4.0f;
-            const float depth_world_padding = cam_scale * std::max(0.0f, cam_settings.grid_depth_offset_px);
+            const float depth_world_padding = cam_scale * std::max(0.0f, cam.current_depth_offset_px());
             const float min_world_x = std::min(top_left_world.x, bottom_right_world.x) - world_padding;
             const float max_world_x = std::max(top_left_world.x, bottom_right_world.x) + world_padding;
             const float min_world_y = std::min(top_left_world.y, bottom_right_world.y) - world_padding - depth_world_padding * 0.5f;

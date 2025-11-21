@@ -14,6 +14,7 @@
 namespace devmode::core {
 class ManifestStore;
 }
+class AssetInfo;
 
 class DMButton;
 class SearchAssets;
@@ -31,6 +32,7 @@ class ChildrenPanel {
     ~ChildrenPanel();
 
     void set_document(std::shared_ptr<AnimationDocument> document);
+    void set_info(std::shared_ptr<AssetInfo> info);
     void set_manifest_store(devmode::core::ManifestStore* store);
     void set_animation_id(const std::string& animation_id);
     void set_bounds(const SDL_Rect& bounds);
@@ -83,8 +85,8 @@ class ChildrenPanel {
 
   private:
     std::shared_ptr<AnimationDocument> document_;
+    std::shared_ptr<AssetInfo> info_;
     devmode::core::ManifestStore* manifest_store_ = nullptr;
-    std::string animation_id_;
     SDL_Rect bounds_{0, 0, 0, 0};
     StatusCallback status_callback_;
     std::function<void()> layout_dirty_callback_;

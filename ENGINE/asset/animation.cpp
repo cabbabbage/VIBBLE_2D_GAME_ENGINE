@@ -543,21 +543,18 @@ void Animation::load(const std::string& trigger,
 	rnd_start = anim_json.value("rnd_start", false);
 	on_end_animation = anim_json.value("on_end", std::string{"default"});
         child_asset_names_.clear();
-        bool children_specified = false;
-        if (anim_json.contains("children") && anim_json["children"].is_array()) {
+        if (!info.animation_children.empty()) {
+                child_asset_names_ = info.animation_children;
+        } else if (anim_json.contains("children") && anim_json["children"].is_array()) {
                 for (const auto& child_entry : anim_json["children"]) {
-                        if (!child_entry.is_string()) {
-                                continue;
-                        }
+                        if (!child_entry.is_string()) continue;
                         std::string name = child_entry.get<std::string>();
-                        if (name.empty()) {
-                                continue;
+                        if (!name.empty()) {
+                                child_asset_names_.push_back(std::move(name));
                         }
-                        child_asset_names_.push_back(std::move(name));
                 }
-                children_specified = true;
         }
-        if (!children_specified && source.kind == "animation" && !source.name.empty()) {
+        if (child_asset_names_.empty() && source.kind == "animation" && !source.name.empty()) {
                 auto src_child_it = info.animations.find(source.name);
                 if (src_child_it != info.animations.end()) {
                         child_asset_names_ = src_child_it->second.child_assets();

@@ -24,12 +24,44 @@ namespace {
     constexpr double RAD_TO_DEG = 180.0 / PI_D;
     constexpr float  kMaxForeshortenSliderStrength = 2.0f;
     constexpr float  kMaxDistanceSliderStrength = 1.0f;
-    constexpr float  kDefaultPitchDegrees   = -30.0f;
+    constexpr float  kDefaultPitchDegrees   = 330.0f;
+
+    double wrap_degrees_0_360(double raw_value) {
+        if (!std::isfinite(raw_value)) {
+            return static_cast<double>(kDefaultPitchDegrees);
+        }
+        double wrapped = std::fmod(raw_value, 360.0);
+        if (wrapped < 0.0) wrapped += 360.0;
+        if (wrapped >= 360.0 || !std::isfinite(wrapped)) {
+            wrapped = std::fmod(wrapped, 360.0);
+            if (wrapped < 0.0) wrapped += 360.0;
+        }
+        return std::isfinite(wrapped) ? wrapped : static_cast<double>(kDefaultPitchDegrees);
+    }
+
+    float wrap_degrees_0_360(float raw_value) {
+        return static_cast<float>(wrap_degrees_0_360(static_cast<double>(raw_value)));
+    }
+
+    double signed_radians_from_degrees(double degrees) {
+        const double wrapped_deg = wrap_degrees_0_360(degrees);
+        const double signed_deg  = (wrapped_deg > 180.0) ? wrapped_deg - 360.0 : wrapped_deg;
+        return signed_deg * (PI_D / 180.0);
+    }
+
+    double shortest_delta_degrees(double from_deg, double to_deg) {
+        return std::remainder(to_deg - from_deg, 360.0);
+    }
 
     float sanitize_pitch_degrees(float raw_value, bool* clamped = nullptr) {
         if (clamped) *clamped = false;
-        float value = std::isfinite(raw_value) ? raw_value : kDefaultPitchDegrees;
-        const float clamped_value = std::clamp(value, camera::kMinPitchDegrees, camera::kMaxPitchDegrees);
+        const float wrapped = wrap_degrees_0_360(std::isfinite(raw_value)
+            ? raw_value
+            : kDefaultPitchDegrees);
+        const float clamped_value = std::clamp(
+            wrapped,
+            camera::kMinPitchDegrees,
+            camera::kMaxPitchDegrees);
         if (clamped && clamped_value != raw_value) {
             *clamped = true;
         }
@@ -158,12 +190,33 @@ namespace {
 
         bool clamped_in  = false;
         bool clamped_out = false;
-        const float pitch_in_deg  = sanitize_pitch_degrees(settings.tilt_zoom_in_degrees, &clamped_in);
-        const float pitch_out_deg = sanitize_pitch_degrees(settings.tilt_zoom_out_degrees, &clamped_out);
+        const double pitch_in_deg  = static_cast<double>(sanitize_pitch_degrees(settings.tilt_zoom_in_degrees, &clamped_in));
+        const double pitch_out_deg = static_cast<double>(sanitize_pitch_degrees(settings.tilt_zoom_out_degrees, &clamped_out));
 
-        const double pitch = static_cast<double>(pitch_in_deg) +
-                             (static_cast<double>(pitch_out_deg) - static_cast<double>(pitch_in_deg)) * t;
-        return pitch;
+        const double delta = shortest_delta_degrees(pitch_in_deg, pitch_out_deg);
+        const double pitch = pitch_in_deg + delta * t;
+
+        return wrap_degrees_0_360(pitch);
+    }
+
+    template <typename T>
+    T lerp(T a, T b, double t) {
+        return static_cast<T>(a + (b - a) * t);
+    }
+
+    float clamp_foreshorten(float raw_value) {
+        const float value = std::isfinite(raw_value) ? std::max(0.0f, raw_value) : 0.0f;
+        return std::clamp(value, 0.0f, kMaxForeshortenSliderStrength);
+    }
+
+    float clamp_distance_strength(float raw_value) {
+        const float value = std::isfinite(raw_value) ? std::max(0.0f, raw_value) : 0.0f;
+        return std::clamp(value, 0.0f, kMaxDistanceSliderStrength);
+    }
+
+    float clamp_depth_offset(float raw_value) {
+        const float value = std::isfinite(raw_value) ? raw_value : 0.0f;
+        return std::clamp(value, -4000.0f, 4000.0f);
     }
 }
 
@@ -184,7 +237,7 @@ camera::CameraGeometry camera::compute_geometry_for_scale(double scale_value) co
 
     const double target_pitch_deg = pitch_from_scale(clamped_scale, settings_);
     g.pitch_degrees = static_cast<float>(target_pitch_deg);
-    g.pitch_radians = target_pitch_deg * (PI_D / 180.0);
+    g.pitch_radians = signed_radians_from_degrees(target_pitch_deg);
 
     g.focus_ndc_offset = 0.0;
 
@@ -197,12 +250,16 @@ camera::CameraGeometry camera::compute_geometry() const {
 }
 
 void camera::update_geometry_cache(const CameraGeometry& g) {
+    const double scale_value = std::max(0.0001, static_cast<double>(smoothed_scale_));
     runtime_camera_height_ = g.camera_height;
     runtime_focus_depth_   = g.focus_depth;
     runtime_anchor_world_y_ = g.anchor_world_y;
     runtime_focus_ndc_offset_ = g.focus_ndc_offset;
     runtime_pitch_rad_     = g.pitch_radians;
     runtime_pitch_deg_     = g.pitch_degrees;
+    runtime_foreshorten_strength_ = foreshorten_for_scale(scale_value);
+    runtime_distance_scale_strength_ = distance_scale_for_scale(scale_value);
+    runtime_depth_offset_px_ = depth_offset_for_scale(scale_value);
     geometry_valid_        = g.valid;
     if (!g.valid) {
         runtime_camera_height_ = 0.0;
@@ -211,6 +268,9 @@ void camera::update_geometry_cache(const CameraGeometry& g) {
         runtime_focus_ndc_offset_ = 0.0;
         runtime_pitch_rad_     = 0.0;
         runtime_pitch_deg_     = 0.0f;
+        runtime_foreshorten_strength_ = foreshorten_for_scale(scale_value);
+        runtime_distance_scale_strength_ = distance_scale_for_scale(scale_value);
+        runtime_depth_offset_px_ = depth_offset_for_scale(scale_value);
     }
 }
 
@@ -355,12 +415,7 @@ void camera::set_realism_settings(const RealismSettings& settings) {
     }
     settings_.tilt_zoom_in_degrees  = sanitize_pitch_degrees(settings_.tilt_zoom_in_degrees);
     settings_.tilt_zoom_out_degrees = sanitize_pitch_degrees(settings_.tilt_zoom_out_degrees);
-    if (settings_.tilt_zoom_out_degrees > settings_.tilt_zoom_in_degrees) {
-        std::swap(settings_.tilt_zoom_out_degrees, settings_.tilt_zoom_in_degrees);
-    }
-    if (!std::isfinite(settings_.grid_depth_offset_px)) {
-        settings_.grid_depth_offset_px = 0.0f;
-    }
+    settings_.grid_depth_offset_px = clamp_depth_offset(settings_.grid_depth_offset_px);
     auto sanitize_horizon_value = [](std::optional<float>& value) {
         if (value && !std::isfinite(*value)) {
             value.reset();
@@ -377,26 +432,46 @@ void camera::set_realism_settings(const RealismSettings& settings) {
         settings_.parallax_smoothing.spring_frequency = 10.0f;
     }
 
-    if (!std::isfinite(settings_.foreshorten_strength)) {
-        settings_.foreshorten_strength = 0.0f;
-    }
-    settings_.foreshorten_strength = std::clamp(
-        settings_.foreshorten_strength,
-        0.0f,
-        kMaxForeshortenSliderStrength);
+    settings_.foreshorten_strength = clamp_foreshorten(settings_.foreshorten_strength);
+    settings_.foreshorten_at_zoom_low = clamp_foreshorten(
+        std::isfinite(settings_.foreshorten_at_zoom_low)
+            ? settings_.foreshorten_at_zoom_low
+            : settings_.foreshorten_strength);
+    settings_.foreshorten_at_zoom_high = clamp_foreshorten(
+        std::isfinite(settings_.foreshorten_at_zoom_high)
+            ? settings_.foreshorten_at_zoom_high
+            : settings_.foreshorten_strength);
+    settings_.foreshorten_strength =
+        0.5f * (settings_.foreshorten_at_zoom_low + settings_.foreshorten_at_zoom_high);
 
-    if (!std::isfinite(settings_.distance_scale_strength)) {
-        settings_.distance_scale_strength = 0.0f;
-    }
-    settings_.distance_scale_strength = std::clamp(
-        settings_.distance_scale_strength,
-        0.0f,
-        kMaxDistanceSliderStrength);
+    settings_.distance_scale_strength = clamp_distance_strength(settings_.distance_scale_strength);
+    settings_.distance_scale_at_zoom_low = clamp_distance_strength(
+        std::isfinite(settings_.distance_scale_at_zoom_low)
+            ? settings_.distance_scale_at_zoom_low
+            : settings_.distance_scale_strength);
+    settings_.distance_scale_at_zoom_high = clamp_distance_strength(
+        std::isfinite(settings_.distance_scale_at_zoom_high)
+            ? settings_.distance_scale_at_zoom_high
+            : settings_.distance_scale_strength);
+    settings_.distance_scale_strength =
+        0.5f * (settings_.distance_scale_at_zoom_low + settings_.distance_scale_at_zoom_high);
+
+    settings_.depth_offset_at_zoom_low = clamp_depth_offset(
+        std::isfinite(settings_.depth_offset_at_zoom_low)
+            ? settings_.depth_offset_at_zoom_low
+            : settings_.grid_depth_offset_px);
+    settings_.depth_offset_at_zoom_high = clamp_depth_offset(
+        std::isfinite(settings_.depth_offset_at_zoom_high)
+            ? settings_.depth_offset_at_zoom_high
+            : settings_.grid_depth_offset_px);
+    settings_.grid_depth_offset_px =
+        0.5f * (settings_.depth_offset_at_zoom_low + settings_.depth_offset_at_zoom_high);
 
     TransformSmoothingParams motion_params = motion_params_from_settings(settings_);
     center_smoothing_x_.set_params(motion_params);
     center_smoothing_y_.set_params(motion_params);
     zoom_smoothing_.set_params(motion_params);
+    update_geometry_cache(compute_geometry());
 }
 
 void camera::set_screen_center(SDL_Point p) {
@@ -878,11 +953,11 @@ camera::RenderEffects camera::compute_render_effects(
     const double pitch_factor  = std::min(std::abs(pitch_rad) / (PI_D / 3.0), 1.0);
     const double tilt_up       = 1.0 - pitch_factor; // 0 = steep down, 1 = level/upward
     const double slider_vertical_strength = std::clamp(
-        static_cast<double>(settings_.foreshorten_strength),
+        static_cast<double>(runtime_foreshorten_strength_),
         0.0,
         static_cast<double>(kMaxForeshortenSliderStrength));
     const double slider_distance_strength = std::clamp(
-        static_cast<double>(settings_.distance_scale_strength),
+        static_cast<double>(runtime_distance_scale_strength_),
         0.0,
         static_cast<double>(kMaxDistanceSliderStrength));
 
@@ -1031,6 +1106,10 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
 
     try_read_float("foreshorten_strength",       settings_.foreshorten_strength);
     try_read_float("distance_scale_strength",    settings_.distance_scale_strength);
+    bool foreshorten_low_seen  = try_read_float("foreshorten_at_zoom_low", settings_.foreshorten_at_zoom_low);
+    bool foreshorten_high_seen = try_read_float("foreshorten_at_zoom_high", settings_.foreshorten_at_zoom_high);
+    bool distance_low_seen     = try_read_float("distance_scale_at_zoom_low", settings_.distance_scale_at_zoom_low);
+    bool distance_high_seen    = try_read_float("distance_scale_at_zoom_high", settings_.distance_scale_at_zoom_high);
     try_read_float("zoom_low",                    settings_.zoom_low);
     try_read_float("zoom_high",                   settings_.zoom_high);
     const bool base_height_read = try_read_float("base_height_px",         settings_.base_height_px);
@@ -1046,6 +1125,8 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     float legacy_pitch = settings_.tilt_zoom_out_degrees;
     const bool legacy_pitch_seen    = try_read_float("grid_pitch_degrees", legacy_pitch);
     try_read_float("grid_depth_offset_px",       settings_.grid_depth_offset_px);
+    bool depth_low_seen  = try_read_float("depth_offset_at_zoom_low", settings_.depth_offset_at_zoom_low);
+    bool depth_high_seen = try_read_float("depth_offset_at_zoom_high", settings_.depth_offset_at_zoom_high);
     try_read_optional_float("horizon_y_at_zoom_low",  settings_.horizon_y_at_zoom_low);
     try_read_optional_float("horizon_y_at_zoom_high", settings_.horizon_y_at_zoom_high);
 
@@ -1163,21 +1244,29 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
             std::clamp(settings_.background_plane_screen_y, 0.0f, 4000.0f);
     }
 
-    const float raw_foreshorten = std::isfinite(settings_.foreshorten_strength)
-        ? std::max(0.0f, settings_.foreshorten_strength)
-        : 0.0f;
-    settings_.foreshorten_strength = std::clamp(
-        raw_foreshorten,
-        0.0f,
-        kMaxForeshortenSliderStrength);
+    settings_.foreshorten_strength = clamp_foreshorten(settings_.foreshorten_strength);
+    if (!foreshorten_low_seen) {
+        settings_.foreshorten_at_zoom_low = settings_.foreshorten_strength;
+    }
+    if (!foreshorten_high_seen) {
+        settings_.foreshorten_at_zoom_high = settings_.foreshorten_strength;
+    }
+    settings_.foreshorten_at_zoom_low = clamp_foreshorten(settings_.foreshorten_at_zoom_low);
+    settings_.foreshorten_at_zoom_high = clamp_foreshorten(settings_.foreshorten_at_zoom_high);
+    settings_.foreshorten_strength =
+        0.5f * (settings_.foreshorten_at_zoom_low + settings_.foreshorten_at_zoom_high);
 
-    const float raw_distance = std::isfinite(settings_.distance_scale_strength)
-        ? std::max(0.0f, settings_.distance_scale_strength)
-        : 0.0f;
-    settings_.distance_scale_strength = std::clamp(
-        raw_distance,
-        0.0f,
-        kMaxDistanceSliderStrength);
+    settings_.distance_scale_strength = clamp_distance_strength(settings_.distance_scale_strength);
+    if (!distance_low_seen) {
+        settings_.distance_scale_at_zoom_low = settings_.distance_scale_strength;
+    }
+    if (!distance_high_seen) {
+        settings_.distance_scale_at_zoom_high = settings_.distance_scale_strength;
+    }
+    settings_.distance_scale_at_zoom_low = clamp_distance_strength(settings_.distance_scale_at_zoom_low);
+    settings_.distance_scale_at_zoom_high = clamp_distance_strength(settings_.distance_scale_at_zoom_high);
+    settings_.distance_scale_strength =
+        0.5f * (settings_.distance_scale_at_zoom_low + settings_.distance_scale_at_zoom_high);
 
     if (!std::isfinite(settings_.zoom_low)) {
         settings_.zoom_low = 0.75f;
@@ -1209,20 +1298,25 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         }
     }
     if (!std::isfinite(settings_.tilt_zoom_in_degrees)) {
-        settings_.tilt_zoom_in_degrees = -15.0f;
+        settings_.tilt_zoom_in_degrees = 345.0f;
     }
     if (!std::isfinite(settings_.tilt_zoom_out_degrees)) {
-        settings_.tilt_zoom_out_degrees = -50.0f;
+        settings_.tilt_zoom_out_degrees = 310.0f;
     }
     settings_.tilt_zoom_in_degrees  = sanitize_pitch_degrees(settings_.tilt_zoom_in_degrees);
     settings_.tilt_zoom_out_degrees = sanitize_pitch_degrees(settings_.tilt_zoom_out_degrees);
-    if (settings_.tilt_zoom_out_degrees > settings_.tilt_zoom_in_degrees) {
-        std::swap(settings_.tilt_zoom_out_degrees, settings_.tilt_zoom_in_degrees);
-    }
 
-    if (!std::isfinite(settings_.grid_depth_offset_px)) {
-        settings_.grid_depth_offset_px = 0.0f;
+    settings_.grid_depth_offset_px = clamp_depth_offset(settings_.grid_depth_offset_px);
+    if (!depth_low_seen) {
+        settings_.depth_offset_at_zoom_low = settings_.grid_depth_offset_px;
     }
+    if (!depth_high_seen) {
+        settings_.depth_offset_at_zoom_high = settings_.grid_depth_offset_px;
+    }
+    settings_.depth_offset_at_zoom_low = clamp_depth_offset(settings_.depth_offset_at_zoom_low);
+    settings_.depth_offset_at_zoom_high = clamp_depth_offset(settings_.depth_offset_at_zoom_high);
+    settings_.grid_depth_offset_px =
+        0.5f * (settings_.depth_offset_at_zoom_low + settings_.depth_offset_at_zoom_high);
 
     if (!std::isfinite(settings_.min_visible_screen_ratio) ||
         settings_.min_visible_screen_ratio < 0.0f) {
@@ -1284,6 +1378,7 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     center_smoothing_x_.set_params(motion_params);
     center_smoothing_y_.set_params(motion_params);
     zoom_smoothing_.set_params(motion_params);
+    update_geometry_cache(compute_geometry());
 }
 
 nlohmann::json camera::camera_settings_to_json() const {
@@ -1291,6 +1386,12 @@ nlohmann::json camera::camera_settings_to_json() const {
     j["realism_enabled"]                 = realism_enabled_;
     j["foreshorten_strength"]            = settings_.foreshorten_strength;
     j["distance_scale_strength"]         = settings_.distance_scale_strength;
+    j["foreshorten_at_zoom_low"]         = settings_.foreshorten_at_zoom_low;
+    j["foreshorten_at_zoom_high"]        = settings_.foreshorten_at_zoom_high;
+    j["distance_scale_at_zoom_low"]      = settings_.distance_scale_at_zoom_low;
+    j["distance_scale_at_zoom_high"]     = settings_.distance_scale_at_zoom_high;
+    j["depth_offset_at_zoom_low"]        = settings_.depth_offset_at_zoom_low;
+    j["depth_offset_at_zoom_high"]       = settings_.depth_offset_at_zoom_high;
     j["zoom_low"]                        = settings_.zoom_low;
     j["zoom_high"]                       = settings_.zoom_high;
     j["base_height_px"]                  = settings_.base_height_px;
@@ -1365,7 +1466,6 @@ camera::FloorDepthParams camera::compute_floor_depth_params_for_scale(double sca
         return p;
     }
 
-    const double focus_screen_y = screen_h * 0.5;
     const double top_margin     = std::max(12.0, screen_h * 0.05);
     const double min_horizon    = top_margin + 1.0;
 
@@ -1380,9 +1480,14 @@ camera::FloorDepthParams camera::compute_floor_depth_params_for_scale(double sca
     double horizon_ndc = (tan_pitch / tan_fov) - geom.focus_ndc_offset;
     horizon_ndc = std::clamp(horizon_ndc, -10.0, 10.0);
     double horizon_y = screen_h * (0.5 - 0.5 * horizon_ndc);
-    horizon_y = std::clamp(horizon_y, min_horizon, focus_screen_y - 2.0);
+    horizon_y = std::max(min_horizon, horizon_y);
 
     horizon_y = apply_horizon_override(horizon_y, scale_value, screen_h);
+
+    // Recompute the NDC focus offset so the warped grid tracks the chosen horizon.
+    double horizon_ndc_target = 1.0 - 2.0 * (horizon_y / screen_h);
+    horizon_ndc_target = std::clamp(horizon_ndc_target, -10.0, 10.0);
+    const double focus_ndc_offset = (tan_pitch / tan_fov) - horizon_ndc_target;
 
     p.horizon_screen_y     = horizon_y;
     p.bottom_screen_y      = screen_h;
@@ -1390,7 +1495,7 @@ camera::FloorDepthParams camera::compute_floor_depth_params_for_scale(double sca
     p.camera_height        = geom.camera_height;
     p.pitch_radians        = geom.pitch_radians;
     p.pitch_norm           = pitch_norm;
-    p.focus_ndc_offset     = geom.focus_ndc_offset;
+    p.focus_ndc_offset     = focus_ndc_offset;
     p.strength             = 1.0;
     p.enabled              = true;
 
@@ -1477,6 +1582,33 @@ double camera::zoom_lerp_t_for_scale(double scale_value) const {
     const double high_zoom = std::max(low_zoom + 1e-4, static_cast<double>(settings_.zoom_high));
     const double t_raw     = (scale_value - low_zoom) / std::max(1e-4, high_zoom - low_zoom);
     return std::clamp(t_raw, 0.0, 1.0);
+}
+
+float camera::foreshorten_for_scale(double scale_value) const {
+    const double t = zoom_lerp_t_for_scale(scale_value);
+    const double value = lerp(
+        static_cast<double>(settings_.foreshorten_at_zoom_low),
+        static_cast<double>(settings_.foreshorten_at_zoom_high),
+        t);
+    return clamp_foreshorten(static_cast<float>(value));
+}
+
+float camera::distance_scale_for_scale(double scale_value) const {
+    const double t = zoom_lerp_t_for_scale(scale_value);
+    const double value = lerp(
+        static_cast<double>(settings_.distance_scale_at_zoom_low),
+        static_cast<double>(settings_.distance_scale_at_zoom_high),
+        t);
+    return clamp_distance_strength(static_cast<float>(value));
+}
+
+float camera::depth_offset_for_scale(double scale_value) const {
+    const double t = zoom_lerp_t_for_scale(scale_value);
+    const double value = lerp(
+        static_cast<double>(settings_.depth_offset_at_zoom_low),
+        static_cast<double>(settings_.depth_offset_at_zoom_high),
+        t);
+    return clamp_depth_offset(static_cast<float>(value));
 }
 
 double camera::horizon_screen_y_for_scale_value(double scale_value) const {

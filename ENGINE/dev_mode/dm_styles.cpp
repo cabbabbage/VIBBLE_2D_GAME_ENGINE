@@ -157,6 +157,10 @@ const DMButtonStyle &DMStyles::ListButton() {
   return s;
 }
 
+const DMButtonStyle &DMStyles::SecondaryButton() {
+  return DMStyles::ListButton();
+}
+
 const DMButtonStyle &DMStyles::CreateButton() {
   static const DMButtonStyle s{
       {dm::FONT_PATH, 16, kCreateText},

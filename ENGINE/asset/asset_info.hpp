@@ -73,6 +73,8 @@ class AssetInfo {
     bool tillable = false;
     std::vector<std::string> tags;
     std::vector<std::string> anti_tags;
+    // Children that participate in animation frames (shared across all animations for this asset).
+    std::vector<std::string> animation_children;
     bool is_light_source = false;
     bool moving_asset = false;
     std::vector<float>  scale_variants;
@@ -123,6 +125,7 @@ class AssetInfo {
     void set_anti_tags(const std::vector<std::string> &t);
     void add_anti_tag(const std::string &tag);
     void remove_anti_tag(const std::string &tag);
+    void set_animation_children(const std::vector<std::string>& children);
     void set_passable(bool v);
     void set_tillable(bool v);
     Area* find_area(const std::string& name);

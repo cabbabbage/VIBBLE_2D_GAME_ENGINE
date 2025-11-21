@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <system_error>
 #include <utility>
+#include <unordered_set>
 
 #include "dev_mode/core/manifest_store.hpp"
 #include "util/grid.hpp"
@@ -1108,6 +1109,24 @@ void AssetInfo::remove_anti_tag(const std::string &tag) {
         set_anti_tags(anti_tags);
 }
 
+void AssetInfo::set_animation_children(const std::vector<std::string>& children) {
+        animation_children.clear();
+        std::unordered_set<std::string> seen;
+        for (const auto& entry : children) {
+                if (entry.empty()) {
+                        continue;
+                }
+                if (seen.insert(entry).second) {
+                        animation_children.push_back(entry);
+                }
+        }
+        nlohmann::json arr = nlohmann::json::array();
+        for (const auto& name : animation_children) {
+                arr.push_back(name);
+        }
+        info_json_["animation_children"] = std::move(arr);
+}
+
 void AssetInfo::rebuild_tag_cache() {
         tag_lookup_.clear();
         tag_lookup_.reserve(tags.size());
@@ -1392,12 +1411,44 @@ void AssetInfo::initialize_from_json(const nlohmann::json& source) {
         rebuild_tag_cache();
         rebuild_anti_tag_cache();
 
+        animation_children = parse_string_array(data.value("animation_children", nlohmann::json::array()));
+        if (animation_children.empty()) {
+                const nlohmann::json* anim_payloads = nullptr;
+                if (data.contains("animations") && data["animations"].is_object()) {
+                        anim_payloads = &data["animations"];
+                        if (data["animations"].contains("animations") && data["animations"]["animations"].is_object()) {
+                                anim_payloads = &data["animations"]["animations"];
+                        }
+                }
+                if (anim_payloads) {
+                        std::unordered_set<std::string> seen;
+                        for (const auto& item : anim_payloads->items()) {
+                                if (!item.value().is_object()) continue;
+                                auto it_children = item.value().find("children");
+                                if (it_children == item.value().end() || !it_children->is_array()) continue;
+                                for (const auto& entry : *it_children) {
+                                        if (!entry.is_string()) continue;
+                                        std::string name = entry.get<std::string>();
+                                        if (name.empty() || !seen.insert(name).second) continue;
+                                        animation_children.push_back(std::move(name));
+                                }
+                        }
+                }
+        }
+
         if (!info_json_.contains("tags") || !info_json_["tags"].is_array()) {
                 info_json_["tags"] = nlohmann::json::array();
         }
         if (!info_json_.contains("anti_tags") || !info_json_["anti_tags"].is_array()) {
                 info_json_["anti_tags"] = nlohmann::json::array();
         }
+        nlohmann::json animation_children_json = nlohmann::json::array();
+        for (const auto& name : animation_children) {
+                if (!name.empty()) {
+                        animation_children_json.push_back(name);
+                }
+        }
+        info_json_["animation_children"] = std::move(animation_children_json);
 
         load_animations(data);
 

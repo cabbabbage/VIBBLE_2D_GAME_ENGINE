@@ -1,6 +1,7 @@
 #include "camera_ui.hpp"
 
 #include <SDL.h>
+#include <SDL_image.h>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -18,6 +19,7 @@
 #include "dev_mode/depth_cue_settings.hpp"
 #include "dev_mode/dm_icons.hpp"
 #include "dev_mode/dm_styles.hpp"
+#include "dev_mode/draw_utils.hpp"
 #include "dev_mode/font_cache.hpp"
 #include "dev_mode/float_slider_widget.hpp"
 #include "dev_mode/shared/formatting.hpp"
@@ -28,9 +30,12 @@
 namespace {
     constexpr float kMinTau = 1e-4f;
     constexpr float kPi     = 3.14159265358979323846f;
+    constexpr float kRadToDeg = 180.0f / kPi;
+    constexpr float kDegToRad = kPi / 180.0f;
     constexpr float kHorizonSliderMin  = -2000.0f;
     constexpr float kHorizonSliderMax  = 4000.0f;
     constexpr float kHorizonSliderStep = 5.0f;
+    constexpr const char* kCameraIconPath = "SRC/icons/camera.png";
 
     float rate_from_tau(float tau) {
         if (!std::isfinite(tau) || tau <= kMinTau) {
@@ -58,6 +63,46 @@ namespace {
 
     TransformSmoothingMethod method_from_index(int idx) {
         return (idx == 0) ? TransformSmoothingMethod::Lerp : TransformSmoothingMethod::CriticallyDampedSpring;
+    }
+
+    float wrap_angle_deg(float raw_value) {
+        if (!std::isfinite(raw_value)) {
+            return 0.0f;
+        }
+        float wrapped = std::fmod(raw_value, 360.0f);
+        if (wrapped < 0.0f) wrapped += 360.0f;
+        if (wrapped >= 360.0f) wrapped = std::fmod(wrapped, 360.0f);
+        if (wrapped < 0.0f) wrapped += 360.0f;
+        return wrapped;
+    }
+
+    float angle_to_pitch_deg(float angle_deg) {
+        const float rad = wrap_angle_deg(angle_deg) * (kPi / 180.0f);
+        const float downward = std::max(0.0f, -std::sin(rad));
+        const float span = std::abs(camera::kMinPitchDegrees);
+        return -downward * span;
+    }
+
+    float angular_distance_deg(float a, float b) {
+        const float diff = std::fabs(wrap_angle_deg(a) - wrap_angle_deg(b));
+        const float wrapped = std::fmod(diff, 360.0f);
+        return std::min(wrapped, 360.0f - wrapped);
+    }
+
+    float pitch_to_angle_deg(float pitch_deg, float preferred_angle_deg = 0.0f) {
+        const float span = std::abs(camera::kMinPitchDegrees);
+        if (span <= 1e-5f) {
+            return wrap_angle_deg(preferred_angle_deg);
+        }
+        const float clamped = std::clamp(pitch_deg, camera::kMinPitchDegrees, camera::kMaxPitchDegrees);
+        const float ratio = std::clamp(-clamped / span, 0.0f, 1.0f);
+        const float angle_offset = std::asin(std::clamp(ratio, 0.0f, 1.0f)) * (180.0f / kPi);
+        const float candidate_left  = wrap_angle_deg(180.0f + angle_offset);
+        const float candidate_right = wrap_angle_deg(360.0f - angle_offset);
+        const float preferred = wrap_angle_deg(preferred_angle_deg);
+        const float dist_left  = angular_distance_deg(candidate_left, preferred);
+        const float dist_right = angular_distance_deg(candidate_right, preferred);
+        return (dist_left < dist_right) ? candidate_left : candidate_right;
     }
 }
 
@@ -410,6 +455,572 @@ private:
     ChangeCallback on_change_{};
 };
 
+class PitchDialWidget : public Widget {
+public:
+    using ChangeCallback = std::function<void(float)>;
+
+    PitchDialWidget(std::string label, float angle_degrees = 0.0f)
+        : label_(std::move(label)),
+          angle_deg_(wrap_angle_deg(angle_degrees)) {
+        label_style_ = DMStyles::Label();
+        value_style_ = DMStyles::Slider().value;
+        value_style_.font_size = std::max(value_style_.font_size, label_style_.font_size);
+    }
+
+    ~PitchDialWidget() override {
+        if (icon_texture_) {
+            SDL_DestroyTexture(icon_texture_);
+            icon_texture_ = nullptr;
+        }
+    }
+
+    void set_rect(const SDL_Rect& r) override { rect_ = r; }
+    const SDL_Rect& rect() const override { return rect_; }
+
+    int height_for_width(int w) const override {
+        const int heading_h = label_style_.font_size + DMSpacing::label_gap();
+        const int dial_size = std::clamp(w - 80, 120, 180);
+        return heading_h + dial_size + DMSpacing::item_gap();
+    }
+
+    bool handle_event(const SDL_Event& e) override {
+        bool used = false;
+        switch (e.type) {
+        case SDL_MOUSEBUTTONDOWN: {
+            SDL_Point p{ e.button.x, e.button.y };
+            hovered_ = point_in_dial(p);
+            if (e.button.button == SDL_BUTTON_LEFT && hovered_) {
+                dragging_ = true;
+                update_angle_from_mouse(p);
+                used = true;
+            }
+            break;
+        }
+        case SDL_MOUSEBUTTONUP: {
+            SDL_Point p{ e.button.x, e.button.y };
+            hovered_ = point_in_dial(p);
+            if (dragging_ && e.button.button == SDL_BUTTON_LEFT) {
+                dragging_ = false;
+                update_angle_from_mouse(p);
+                used = true;
+            }
+            break;
+        }
+        case SDL_MOUSEMOTION: {
+            SDL_Point p{ e.motion.x, e.motion.y };
+            hovered_ = point_in_dial(p);
+            if (dragging_) {
+                update_angle_from_mouse(p);
+                used = true;
+            }
+            break;
+        }
+        case SDL_MOUSEWHEEL: {
+            if (hovered_) {
+                const float delta = static_cast<float>(-e.wheel.y) * 2.5f;
+                set_angle_from_user(angle_deg_ + delta);
+                used = true;
+            }
+            break;
+        }
+        default:
+            break;
+        }
+        if (tooltip_enabled() && DMWidgetTooltipHandleEvent(e, rect_, *tooltip_state())) {
+            used = true;
+        }
+        return used;
+    }
+
+    void render(SDL_Renderer* renderer) const override {
+        if (!renderer) return;
+        const auto slider_style = DMStyles::Slider();
+        const DialGeometry g    = compute_geometry();
+
+        draw_heading(renderer);
+        draw_ring(renderer, g, slider_style);
+        draw_line(renderer, g, slider_style);
+        draw_icon(renderer, g);
+        draw_rotated_value(renderer, g);
+        draw_knob(renderer, g, slider_style);
+
+        if (tooltip_enabled()) {
+            DMWidgetTooltipRender(renderer, rect_, *tooltip_state());
+        }
+    }
+
+    bool wants_full_row() const override { return true; }
+
+    void set_angle_degrees(float deg) { angle_deg_ = wrap_angle_deg(deg); }
+    float angle_degrees() const { return angle_deg_; }
+    void set_on_angle_changed(ChangeCallback cb) { on_change_ = std::move(cb); }
+
+private:
+    struct DialGeometry {
+        SDL_Rect area{0, 0, 0, 0};
+        SDL_Point center{0, 0};
+        int radius = 0;
+        int knob_size = 12;
+    };
+
+    DialGeometry compute_geometry() const {
+        DialGeometry g{};
+        const int heading_h = label_style_.font_size + DMSpacing::label_gap();
+        g.area = SDL_Rect{
+            rect_.x,
+            rect_.y + heading_h,
+            rect_.w,
+            std::max(0, rect_.h - heading_h)
+        };
+        const int padding = 12;
+        const int usable_w = std::max(1, g.area.w - padding * 2);
+        const int usable_h = std::max(1, g.area.h - padding * 2);
+        const int diameter = std::min(usable_w, usable_h);
+        g.radius = std::max(22, diameter / 2);
+        g.center = SDL_Point{ g.area.x + g.area.w / 2, g.area.y + g.area.h / 2 };
+        g.knob_size = std::max(12, g.radius / 3);
+        return g;
+    }
+
+    void draw_heading(SDL_Renderer* renderer) const {
+        const std::string heading = label_ + " (" + formatted_angle() + ")";
+        DrawLabelText(renderer, heading, rect_.x, rect_.y, label_style_);
+    }
+
+    void draw_circle(SDL_Renderer* renderer, const SDL_Point& c, int radius, SDL_Color color, int thickness = 1) const {
+        SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+        const int segments = 64;
+        for (int t = 0; t < thickness; ++t) {
+            const int r = std::max(1, radius - t);
+            SDL_Point prev{ c.x + r, c.y };
+            for (int i = 1; i <= segments; ++i) {
+                const float theta = (static_cast<float>(i) / static_cast<float>(segments)) * 2.0f * kPi;
+                SDL_Point next{
+                    c.x + static_cast<int>(std::round(std::cos(theta) * static_cast<float>(r))),
+                    c.y + static_cast<int>(std::round(std::sin(theta) * static_cast<float>(r)))
+                };
+                SDL_RenderDrawLine(renderer, prev.x, prev.y, next.x, next.y);
+                prev = next;
+            }
+        }
+    }
+
+    void draw_ring(SDL_Renderer* renderer, const DialGeometry& g, const DMSliderStyle& slider_style) const {
+        SDL_Color base = dm_draw::DarkenColor(slider_style.track_bg, 0.25f);
+        SDL_Color accent = dragging_ ? slider_style.track_fill_active : slider_style.track_fill;
+        draw_circle(renderer, g.center, g.radius + 6, base, 3);
+        draw_circle(renderer, g.center, g.radius, accent, 2);
+    }
+
+    void draw_line(SDL_Renderer* renderer, const DialGeometry& g, const DMSliderStyle& slider_style) const {
+        const float rad = angle_deg_ * kDegToRad;
+        const float dir_x = std::cos(rad);
+        const float dir_y = -std::sin(rad);
+        const SDL_Point knob{
+            g.center.x + static_cast<int>(std::round(dir_x * static_cast<float>(g.radius))),
+            g.center.y + static_cast<int>(std::round(dir_y * static_cast<float>(g.radius)))
+        };
+        SDL_Color line_color = dragging_ ? slider_style.track_fill_active : slider_style.track_fill;
+        SDL_SetRenderDrawColor(renderer, line_color.r, line_color.g, line_color.b, line_color.a);
+        SDL_RenderDrawLine(renderer, g.center.x, g.center.y, knob.x, knob.y);
+    }
+
+    void draw_knob(SDL_Renderer* renderer, const DialGeometry& g, const DMSliderStyle& slider_style) const {
+        const float rad = angle_deg_ * kDegToRad;
+        const float dir_x = std::cos(rad);
+        const float dir_y = -std::sin(rad);
+        const SDL_Point knob_center{
+            g.center.x + static_cast<int>(std::round(dir_x * static_cast<float>(g.radius))),
+            g.center.y + static_cast<int>(std::round(dir_y * static_cast<float>(g.radius)))
+        };
+        SDL_Rect knob_rect{
+            knob_center.x - g.knob_size / 2,
+            knob_center.y - g.knob_size / 2,
+            g.knob_size,
+            g.knob_size
+        };
+        SDL_Color knob_col   = slider_style.knob;
+        SDL_Color knob_border = slider_style.knob_border;
+        if (dragging_) {
+            knob_col    = slider_style.knob_accent;
+            knob_border = slider_style.knob_accent_border;
+        } else if (hovered_) {
+            knob_col    = slider_style.knob_hover;
+            knob_border = slider_style.knob_border_hover;
+        }
+        const int bevel = std::min(DMStyles::BevelDepth(), std::max(1, g.knob_size / 3));
+        const int radius = std::min(DMStyles::CornerRadius(), g.knob_size / 2);
+        dm_draw::DrawBeveledRect(
+            renderer,
+            knob_rect,
+            radius,
+            bevel,
+            knob_col,
+            DMStyles::HighlightColor(),
+            DMStyles::ShadowColor(),
+            true,
+            DMStyles::HighlightIntensity(),
+            DMStyles::ShadowIntensity());
+        dm_draw::DrawRoundedOutline(renderer, knob_rect, radius, 1, knob_border);
+    }
+
+    void draw_icon(SDL_Renderer* renderer, const DialGeometry& g) const {
+        if (!ensure_icon(renderer)) {
+            return;
+        }
+        const int icon_size = std::clamp(g.radius, g.radius / 2, g.radius * 2);
+        SDL_Rect dst{
+            g.center.x - icon_size / 2,
+            g.center.y - icon_size / 2,
+            icon_size,
+            icon_size
+        };
+        SDL_Point pivot{ icon_size / 2, icon_size / 2 };
+        SDL_RenderCopyEx(renderer, icon_texture_, nullptr, &dst, -angle_deg_, &pivot, SDL_FLIP_NONE);
+    }
+
+    void draw_rotated_value(SDL_Renderer* renderer, const DialGeometry& g) const {
+        TTF_Font* font = DMFontCache::instance().get_font(value_style_.font_path, value_style_.font_size);
+        if (!font) return;
+        const std::string text = formatted_angle();
+        SDL_Surface* surface = TTF_RenderUTF8_Blended(font, text.c_str(), value_style_.color);
+        if (!surface) return;
+        SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surface);
+        int w = surface->w;
+        int h = surface->h;
+        SDL_FreeSurface(surface);
+        if (!tex) return;
+        const float rad = angle_deg_ * kDegToRad;
+        const float dir_x = std::cos(rad);
+        const float dir_y = -std::sin(rad);
+        const int text_radius = g.radius + g.knob_size + 12;
+        SDL_Point anchor{
+            g.center.x + static_cast<int>(std::round(dir_x * static_cast<float>(text_radius))),
+            g.center.y + static_cast<int>(std::round(dir_y * static_cast<float>(text_radius)))
+        };
+        SDL_Rect dst{ anchor.x - w / 2, anchor.y - h / 2, w, h };
+        SDL_Point pivot{ w / 2, h / 2 };
+        SDL_RenderCopyEx(renderer, tex, nullptr, &dst, -angle_deg_, &pivot, SDL_FLIP_NONE);
+        SDL_DestroyTexture(tex);
+    }
+
+    std::string formatted_angle() const {
+        char buffer[16]{};
+        std::snprintf(buffer, sizeof(buffer), "%.0f\u00b0", wrap_angle_deg(angle_deg_));
+        return std::string(buffer);
+    }
+
+    bool point_in_dial(SDL_Point p) const {
+        const DialGeometry g = compute_geometry();
+        const int dx = p.x - g.center.x;
+        const int dy = p.y - g.center.y;
+        const int r = g.radius + g.knob_size;
+        return (dx * dx + dy * dy) <= r * r;
+    }
+
+    void update_angle_from_mouse(SDL_Point p) {
+        const DialGeometry g = compute_geometry();
+        const int dx = p.x - g.center.x;
+        const int dy = p.y - g.center.y;
+        if (dx == 0 && dy == 0) {
+            return;
+        }
+        const float deg = std::atan2(static_cast<float>(-dy), static_cast<float>(dx)) * kRadToDeg;
+        set_angle_from_user(deg);
+    }
+
+    void set_angle_from_user(float deg) {
+        const float normalized = wrap_angle_deg(deg);
+        if (std::fabs(normalized - angle_deg_) < 0.0001f) {
+            return;
+        }
+        angle_deg_ = normalized;
+        if (on_change_) {
+            on_change_(angle_deg_);
+        }
+    }
+
+    bool ensure_icon(SDL_Renderer* renderer) const {
+        if (icon_texture_ || icon_load_attempted_) {
+            return icon_texture_ != nullptr;
+        }
+        icon_load_attempted_ = true;
+        SDL_Surface* surface = IMG_Load(kCameraIconPath);
+        if (!surface) {
+            return false;
+        }
+        icon_texture_ = SDL_CreateTextureFromSurface(renderer, surface);
+        if (icon_texture_) {
+            SDL_SetTextureBlendMode(icon_texture_, SDL_BLENDMODE_BLEND);
+        }
+        SDL_FreeSurface(surface);
+        return icon_texture_ != nullptr;
+    }
+
+    SDL_Rect rect_{0, 0, 0, 0};
+    std::string label_;
+    DMLabelStyle label_style_{};
+    DMLabelStyle value_style_{};
+    float angle_deg_ = 0.0f;
+    bool dragging_ = false;
+    bool hovered_ = false;
+    ChangeCallback on_change_{};
+    mutable SDL_Texture* icon_texture_ = nullptr;
+    mutable bool icon_load_attempted_ = false;
+};
+
+class ZoomKeyPointWidget : public Widget {
+public:
+    struct Values {
+        float zoom = 1.0f;
+        float pitch_degrees = 0.0f;
+        float horizon_y = 0.0f;
+        float depth_offset_px = 0.0f;
+        float distance_strength = 0.0f;
+        float foreshorten_strength = 0.0f;
+    };
+
+    ZoomKeyPointWidget(std::string label, const Values& values, bool expanded, float zoom_min, float zoom_max)
+        : label_(std::move(label)),
+          expanded_(expanded),
+          zoom_min_(zoom_min),
+          zoom_max_(zoom_max) {
+        header_toggle_ = std::make_unique<SectionToggleWidget>(label_, expanded_);
+        if (header_toggle_) {
+            header_toggle_->set_on_toggle([this](bool v) {
+                expanded_ = v;
+                layout_children();
+                if (on_expanded_changed_) {
+                    on_expanded_changed_(expanded_);
+                }
+            });
+        }
+        set_zoom_button_ = std::make_unique<DMButton>("Set Zoom", &DMStyles::SecondaryButton(), 120, DMButton::height());
+
+        zoom_slider_ = std::make_unique<FloatSliderWidget>(
+            "Zoom", zoom_min_, zoom_max_, 0.01f, values.zoom, 2);
+        if (zoom_slider_) {
+            zoom_slider_->set_tooltip("Zoom anchor for this key point.");
+            zoom_slider_->set_on_value_changed([this](float) { notify_change(); });
+        }
+
+        tilt_widget_ = std::make_unique<PitchDialWidget>("Tilt (Pitch)", pitch_to_angle_deg(values.pitch_degrees));
+        if (tilt_widget_) {
+            tilt_widget_->set_tooltip("Camera pitch at this zoom level.");
+            tilt_widget_->set_on_angle_changed([this](float) { notify_change(); });
+        }
+
+        horizon_slider_ = std::make_unique<FloatSliderWidget>(
+            "Horizon Y (px from top)", kHorizonSliderMin, kHorizonSliderMax, kHorizonSliderStep, values.horizon_y, 0);
+        if (horizon_slider_) {
+            horizon_slider_->set_tooltip("Screen-space horizon placement for this zoom anchor.");
+            horizon_slider_->set_on_value_changed([this](float) { notify_change(); });
+        }
+
+        depth_offset_slider_ = std::make_unique<FloatSliderWidget>(
+            "Depth Offset (px)", -4000.0f, 4000.0f, 5.0f, values.depth_offset_px, 0);
+        if (depth_offset_slider_) {
+            depth_offset_slider_->set_tooltip("Offsets the virtual ground plane for parallax at this zoom.");
+            depth_offset_slider_->set_on_value_changed([this](float) { notify_change(); });
+        }
+
+        distance_slider_ = std::make_unique<FloatSliderWidget>(
+            "Distance Scaling", 0.0f, 1.0f, 0.01f, values.distance_strength, 2);
+        if (distance_slider_) {
+            distance_slider_->set_tooltip("How much sprites shrink with distance at this zoom.");
+            distance_slider_->set_on_value_changed([this](float) { notify_change(); });
+        }
+
+        foreshorten_slider_ = std::make_unique<FloatSliderWidget>(
+            "Vertical Foreshortening", 0.0f, 2.0f, 0.01f, values.foreshorten_strength, 2);
+        if (foreshorten_slider_) {
+            foreshorten_slider_->set_tooltip("Scale bias for tall sprites at this zoom.");
+            foreshorten_slider_->set_on_value_changed([this](float) { notify_change(); });
+        }
+    }
+
+    void set_on_value_changed(std::function<void()> cb) { on_change_ = std::move(cb); }
+    void set_on_expanded_changed(std::function<void(bool)> cb) { on_expanded_changed_ = std::move(cb); }
+    void set_on_set_zoom(std::function<void(float)> cb) { on_set_zoom_ = std::move(cb); }
+
+    void set_values(const Values& values) {
+        const float preferred_angle = tilt_widget_ ? tilt_widget_->angle_degrees() : 0.0f;
+        if (zoom_slider_) zoom_slider_->set_value(values.zoom);
+        if (tilt_widget_) tilt_widget_->set_angle_degrees(pitch_to_angle_deg(values.pitch_degrees, preferred_angle));
+        if (horizon_slider_) horizon_slider_->set_value(values.horizon_y);
+        if (depth_offset_slider_) depth_offset_slider_->set_value(values.depth_offset_px);
+        if (distance_slider_) distance_slider_->set_value(values.distance_strength);
+        if (foreshorten_slider_) foreshorten_slider_->set_value(values.foreshorten_strength);
+        layout_children();
+    }
+
+    Values values() const {
+        Values v{};
+        v.zoom = zoom_slider_ ? zoom_slider_->value() : 1.0f;
+        v.pitch_degrees = tilt_widget_ ? angle_to_pitch_deg(tilt_widget_->angle_degrees()) : 0.0f;
+        v.horizon_y = horizon_slider_ ? horizon_slider_->value() : 0.0f;
+        v.depth_offset_px = depth_offset_slider_ ? depth_offset_slider_->value() : 0.0f;
+        v.distance_strength = distance_slider_ ? distance_slider_->value() : 0.0f;
+        v.foreshorten_strength = foreshorten_slider_ ? foreshorten_slider_->value() : 0.0f;
+        return v;
+    }
+
+    void set_expanded(bool expanded) {
+        if (expanded_ == expanded) return;
+        expanded_ = expanded;
+        if (header_toggle_) {
+            header_toggle_->set_expanded(expanded_);
+        }
+        layout_children();
+    }
+
+    bool expanded() const { return expanded_; }
+
+    void set_rect(const SDL_Rect& r) override {
+        rect_ = r;
+        layout_children();
+    }
+
+    const SDL_Rect& rect() const override { return rect_; }
+
+    int height_for_width(int w) const override {
+        const int width = std::max(1, w);
+        const int header_h = DMButton::height();
+        int height = header_h;
+        if (expanded_) {
+            const int gap = DMSpacing::item_gap();
+            height += gap;
+            auto add_height = [&](const Widget* wgt) {
+                if (!wgt) return;
+                height += wgt->height_for_width(width) + gap;
+            };
+            add_height(zoom_slider_.get());
+            add_height(tilt_widget_.get());
+            add_height(horizon_slider_.get());
+            add_height(depth_offset_slider_.get());
+            add_height(distance_slider_.get());
+            add_height(foreshorten_slider_.get());
+        }
+        return height;
+    }
+
+    bool handle_event(const SDL_Event& e) override {
+        if (header_toggle_ && header_toggle_->handle_event(e)) {
+            expanded_ = header_toggle_->expanded();
+            layout_children();
+            if (on_expanded_changed_) {
+                on_expanded_changed_(expanded_);
+            }
+            return true;
+        }
+        if (set_zoom_button_ && set_zoom_button_->handle_event(e)) {
+            if (on_set_zoom_) {
+                on_set_zoom_(zoom_slider_ ? zoom_slider_->value() : 1.0f);
+            }
+            return true;
+        }
+
+        if (!expanded_) {
+            return false;
+        }
+
+        bool used = false;
+        auto handle_child = [&](Widget* w) {
+            if (!w) return false;
+            return w->handle_event(e);
+        };
+        used = handle_child(zoom_slider_.get()) || used;
+        used = handle_child(tilt_widget_.get()) || used;
+        used = handle_child(horizon_slider_.get()) || used;
+        used = handle_child(depth_offset_slider_.get()) || used;
+        used = handle_child(distance_slider_.get()) || used;
+        used = handle_child(foreshorten_slider_.get()) || used;
+        return used;
+    }
+
+    void render(SDL_Renderer* renderer) const override {
+        if (header_toggle_) header_toggle_->render(renderer);
+        if (set_zoom_button_) set_zoom_button_->render(renderer);
+        if (!expanded_) return;
+        if (zoom_slider_) zoom_slider_->render(renderer);
+        if (tilt_widget_) tilt_widget_->render(renderer);
+        if (horizon_slider_) horizon_slider_->render(renderer);
+        if (depth_offset_slider_) depth_offset_slider_->render(renderer);
+        if (distance_slider_) distance_slider_->render(renderer);
+        if (foreshorten_slider_) foreshorten_slider_->render(renderer);
+    }
+
+    bool wants_full_row() const override { return true; }
+
+private:
+    void notify_change() {
+        if (on_change_) {
+            on_change_();
+        }
+    }
+
+    void layout_children() {
+        const int gap = DMSpacing::item_gap();
+        const int width = std::max(1, rect_.w);
+        int x = rect_.x;
+        int y = rect_.y;
+
+        const int header_h = DMButton::height();
+        const int button_w = set_zoom_button_
+            ? std::min(width / 3, std::max(set_zoom_button_->preferred_width(), 110))
+            : 0;
+        const int toggle_w = std::max(0, width - button_w - (button_w > 0 ? gap : 0));
+
+        if (header_toggle_) {
+            header_toggle_->set_rect(SDL_Rect{ x, y, toggle_w, header_h });
+        }
+        if (set_zoom_button_) {
+            const int btn_x = x + width - button_w;
+            set_zoom_button_->set_rect(SDL_Rect{ btn_x, y, button_w, header_h });
+        }
+        y += header_h;
+
+        if (!expanded_) {
+            return;
+        }
+
+        y += gap;
+        auto place_child = [&](Widget* child) {
+            if (!child) return;
+            int h = child->height_for_width(width);
+            child->set_rect(SDL_Rect{ x, y, width, h });
+            y += h + gap;
+        };
+
+        place_child(zoom_slider_.get());
+        place_child(tilt_widget_.get());
+        place_child(horizon_slider_.get());
+        place_child(depth_offset_slider_.get());
+        place_child(distance_slider_.get());
+        place_child(foreshorten_slider_.get());
+    }
+
+private:
+    std::string label_;
+    bool expanded_ = true;
+    SDL_Rect rect_{0, 0, 0, 0};
+    float zoom_min_ = 0.0f;
+    float zoom_max_ = 0.0f;
+
+    std::unique_ptr<SectionToggleWidget> header_toggle_;
+    std::unique_ptr<DMButton> set_zoom_button_;
+    std::unique_ptr<FloatSliderWidget> zoom_slider_;
+    std::unique_ptr<PitchDialWidget> tilt_widget_;
+    std::unique_ptr<FloatSliderWidget> horizon_slider_;
+    std::unique_ptr<FloatSliderWidget> depth_offset_slider_;
+    std::unique_ptr<FloatSliderWidget> distance_slider_;
+    std::unique_ptr<FloatSliderWidget> foreshorten_slider_;
+
+    std::function<void()> on_change_{};
+    std::function<void(bool)> on_expanded_changed_{};
+    std::function<void(float)> on_set_zoom_{};
+};
+
 CameraUIPanel::CameraUIPanel(Assets* assets, int x, int y)
     : DockableCollapsible("Camera Settings", true, x, y),
       assets_(assets) {
@@ -534,8 +1145,6 @@ void CameraUIPanel::sync_from_camera() {
     last_realism_enabled_ = effects_enabled;
 
     if (min_render_size_slider_) min_render_size_slider_->set_value(last_settings_.min_visible_screen_ratio);
-    if (foreshorten_strength_slider_) foreshorten_strength_slider_->set_value(last_settings_.foreshorten_strength);
-    if (distance_strength_slider_) distance_strength_slider_->set_value(last_settings_.distance_scale_strength);
     if (render_quality_slider_) render_quality_slider_->set_value(last_settings_.render_quality_percent);
     if (smoothing_checkbox_) smoothing_checkbox_->set_value(last_settings_.smooth_motion_zoom);
     if (smoothing_method_dropdown_) smoothing_method_dropdown_->set_selected(method_to_index(last_settings_.motion_smoothing_method));
@@ -550,12 +1159,8 @@ void CameraUIPanel::sync_from_camera() {
         parallax_smoothing_slider_->set_value(slider_value);
     }
     if (hysteresis_margin_slider_) hysteresis_margin_slider_->set_value(last_settings_.scale_variant_hysteresis_margin);
-    if (zoom_in_slider_) zoom_in_slider_->set_value(last_settings_.zoom_low);
-    if (zoom_out_slider_) zoom_out_slider_->set_value(last_settings_.zoom_high);
     if (base_height_slider_) base_height_slider_->set_value(last_settings_.base_height_px);
-    if (tilt_in_slider_) tilt_in_slider_->set_value(std::abs(last_settings_.tilt_zoom_in_degrees));
-    if (tilt_out_slider_) tilt_out_slider_->set_value(std::abs(last_settings_.tilt_zoom_out_degrees));
-    if (horizon_near_slider_ || horizon_far_slider_) {
+    if (zoom_in_keypoint_ || zoom_out_keypoint_) {
         auto horizon_value_for_zoom = [&cam](float zoom_value, const std::optional<float>& stored) {
             float value = 0.0f;
             if (stored.has_value()) {
@@ -565,14 +1170,29 @@ void CameraUIPanel::sync_from_camera() {
             }
             return std::clamp(value, kHorizonSliderMin, kHorizonSliderMax);
         };
-        if (horizon_near_slider_) {
-            horizon_near_slider_->set_value(horizon_value_for_zoom(last_settings_.zoom_low, last_settings_.horizon_y_at_zoom_low));
+
+        ZoomKeyPointWidget::Values min_values;
+        min_values.zoom = last_settings_.zoom_low;
+        min_values.pitch_degrees = last_settings_.tilt_zoom_in_degrees;
+        min_values.horizon_y = horizon_value_for_zoom(last_settings_.zoom_low, last_settings_.horizon_y_at_zoom_low);
+        min_values.depth_offset_px = last_settings_.depth_offset_at_zoom_low;
+        min_values.distance_strength = last_settings_.distance_scale_at_zoom_low;
+        min_values.foreshorten_strength = last_settings_.foreshorten_at_zoom_low;
+        if (zoom_in_keypoint_) {
+            zoom_in_keypoint_->set_values(min_values);
         }
-        if (horizon_far_slider_) {
-            horizon_far_slider_->set_value(horizon_value_for_zoom(last_settings_.zoom_high, last_settings_.horizon_y_at_zoom_high));
+
+        ZoomKeyPointWidget::Values max_values;
+        max_values.zoom = last_settings_.zoom_high;
+        max_values.pitch_degrees = last_settings_.tilt_zoom_out_degrees;
+        max_values.horizon_y = horizon_value_for_zoom(last_settings_.zoom_high, last_settings_.horizon_y_at_zoom_high);
+        max_values.depth_offset_px = last_settings_.depth_offset_at_zoom_high;
+        max_values.distance_strength = last_settings_.distance_scale_at_zoom_high;
+        max_values.foreshorten_strength = last_settings_.foreshorten_at_zoom_high;
+        if (zoom_out_keypoint_) {
+            zoom_out_keypoint_->set_values(max_values);
         }
     }
-    if (depth_offset_slider_) depth_offset_slider_->set_value(last_settings_.grid_depth_offset_px);
 
     if (foreground_texture_opacity_slider_) {
         foreground_texture_opacity_slider_->set_value(static_cast<float>(last_settings_.foreground_texture_max_opacity));
@@ -627,62 +1247,16 @@ void CameraUIPanel::build_ui() {
             rebuild_rows();
         });
     }
-    zoom_in_settings_header_ = std::make_unique<SectionToggleWidget>("Zoomed In Settings", zoom_in_settings_expanded_);
-    if (zoom_in_settings_header_) {
-        zoom_in_settings_header_->set_on_toggle([this](bool expanded) {
-            zoom_in_settings_expanded_ = expanded;
-            enforce_zoom_section_exclusivity(true);
-            rebuild_rows();
-        });
-        zoom_in_settings_header_->set_tooltip("Perspective controls that apply at minimum zoom.");
-    }
-    zoom_out_settings_header_ = std::make_unique<SectionToggleWidget>("Zoomed Out Settings", zoom_out_settings_expanded_);
-    if (zoom_out_settings_header_) {
-        zoom_out_settings_header_->set_on_toggle([this](bool expanded) {
-            zoom_out_settings_expanded_ = expanded;
-            enforce_zoom_section_exclusivity(false);
-            rebuild_rows();
-        });
-        zoom_out_settings_header_->set_tooltip("Perspective controls that apply at maximum zoom.");
-    }
-    enforce_zoom_section_exclusivity(true);
 
     min_render_size_slider_ = std::make_unique<FloatSliderWidget>("Min On-Screen Size", 0.0f, 0.05f, 0.001f, defaults.min_visible_screen_ratio, 3);
     min_render_size_slider_->set_tooltip("Cull sprites once their height drops below this fraction of the screen (0.01 = 1%).");
     min_render_size_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
-    foreshorten_strength_slider_ = std::make_unique<FloatSliderWidget>("Vertical Foreshortening", 0.0f, 2.0f, 0.01f, defaults.foreshorten_strength, 2);
-    foreshorten_strength_slider_->set_tooltip("Controls how much tall sprites foreshorten or stretch with depth.");
-    foreshorten_strength_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
-    distance_strength_slider_ = std::make_unique<FloatSliderWidget>("Distance Scaling", 0.0f, 1.0f, 0.01f, defaults.distance_scale_strength, 2);
-    distance_strength_slider_->set_tooltip("Higher values shrink faraway sprites more aggressively.");
-    distance_strength_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
     render_quality_slider_ = std::make_unique<DiscreteSliderWidget>("Render Quality (%)", std::vector<int>{100, 75, 50, 25, 10}, defaults.render_quality_percent);
     render_quality_slider_->set_tooltip("Trade fidelity for speed; lowers the number of sprites drawn each frame.");
     render_quality_slider_->set_on_value_changed([this](int) { on_control_value_changed(); });
-
-    zoom_in_slider_ = std::make_unique<FloatSliderWidget>("Zoom In Limit", 0.1f, camera::kMaxZoomAnchors, 0.01f, defaults.zoom_low, 2);
-    zoom_in_slider_->set_tooltip("Closest allowed zoom (smaller = closer to the player).");
-    zoom_in_slider_->set_on_value_changed([this](float) { on_zoom_anchor_value_changed(true); });
-
-    zoom_out_slider_ = std::make_unique<FloatSliderWidget>("Zoom Out Limit", 0.1f, camera::kMaxZoomAnchors, 0.01f, defaults.zoom_high, 2);
-    zoom_out_slider_->set_tooltip("Farthest allowed zoom before tilting down.");
-    zoom_out_slider_->set_on_value_changed([this](float) { on_zoom_anchor_value_changed(false); });
-
     base_height_slider_ = std::make_unique<FloatSliderWidget>("Base Camera Height (px)", 80.0f, 4000.0f, 5.0f, defaults.base_height_px, 0);
     base_height_slider_->set_tooltip("Reference camera height; scales with zoom to drive depth and parallax.");
     base_height_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
-
-    constexpr float kTiltSliderMax = (camera::kMinPitchDegrees < 0.0f)
-        ? -camera::kMinPitchDegrees
-        : camera::kMinPitchDegrees;
-    tilt_in_slider_ = std::make_unique<FloatSliderWidget>("Tilt When Zoomed In (deg)", 0.0f, kTiltSliderMax, 0.25f, std::abs(defaults.tilt_zoom_in_degrees), 2);
-    tilt_in_slider_->set_tooltip("How much the camera tilts down when zoomed in (0 deg = level/up, higher values tilt farther downward).");
-    tilt_in_slider_->set_on_value_changed([this](float) { on_zoom_anchor_value_changed(true); });
-
-    tilt_out_slider_ = std::make_unique<FloatSliderWidget>("Tilt When Zoomed Out (deg)", 0.0f, kTiltSliderMax, 0.25f, std::abs(defaults.tilt_zoom_out_degrees), 2);
-    tilt_out_slider_->set_tooltip("Tilt when zoomed out; higher numbers tilt more downward, 0 deg stays level.");
-    tilt_out_slider_->set_on_value_changed([this](float) { on_zoom_anchor_value_changed(false); });
-    tilt_hint_label_ = std::make_unique<GroupLabelWidget>("Tilt sliders: lower numbers stay level/up, higher numbers tilt downward (0 deg = level, 60 deg = steep down).");
 
     const auto horizon_value_for_zoom = [this, &defaults](float zoom_value, const std::optional<float>& stored) {
         if (stored.has_value()) {
@@ -697,21 +1271,53 @@ void CameraUIPanel::build_ui() {
         }
         return std::clamp(value, kHorizonSliderMin, kHorizonSliderMax);
     };
-    const float default_horizon_near = horizon_value_for_zoom(defaults.zoom_low, defaults.horizon_y_at_zoom_low);
-    horizon_near_slider_ = std::make_unique<FloatSliderWidget>("Horizon @ Min Zoom (px from top)", kHorizonSliderMin, kHorizonSliderMax, kHorizonSliderStep, default_horizon_near, 0);
-    horizon_near_slider_->set_tooltip("Screen-space y-distance from the top for the horizon at minimum zoom. Negative values place it above the screen.");
-    horizon_near_slider_->set_on_value_changed([this](float) { on_zoom_anchor_value_changed(true); });
+    ZoomKeyPointWidget::Values zoom_in_defaults;
+    zoom_in_defaults.zoom = defaults.zoom_low;
+    zoom_in_defaults.pitch_degrees = defaults.tilt_zoom_in_degrees;
+    zoom_in_defaults.horizon_y = horizon_value_for_zoom(defaults.zoom_low, defaults.horizon_y_at_zoom_low);
+    zoom_in_defaults.depth_offset_px = defaults.depth_offset_at_zoom_low;
+    zoom_in_defaults.distance_strength = defaults.distance_scale_at_zoom_low;
+    zoom_in_defaults.foreshorten_strength = defaults.foreshorten_at_zoom_low;
+    zoom_in_keypoint_ = std::make_unique<ZoomKeyPointWidget>(
+        "Zoomed In Settings",
+        zoom_in_defaults,
+        zoom_in_settings_expanded_,
+        0.1f,
+        camera::kMaxZoomAnchors);
+    if (zoom_in_keypoint_) {
+        zoom_in_keypoint_->set_on_value_changed([this]() { on_control_value_changed(); });
+        zoom_in_keypoint_->set_on_expanded_changed([this](bool expanded) {
+            zoom_in_settings_expanded_ = expanded;
+            rebuild_rows();
+        });
+        zoom_in_keypoint_->set_on_set_zoom([this](float target_zoom) {
+            snap_zoom_to_anchor(target_zoom, true);
+        });
+    }
 
-    const float default_horizon_far = horizon_value_for_zoom(defaults.zoom_high, defaults.horizon_y_at_zoom_high);
-    horizon_far_slider_ = std::make_unique<FloatSliderWidget>("Horizon @ Max Zoom (px from top)", kHorizonSliderMin, kHorizonSliderMax, kHorizonSliderStep, default_horizon_far, 0);
-    horizon_far_slider_->set_tooltip("Horizon distance from the top when fully zoomed out. Negative values push it above the visible area.");
-    horizon_far_slider_->set_on_value_changed([this](float) { on_zoom_anchor_value_changed(false); });
-
-    depth_offset_slider_ = std::make_unique<FloatSliderWidget>("Grid Depth Offset (px)", -4000.0f, 4000.0f, 5.0f, defaults.grid_depth_offset_px, 0);
-    depth_offset_slider_->set_tooltip("Offsets the virtual ground plane to tune grid spacing and parallax (negative raises, positive lowers).");
-    depth_offset_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
-
-
+    ZoomKeyPointWidget::Values zoom_out_defaults;
+    zoom_out_defaults.zoom = defaults.zoom_high;
+    zoom_out_defaults.pitch_degrees = defaults.tilt_zoom_out_degrees;
+    zoom_out_defaults.horizon_y = horizon_value_for_zoom(defaults.zoom_high, defaults.horizon_y_at_zoom_high);
+    zoom_out_defaults.depth_offset_px = defaults.depth_offset_at_zoom_high;
+    zoom_out_defaults.distance_strength = defaults.distance_scale_at_zoom_high;
+    zoom_out_defaults.foreshorten_strength = defaults.foreshorten_at_zoom_high;
+    zoom_out_keypoint_ = std::make_unique<ZoomKeyPointWidget>(
+        "Zoomed Out Settings",
+        zoom_out_defaults,
+        zoom_out_settings_expanded_,
+        0.1f,
+        camera::kMaxZoomAnchors);
+    if (zoom_out_keypoint_) {
+        zoom_out_keypoint_->set_on_value_changed([this]() { on_control_value_changed(); });
+        zoom_out_keypoint_->set_on_expanded_changed([this](bool expanded) {
+            zoom_out_settings_expanded_ = expanded;
+            rebuild_rows();
+        });
+        zoom_out_keypoint_->set_on_set_zoom([this](float target_zoom) {
+            snap_zoom_to_anchor(target_zoom, false);
+        });
+    }
 
     const int stored_fg_opacity = devmode::camera_prefs::load_foreground_texture_max_opacity();
     const int stored_bg_opacity = devmode::camera_prefs::load_background_texture_max_opacity();
@@ -817,21 +1423,9 @@ void CameraUIPanel::on_control_value_changed() {
     apply_settings_if_needed();
 }
 
-void CameraUIPanel::on_zoom_anchor_value_changed(bool use_min_zoom) {
-    if (!assets_ || !is_visible()) {
-        return;
-    }
-    apply_settings_if_needed();
-    const float target_zoom = use_min_zoom
-        ? (zoom_in_slider_ ? zoom_in_slider_->value() : last_settings_.zoom_low)
-        : (zoom_out_slider_ ? zoom_out_slider_->value() : last_settings_.zoom_high);
-    snap_zoom_to_anchor(target_zoom, use_min_zoom);
-}
-
 void CameraUIPanel::snap_zoom_to_anchor(float target_zoom, bool anchor_is_min_section) {
     if (!assets_ || !is_visible()) return;
-    if (anchor_is_min_section && !zoom_in_settings_expanded_) return;
-    if (!anchor_is_min_section && !zoom_out_settings_expanded_) return;
+    (void)anchor_is_min_section;
 
     camera& cam = assets_->getView();
     const float clamped_target = std::clamp(target_zoom, camera::kMinZoomAnchors, camera::kMaxZoomAnchors);
@@ -845,19 +1439,6 @@ void CameraUIPanel::snap_zoom_to_anchor(float target_zoom, bool anchor_is_min_se
     cam.set_scale(clamped_target);
     cam.recompute_current_view();
     assets_->apply_camera_runtime_settings();
-}
-
-void CameraUIPanel::enforce_zoom_section_exclusivity(bool expanding_min_section) {
-    if (!zoom_in_settings_expanded_ || !zoom_out_settings_expanded_) return;
-
-    if (expanding_min_section) {
-        zoom_out_settings_expanded_ = false;
-        if (zoom_out_settings_header_) zoom_out_settings_header_->set_expanded(false);
-        return;
-    }
-
-    zoom_in_settings_expanded_ = false;
-    if (zoom_in_settings_header_) zoom_in_settings_header_->set_expanded(false);
 }
 
 void CameraUIPanel::rebuild_rows() {
@@ -875,22 +1456,8 @@ void CameraUIPanel::rebuild_rows() {
     if (depth_section_header_) rows.push_back({ depth_section_header_.get() });
     if (depth_section_expanded_) {
         if (base_height_slider_) rows.push_back({ base_height_slider_.get() });
-        if (distance_strength_slider_) rows.push_back({ distance_strength_slider_.get() });
-        if (foreshorten_strength_slider_) rows.push_back({ foreshorten_strength_slider_.get() });
-        if (depth_offset_slider_) rows.push_back({ depth_offset_slider_.get() });
-        if (zoom_in_settings_header_) rows.push_back({ zoom_in_settings_header_.get() });
-        if (zoom_in_settings_expanded_) {
-            if (zoom_in_slider_) rows.push_back({ zoom_in_slider_.get() });
-            if (tilt_in_slider_) rows.push_back({ tilt_in_slider_.get() });
-            if (horizon_near_slider_) rows.push_back({ horizon_near_slider_.get() });
-        }
-        if (zoom_out_settings_header_) rows.push_back({ zoom_out_settings_header_.get() });
-        if (zoom_out_settings_expanded_) {
-            if (zoom_out_slider_) rows.push_back({ zoom_out_slider_.get() });
-            if (tilt_out_slider_) rows.push_back({ tilt_out_slider_.get() });
-            if (horizon_far_slider_) rows.push_back({ horizon_far_slider_.get() });
-        }
-        if (tilt_hint_label_) rows.push_back({ tilt_hint_label_.get() });
+        if (zoom_in_keypoint_) rows.push_back({ zoom_in_keypoint_.get() });
+        if (zoom_out_keypoint_) rows.push_back({ zoom_out_keypoint_.get() });
     }
 
     if (depthcue_section_header_) rows.push_back({ depthcue_section_header_.get() });
@@ -950,11 +1517,16 @@ void CameraUIPanel::apply_settings_if_needed() {
         differs(settings.tilt_zoom_out_degrees, prev.tilt_zoom_out_degrees);
     changed = changed || differs_opt(settings.horizon_y_at_zoom_low, prev.horizon_y_at_zoom_low);
     changed = changed || differs_opt(settings.horizon_y_at_zoom_high, prev.horizon_y_at_zoom_high);
-    changed = changed || differs(settings.foreshorten_strength, prev.foreshorten_strength) || differs(settings.distance_scale_strength, prev.distance_scale_strength) || differs(settings.min_visible_screen_ratio, prev.min_visible_screen_ratio);
+    changed = changed || differs(settings.foreshorten_at_zoom_low, prev.foreshorten_at_zoom_low) ||
+        differs(settings.foreshorten_at_zoom_high, prev.foreshorten_at_zoom_high);
+    changed = changed || differs(settings.distance_scale_at_zoom_low, prev.distance_scale_at_zoom_low) ||
+        differs(settings.distance_scale_at_zoom_high, prev.distance_scale_at_zoom_high);
+    changed = changed || differs(settings.depth_offset_at_zoom_low, prev.depth_offset_at_zoom_low) ||
+        differs(settings.depth_offset_at_zoom_high, prev.depth_offset_at_zoom_high);
+    changed = changed || differs(settings.min_visible_screen_ratio, prev.min_visible_screen_ratio);
     if (render_quality_slider_) {
         changed = changed || settings.render_quality_percent != prev.render_quality_percent;
     }
-    changed = changed || differs(settings.grid_depth_offset_px, prev.grid_depth_offset_px);
     changed = changed || settings.smooth_motion_zoom != prev.smooth_motion_zoom;
     changed = changed || settings.motion_smoothing_method != prev.motion_smoothing_method;
     changed = changed || differs(settings.motion_smoothing_tau, prev.motion_smoothing_tau);
@@ -1027,8 +1599,6 @@ void CameraUIPanel::apply_settings_to_camera(const camera::RealismSettings& sett
 camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
     camera::RealismSettings settings = last_settings_;
     if (min_render_size_slider_) settings.min_visible_screen_ratio = std::clamp(min_render_size_slider_->value(), 0.0f, 0.5f);
-    if (foreshorten_strength_slider_) settings.foreshorten_strength = std::max(0.0f, foreshorten_strength_slider_->value());
-    if (distance_strength_slider_) settings.distance_scale_strength = std::max(0.0f, distance_strength_slider_->value());
     if (render_quality_slider_) settings.render_quality_percent = render_quality_slider_->value();
     if (smoothing_checkbox_) settings.smooth_motion_zoom = smoothing_checkbox_->value();
 
@@ -1057,43 +1627,66 @@ camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
     if (hysteresis_margin_slider_) {
         settings.scale_variant_hysteresis_margin = std::max(0.0f, hysteresis_margin_slider_->value());
     }
-    if (zoom_in_slider_) settings.zoom_low = zoom_in_slider_->value();
-    if (zoom_out_slider_) settings.zoom_high = zoom_out_slider_->value();
+
+    if (base_height_slider_) settings.base_height_px = std::max(0.0f, base_height_slider_->value());
+
+    ZoomKeyPointWidget::Values min_values{};
+    ZoomKeyPointWidget::Values max_values{};
+    if (zoom_in_keypoint_) {
+        min_values = zoom_in_keypoint_->values();
+        settings.zoom_low = min_values.zoom;
+        settings.tilt_zoom_in_degrees = min_values.pitch_degrees;
+    }
+    if (zoom_out_keypoint_) {
+        max_values = zoom_out_keypoint_->values();
+        settings.zoom_high = max_values.zoom;
+        settings.tilt_zoom_out_degrees = max_values.pitch_degrees;
+    }
+
     settings.zoom_low = std::clamp(settings.zoom_low,
                                    camera::kMinZoomAnchors,
                                    camera::kMaxZoomAnchors);
     const float min_high = std::min(camera::kMaxZoomAnchors, settings.zoom_low + 0.0001f);
     settings.zoom_high = std::clamp(settings.zoom_high, min_high, camera::kMaxZoomAnchors);
 
-    if (base_height_slider_) settings.base_height_px = std::max(0.0f, base_height_slider_->value());
-    if (tilt_in_slider_) settings.tilt_zoom_in_degrees = -std::abs(tilt_in_slider_->value());
-    if (tilt_out_slider_) settings.tilt_zoom_out_degrees = -std::abs(tilt_out_slider_->value());
-    auto apply_horizon_setting = [this](FloatSliderWidget* slider,
+    auto apply_horizon_setting = [this](float value,
                                         std::optional<float>& target,
                                         const std::optional<float>& previous,
                                         float zoom_value) {
-        if (!slider) return;
-        const float value = std::clamp(slider->value(), kHorizonSliderMin, kHorizonSliderMax);
+        const float clamped = std::clamp(value, kHorizonSliderMin, kHorizonSliderMax);
         if (!previous.has_value() && assets_) {
             const float baseline = std::clamp(
                 static_cast<float>(assets_->getView().horizon_screen_y_for_scale_value(zoom_value)),
                 kHorizonSliderMin,
                 kHorizonSliderMax);
-            if (std::fabs(value - baseline) < 0.0001f) {
+            if (std::fabs(clamped - baseline) < 0.0001f) {
                 target.reset();
                 return;
             }
         }
-        target = value;
+        target = clamped;
     };
-    apply_horizon_setting(horizon_near_slider_.get(), settings.horizon_y_at_zoom_low, last_settings_.horizon_y_at_zoom_low, settings.zoom_low);
-    apply_horizon_setting(horizon_far_slider_.get(), settings.horizon_y_at_zoom_high, last_settings_.horizon_y_at_zoom_high, settings.zoom_high);
+    if (zoom_in_keypoint_) {
+        apply_horizon_setting(min_values.horizon_y, settings.horizon_y_at_zoom_low, last_settings_.horizon_y_at_zoom_low, settings.zoom_low);
+        settings.depth_offset_at_zoom_low = std::clamp(min_values.depth_offset_px, -4000.0f, 4000.0f);
+        settings.distance_scale_at_zoom_low = std::max(0.0f, min_values.distance_strength);
+        settings.foreshorten_at_zoom_low = std::max(0.0f, min_values.foreshorten_strength);
+    }
+    if (zoom_out_keypoint_) {
+        apply_horizon_setting(max_values.horizon_y, settings.horizon_y_at_zoom_high, last_settings_.horizon_y_at_zoom_high, settings.zoom_high);
+        settings.depth_offset_at_zoom_high = std::clamp(max_values.depth_offset_px, -4000.0f, 4000.0f);
+        settings.distance_scale_at_zoom_high = std::max(0.0f, max_values.distance_strength);
+        settings.foreshorten_at_zoom_high = std::max(0.0f, max_values.foreshorten_strength);
+    }
     settings.tilt_zoom_in_degrees  = std::clamp(settings.tilt_zoom_in_degrees, camera::kMinPitchDegrees, camera::kMaxPitchDegrees);
     settings.tilt_zoom_out_degrees = std::clamp(settings.tilt_zoom_out_degrees, camera::kMinPitchDegrees, camera::kMaxPitchDegrees);
-    if (settings.tilt_zoom_out_degrees > settings.tilt_zoom_in_degrees) {
-        std::swap(settings.tilt_zoom_out_degrees, settings.tilt_zoom_in_degrees);
-    }
-    if (depth_offset_slider_) settings.grid_depth_offset_px = std::clamp(depth_offset_slider_->value(), -4000.0f, 4000.0f);
+
+    settings.foreshorten_strength =
+        0.5f * (settings.foreshorten_at_zoom_low + settings.foreshorten_at_zoom_high);
+    settings.distance_scale_strength =
+        0.5f * (settings.distance_scale_at_zoom_low + settings.distance_scale_at_zoom_high);
+    settings.grid_depth_offset_px =
+        0.5f * (settings.depth_offset_at_zoom_low + settings.depth_offset_at_zoom_high);
     // Depth cue texture settings
     auto slider_to_opacity = [](const FloatSliderWidget* slider) -> int {
         if (!slider) return 0;

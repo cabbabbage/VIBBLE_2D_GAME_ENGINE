@@ -67,7 +67,7 @@ private:
         float dx = 0.0f;
         float dy = 0.0f;
         float degree = 0.0f;
-        bool visible = true;
+        bool visible = false;
         bool render_in_front = true;
     };
     struct MovementFrame {
@@ -584,19 +584,19 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
                         child.child_index = child_entry.value("child_index", -1);
                         child.dx = static_cast<float>(child_entry.value("dx", 0.0));
                         child.dy = static_cast<float>(child_entry.value("dy", 0.0));
-                        if (child_entry.contains("degree") && child_entry["degree"].is_number()) {
-                            child.degree = static_cast<float>(child_entry["degree"].get<double>());
-                        } else if (child_entry.contains("rotation") && child_entry["rotation"].is_number()) {
-                            child.degree = static_cast<float>(child_entry["rotation"].get<double>());
-                        } else {
-                            child.degree = 0.0f;
-                        }
-                        child.visible = child_entry.value("visible", true);
-                        child.render_in_front = child_entry.value("render_in_front", true);
-                    } else if (child_entry.is_array()) {
-                        try { child.child_index = child_entry[0].get<int>(); } catch (...) { child.child_index = -1; }
-                        if (child_entry.size() > 1 && child_entry[1].is_number()) {
-                            child.dx = static_cast<float>(child_entry[1].get<double>());
+                    if (child_entry.contains("degree") && child_entry["degree"].is_number()) {
+                        child.degree = static_cast<float>(child_entry["degree"].get<double>());
+                    } else if (child_entry.contains("rotation") && child_entry["rotation"].is_number()) {
+                        child.degree = static_cast<float>(child_entry["rotation"].get<double>());
+                    } else {
+                        child.degree = 0.0f;
+                    }
+                    child.visible = child_entry.value("visible", false);
+                    child.render_in_front = child_entry.value("render_in_front", true);
+                } else if (child_entry.is_array()) {
+                    try { child.child_index = child_entry[0].get<int>(); } catch (...) { child.child_index = -1; }
+                    if (child_entry.size() > 1 && child_entry[1].is_number()) {
+                        child.dx = static_cast<float>(child_entry[1].get<double>());
                         }
                         if (child_entry.size() > 2 && child_entry[2].is_number()) {
                             child.dy = static_cast<float>(child_entry[2].get<double>());

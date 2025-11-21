@@ -35,7 +35,8 @@ namespace {
 // Default dt when caller passes bad dt.
 constexpr float  kDefaultParallaxDt = 1.0f / 60.0f;
 constexpr double kParallaxEpsilon   = 1e-6;
-constexpr double kHalfFovY          = 3.14159265358979323846 / 4.0; // 45 deg vertical half-FOV
+constexpr double kPi                = 3.14159265358979323846;
+constexpr double kHalfFovY          = kPi / 4.0; // 45 deg vertical half-FOV
 constexpr double kParallaxMaxScreenRatio = 1.0 / 3.0; // player stays within ~1/3 screen, keep parallax subtle
 
 TransformSmoothingParams sanitize_smoothing(const TransformSmoothingParams& params) {
@@ -54,6 +55,33 @@ TransformSmoothingParams sanitize_smoothing(const TransformSmoothingParams& para
         break;
     }
     return out;
+}
+
+double wrap_degrees_0_360(double raw_value) {
+    if (!std::isfinite(raw_value)) {
+        return 0.0;
+    }
+    double wrapped = std::fmod(raw_value, 360.0);
+    if (wrapped < 0.0) wrapped += 360.0;
+    if (wrapped >= 360.0) {
+        wrapped = std::fmod(wrapped, 360.0);
+        if (wrapped < 0.0) wrapped += 360.0;
+    }
+    return std::isfinite(wrapped) ? wrapped : 0.0;
+}
+
+double normalize_pitch_degrees(double raw_value) {
+    const double wrapped = wrap_degrees_0_360(raw_value);
+    return std::clamp(
+        wrapped,
+        static_cast<double>(camera::kMinPitchDegrees),
+        static_cast<double>(camera::kMaxPitchDegrees));
+}
+
+double signed_radians_from_degrees(double degrees) {
+    const double wrapped = normalize_pitch_degrees(degrees);
+    const double signed_deg = (wrapped > 180.0) ? wrapped - 360.0 : wrapped;
+    return signed_deg * (kPi / 180.0);
 }
 
 int width_from_area(const Area& a) {
@@ -446,13 +474,10 @@ void Grid::update_parallax(const camera& cam, float dt) {
     double pitch_deg = std::isfinite(cam.current_pitch_degrees())
         ? static_cast<double>(cam.current_pitch_degrees())
         : static_cast<double>(settings.tilt_zoom_out_degrees);
-    pitch_deg = std::clamp(pitch_deg,
-                           static_cast<double>(camera::kMinPitchDegrees),
-                           static_cast<double>(camera::kMaxPitchDegrees));
+    pitch_deg = normalize_pitch_degrees(pitch_deg);
 
-    constexpr double PI_D = 3.14159265358979323846;
-    const double pitch_rad  = pitch_deg * (PI_D / 180.0);
-    const double pitch_norm = std::min(std::abs(pitch_rad) / (PI_D / 3.0), 1.0);
+    const double pitch_rad  = signed_radians_from_degrees(pitch_deg);
+    const double pitch_norm = std::min(std::abs(pitch_rad) / (kPi / 3.0), 1.0);
 
     // Camera position in world coordinates (same basis as world positions).
     const SDL_FPoint center_px = cam.get_view_center_f();
@@ -463,7 +488,7 @@ void Grid::update_parallax(const camera& cam, float dt) {
     // Depth reference derived from camera height plus user depth offset.
     const double depth_ref_effect = std::max(
         kParallaxEpsilon,
-        camera_height + static_cast<double>(settings.grid_depth_offset_px)
+        camera_height + static_cast<double>(cam.current_depth_offset_px())
     );
 
     // Only use parallax_smoothing for temporal smoothing, not for strength.

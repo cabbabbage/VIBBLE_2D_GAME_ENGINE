@@ -37,6 +37,7 @@
 #include "asset_sections/Section_Shading.hpp"
 #include "asset_sections/Section_Spacing.hpp"
 #include "spawn_group_config/SpawnGroupConfig.hpp"
+#include "asset_sections/Section_AnimationChildren.hpp"
 #include "asset_sections/Section_SpawnGroups.hpp"
 #include "map_generation/room.hpp"
 #include "core/AssetsManager.hpp"
@@ -395,6 +396,9 @@ void AssetInfoUI::set_manifest_store(devmode::core::ManifestStore* store) {
     manifest_store_ = store;
     if (spawn_groups_section_) {
         spawn_groups_section_->set_manifest_store(manifest_store_);
+    }
+    if (animation_children_section_) {
+        animation_children_section_->set_manifest_store(manifest_store_);
     }
     if (animation_editor_window_) {
         animation_editor_window_->set_manifest_store(manifest_store_);
@@ -945,11 +949,9 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
 
     if (showing_delete_popup_) {
         update_delete_modal_geometry(screen_w, screen_h);
-        SDL_StopTextInput();
-    } else if (showing_duplicate_popup_) {
+    }
+    if (showing_duplicate_popup_) {
         SDL_StartTextInput();
-    } else {
-        SDL_StopTextInput();
     }
 }
 
@@ -1967,6 +1969,7 @@ void AssetInfoUI::rebuild_default_sections() {
     basic_info_section_ = nullptr;
     lighting_section_ = nullptr;
     shading_section_ = nullptr;
+    animation_children_section_ = nullptr;
     spawn_groups_section_ = nullptr;
     focused_section_ = nullptr;
 
@@ -2016,6 +2019,14 @@ void AssetInfoUI::rebuild_default_sections() {
     adopt_section(shading_section_);
     finalize_section(shading_section_);
     sections_.push_back(std::move(shading));
+
+    auto animation_children = std::make_unique<Section_AnimationChildren>();
+    animation_children_section_ = animation_children.get();
+    animation_children_section_->set_ui(this);
+    animation_children_section_->set_manifest_store(manifest_store_);
+    adopt_section(animation_children_section_);
+    finalize_section(animation_children_section_);
+    sections_.push_back(std::move(animation_children));
 
     auto spacing = std::make_unique<Section_Spacing>();
     spacing->set_ui(this);
