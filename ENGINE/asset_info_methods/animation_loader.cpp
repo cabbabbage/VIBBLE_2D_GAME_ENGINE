@@ -130,8 +130,7 @@ AnimationLoader::LoadAttemptResult AnimationLoader::load_asset_animations_once(
         std::cout << "[AnimationLoader] " << info.name
                   << " normalized asset scaling steps: "
                   << format_steps(info.scale_variants)
-                  << " (profile revision " << profile.revision << ")\n";
-        info.scale_profile_revision = profile.revision;
+                  << " (fixed variants)\n";
 
         auto mark_failed_animation = [&](const std::string& trigger) {
                 if (result.failed_animation.empty()) {

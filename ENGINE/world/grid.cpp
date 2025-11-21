@@ -445,7 +445,7 @@ void Grid::update_parallax(const camera& cam, float dt) {
     // Camera pitch (in degrees) from runtime, clamped to a sane range.
     double pitch_deg = std::isfinite(cam.current_pitch_degrees())
         ? static_cast<double>(cam.current_pitch_degrees())
-        : static_cast<double>(settings.grid_pitch_degrees);
+        : static_cast<double>(settings.tilt_zoom_out_degrees);
     pitch_deg = std::clamp(pitch_deg,
                            static_cast<double>(camera::kMinPitchDegrees),
                            static_cast<double>(camera::kMaxPitchDegrees));
@@ -581,7 +581,8 @@ void Grid::update_parallax(const camera& cam, float dt) {
 
             const double dx_world = cell_cx - base_x;
 
-            const double ground_distance = std::max(0.0, anchor_y - cell_cy);
+            // Positive when the sample lies below the camera anchor (world Y grows downward).
+            const double ground_distance = std::max(0.0, cell_cy - anchor_y);
 
             const double forward_depth = std::max(
                 kParallaxEpsilon,

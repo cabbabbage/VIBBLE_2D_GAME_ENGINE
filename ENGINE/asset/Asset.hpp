@@ -94,6 +94,7 @@ class Asset {
         int cached_h = 0;
         bool was_visible = false;
         int last_parent_frame_index = -1;
+        Asset* spawned_asset = nullptr;
     };
 
     struct BoundsSquare {

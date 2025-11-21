@@ -1,6 +1,44 @@
 #include "animation_update/child_attachment_controller.hpp"
 
+#include <mutex>
+#include <random>
+
 #include "animation_update/child_attachment_math.hpp"
+
+namespace {
+std::mt19937& child_rng() {
+    static std::mt19937 rng{ std::random_device{}() };
+    return rng;
+}
+
+std::mutex& child_rng_mutex() {
+    static std::mutex m;
+    return m;
+}
+
+const AnimationFrame* pick_start_frame(const Animation& animation) {
+    const AnimationFrame* start = animation.get_first_frame();
+    if (!start) {
+        return nullptr;
+    }
+    const bool should_randomize =
+        (animation.randomize || animation.rnd_start) && animation.frames.size() > 1;
+    if (!should_randomize) {
+        return start;
+    }
+    std::uniform_int_distribution<int> dist(0, static_cast<int>(animation.frames.size()) - 1);
+    int idx = 0;
+    {
+        std::lock_guard<std::mutex> lock(child_rng_mutex());
+        idx = dist(child_rng());
+    }
+    const AnimationFrame* frame = start;
+    while (idx-- > 0 && frame && frame->next) {
+        frame = frame->next;
+    }
+    return frame ? frame : start;
+}
+} // namespace
 
 namespace animation_update::child_attachments {
 
@@ -30,7 +68,7 @@ void restart(Asset::AnimationChildAttachment& slot) {
         slot.current_frame = nullptr;
         return;
     }
-    slot.current_frame = slot.animation->get_first_frame();
+    slot.current_frame = pick_start_frame(*slot.animation);
     update_dimensions(slot);
 }
 
@@ -44,7 +82,7 @@ void advance_frames(std::vector<Asset::AnimationChildAttachment>& slots,
         dt = 1.0f / 60.0f;
     }
     for (auto& slot : slots) {
-        if (!slot.animation || !slot.current_frame) {
+        if (!slot.animation || !slot.current_frame || !slot.visible || slot.child_index < 0) {
             continue;
         }
         const AnimationFrame* previous_frame = slot.current_frame;
@@ -79,17 +117,20 @@ void apply_frame_data(std::vector<Asset::AnimationChildAttachment>& slots,
     }
     const int parent_frame_index = frame ? frame->frame_index : -1;
     for (auto& slot : slots) {
+        const bool inactive = slot.child_index < 0;
         const bool parent_looped = parent_frame_index != -1 &&
                                    slot.last_parent_frame_index != -1 &&
                                    parent_frame_index < slot.last_parent_frame_index;
-        if (parent_looped) {
+        if (parent_looped && !inactive) {
             restart(slot);
         }
         slot.last_parent_frame_index = parent_frame_index;
         slot.visible = false;
         slot.rotation_degrees = 0.0f;
-        slot.world_pos = parent_state.position;
         slot.render_in_front = true;
+        if (inactive) {
+            continue;
+        }
     }
     if (!frame) {
         for (auto& slot : slots) {

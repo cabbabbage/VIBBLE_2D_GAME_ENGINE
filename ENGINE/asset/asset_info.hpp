@@ -76,7 +76,6 @@ class AssetInfo {
     bool is_light_source = false;
     bool moving_asset = false;
     std::vector<float>  scale_variants;
-    std::uint64_t       scale_profile_revision = 0;
     struct NamedArea {
         struct RenderFrame {
             int width = 0;

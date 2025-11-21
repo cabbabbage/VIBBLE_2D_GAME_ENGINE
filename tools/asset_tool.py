@@ -63,50 +63,8 @@ from shadow_mask import ShadowMaskGenerator, ShadowMaskSettings
 
 
 def normalize_variant_steps(steps):
-    if not steps:
-        return [1.0, 0.75, 0.5, 0.25]
-
-    cleaned = [v for v in steps if v > 0.0 and math.isfinite(v)]
-    if not cleaned:
-        return [1.0, 0.75, 0.5, 0.25]
-
-    cleaned.sort(reverse=True)
-
-    # Remove duplicates with abs diff <= 1e-4
-    i = 1
-    while i < len(cleaned):
-        if any(abs(cleaned[i] - cleaned[j]) <= 1e-4 for j in range(i)):
-            cleaned.pop(i)
-        else:
-            i += 1
-
-    if abs(cleaned[0] - 1.0) > 1e-4:
-        cleaned.insert(0, 1.0)
-
-    prioritized = []
-    min_spacing = 0.05
-    max_count = 4
-    for value in cleaned:
-        too_close = any(abs(value - existing) < min_spacing for existing in prioritized)
-        if not too_close:
-            prioritized.append(value)
-            if len(prioritized) >= max_count:
-                break
-
-    if len(prioritized) < max_count:
-        defaults = [1.0, 0.75, 0.5, 0.25]
-        for d in defaults:
-            if len(prioritized) >= max_count:
-                break
-            exists = any(abs(d - existing) < min_spacing for existing in prioritized)
-            if not exists:
-                prioritized.append(d)
-
-    prioritized.sort(reverse=True)
-    if len(prioritized) > max_count:
-        prioritized = prioritized[:max_count]
-
-    return prioritized
+    # Always use fixed variants: 100%, 75%, 50%, 25%.
+    return [1.0, 0.75, 0.5, 0.25]
 
 
 def _configure_logger() -> logging.Logger:
@@ -248,17 +206,8 @@ class AssetTool:
         self.executor = ProcessPoolExecutor(max_workers=self.max_workers)
 
     def get_normalized_steps_for_asset(self, asset_name):
-        assets_block = self.manifest.get("assets", {})
-        entry = assets_block.get(asset_name, {})
-        profile = entry.get("scaling_profile", {})
-        steps = profile.get("recommended_steps")
-        if not steps or not isinstance(steps, list):
-            steps = profile.get("recommended_percentages")
-            if steps and isinstance(steps, list):
-                steps = [p / 100.0 for p in steps if isinstance(p, (int, float)) and p > 0]
-        if not steps:
-            steps = []
-        return normalize_variant_steps(steps)
+        # Manifest-driven scaling profiles are disabled; always use fixed variants.
+        return normalize_variant_steps([])
 
     def load_manifest(self) -> Dict:
         """Load and parse the manifest JSON file."""

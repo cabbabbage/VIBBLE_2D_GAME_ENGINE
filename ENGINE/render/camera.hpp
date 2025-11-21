@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <utility>
 #include <nlohmann/json.hpp>
+#include <optional>
 
 #include "utils/area.hpp"
 #include "utils/transform_smoothing_settings.hpp"
@@ -43,11 +44,21 @@ public:
         float distance_scale_strength      = 0.0f;
         float min_visible_screen_ratio     = 0.015f;
 
-        // Camera height mapping: interpret zoom as a height parameter between two anchors.
+        // Zoom boundaries; also drive tilt mapping.
         float zoom_low                     = 0.75f;
         float zoom_high                    = 3.0f;
-        float height_low_px                = 320.0f;
-        float height_high_px               = 960.0f;
+
+        // Single baseline height that scales with zoom for perspective depth.
+        float base_height_px               = 720.0f;
+
+        // Tilt mapping: zooming in lifts the horizon, zooming out tilts downward.
+        float tilt_zoom_in_degrees         = -15.0f;
+        float tilt_zoom_out_degrees        = -50.0f;
+
+        // Screen-space horizon placement (distance from the top in px).
+        // When unset, the pitch-derived horizon is used.
+        std::optional<float> horizon_y_at_zoom_low{};
+        std::optional<float> horizon_y_at_zoom_high{};
 
         int   render_quality_percent       = 100;
         bool  smooth_motion_zoom           = true;
@@ -70,10 +81,7 @@ public:
         float background_plane_screen_y       = 0.0f;
         BlurFalloffMethod texture_opacity_falloff_method = BlurFalloffMethod::Linear;
 
-        // New grid depth parameters
-        // Strength of vertical grid line compression with depth.
-        // How steep the camera is pitched over the floor. More negative means more downward tilt.
-        float grid_pitch_degrees             = 0.0f;   // enforced to -60..0 degrees
+        // Grid depth parameters
         // Distance (in screen px) to place the depth offset below the bottom of the screen.
         float grid_depth_offset_px           = 240.0f;
 
@@ -170,6 +178,7 @@ public:
     FloorDepthParams compute_floor_depth_params() const;
     float warp_floor_screen_y(float world_y, float linear_screen_y) const;
     double horizon_screen_y_for_scale() const;
+    double horizon_screen_y_for_scale_value(double scale_value) const;
 
     // Runtime camera geometry helpers (derived from zoom + offsets).
     float  current_pitch_degrees() const { return runtime_pitch_deg_; }
@@ -192,8 +201,20 @@ public:
     double compute_room_scale_from_area(const Room* room) const;
 
 private:
+    struct CameraGeometry {
+        double camera_height = 0.0;
+        double focus_depth   = 0.0;
+        double anchor_world_y = 0.0;
+        double focus_ndc_offset = 0.0;
+        double pitch_radians = 0.0;
+        float  pitch_degrees = 0.0f;
+        bool   valid         = false;
+    };
+
     double view_height_world() const;
     double anchor_world_y() const;
+    double zoom_lerp_t_for_scale(double scale_value) const;
+    CameraGeometry compute_geometry_for_scale(double scale_value) const;
 
     struct TransformSmoother1D {
         TransformSmoothingParams params{};
@@ -255,15 +276,8 @@ private:
     Room*  starting_room_ = nullptr;
     double starting_area_ = 1.0;
 
-    struct CameraGeometry {
-        double camera_height = 0.0;
-        double focus_depth   = 0.0;
-        double anchor_world_y = 0.0;
-        double focus_ndc_offset = 0.0;
-        double pitch_radians = 0.0;
-        float  pitch_degrees = 0.0f;
-        bool   valid         = false;
-    };
     CameraGeometry compute_geometry() const;
+    FloorDepthParams compute_floor_depth_params_for_scale(double scale_value) const;
+    double apply_horizon_override(double base_horizon_y, double scale_value, double screen_height) const;
     void update_geometry_cache(const CameraGeometry& g);
 };

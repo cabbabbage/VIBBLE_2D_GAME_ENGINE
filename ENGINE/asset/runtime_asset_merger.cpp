@@ -230,6 +230,7 @@ std::shared_ptr<AssetInfo> TemporaryMergedAssetInfo::finalize(const std::vector<
     info_->anti_tags.erase(std::unique(info_->anti_tags.begin(), info_->anti_tags.end()), info_->anti_tags.end());
 
     info_->scale_variants = variant_steps;
+    render_pipeline::ScalingLogic::NormalizeVariantSteps(info_->scale_variants);
     if (scale_factor_count_ > 0) {
         info_->scale_factor = scale_factor_sum_ / static_cast<float>(scale_factor_count_);
     } else {

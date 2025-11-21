@@ -7,6 +7,7 @@
 
 #include <SDL.h>
 
+#include "asset/Asset.hpp"
 #include "stride_types.hpp"
 #include "path_sanitizer.hpp"
 #include "get_best_path.hpp"
@@ -65,6 +66,9 @@ private:
     void       ensure_child_slots(Animation& anim);
     void       advance_child_frames(float dt);
     void       apply_child_frame_data(const AnimationFrame* frame);
+    void       sync_child_assets();
+    Asset*     spawn_child_asset(Asset::AnimationChildAttachment& slot);
+    void       destroy_child_assets();
 
     // Apply a pending one-shot move from the planner
     void       apply_pending_move();

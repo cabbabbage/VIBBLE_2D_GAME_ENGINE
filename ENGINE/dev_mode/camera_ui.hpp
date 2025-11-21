@@ -17,7 +17,6 @@ class Input;
 class FloatSliderWidget;
 class SectionToggleWidget;
 class DiscreteSliderWidget;
-class CameraSideViewPanel;
 
 class CameraUIPanel : public DockableCollapsible {
 public:
@@ -47,9 +46,6 @@ private:
     void apply_settings_to_camera(const camera::RealismSettings& settings, bool effects_enabled, bool depthcue_enabled);
     camera::RealismSettings read_settings_from_ui() const;
     void on_control_value_changed();
-    void refresh_side_view_preview();
-    void update_side_view_visibility(int screen_w, int screen_h);
-    void position_side_view_panel(int screen_w, int screen_h);
 
 private:
     Assets* assets_ = nullptr;
@@ -69,7 +65,14 @@ private:
     std::unique_ptr<SectionToggleWidget> depthcue_section_header_;
     std::unique_ptr<SectionToggleWidget> smoothing_section_header_;
 
-    std::unique_ptr<CameraSideViewPanel> side_view_panel_;
+    std::unique_ptr<FloatSliderWidget> zoom_in_slider_;
+    std::unique_ptr<FloatSliderWidget> zoom_out_slider_;
+    std::unique_ptr<FloatSliderWidget> base_height_slider_;
+    std::unique_ptr<FloatSliderWidget> tilt_in_slider_;
+    std::unique_ptr<FloatSliderWidget> tilt_out_slider_;
+    std::unique_ptr<FloatSliderWidget> horizon_near_slider_;
+    std::unique_ptr<FloatSliderWidget> horizon_far_slider_;
+    std::unique_ptr<FloatSliderWidget> depth_offset_slider_;
     std::unique_ptr<FloatSliderWidget> foreshorten_strength_slider_;
     std::unique_ptr<FloatSliderWidget> distance_strength_slider_;
     std::unique_ptr<FloatSliderWidget> min_render_size_slider_;

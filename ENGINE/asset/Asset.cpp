@@ -1181,6 +1181,15 @@ Asset::MaskRenderMetadata& Asset::mask_render_metadata() const { return mask_ren
 void Asset::Delete() {
         dead = true;
         hidden = true;
+        if (!animation_children_.empty()) {
+                for (auto& slot : animation_children_) {
+                        if (slot.spawned_asset) {
+                                slot.spawned_asset->Delete();
+                                slot.spawned_asset = nullptr;
+                        }
+                }
+                animation_children_.clear();
+        }
         if (assets_) {
                 assets_->mark_active_assets_dirty();
                 assets_->schedule_removal(this);

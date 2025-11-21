@@ -195,6 +195,7 @@ private:
     SpawnEntryResolution locate_spawn_entry(const std::string& spawn_id);
     SDL_Point get_room_center() const;
     std::pair<int, int> get_room_dimensions() const;
+    int current_grid_resolution() const;
     void refresh_spawn_group_config_ui();
     void update_spawn_group_config_anchor();
     SDL_Point spawn_groups_anchor_point() const;

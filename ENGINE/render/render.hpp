@@ -541,81 +541,9 @@ struct ScalingLogic {
     }
 
     static inline void NormalizeVariantSteps(ScaleSteps& steps) {
-        ScaleSteps cleaned;
-        cleaned.reserve(steps.size());
-        for (float value : steps) {
-            if (!std::isfinite(value) || value <= 0.0f) {
-                continue;
-            }
-            cleaned.push_back(value);
-        }
-
-        if (cleaned.empty()) {
-            const auto& defaults = DefaultScaleSteps();
-            cleaned.assign(defaults.begin(), defaults.end());
-        }
-
-        std::sort(cleaned.begin(), cleaned.end(), std::greater<float>());
-        cleaned.erase(std::unique(cleaned.begin(), cleaned.end(), [](float a, float b) {
-            return std::fabs(a - b) <= 1e-4f;
-        }), cleaned.end());
-
-        if (cleaned.empty()) {
-            cleaned.push_back(1.0f);
-        }
-
-        if (std::fabs(cleaned.front() - 1.0f) > 1e-4f) {
-            cleaned.insert(cleaned.begin(), 1.0f);
-        }
-
-        ScaleSteps prioritized;
-        prioritized.reserve(kMaxVariantCount);
-        constexpr float kMinSpacing = 0.05f;
-        for (float value : cleaned) {
-            bool too_close = false;
-            for (float existing : prioritized) {
-                if (std::fabs(existing - value) < kMinSpacing) {
-                    too_close = true;
-                    break;
-                }
-            }
-            if (!too_close) {
-                prioritized.push_back(value);
-            }
-            if (prioritized.size() >= kMaxVariantCount) {
-                break;
-            }
-        }
-
-        if (prioritized.size() < kMaxVariantCount) {
-            const auto& defaults = DefaultScaleSteps();
-            for (float value : defaults) {
-                if (prioritized.size() >= kMaxVariantCount) {
-                    break;
-                }
-                bool exists = false;
-                for (float existing : prioritized) {
-                    if (std::fabs(existing - value) < kMinSpacing) {
-                        exists = true;
-                        break;
-                    }
-                }
-                if (!exists) {
-                    prioritized.push_back(value);
-                }
-            }
-        }
-
-        if (prioritized.empty()) {
-            prioritized.push_back(1.0f);
-        }
-
-        std::sort(prioritized.begin(), prioritized.end(), std::greater<float>());
-        if (prioritized.size() > kMaxVariantCount) {
-            prioritized.resize(kMaxVariantCount);
-        }
-
-        steps.swap(prioritized);
+        // Enforce a single global variant set: 100%, 75%, 50%, 25%.
+        const auto& defaults = DefaultScaleSteps();
+        steps.assign(defaults.begin(), defaults.end());
     }
 
     static inline float ComputeScale(int base_w, int base_h, int target_w, int target_h) {
@@ -798,6 +726,15 @@ struct ScalingLogic {
         ensure_loaded(state);
     }
 
+    // Reset profile history so subsequent loads treat current manifest revisions as the baseline.
+    // This avoids triggering cache invalidation after tools rewrite scaling profiles at runtime.
+    static inline void ResetProfileHistory() {
+        ProfilesState& state = profiles_state();
+        std::lock_guard<std::mutex> guard(state.mutex);
+        state.history.clear();
+        state.loaded = false;
+    }
+
     static inline ScaleProfile ProfileForAsset(const std::string& asset_key) {
         ProfilesState& state = profiles_state();
         std::lock_guard<std::mutex> guard(state.mutex);
@@ -954,58 +891,13 @@ private:
     }
 
     static inline void ensure_loaded(ProfilesState& state) {
+        // Dynamic scaling profiles are disabled; always fall back to the fixed defaults.
+        // Mark as loaded to avoid repeated work.
         if (state.loaded) {
             return;
         }
         state.loaded = true;
         state.entries.clear();
-
-        manifest::ManifestData manifest_data;
-        try {
-            manifest_data = manifest::load_manifest();
-        } catch (...) {
-            return;
-        }
-
-        if (!manifest_data.assets.is_object()) {
-            return;
-        }
-
-        for (auto it = manifest_data.assets.begin(); it != manifest_data.assets.end(); ++it) {
-            if (!it.value().is_object()) {
-                continue;
-            }
-
-            const auto profile_it = it.value().find("scaling_profile");
-            if (profile_it == it.value().end() || !profile_it->is_object()) {
-                continue;
-            }
-
-            ProfileEntry entry;
-            entry.revision  = profile_it->value("revision", static_cast<std::uint64_t>(0));
-            entry.min_scale = static_cast<float>(profile_it->value("min_scale", 1.0));
-            entry.max_scale = static_cast<float>(profile_it->value("max_scale", 1.0));
-
-            if (auto steps_it = profile_it->find("recommended_steps"); steps_it != profile_it->end() && steps_it->is_array()) {
-                for (const auto& value : *steps_it) {
-                    if (!value.is_number()) {
-                        continue;
-                    }
-                    entry.steps.push_back(static_cast<float>(value.get<double>()));
-                }
-            } else if (auto perc_it = profile_it->find("recommended_percentages");
-                       perc_it != profile_it->end() && perc_it->is_array()) {
-                for (const auto& value : *perc_it) {
-                    if (!value.is_number()) {
-                        continue;
-                    }
-                    entry.steps.push_back(static_cast<float>(value.get<double>()) / 100.0f);
-                }
-            }
-
-            NormalizeVariantSteps(entry.steps);
-            state.entries.emplace(it.key(), std::move(entry));
-        }
     }
 
     static inline void record_profile_history(ProfilesState& state,

@@ -233,6 +233,10 @@ std::string iso_timestamp_now() {
 } // namespace
 
 bool BuildScalingProfiles(const ScalingProfileBuildOptions& options) {
+    (void)options;
+    vibble::log::info("[ScalingProfileBuilder] Dynamic scaling profiles disabled; using fixed variants (100/75/50/25).");
+    return true;
+#if 0
     const double aspect = (options.screen_aspect > 0.0) ? options.screen_aspect : kDefaultAspect;
 
     vibble::log::info("[ScalingProfileBuilder] Starting scaling profile precomputation...");
@@ -420,6 +424,10 @@ bool BuildScalingProfiles(const ScalingProfileBuildOptions& options) {
 
     try {
         manifest::save_manifest(manifest_data);
+        // Reset scaling profile cache/history so the freshly-written revisions become the baseline
+        // for the current session (prevents downstream cache invalidation when dev mode starts).
+        render_pipeline::ScalingLogic::ResetProfileHistory();
+        render_pipeline::ScalingLogic::LoadPrecomputedProfiles(true);
     } catch (const std::exception& ex) {
         vibble::log::error(std::string("[ScalingProfileBuilder] Failed to write manifest: ") + ex.what());
         return false;
@@ -429,6 +437,7 @@ bool BuildScalingProfiles(const ScalingProfileBuildOptions& options) {
 
     vibble::log::info("[ScalingProfileBuilder] Scaling profile precomputation complete.");
     return true;
+#endif
 }
 
 } // namespace render_pipeline

@@ -186,15 +186,13 @@ void AnimationRuntime::apply_pending_move() {
 
 bool AnimationRuntime::advance(AnimationFrame*& frame) {
     if (!self_ || !self_->info) {
-        if (self_) {
-            self_->animation_children_.clear();
-        }
+        destroy_child_assets();
         return false;
     }
 
     auto it = self_->info->animations.find(self_->current_animation);
     if (it == self_->info->animations.end()) {
-        self_->animation_children_.clear();
+        destroy_child_assets();
         return false;
     }
 
@@ -203,7 +201,7 @@ bool AnimationRuntime::advance(AnimationFrame*& frame) {
     if (!frame) {
         frame = anim.get_first_frame(path_index);
         if (!frame) {
-            self_->animation_children_.clear();
+            destroy_child_assets();
             return false;
         }
     }
@@ -264,6 +262,11 @@ void AnimationRuntime::switch_to(const std::string& anim_id, std::size_t path_in
         return;
     }
 
+    const bool animation_changed = self_->current_animation != anim_id;
+    if (animation_changed) {
+        destroy_child_assets();
+    }
+
     auto it = self_->info->animations.find(anim_id);
     if (it == self_->info->animations.end()) {
         auto def = self_->info->animations.find(animation_update::detail::kDefaultAnimation);
@@ -288,6 +291,8 @@ void AnimationRuntime::switch_to(const std::string& anim_id, std::size_t path_in
     }
     self_->frame_progress    = 0.0f;
     active_paths_[self_->current_animation] = path_index;
+    ensure_child_slots(anim);
+    apply_child_frame_data(self_->current_frame);
 }
 
 bool AnimationRuntime::should_defer_for_non_locked(bool override_non_locked) const {
@@ -327,7 +332,8 @@ void AnimationRuntime::update_child_attachments(Animation& anim, float dt) {
         return;
     }
     if (!anim.has_child_assets()) {
-        self_->animation_children_.clear();
+        destroy_child_assets();
+        sync_child_assets();
         return;
     }
     ensure_child_slots(anim);
@@ -344,44 +350,74 @@ void AnimationRuntime::ensure_child_slots(Animation& anim) {
     }
     auto& slots = self_->animation_children_;
     const auto& requested = anim.child_assets();
-    if (slots.size() != requested.size()) {
+    if (slots.size() < requested.size()) {
         slots.resize(requested.size());
     }
-    AssetLibrary* library = nullptr;
-    if (assets_owner_) {
-        library = &assets_owner_->library();
-    }
+
+    AssetLibrary* library = assets_owner_ ? &assets_owner_->library() : nullptr;
+
     for (std::size_t i = 0; i < requested.size(); ++i) {
         auto& slot = slots[i];
         const AnimationFrame* previous_frame = slot.current_frame;
-        bool slot_invalidated = false;
-        if (slot.child_index != static_cast<int>(i) || slot.asset_name != requested[i]) {
-            slot = Asset::AnimationChildAttachment{};
+        const bool index_changed = slot.child_index != static_cast<int>(i);
+        const bool name_changed = slot.asset_name != requested[i];
+        if (index_changed || name_changed) {
+            if (slot.spawned_asset) {
+                slot.spawned_asset->set_hidden(true);
+            }
+            if (name_changed) {
+                slot.spawned_asset = nullptr;
+                slot.info.reset();
+                slot.animation = nullptr;
+                slot.current_frame = nullptr;
+            }
             slot.child_index = static_cast<int>(i);
             slot.asset_name = requested[i];
-            slot_invalidated = true;
+            slot.frame_progress = 0.0f;
+            slot.cached_w = 0;
+            slot.cached_h = 0;
+            slot.was_visible = false;
+            slot.last_parent_frame_index = -1;
+            slot.visible = false;
         }
         if (!slot.info && library && !slot.asset_name.empty()) {
             slot.info = library->get(slot.asset_name);
-            if (slot.info) {
-                auto child_anim_it = slot.info->animations.find(animation_update::detail::kDefaultAnimation);
-                if (child_anim_it == slot.info->animations.end() && !slot.info->animations.empty()) {
-                    child_anim_it = slot.info->animations.begin();
-                }
-                if (child_anim_it != slot.info->animations.end()) {
-                    slot.animation = &child_anim_it->second;
-                    slot.current_frame = slot.animation->get_first_frame();
-                    slot.frame_progress = 0.0f;
-                    slot.cached_w = 0;
-                    slot.cached_h = 0;
-                    slot.was_visible = false;
-                    slot.last_parent_frame_index = -1;
-                    slot_invalidated = true;
-                }
+        }
+        if (!slot.animation && slot.info) {
+            auto child_anim_it =
+                slot.info->animations.find(animation_update::detail::kDefaultAnimation);
+            if (child_anim_it == slot.info->animations.end() && !slot.info->animations.empty()) {
+                child_anim_it = slot.info->animations.begin();
+            }
+            if (child_anim_it != slot.info->animations.end()) {
+                slot.animation = &child_anim_it->second;
+                slot.current_frame = nullptr;
+                slot.frame_progress = 0.0f;
+                slot.cached_w = 0;
+                slot.cached_h = 0;
+                slot.was_visible = false;
+                slot.last_parent_frame_index = -1;
             }
         }
-        if (slot_invalidated || slot.current_frame != previous_frame) {
+        if (slot.animation && !slot.current_frame) {
+            animation_update::child_attachments::restart(slot);
+        }
+        if (!slot.spawned_asset && slot.info && slot.visible) {
+            slot.spawned_asset = spawn_child_asset(slot);
+        }
+        if (slot.current_frame != previous_frame) {
             animation_update::child_attachments::update_dimensions(slot);
+        }
+    }
+
+    for (std::size_t i = requested.size(); i < slots.size(); ++i) {
+        auto& slot = slots[i];
+        slot.child_index = -1;
+        slot.visible = false;
+        slot.was_visible = false;
+        slot.last_parent_frame_index = -1;
+        if (slot.spawned_asset) {
+            slot.spawned_asset->set_hidden(true);
         }
     }
 }
@@ -406,6 +442,112 @@ void AnimationRuntime::apply_child_frame_data(const AnimationFrame* frame) {
     parent_state.flipped = self_->flipped;
     parent_state.animation_id = self_->current_animation;
     animation_update::child_attachments::apply_frame_data(self_->animation_children_, parent_state, frame);
+    sync_child_assets();
+}
+
+Asset* AnimationRuntime::spawn_child_asset(Asset::AnimationChildAttachment& slot) {
+    if (!assets_owner_ || !self_ || !slot.info) {
+        return nullptr;
+    }
+    if (slot.spawned_asset && slot.spawned_asset->dead) {
+        slot.spawned_asset = nullptr;
+    }
+    if (slot.spawned_asset) {
+        return slot.spawned_asset;
+    }
+
+    SDL_Point spawn_pos = self_->pos;
+    Asset* child = assets_owner_->spawn_asset(slot.asset_name, spawn_pos);
+    if (!child) {
+        return nullptr;
+    }
+
+    // Attach to parent and inherit core spatial/Z context.
+    child->parent = self_;
+    child->depth = self_->depth;
+    child->grid_resolution = self_->grid_resolution;
+    child->set_z_offset(self_->z_offset);
+    child->set_z_index();
+    if (std::find(self_->asset_children.begin(), self_->asset_children.end(), child) ==
+        self_->asset_children.end()) {
+        self_->add_child(child);
+    }
+
+    slot.spawned_asset = child;
+    return child;
+}
+
+void AnimationRuntime::destroy_child_assets() {
+    if (!self_) {
+        return;
+    }
+    // Do not delete child assets; park them and clear slot state until they are needed again.
+    for (auto& slot : self_->animation_children_) {
+        slot.child_index = -1;
+        slot.visible = false;
+        slot.was_visible = false;
+        slot.render_in_front = true;
+        slot.frame_progress = 0.0f;
+        slot.last_parent_frame_index = -1;
+        if (slot.animation) {
+            slot.current_frame = slot.animation->get_first_frame();
+        } else {
+            slot.current_frame = nullptr;
+        }
+        if (slot.spawned_asset) {
+            slot.spawned_asset->set_hidden(true);
+        }
+    }
+}
+
+void AnimationRuntime::sync_child_assets() {
+    if (!self_) {
+        return;
+    }
+    for (auto& slot : self_->animation_children_) {
+        if (slot.child_index < 0) {
+            if (slot.spawned_asset) {
+                slot.spawned_asset->hidden = true;
+                slot.spawned_asset->alpha_smoothing_.target = 0.0f;
+            }
+            continue;
+        }
+        Asset* child = slot.spawned_asset;
+        if (!child && slot.info && slot.visible) {
+            child = spawn_child_asset(slot);
+        }
+        if (!child) {
+            continue;
+        }
+        if (child->dead) {
+            slot.spawned_asset = nullptr;
+            continue;
+        }
+
+        if (!slot.visible) {
+            child->hidden = true;
+            child->alpha_smoothing_.target = 0.0f;
+            continue;
+        }
+
+        // Keep attachment in parent's ownership list.
+        if (std::find(self_->asset_children.begin(), self_->asset_children.end(), child) ==
+            self_->asset_children.end()) {
+            self_->add_child(child);
+        }
+
+        child->pos = slot.world_pos;
+        child->grid_resolution = self_->grid_resolution;
+        child->depth = self_->depth;
+        child->flipped = self_->flipped;
+        child->hidden = !slot.visible;
+        child->z_offset = self_->z_offset + (slot.render_in_front ? 1 : -1);
+        child->set_z_index();
+        // Keep smoothing targets aligned with the forced position/alpha.
+        child->translation_smoothing_x_.target = static_cast<float>(child->pos.x);
+        child->translation_smoothing_y_.target = static_cast<float>(child->pos.y);
+        child->alpha_smoothing_.target = child->hidden ? 0.0f : 1.0f;
+    }
 }
 
 SDL_Point AnimationRuntime::bottom_middle(SDL_Point pos) const {

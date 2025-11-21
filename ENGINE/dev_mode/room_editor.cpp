@@ -3751,18 +3751,13 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
         ? shared_footer_bar_->grid_resolution()
         : vibble::grid::clamp_resolution(map_settings.resolution);
     const bool snap_enabled = editing_spawn_config && shared_footer_bar_ && shared_footer_bar_->snap_to_grid_enabled();
-    drag_snap_enabled_ = editing_spawn_config;
+    drag_snap_enabled_ = snap_enabled;
 
     if (editing_spawn_config) {
         if (snap_enabled) {
             // Snap ON: set group resolution to overlay immediately on drag start
             const int clamped_overlay_r = vibble::grid::clamp_resolution(overlay_resolution);
             drag_resolution_ = clamped_overlay_r;
-            if (spawn_entry) {
-                (*spawn_entry)["resolution"] = clamped_overlay_r;
-                // Persist the resolution update immediately
-                save_current_room_assets_json();
-            }
             // Do not change overlay resolution
             overlay_resolution_before_drag_.reset();
         } else if (spawn_entry) {
@@ -4206,7 +4201,7 @@ bool RoomEditor::snap_dragged_assets_to_grid() {
 
 void RoomEditor::finalize_drag_session() {
     // Restore overlay grid resolution if we changed it for the drag
-    if (drag_snap_enabled_ && shared_footer_bar_ && overlay_resolution_before_drag_.has_value()) {
+    if (shared_footer_bar_ && overlay_resolution_before_drag_.has_value()) {
         shared_footer_bar_->set_grid_resolution(*overlay_resolution_before_drag_);
         overlay_resolution_before_drag_.reset();
     }
@@ -4234,11 +4229,6 @@ void RoomEditor::finalize_drag_session() {
                 case DragMode::Exact:
                     if (drag_moved_) {
                         update_exact_json(*entry, *primary, center, width, height);
-                        json_modified = true;
-                    }
-                    {
-                        const int current_resolution = current_room_ ? current_room_->map_grid_settings().resolution : MapGridSettings::defaults().resolution;
-                        (*entry)["resolution"] = current_resolution;
                         json_modified = true;
                     }
                     break;
@@ -4287,6 +4277,14 @@ void RoomEditor::finalize_drag_session() {
                     break;
                 default:
                     break;
+            }
+
+            if (drag_moved_ && drag_snap_enabled_) {
+                const int current_resolution = current_grid_resolution();
+                if (entry->value("resolution", current_resolution) != current_resolution) {
+                    (*entry)["resolution"] = current_resolution;
+                    json_modified = true;
+                }
             }
             if (request_respawn) {
                 // Persist first so the respawn uses current values
@@ -4408,6 +4406,15 @@ std::pair<int, int> RoomEditor::get_room_dimensions() const {
     int width = std::max(0, std::get<2>(bounds) - std::get<0>(bounds));
     int height = std::max(0, std::get<3>(bounds) - std::get<1>(bounds));
     return {width, height};
+}
+
+int RoomEditor::current_grid_resolution() const {
+    if (shared_footer_bar_) {
+        return vibble::grid::clamp_resolution(shared_footer_bar_->grid_resolution());
+    }
+    MapGridSettings settings = current_room_ ? current_room_->map_grid_settings() : MapGridSettings::defaults();
+    settings.clamp();
+    return vibble::grid::clamp_resolution(settings.resolution);
 }
 
 void RoomEditor::refresh_spawn_group_config_ui() {
@@ -4833,7 +4840,7 @@ void RoomEditor::add_spawn_group_internal() {
     nlohmann::json entry;
     const std::string new_spawn_id = generate_spawn_id();
     entry["spawn_id"] = new_spawn_id;
-    const int add_default_resolution = current_room_ ? current_room_->map_grid_settings().resolution : MapGridSettings::defaults().resolution;
+    const int add_default_resolution = current_grid_resolution();
     devmode::spawn::ensure_spawn_group_entry_defaults(entry, "New Spawn", add_default_resolution);
     arr.push_back(entry);
 

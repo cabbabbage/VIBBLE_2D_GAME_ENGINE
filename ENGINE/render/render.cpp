@@ -21,6 +21,8 @@
 #include <vector>
 #include <SDL_image.h>
 
+#include "animation_update/animation_update.hpp"
+#include "animation_update/child_attachment_math.hpp"
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
 #include "asset/animation.hpp"
@@ -184,18 +186,6 @@ SDL_Color Global_Light_Source::clamp_color_alpha(SDL_Color color) const {
 // GridTileRenderer implementation
 ////////////////////////////////////////////////////////////////////////////////
 
-
-
-
-namespace grid_tile_renderer_detail {
-constexpr float kParallaxEqualityEpsilon = 0.001f;
-
-inline bool nearly_equal(float a, float b, float eps) {
-    return std::fabs(a - b) <= eps;
-}
-
-}  // namespace grid_tile_renderer_detail
-
 void GridTileRenderer::render(SDL_Renderer* renderer) {
     if (!renderer || !assets_) return;
     render(renderer, assets_->getView(), assets_->world_grid());
@@ -222,46 +212,18 @@ void GridTileRenderer::render(SDL_Renderer* renderer, const camera& cam, const w
             SDL_Point world_br{ tile.world_rect.x + tile.world_rect.w, tile.world_rect.y + tile.world_rect.h };
             SDL_Point world_bl{ tile.world_rect.x, tile.world_rect.y + tile.world_rect.h };
 
-            const float offset_tl = grid.parallax_offset(world_tl);
-            const float offset_tr = grid.parallax_offset(world_tr);
-            const float offset_br = grid.parallax_offset(world_br);
-            const float offset_bl = grid.parallax_offset(world_bl);
+            SDL_FPoint screen_tl = grid.floor_warped_screen_position(cam, world_tl);
+            SDL_FPoint screen_tr = grid.floor_warped_screen_position(cam, world_tr);
+            SDL_FPoint screen_br = grid.floor_warped_screen_position(cam, world_br);
+            SDL_FPoint screen_bl = grid.floor_warped_screen_position(cam, world_bl);
 
-            const bool uniform_parallax =
-                grid_tile_renderer_detail::nearly_equal(offset_tl, offset_tr, grid_tile_renderer_detail::kParallaxEqualityEpsilon) &&
-                grid_tile_renderer_detail::nearly_equal(offset_tl, offset_br, grid_tile_renderer_detail::kParallaxEqualityEpsilon) &&
-                grid_tile_renderer_detail::nearly_equal(offset_tl, offset_bl, grid_tile_renderer_detail::kParallaxEqualityEpsilon);
-
-            if (uniform_parallax) {
-                SDL_FPoint screen_tl = cam.map_to_screen(world_tl);
-                SDL_FPoint screen_br = cam.map_to_screen(world_br);
-
-                const float width  = screen_br.x - screen_tl.x;
-                const float height = screen_br.y - screen_tl.y;
-                if (width <= 0.0f || height <= 0.0f) {
-                    continue;
-                }
-
-                SDL_FRect dest{
-                    grid.parallax_adjusted_screen_x(world_tl, screen_tl.x),
-                    screen_tl.y,
-                    width,
-                    height
-                };
-
-                SDL_RenderCopyF(renderer, tile.texture, nullptr, &dest);
+            // Drop degenerate quads from extreme warping/parallax.
+            const float area_doubled =
+                (screen_tr.x - screen_tl.x) * (screen_bl.y - screen_tl.y) -
+                (screen_bl.x - screen_tl.x) * (screen_tr.y - screen_tl.y);
+            if (std::fabs(area_doubled) < 1e-5f) {
                 continue;
             }
-
-            SDL_FPoint screen_tl = cam.map_to_screen(world_tl);
-            SDL_FPoint screen_tr = cam.map_to_screen(world_tr);
-            SDL_FPoint screen_br = cam.map_to_screen(world_br);
-            SDL_FPoint screen_bl = cam.map_to_screen(world_bl);
-
-            screen_tl.x = grid.parallax_adjusted_screen_x(world_tl, screen_tl.x);
-            screen_tr.x = grid.parallax_adjusted_screen_x(world_tr, screen_tr.x);
-            screen_br.x = grid.parallax_adjusted_screen_x(world_br, screen_br.x);
-            screen_bl.x = grid.parallax_adjusted_screen_x(world_bl, screen_bl.x);
 
             int tex_w_int = 0, tex_h_int = 0;
             if (SDL_QueryTexture(tile.texture, nullptr, nullptr, &tex_w_int, &tex_h_int) != 0) {
@@ -1627,25 +1589,96 @@ void SceneRenderer::render(){
             batch.commands_back.reserve(child_slots.size());
             batch.commands_front.reserve(child_slots.size());
 
+            const AnimationFrame* parent_frame = parent ? parent->current_animation_frame() : nullptr;
+            const Animation* parent_anim = nullptr;
+            bool parent_frame_valid = false;
+            if (parent && parent->info) {
+                auto parent_anim_it = parent->info->animations.find(parent->current_animation);
+                if (parent_anim_it != parent->info->animations.end()) {
+                    parent_anim = &parent_anim_it->second;
+                    parent_frame_valid =
+                        animation_frame_belongs_to_animation(*parent_anim, parent_frame);
+                }
+            }
+
+            auto resolve_child_animation = [](Asset::AnimationChildAttachment& slot) -> const Animation* {
+                if (slot.animation) {
+                    return slot.animation;
+                }
+                if (!slot.info) {
+                    return nullptr;
+                }
+                auto anim_it = slot.info->animations.find(animation_update::detail::kDefaultAnimation);
+                if (anim_it == slot.info->animations.end() && !slot.info->animations.empty()) {
+                    anim_it = slot.info->animations.begin();
+                }
+                if (anim_it != slot.info->animations.end()) {
+                    slot.animation = &anim_it->second;
+                }
+                return slot.animation;
+            };
+
             for (std::size_t child_index = 0; child_index < child_slots.size(); ++child_index) {
-                const auto& attachment = child_slots[child_index];
-                if (!attachment.visible || !attachment.current_frame) {
+                auto& slot = const_cast<Asset::AnimationChildAttachment&>(child_slots[child_index]);
+                const Animation* slot_animation = resolve_child_animation(slot);
+                const AnimationFrame* frame_ptr = slot.current_frame;
+
+                if (slot.spawned_asset) {
+                    batch.has_visible_child = batch.has_visible_child || slot.visible;
                     continue;
                 }
-                SDL_Texture* child_tex = attachment.current_frame->get_base_texture();
+
+                if (slot_animation &&
+                    !animation_frame_belongs_to_animation(*slot_animation, frame_ptr)) {
+                    // Child animations may be refreshed; rebind to a valid frame so rendering resumes.
+                    slot.current_frame = slot_animation->get_first_frame();
+                    slot.frame_progress = 0.0f;
+                    slot.cached_w = 0;
+                    slot.cached_h = 0;
+                    frame_ptr = slot.current_frame;
+                }
+
+                // If the runtime never pushed the child visibility for the current parent frame,
+                // fall back to the parent frame's child list so frame-bound children still render.
+                if (!slot.visible && parent_frame_valid && parent_frame) {
+                    for (const auto& child_data : parent_frame->children) {
+                        if (child_data.child_index != slot.child_index) {
+                            continue;
+                        }
+                        slot.visible = child_data.visible;
+                        slot.render_in_front = child_data.render_in_front;
+                        const int dx = parent->flipped ? -child_data.dx : child_data.dx;
+                        slot.world_pos = SDL_Point{ parent->pos.x + dx, parent->pos.y + child_data.dy };
+                        slot.rotation_degrees = ::mirrored_child_rotation(parent->flipped, child_data.degree);
+                        if (slot.visible && (!frame_ptr || !slot_animation)) {
+                            slot_animation = resolve_child_animation(slot);
+                            if (slot_animation) {
+                                slot.current_frame = slot_animation->get_first_frame();
+                                slot.frame_progress = 0.0f;
+                                slot.cached_w = 0;
+                                slot.cached_h = 0;
+                                frame_ptr = slot.current_frame;
+                            }
+                        }
+                        break;
+                    }
+                }
+
+                if (!slot.visible || !frame_ptr) {
+                    continue;
+                }
+                SDL_Texture* child_tex = frame_ptr->get_base_texture();
                 if (!child_tex) {
                     continue;
                 }
 
-                int child_fw = attachment.cached_w;
-                int child_fh = attachment.cached_h;
+                int child_fw = slot.cached_w;
+                int child_fh = slot.cached_h;
                 if (child_fw <= 0 || child_fh <= 0) {
                     if (SDL_QueryTexture(child_tex, nullptr, nullptr, &child_fw, &child_fh) == 0 &&
                         child_fw > 0 && child_fh > 0) {
-                        auto& mutable_slot =
-                            const_cast<Asset::AnimationChildAttachment&>(child_slots[child_index]);
-                        mutable_slot.cached_w = child_fw;
-                        mutable_slot.cached_h = child_fh;
+                        slot.cached_w = child_fw;
+                        slot.cached_h = child_fh;
                     }
                 }
                 if (child_fw <= 0 || child_fh <= 0) {
@@ -1653,7 +1686,7 @@ void SceneRenderer::render(){
                 }
 
                 SDL_FRect child_rect = get_child_position_rect(parent,
-                                                               attachment.world_pos,
+                                                               slot.world_pos,
                                                                child_fw,
                                                                child_fh,
                                                                inv_scale,
@@ -1670,10 +1703,10 @@ void SceneRenderer::render(){
                 batch.has_visible_child = true;
 
                 SDL_Texture* draw_tex = child_tex;
-                if (attachment.animation && attachment.current_frame) {
-                    const int frame_index = attachment.current_frame->frame_index;
+                if (slot.animation && frame_ptr) {
+                    const int frame_index = frame_ptr->frame_index;
                     if (frame_index >= 0) {
-                        const auto& steps = attachment.animation->variant_steps();
+                        const auto& steps = slot.animation->variant_steps();
                         if (!steps.empty()) {
                             const float desired = render_pipeline::ScalingLogic::ComputeScale(
                                 child_fw,
@@ -1682,7 +1715,7 @@ void SceneRenderer::render(){
                                 static_cast<int>(std::lround(child_rect.h)));
                             auto sel = render_pipeline::ScalingLogic::Choose(desired, steps);
                             if (sel.index >= 0) {
-                                if (SDL_Texture* variant = attachment.animation->frame_variant(
+                                if (SDL_Texture* variant = slot.animation->frame_variant(
                                         static_cast<std::size_t>(frame_index),
                                         static_cast<std::size_t>(sel.index))) {
                                     draw_tex = variant;
@@ -1705,13 +1738,13 @@ void SceneRenderer::render(){
                     child_cmd.alpha = 1.0f;
                 }
                 child_cmd.alpha = std::clamp(child_cmd.alpha, 0.0f, 1.0f);
-                child_cmd.rotation_degrees = attachment.rotation_degrees;
-                if (std::fabs(attachment.rotation_degrees) > std::numeric_limits<float>::epsilon()) {
+                child_cmd.rotation_degrees = slot.rotation_degrees;
+                if (std::fabs(slot.rotation_degrees) > std::numeric_limits<float>::epsilon()) {
                     child_cmd.has_custom_pivot = true;
                     child_cmd.rotation_pivot = SDL_FPoint{ child_rect.w * 0.5f, child_rect.h };
                 }
 
-                if (attachment.render_in_front) {
+                if (slot.render_in_front) {
                     batch.commands_front.push_back(std::move(child_cmd));
                 } else {
                     batch.commands_back.push_back(std::move(child_cmd));
