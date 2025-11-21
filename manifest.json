@@ -313,6 +313,7 @@
       "start": "default"
     },
     "Vibble": {
+      "animation_children": [],
       "animations": {
         "backward": {
           "children": [
@@ -2023,20 +2024,20 @@
       "camera_settings": {
         "background_plane_screen_y": 198.0,
         "background_texture_max_opacity": 0,
-        "base_height_px": 1635.0,
-        "depth_offset_at_zoom_high": -2295.0,
-        "depth_offset_at_zoom_low": -2655.0,
+        "base_height_px": 1645.0,
+        "depth_offset_at_zoom_high": -2850.0,
+        "depth_offset_at_zoom_low": -2510.0,
         "distance_scale_at_zoom_high": 0.12999999523162842,
-        "distance_scale_at_zoom_low": 0.12999999523162842,
-        "distance_scale_strength": 0.12999999523162842,
+        "distance_scale_at_zoom_low": 0.3100000023841858,
+        "distance_scale_strength": 0.2199999988079071,
         "foreground_plane_screen_y": 902.0,
         "foreground_texture_max_opacity": 0,
         "foreshorten_at_zoom_high": 0.28999999165534973,
-        "foreshorten_at_zoom_low": 0.0,
-        "foreshorten_strength": 0.14499999582767487,
-        "grid_depth_offset_px": -2475.0,
-        "horizon_y_at_zoom_high": -185.0,
-        "horizon_y_at_zoom_low": -1300.0,
+        "foreshorten_at_zoom_low": 0.47999998927116394,
+        "foreshorten_strength": 0.38499999046325684,
+        "grid_depth_offset_px": -2680.0,
+        "horizon_y_at_zoom_high": 140.0,
+        "horizon_y_at_zoom_low": 1120.0,
         "min_visible_screen_ratio": 0.006000000052154064,
         "motion_smoothing_max_step": 300.0,
         "motion_smoothing_method": 1,
@@ -2056,7 +2057,7 @@
         "tilt_zoom_in_degrees": -0.0,
         "tilt_zoom_out_degrees": -0.0,
         "zoom_high": 4.779999732971191,
-        "zoom_low": 0.8100000023841858
+        "zoom_low": 0.4099999964237213
       },
       "content_root": "MAPS/FORREST",
       "map_assets_data": {
@@ -2356,9 +2357,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            242,
-            160,
+            37,
             36,
+            242,
             255
           ],
           "edge_smoothness": 43,
@@ -2409,9 +2410,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            31,
-            32,
-            204,
+            85,
+            242,
+            241,
             255
           ],
           "edge_smoothness": 101,

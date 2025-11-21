@@ -459,31 +459,29 @@ void Grid::update_parallax(const camera& cam, float dt) {
     const float clamped_dt = (std::isfinite(dt) && dt > 0.0f) ? dt : kDefaultParallaxDt;
     ++parallax_frame_counter_;
 
-    const double camera_height = std::max(kParallaxEpsilon, cam.current_camera_height());
-
     // Realism flag controls whether parallax runs at all.
+    const camera::FloorDepthParams& floor = cam.current_floor_depth_params();
     parallax_active_ = cam.realism_enabled();
-    if (!parallax_active_ || camera_height <= kParallaxEpsilon) {
+    const bool floor_ready = floor.enabled &&
+        std::isfinite(floor.camera_height) &&
+        std::isfinite(floor.pitch_radians);
+
+    if (!parallax_active_ || !floor_ready || floor.camera_height <= kParallaxEpsilon) {
         clear_parallax_state();
         return;
     }
 
+    const double camera_height = std::max(kParallaxEpsilon, floor.camera_height);
     const auto& settings = cam.realism_settings();
 
-    // Camera pitch (in degrees) from runtime, clamped to a sane range.
-    double pitch_deg = std::isfinite(cam.current_pitch_degrees())
-        ? static_cast<double>(cam.current_pitch_degrees())
-        : static_cast<double>(settings.tilt_zoom_out_degrees);
-    pitch_deg = normalize_pitch_degrees(pitch_deg);
-
-    const double pitch_rad  = signed_radians_from_degrees(pitch_deg);
+    const double pitch_rad  = floor.pitch_radians;
     const double pitch_norm = std::min(std::abs(pitch_rad) / (kPi / 3.0), 1.0);
 
     // Camera position in world coordinates (same basis as world positions).
     const SDL_FPoint center_px = cam.get_view_center_f();
     const double base_x = static_cast<double>(center_px.x);
     // Ground anchor represents where the camera rig meets the floor plane.
-    const double anchor_y = cam.current_anchor_world_y();
+    const double anchor_y = floor.base_world_y;
 
     // Depth reference derived from camera height plus user depth offset.
     const double depth_ref_effect = std::max(

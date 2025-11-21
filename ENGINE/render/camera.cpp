@@ -260,6 +260,7 @@ void camera::update_geometry_cache(const CameraGeometry& g) {
     runtime_foreshorten_strength_ = foreshorten_for_scale(scale_value);
     runtime_distance_scale_strength_ = distance_scale_for_scale(scale_value);
     runtime_depth_offset_px_ = depth_offset_for_scale(scale_value);
+    runtime_floor_params_ = compute_floor_depth_params_for_geometry(g, scale_value);
     geometry_valid_        = g.valid;
     if (!g.valid) {
         runtime_camera_height_ = 0.0;
@@ -271,6 +272,7 @@ void camera::update_geometry_cache(const CameraGeometry& g) {
         runtime_foreshorten_strength_ = foreshorten_for_scale(scale_value);
         runtime_distance_scale_strength_ = distance_scale_for_scale(scale_value);
         runtime_depth_offset_px_ = depth_offset_for_scale(scale_value);
+        runtime_floor_params_ = FloorDepthParams{};
     }
 }
 
@@ -1449,15 +1451,9 @@ SDL_FPoint camera::get_view_center_f() const {
 // Floor depth helpers for warped grid lines using actual camera height (from zoom) and pitch.
 
 
-camera::FloorDepthParams camera::compute_floor_depth_params_for_scale(double scale_value) const {
+camera::FloorDepthParams camera::compute_floor_depth_params_for_geometry(const CameraGeometry& geom, double scale_value) const {
     FloorDepthParams p{};
-
-    if (!realism_enabled_) {
-        return p;
-    }
-
-    const CameraGeometry geom = compute_geometry_for_scale(scale_value);
-    if (!geom.valid) {
+    if (!realism_enabled_ || !geom.valid) {
         return p;
     }
 
@@ -1502,8 +1498,14 @@ camera::FloorDepthParams camera::compute_floor_depth_params_for_scale(double sca
     return p;
 }
 
+camera::FloorDepthParams camera::compute_floor_depth_params_for_scale(double scale_value) const {
+    const CameraGeometry geom = compute_geometry_for_scale(scale_value);
+    return compute_floor_depth_params_for_geometry(geom, scale_value);
+}
+
 camera::FloorDepthParams camera::compute_floor_depth_params() const {
-    return compute_floor_depth_params_for_scale(static_cast<double>(smoothed_scale_));
+    const CameraGeometry geom = compute_geometry();
+    return compute_floor_depth_params_for_geometry(geom, static_cast<double>(smoothed_scale_));
 }
 
 double camera::apply_horizon_override(double base_horizon_y, double scale_value, double screen_height) const {
@@ -1527,7 +1529,11 @@ double camera::apply_horizon_override(double base_horizon_y, double scale_value,
     return target;
 }
 float camera::warp_floor_screen_y(float world_y, float linear_screen_y) const {
-    FloorDepthParams p = compute_floor_depth_params();
+    FloorDepthParams p = runtime_floor_params_;
+    if (!p.enabled) {
+        // Fallback to a fresh computation if the cache is empty (e.g., before the first update).
+        p = compute_floor_depth_params();
+    }
     if (!p.enabled) {
         // No pitch or realism disabled, keep the original linear mapping.
         return linear_screen_y;
@@ -1614,6 +1620,15 @@ float camera::depth_offset_for_scale(double scale_value) const {
 double camera::horizon_screen_y_for_scale_value(double scale_value) const {
     if (screen_height_ <= 0) {
         return 0.0;
+    }
+
+    const double cached_scale = static_cast<double>(smoothed_scale_);
+    const double kScaleEps = 1e-6;
+    if (std::abs(scale_value - cached_scale) <= kScaleEps && runtime_floor_params_.enabled) {
+        const double extent    = static_cast<double>(screen_height_);
+        const double min_bound = -2.0 * extent;
+        const double max_bound = 3.0 * extent;
+        return std::clamp(runtime_floor_params_.horizon_screen_y, min_bound, max_bound);
     }
 
     const FloorDepthParams depth = compute_floor_depth_params_for_scale(scale_value);

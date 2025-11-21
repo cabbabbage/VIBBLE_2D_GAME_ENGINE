@@ -195,6 +195,7 @@ public:
     float  current_foreshorten_strength() const { return runtime_foreshorten_strength_; }
     float  current_distance_scale_strength() const { return runtime_distance_scale_strength_; }
     float  current_depth_offset_px() const { return runtime_depth_offset_px_; }
+    const FloorDepthParams& current_floor_depth_params() const { return runtime_floor_params_; }
 
     // Override controls for dev mode
     void set_manual_zoom_override(bool enabled) { manual_zoom_override_ = enabled; }
@@ -276,6 +277,7 @@ private:
     float      runtime_foreshorten_strength_ = 0.0f;
     float      runtime_distance_scale_strength_ = 0.0f;
     float      runtime_depth_offset_px_ = 0.0f;
+    FloorDepthParams runtime_floor_params_{};
     bool       geometry_valid_        = false;
 
     RealismSettings settings_{};
@@ -294,6 +296,7 @@ private:
     double starting_area_ = 1.0;
 
     CameraGeometry compute_geometry() const;
+    FloorDepthParams compute_floor_depth_params_for_geometry(const CameraGeometry& geom, double scale_value) const;
     FloorDepthParams compute_floor_depth_params_for_scale(double scale_value) const;
     double apply_horizon_override(double base_horizon_y, double scale_value, double screen_height) const;
     void update_geometry_cache(const CameraGeometry& g);
