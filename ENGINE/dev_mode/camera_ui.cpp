@@ -627,14 +627,33 @@ void CameraUIPanel::build_ui() {
             rebuild_rows();
         });
     }
+    zoom_in_settings_header_ = std::make_unique<SectionToggleWidget>("Zoomed In Settings", zoom_in_settings_expanded_);
+    if (zoom_in_settings_header_) {
+        zoom_in_settings_header_->set_on_toggle([this](bool expanded) {
+            zoom_in_settings_expanded_ = expanded;
+            enforce_zoom_section_exclusivity(true);
+            rebuild_rows();
+        });
+        zoom_in_settings_header_->set_tooltip("Perspective controls that apply at minimum zoom.");
+    }
+    zoom_out_settings_header_ = std::make_unique<SectionToggleWidget>("Zoomed Out Settings", zoom_out_settings_expanded_);
+    if (zoom_out_settings_header_) {
+        zoom_out_settings_header_->set_on_toggle([this](bool expanded) {
+            zoom_out_settings_expanded_ = expanded;
+            enforce_zoom_section_exclusivity(false);
+            rebuild_rows();
+        });
+        zoom_out_settings_header_->set_tooltip("Perspective controls that apply at maximum zoom.");
+    }
+    enforce_zoom_section_exclusivity(true);
 
     min_render_size_slider_ = std::make_unique<FloatSliderWidget>("Min On-Screen Size", 0.0f, 0.05f, 0.001f, defaults.min_visible_screen_ratio, 3);
     min_render_size_slider_->set_tooltip("Cull sprites once their height drops below this fraction of the screen (0.01 = 1%).");
     min_render_size_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
-    foreshorten_strength_slider_ = std::make_unique<FloatSliderWidget>("Vertical Stretch", 0.0f, 2.0f, 0.01f, defaults.foreshorten_strength, 2);
-    foreshorten_strength_slider_->set_tooltip("Controls how much tall sprites stretch or compress with depth.");
+    foreshorten_strength_slider_ = std::make_unique<FloatSliderWidget>("Vertical Foreshortening", 0.0f, 2.0f, 0.01f, defaults.foreshorten_strength, 2);
+    foreshorten_strength_slider_->set_tooltip("Controls how much tall sprites foreshorten or stretch with depth.");
     foreshorten_strength_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
-    distance_strength_slider_ = std::make_unique<FloatSliderWidget>("Distance Scale", 0.0f, 1.0f, 0.01f, defaults.distance_scale_strength, 2);
+    distance_strength_slider_ = std::make_unique<FloatSliderWidget>("Distance Scaling", 0.0f, 1.0f, 0.01f, defaults.distance_scale_strength, 2);
     distance_strength_slider_->set_tooltip("Higher values shrink faraway sprites more aggressively.");
     distance_strength_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
     render_quality_slider_ = std::make_unique<DiscreteSliderWidget>("Render Quality (%)", std::vector<int>{100, 75, 50, 25, 10}, defaults.render_quality_percent);
@@ -643,11 +662,11 @@ void CameraUIPanel::build_ui() {
 
     zoom_in_slider_ = std::make_unique<FloatSliderWidget>("Zoom In Limit", 0.1f, camera::kMaxZoomAnchors, 0.01f, defaults.zoom_low, 2);
     zoom_in_slider_->set_tooltip("Closest allowed zoom (smaller = closer to the player).");
-    zoom_in_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+    zoom_in_slider_->set_on_value_changed([this](float) { on_zoom_anchor_value_changed(true); });
 
     zoom_out_slider_ = std::make_unique<FloatSliderWidget>("Zoom Out Limit", 0.1f, camera::kMaxZoomAnchors, 0.01f, defaults.zoom_high, 2);
     zoom_out_slider_->set_tooltip("Farthest allowed zoom before tilting down.");
-    zoom_out_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+    zoom_out_slider_->set_on_value_changed([this](float) { on_zoom_anchor_value_changed(false); });
 
     base_height_slider_ = std::make_unique<FloatSliderWidget>("Base Camera Height (px)", 80.0f, 4000.0f, 5.0f, defaults.base_height_px, 0);
     base_height_slider_->set_tooltip("Reference camera height; scales with zoom to drive depth and parallax.");
@@ -657,12 +676,13 @@ void CameraUIPanel::build_ui() {
         ? -camera::kMinPitchDegrees
         : camera::kMinPitchDegrees;
     tilt_in_slider_ = std::make_unique<FloatSliderWidget>("Tilt When Zoomed In (deg)", 0.0f, kTiltSliderMax, 0.25f, std::abs(defaults.tilt_zoom_in_degrees), 2);
-    tilt_in_slider_->set_tooltip("How much the camera tilts down when zoomed in (0 deg = level, positive tilts downward).");
-    tilt_in_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+    tilt_in_slider_->set_tooltip("How much the camera tilts down when zoomed in (0 deg = level/up, higher values tilt farther downward).");
+    tilt_in_slider_->set_on_value_changed([this](float) { on_zoom_anchor_value_changed(true); });
 
     tilt_out_slider_ = std::make_unique<FloatSliderWidget>("Tilt When Zoomed Out (deg)", 0.0f, kTiltSliderMax, 0.25f, std::abs(defaults.tilt_zoom_out_degrees), 2);
-    tilt_out_slider_->set_tooltip("Tilt when zoomed out; larger values point farther downward.");
-    tilt_out_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+    tilt_out_slider_->set_tooltip("Tilt when zoomed out; higher numbers tilt more downward, 0 deg stays level.");
+    tilt_out_slider_->set_on_value_changed([this](float) { on_zoom_anchor_value_changed(false); });
+    tilt_hint_label_ = std::make_unique<GroupLabelWidget>("Tilt sliders: lower numbers stay level/up, higher numbers tilt downward (0 deg = level, 60 deg = steep down).");
 
     const auto horizon_value_for_zoom = [this, &defaults](float zoom_value, const std::optional<float>& stored) {
         if (stored.has_value()) {
@@ -680,12 +700,12 @@ void CameraUIPanel::build_ui() {
     const float default_horizon_near = horizon_value_for_zoom(defaults.zoom_low, defaults.horizon_y_at_zoom_low);
     horizon_near_slider_ = std::make_unique<FloatSliderWidget>("Horizon @ Min Zoom (px from top)", kHorizonSliderMin, kHorizonSliderMax, kHorizonSliderStep, default_horizon_near, 0);
     horizon_near_slider_->set_tooltip("Screen-space y-distance from the top for the horizon at minimum zoom. Negative values place it above the screen.");
-    horizon_near_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+    horizon_near_slider_->set_on_value_changed([this](float) { on_zoom_anchor_value_changed(true); });
 
     const float default_horizon_far = horizon_value_for_zoom(defaults.zoom_high, defaults.horizon_y_at_zoom_high);
     horizon_far_slider_ = std::make_unique<FloatSliderWidget>("Horizon @ Max Zoom (px from top)", kHorizonSliderMin, kHorizonSliderMax, kHorizonSliderStep, default_horizon_far, 0);
     horizon_far_slider_->set_tooltip("Horizon distance from the top when fully zoomed out. Negative values push it above the visible area.");
-    horizon_far_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+    horizon_far_slider_->set_on_value_changed([this](float) { on_zoom_anchor_value_changed(false); });
 
     depth_offset_slider_ = std::make_unique<FloatSliderWidget>("Grid Depth Offset (px)", -4000.0f, 4000.0f, 5.0f, defaults.grid_depth_offset_px, 0);
     depth_offset_slider_->set_tooltip("Offsets the virtual ground plane to tune grid spacing and parallax (negative raises, positive lowers).");
@@ -797,6 +817,49 @@ void CameraUIPanel::on_control_value_changed() {
     apply_settings_if_needed();
 }
 
+void CameraUIPanel::on_zoom_anchor_value_changed(bool use_min_zoom) {
+    if (!assets_ || !is_visible()) {
+        return;
+    }
+    apply_settings_if_needed();
+    const float target_zoom = use_min_zoom
+        ? (zoom_in_slider_ ? zoom_in_slider_->value() : last_settings_.zoom_low)
+        : (zoom_out_slider_ ? zoom_out_slider_->value() : last_settings_.zoom_high);
+    snap_zoom_to_anchor(target_zoom, use_min_zoom);
+}
+
+void CameraUIPanel::snap_zoom_to_anchor(float target_zoom, bool anchor_is_min_section) {
+    if (!assets_ || !is_visible()) return;
+    if (anchor_is_min_section && !zoom_in_settings_expanded_) return;
+    if (!anchor_is_min_section && !zoom_out_settings_expanded_) return;
+
+    camera& cam = assets_->getView();
+    const float clamped_target = std::clamp(target_zoom, camera::kMinZoomAnchors, camera::kMaxZoomAnchors);
+    SDL_Point focus = cam.get_screen_center();
+    cam.set_manual_zoom_override(true);
+    if (assets_->player) {
+        focus = SDL_Point{ assets_->player->pos.x, assets_->player->pos.y };
+        cam.set_focus_override(focus);
+        cam.set_screen_center(focus);
+    }
+    cam.set_scale(clamped_target);
+    cam.recompute_current_view();
+    assets_->apply_camera_runtime_settings();
+}
+
+void CameraUIPanel::enforce_zoom_section_exclusivity(bool expanding_min_section) {
+    if (!zoom_in_settings_expanded_ || !zoom_out_settings_expanded_) return;
+
+    if (expanding_min_section) {
+        zoom_out_settings_expanded_ = false;
+        if (zoom_out_settings_header_) zoom_out_settings_header_->set_expanded(false);
+        return;
+    }
+
+    zoom_in_settings_expanded_ = false;
+    if (zoom_in_settings_header_) zoom_in_settings_header_->set_expanded(false);
+}
+
 void CameraUIPanel::rebuild_rows() {
     Rows rows;
     if (header_spacer_) rows.push_back({ header_spacer_.get() });
@@ -811,16 +874,23 @@ void CameraUIPanel::rebuild_rows() {
 
     if (depth_section_header_) rows.push_back({ depth_section_header_.get() });
     if (depth_section_expanded_) {
-        if (zoom_in_slider_) rows.push_back({ zoom_in_slider_.get() });
-        if (zoom_out_slider_) rows.push_back({ zoom_out_slider_.get() });
         if (base_height_slider_) rows.push_back({ base_height_slider_.get() });
-        if (tilt_in_slider_) rows.push_back({ tilt_in_slider_.get() });
-        if (tilt_out_slider_) rows.push_back({ tilt_out_slider_.get() });
-        if (horizon_near_slider_) rows.push_back({ horizon_near_slider_.get() });
-        if (horizon_far_slider_) rows.push_back({ horizon_far_slider_.get() });
-        if (depth_offset_slider_) rows.push_back({ depth_offset_slider_.get() });
-        if (foreshorten_strength_slider_) rows.push_back({ foreshorten_strength_slider_.get() });
         if (distance_strength_slider_) rows.push_back({ distance_strength_slider_.get() });
+        if (foreshorten_strength_slider_) rows.push_back({ foreshorten_strength_slider_.get() });
+        if (depth_offset_slider_) rows.push_back({ depth_offset_slider_.get() });
+        if (zoom_in_settings_header_) rows.push_back({ zoom_in_settings_header_.get() });
+        if (zoom_in_settings_expanded_) {
+            if (zoom_in_slider_) rows.push_back({ zoom_in_slider_.get() });
+            if (tilt_in_slider_) rows.push_back({ tilt_in_slider_.get() });
+            if (horizon_near_slider_) rows.push_back({ horizon_near_slider_.get() });
+        }
+        if (zoom_out_settings_header_) rows.push_back({ zoom_out_settings_header_.get() });
+        if (zoom_out_settings_expanded_) {
+            if (zoom_out_slider_) rows.push_back({ zoom_out_slider_.get() });
+            if (tilt_out_slider_) rows.push_back({ tilt_out_slider_.get() });
+            if (horizon_far_slider_) rows.push_back({ horizon_far_slider_.get() });
+        }
+        if (tilt_hint_label_) rows.push_back({ tilt_hint_label_.get() });
     }
 
     if (depthcue_section_header_) rows.push_back({ depthcue_section_header_.get() });

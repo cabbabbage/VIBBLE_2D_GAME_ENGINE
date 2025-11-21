@@ -46,6 +46,9 @@ private:
     void apply_settings_to_camera(const camera::RealismSettings& settings, bool effects_enabled, bool depthcue_enabled);
     camera::RealismSettings read_settings_from_ui() const;
     void on_control_value_changed();
+    void on_zoom_anchor_value_changed(bool use_min_zoom);
+    void snap_zoom_to_anchor(float target_zoom, bool anchor_is_min_section);
+    void enforce_zoom_section_exclusivity(bool expanding_min_section);
 
 private:
     Assets* assets_ = nullptr;
@@ -62,6 +65,8 @@ private:
     std::unique_ptr<Widget> controls_spacer_;
     std::unique_ptr<SectionToggleWidget> visibility_section_header_;
     std::unique_ptr<SectionToggleWidget> depth_section_header_;
+    std::unique_ptr<SectionToggleWidget> zoom_in_settings_header_;
+    std::unique_ptr<SectionToggleWidget> zoom_out_settings_header_;
     std::unique_ptr<SectionToggleWidget> depthcue_section_header_;
     std::unique_ptr<SectionToggleWidget> smoothing_section_header_;
 
@@ -70,6 +75,7 @@ private:
     std::unique_ptr<FloatSliderWidget> base_height_slider_;
     std::unique_ptr<FloatSliderWidget> tilt_in_slider_;
     std::unique_ptr<FloatSliderWidget> tilt_out_slider_;
+    std::unique_ptr<Widget> tilt_hint_label_;
     std::unique_ptr<FloatSliderWidget> horizon_near_slider_;
     std::unique_ptr<FloatSliderWidget> horizon_far_slider_;
     std::unique_ptr<FloatSliderWidget> depth_offset_slider_;
@@ -99,6 +105,8 @@ private:
     std::unique_ptr<FloatSliderWidget> hysteresis_margin_slider_;
     bool visibility_section_expanded_ = true;
     bool depth_section_expanded_ = true;
+    bool zoom_in_settings_expanded_ = true;
+    bool zoom_out_settings_expanded_ = false;
     bool depthcue_section_expanded_ = false;
     bool smoothing_section_expanded_ = false;
 

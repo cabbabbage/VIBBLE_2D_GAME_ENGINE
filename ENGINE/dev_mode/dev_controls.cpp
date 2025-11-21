@@ -1647,14 +1647,15 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
 
     const bool show_depth_guides = camera_panel_ && camera_panel_->is_depth_section_visible();
     std::optional<float> horizon_screen_y;
+    std::optional<std::string> parallax_probe_label;
 
     // Render grid overlay if enabled (moved to beginning to render behind UI)
-    const bool need_grid_helpers = assets_ && (grid_overlay_enabled_ || show_depth_guides);
-    if (renderer && need_grid_helpers) {
-        const camera& cam = assets_->getView();
-        const camera::RealismSettings& cam_settings = cam.realism_settings();
-        const camera::FloorDepthParams depth_params = cam.compute_floor_depth_params();
-        world::Grid& grid = assets_->world_grid();
+        const bool need_grid_helpers = assets_ && (grid_overlay_enabled_ || show_depth_guides);
+        if (renderer && need_grid_helpers) {
+            const camera& cam = assets_->getView();
+            const camera::RealismSettings& cam_settings = cam.realism_settings();
+            const camera::FloorDepthParams depth_params = cam.compute_floor_depth_params();
+            world::Grid& grid = assets_->world_grid();
         SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
         Uint8 pr = 0, pg = 0, pb = 0, pa = 0;
         if (grid_overlay_enabled_) {
@@ -1752,12 +1753,56 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                 // Always reflect the camera-computed horizon so the guide matches pitch direction.
                 horizon_screen_y = static_cast<float>(depth_params.horizon_screen_y);
             }
+
+            if (grid_overlay_enabled_ && cam.parallax_enabled()) {
+                const int sample_dx = std::max(cell * 2, 64);
+                const int sample_dy = std::max(cell * 3, 96);
+                const SDL_FPoint view_center = cam.get_view_center_f();
+                const double anchor_y = cam.current_anchor_world_y();
+                const int sample_x = static_cast<int>(std::lround(
+                    std::clamp(view_center.x + static_cast<float>(sample_dx), min_world_x, max_world_x)));
+                const double clamped_anchor_y = std::clamp(anchor_y, static_cast<double>(min_world_y), static_cast<double>(max_world_y));
+                const SDL_Point anchor_sample{
+                    sample_x,
+                    static_cast<int>(std::lround(clamped_anchor_y))
+                };
+                const SDL_Point above_sample{
+                    sample_x,
+                    static_cast<int>(std::lround(std::clamp(clamped_anchor_y - static_cast<double>(sample_dy),
+                                                           static_cast<double>(min_world_y),
+                                                           static_cast<double>(max_world_y))))
+                };
+                const SDL_Point below_sample{
+                    sample_x,
+                    static_cast<int>(std::lround(std::clamp(clamped_anchor_y + static_cast<double>(sample_dy),
+                                                           static_cast<double>(min_world_y),
+                                                           static_cast<double>(max_world_y))))
+                };
+
+                const float parallax_anchor = grid.parallax_offset(anchor_sample);
+                const float parallax_above  = grid.parallax_offset(above_sample);
+                const float parallax_below  = grid.parallax_offset(below_sample);
+                if (std::isfinite(parallax_anchor) && std::isfinite(parallax_above) && std::isfinite(parallax_below)) {
+                    char buffer[192];
+                    std::snprintf(buffer, sizeof(buffer),
+                                  "Parallax probe dx=+%d | above %.1f px  anchor %.1f px  below %.1f px",
+                                  sample_dx, parallax_above, parallax_anchor, parallax_below);
+                    parallax_probe_label = std::string(buffer);
+                }
+            }
         }
 
         if (grid_overlay_enabled_) {
             SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
             SDL_SetRenderDrawBlendMode(renderer, prev_mode);
         }
+    }
+
+    if (renderer && grid_overlay_enabled_ && parallax_probe_label) {
+        DMLabelStyle style = DMStyles::Label();
+        const int text_x = DMSpacing::panel_padding();
+        const int text_y = screen_h_ - style.font_size - DMSpacing::panel_padding();
+        DrawLabelText(renderer, *parallax_probe_label, text_x, text_y, style);
     }
 
     if (renderer && show_depth_guides) {

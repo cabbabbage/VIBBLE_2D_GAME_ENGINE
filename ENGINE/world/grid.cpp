@@ -581,22 +581,21 @@ void Grid::update_parallax(const camera& cam, float dt) {
 
             const double dx_world = cell_cx - base_x;
 
-            // Positive when the sample lies below the camera anchor (world Y grows downward).
-            const double ground_distance = std::max(0.0, cell_cy - anchor_y);
+            // Signed depth relative to the anchor (negative when above).
+            const double ground_depth = cell_cy - anchor_y;
 
-            const double forward_depth = std::max(
-                kParallaxEpsilon,
-                (camera_height * cos_p) - (ground_distance * sin_p));
-
-            const double depth_with_offset = std::max(
-                kParallaxEpsilon,
-                forward_depth + depth_ref_effect);
+            // Keep the raw forward depth so layers above the anchor widen less.
+            const double forward_depth = (camera_height * cos_p) - (ground_depth * sin_p);
+            const double depth_with_offset = forward_depth + depth_ref_effect;
 
             const double ortho_x_px = dx_world * inv_scale;
 
             double parallax_px = 0.0;
             if (focal_px > kParallaxEpsilon) {
-                const double projected_x_px = (dx_world / depth_with_offset) * focal_px;
+                const double safe_depth = std::copysign(
+                    std::max(std::abs(depth_with_offset), kParallaxEpsilon),
+                    depth_with_offset);
+                const double projected_x_px = (dx_world / safe_depth) * focal_px;
                 parallax_px = (projected_x_px - ortho_x_px) * pitch_norm;
             }
 
