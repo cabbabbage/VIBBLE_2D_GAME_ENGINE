@@ -2024,9 +2024,9 @@
       "camera_settings": {
         "background_plane_screen_y": 198.0,
         "background_texture_max_opacity": 0,
-        "base_height_px": 1645.0,
+        "base_height_px": 1295.0,
         "depth_offset_at_zoom_high": -2850.0,
-        "depth_offset_at_zoom_low": -2510.0,
+        "depth_offset_at_zoom_low": -415.0,
         "distance_scale_at_zoom_high": 0.12999999523162842,
         "distance_scale_at_zoom_low": 0.3100000023841858,
         "distance_scale_strength": 0.2199999988079071,
@@ -2035,7 +2035,7 @@
         "foreshorten_at_zoom_high": 0.28999999165534973,
         "foreshorten_at_zoom_low": 0.47999998927116394,
         "foreshorten_strength": 0.38499999046325684,
-        "grid_depth_offset_px": -2680.0,
+        "grid_depth_offset_px": -1632.5,
         "horizon_y_at_zoom_high": 140.0,
         "horizon_y_at_zoom_low": 1120.0,
         "min_visible_screen_ratio": 0.006000000052154064,
@@ -2057,7 +2057,7 @@
         "tilt_zoom_in_degrees": -0.0,
         "tilt_zoom_out_degrees": -0.0,
         "zoom_high": 4.779999732971191,
-        "zoom_low": 0.4099999964237213
+        "zoom_low": 0.8100000023841858
       },
       "content_root": "MAPS/FORREST",
       "map_assets_data": {
@@ -2357,7 +2357,7 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            37,
+            116,
             36,
             242,
             255
@@ -2410,9 +2410,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            85,
             242,
-            241,
+            242,
+            85,
             255
           ],
           "edge_smoothness": 101,

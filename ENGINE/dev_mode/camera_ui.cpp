@@ -1203,6 +1203,12 @@ void CameraUIPanel::sync_from_camera() {
     if (texture_opacity_interp_dropdown_) {
         texture_opacity_interp_dropdown_->set_selected(static_cast<int>(last_settings_.texture_opacity_falloff_method));
     }
+    if (realism_enabled_checkbox_) {
+        realism_enabled_checkbox_->set_value(last_realism_enabled_);
+    }
+    if (depthcue_checkbox_) {
+        depthcue_checkbox_->set_value(last_depthcue_enabled_);
+    }
 }
 
 void CameraUIPanel::build_ui() {
@@ -1217,9 +1223,15 @@ void CameraUIPanel::build_ui() {
     hero_banner_widget_ = std::make_unique<PanelBannerWidget>(
         "Camera realism",
         "Dial in render buffers, parallax depth, and smoothing without leaving the editor.");
+    realism_enabled_checkbox_ = std::make_unique<DMCheckbox>("Enable Realism Effects", last_realism_enabled_);
+    realism_widget_ = std::make_unique<CheckboxWidget>(realism_enabled_checkbox_.get());
+    realism_widget_->set_tooltip("Toggle perspective effects, grid warping, and parallax depth.");
+
     controls_spacer_ = std::make_unique<SpacerWidget>(DMSpacing::small_gap());
 
-
+    depthcue_checkbox_ = std::make_unique<DMCheckbox>("Enable Depth Cue", last_depthcue_enabled_);
+    depthcue_widget_ = std::make_unique<CheckboxWidget>(depthcue_checkbox_.get());
+    depthcue_widget_->set_tooltip("Toggle depth cue texture compositing.\nDoes not affect parallax or foreshortening.");
 
     camera::RealismSettings defaults = last_settings_;
     if (assets_) {
@@ -1445,7 +1457,9 @@ void CameraUIPanel::rebuild_rows() {
     Rows rows;
     if (header_spacer_) rows.push_back({ header_spacer_.get() });
     if (hero_banner_widget_) rows.push_back({ hero_banner_widget_.get() });
+    if (realism_widget_) rows.push_back({ realism_widget_.get() });
     if (controls_spacer_) rows.push_back({ controls_spacer_.get() });
+    if (depthcue_widget_) rows.push_back({ depthcue_widget_.get() });
 
     if (visibility_section_header_) rows.push_back({ visibility_section_header_.get() });
     if (visibility_section_expanded_) {
@@ -1494,7 +1508,7 @@ void CameraUIPanel::apply_settings_if_needed() {
     if (!assets_) return;
     camera::RealismSettings settings = read_settings_from_ui();
     const bool effects_enabled = assets_->getView().realism_enabled();
-    const bool depthcue_enabled = last_depthcue_enabled_;
+    const bool depthcue_enabled = depthcue_checkbox_ ? depthcue_checkbox_->value() : last_depthcue_enabled_;
 
     auto differs = [](float a, float b) {
         return std::fabs(a - b) > 0.0001f;
@@ -1591,6 +1605,14 @@ void CameraUIPanel::apply_settings_to_camera(const camera::RealismSettings& sett
     }
     last_settings_ = settings;
     last_realism_enabled_ = effects_enabled;
+    if (on_realism_enabled_changed_) {
+        on_realism_enabled_changed_(effects_enabled);
+    }
+    if (depthcue_enabled != last_depthcue_enabled_) {
+        if (on_depth_effects_enabled_changed_) {
+            on_depth_effects_enabled_changed_(depthcue_enabled);
+        }
+    }
     devmode::camera_prefs::save_foreground_texture_max_opacity(settings.foreground_texture_max_opacity);
     devmode::camera_prefs::save_background_texture_max_opacity(settings.background_texture_max_opacity);
     last_depthcue_enabled_ = depthcue_enabled;

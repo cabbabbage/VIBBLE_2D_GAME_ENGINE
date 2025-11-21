@@ -581,6 +581,22 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     }
     if (camera_panel_) {
         camera_panel_->set_image_effects_panel_callback([this]() { this->toggle_image_effect_panel(); });
+        camera_panel_->set_on_realism_enabled_changed([this](bool enabled) {
+            if (map_mode_ui_) {
+                DevFooterBar* footer = map_mode_ui_->get_footer_bar();
+                if (footer) {
+                    footer->set_depth_effects_enabled(enabled);
+                }
+            }
+        });
+        camera_panel_->set_on_depth_effects_enabled_changed([this](bool enabled) {
+            if (map_mode_ui_) {
+                DevFooterBar* footer = map_mode_ui_->get_footer_bar();
+                if (footer) {
+                    footer->set_depth_effects_enabled(enabled);
+                }
+            }
+        });
     }
     if (map_editor_) {
         map_editor_->set_ui_blocker([this](int x, int y) { return is_pointer_over_dev_ui(x, y); });
@@ -650,6 +666,14 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
                     devmode::camera_prefs::save_depthcue_enabled(enabled);
                 }
             });
+            // Set depth effects enabled to true on load
+            if (assets_) {
+                assets_->set_depth_effects_enabled(true);
+                footer->set_depth_effects_enabled(true);
+                devmode::camera_prefs::save_depthcue_enabled(true);
+            } else {
+                devmode::camera_prefs::save_depthcue_enabled(true);
+            }
             footer->set_grid_overlay_enabled(grid_overlay_enabled_);
             footer->set_grid_resolution(grid_overlay_resolution_r_);
             footer->set_snap_to_grid_enabled(snap_to_grid_enabled_);
