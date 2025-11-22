@@ -313,7 +313,10 @@
       "start": "default"
     },
     "Vibble": {
-      "animation_children": [],
+      "animation_children": [
+        "Vibble_eyes",
+        "Candle"
+      ],
       "animations": {
         "backward": {
           "children": [
@@ -472,10 +475,6 @@
               "melee": null,
               "projectile": null
             }
-          ],
-          "children": [
-            "Candle",
-            "Vibble_eyes"
           ],
           "flipped_source": false,
           "fps": 12,
@@ -2024,18 +2023,18 @@
       "camera_settings": {
         "background_plane_screen_y": 198.0,
         "background_texture_max_opacity": 0,
-        "base_height_px": 2745.0,
+        "base_height_px": 2780.0,
         "depth_offset_at_zoom_high": -1830.0,
-        "depth_offset_at_zoom_low": -680.0,
+        "depth_offset_at_zoom_low": 35.0,
         "distance_scale_at_zoom_high": 0.12999999523162842,
-        "distance_scale_at_zoom_low": 0.20999999344348907,
-        "distance_scale_strength": 0.16999998688697815,
+        "distance_scale_at_zoom_low": 1.0,
+        "distance_scale_strength": 0.5649999976158142,
         "foreground_plane_screen_y": 902.0,
         "foreground_texture_max_opacity": 0,
         "foreshorten_at_zoom_high": 0.28999999165534973,
-        "foreshorten_at_zoom_low": 0.5699999928474426,
-        "foreshorten_strength": 0.4300000071525574,
-        "grid_depth_offset_px": -1255.0,
+        "foreshorten_at_zoom_low": 1.1399999856948853,
+        "foreshorten_strength": 0.7149999737739563,
+        "grid_depth_offset_px": -897.5,
         "min_visible_screen_ratio": 0.006000000052154064,
         "motion_smoothing_max_step": 300.0,
         "motion_smoothing_method": 1,
@@ -2355,9 +2354,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            37,
-            36,
             242,
+            160,
+            36,
             255
           ],
           "edge_smoothness": 43,
@@ -2408,9 +2407,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            85,
-            242,
-            241,
+            31,
+            32,
+            204,
             255
           ],
           "edge_smoothness": 101,
