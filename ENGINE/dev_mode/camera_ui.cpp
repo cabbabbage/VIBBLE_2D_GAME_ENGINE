@@ -32,9 +32,6 @@ namespace {
     constexpr float kPi     = 3.14159265358979323846f;
     constexpr float kRadToDeg = 180.0f / kPi;
     constexpr float kDegToRad = kPi / 180.0f;
-    constexpr float kHorizonSliderMin  = -2000.0f;
-    constexpr float kHorizonSliderMax  = 4000.0f;
-    constexpr float kHorizonSliderStep = 5.0f;
     constexpr const char* kCameraIconPath = "SRC/icons/camera.png";
 
     float rate_from_tau(float tau) {
@@ -774,7 +771,6 @@ public:
     struct Values {
         float zoom = 1.0f;
         float pitch_degrees = 0.0f;
-        float horizon_y = 0.0f;
         float depth_offset_px = 0.0f;
         float distance_strength = 0.0f;
         float foreshorten_strength = 0.0f;
@@ -810,13 +806,6 @@ public:
             tilt_widget_->set_on_angle_changed([this](float) { notify_change(); });
         }
 
-        horizon_slider_ = std::make_unique<FloatSliderWidget>(
-            "Horizon Y (px from top)", kHorizonSliderMin, kHorizonSliderMax, kHorizonSliderStep, values.horizon_y, 0);
-        if (horizon_slider_) {
-            horizon_slider_->set_tooltip("Screen-space horizon placement for this zoom anchor.");
-            horizon_slider_->set_on_value_changed([this](float) { notify_change(); });
-        }
-
         depth_offset_slider_ = std::make_unique<FloatSliderWidget>(
             "Depth Offset (px)", -4000.0f, 4000.0f, 5.0f, values.depth_offset_px, 0);
         if (depth_offset_slider_) {
@@ -847,7 +836,6 @@ public:
         const float preferred_angle = tilt_widget_ ? tilt_widget_->angle_degrees() : 0.0f;
         if (zoom_slider_) zoom_slider_->set_value(values.zoom);
         if (tilt_widget_) tilt_widget_->set_angle_degrees(pitch_to_angle_deg(values.pitch_degrees, preferred_angle));
-        if (horizon_slider_) horizon_slider_->set_value(values.horizon_y);
         if (depth_offset_slider_) depth_offset_slider_->set_value(values.depth_offset_px);
         if (distance_slider_) distance_slider_->set_value(values.distance_strength);
         if (foreshorten_slider_) foreshorten_slider_->set_value(values.foreshorten_strength);
@@ -858,7 +846,6 @@ public:
         Values v{};
         v.zoom = zoom_slider_ ? zoom_slider_->value() : 1.0f;
         v.pitch_degrees = tilt_widget_ ? angle_to_pitch_deg(tilt_widget_->angle_degrees()) : 0.0f;
-        v.horizon_y = horizon_slider_ ? horizon_slider_->value() : 0.0f;
         v.depth_offset_px = depth_offset_slider_ ? depth_offset_slider_->value() : 0.0f;
         v.distance_strength = distance_slider_ ? distance_slider_->value() : 0.0f;
         v.foreshorten_strength = foreshorten_slider_ ? foreshorten_slider_->value() : 0.0f;
@@ -896,7 +883,6 @@ public:
             };
             add_height(zoom_slider_.get());
             add_height(tilt_widget_.get());
-            add_height(horizon_slider_.get());
             add_height(depth_offset_slider_.get());
             add_height(distance_slider_.get());
             add_height(foreshorten_slider_.get());
@@ -931,7 +917,6 @@ public:
         };
         used = handle_child(zoom_slider_.get()) || used;
         used = handle_child(tilt_widget_.get()) || used;
-        used = handle_child(horizon_slider_.get()) || used;
         used = handle_child(depth_offset_slider_.get()) || used;
         used = handle_child(distance_slider_.get()) || used;
         used = handle_child(foreshorten_slider_.get()) || used;
@@ -944,7 +929,6 @@ public:
         if (!expanded_) return;
         if (zoom_slider_) zoom_slider_->render(renderer);
         if (tilt_widget_) tilt_widget_->render(renderer);
-        if (horizon_slider_) horizon_slider_->render(renderer);
         if (depth_offset_slider_) depth_offset_slider_->render(renderer);
         if (distance_slider_) distance_slider_->render(renderer);
         if (foreshorten_slider_) foreshorten_slider_->render(renderer);
@@ -994,7 +978,6 @@ private:
 
         place_child(zoom_slider_.get());
         place_child(tilt_widget_.get());
-        place_child(horizon_slider_.get());
         place_child(depth_offset_slider_.get());
         place_child(distance_slider_.get());
         place_child(foreshorten_slider_.get());
@@ -1011,7 +994,6 @@ private:
     std::unique_ptr<DMButton> set_zoom_button_;
     std::unique_ptr<FloatSliderWidget> zoom_slider_;
     std::unique_ptr<PitchDialWidget> tilt_widget_;
-    std::unique_ptr<FloatSliderWidget> horizon_slider_;
     std::unique_ptr<FloatSliderWidget> depth_offset_slider_;
     std::unique_ptr<FloatSliderWidget> distance_slider_;
     std::unique_ptr<FloatSliderWidget> foreshorten_slider_;
@@ -1161,20 +1143,9 @@ void CameraUIPanel::sync_from_camera() {
     if (hysteresis_margin_slider_) hysteresis_margin_slider_->set_value(last_settings_.scale_variant_hysteresis_margin);
     if (base_height_slider_) base_height_slider_->set_value(last_settings_.base_height_px);
     if (zoom_in_keypoint_ || zoom_out_keypoint_) {
-        auto horizon_value_for_zoom = [&cam](float zoom_value, const std::optional<float>& stored) {
-            float value = 0.0f;
-            if (stored.has_value()) {
-                value = stored.value();
-            } else {
-                value = static_cast<float>(cam.horizon_screen_y_for_scale_value(zoom_value));
-            }
-            return std::clamp(value, kHorizonSliderMin, kHorizonSliderMax);
-        };
-
         ZoomKeyPointWidget::Values min_values;
         min_values.zoom = last_settings_.zoom_low;
         min_values.pitch_degrees = last_settings_.tilt_zoom_in_degrees;
-        min_values.horizon_y = horizon_value_for_zoom(last_settings_.zoom_low, last_settings_.horizon_y_at_zoom_low);
         min_values.depth_offset_px = last_settings_.depth_offset_at_zoom_low;
         min_values.distance_strength = last_settings_.distance_scale_at_zoom_low;
         min_values.foreshorten_strength = last_settings_.foreshorten_at_zoom_low;
@@ -1185,7 +1156,6 @@ void CameraUIPanel::sync_from_camera() {
         ZoomKeyPointWidget::Values max_values;
         max_values.zoom = last_settings_.zoom_high;
         max_values.pitch_degrees = last_settings_.tilt_zoom_out_degrees;
-        max_values.horizon_y = horizon_value_for_zoom(last_settings_.zoom_high, last_settings_.horizon_y_at_zoom_high);
         max_values.depth_offset_px = last_settings_.depth_offset_at_zoom_high;
         max_values.distance_strength = last_settings_.distance_scale_at_zoom_high;
         max_values.foreshorten_strength = last_settings_.foreshorten_at_zoom_high;
@@ -1270,23 +1240,9 @@ void CameraUIPanel::build_ui() {
     base_height_slider_->set_tooltip("Reference camera height; scales with zoom to drive depth and parallax.");
     base_height_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
-    const auto horizon_value_for_zoom = [this, &defaults](float zoom_value, const std::optional<float>& stored) {
-        if (stored.has_value()) {
-            return stored.value();
-        }
-        float value = 0.0f;
-        if (assets_) {
-            value = static_cast<float>(assets_->getView().horizon_screen_y_for_scale_value(zoom_value));
-        } else {
-            const float fallback_screen_h = (last_screen_h_ > 0) ? static_cast<float>(last_screen_h_) : 1080.0f;
-            value = fallback_screen_h * 0.25f;
-        }
-        return std::clamp(value, kHorizonSliderMin, kHorizonSliderMax);
-    };
     ZoomKeyPointWidget::Values zoom_in_defaults;
     zoom_in_defaults.zoom = defaults.zoom_low;
     zoom_in_defaults.pitch_degrees = defaults.tilt_zoom_in_degrees;
-    zoom_in_defaults.horizon_y = horizon_value_for_zoom(defaults.zoom_low, defaults.horizon_y_at_zoom_low);
     zoom_in_defaults.depth_offset_px = defaults.depth_offset_at_zoom_low;
     zoom_in_defaults.distance_strength = defaults.distance_scale_at_zoom_low;
     zoom_in_defaults.foreshorten_strength = defaults.foreshorten_at_zoom_low;
@@ -1310,7 +1266,6 @@ void CameraUIPanel::build_ui() {
     ZoomKeyPointWidget::Values zoom_out_defaults;
     zoom_out_defaults.zoom = defaults.zoom_high;
     zoom_out_defaults.pitch_degrees = defaults.tilt_zoom_out_degrees;
-    zoom_out_defaults.horizon_y = horizon_value_for_zoom(defaults.zoom_high, defaults.horizon_y_at_zoom_high);
     zoom_out_defaults.depth_offset_px = defaults.depth_offset_at_zoom_high;
     zoom_out_defaults.distance_strength = defaults.distance_scale_at_zoom_high;
     zoom_out_defaults.foreshorten_strength = defaults.foreshorten_at_zoom_high;
@@ -1515,24 +1470,12 @@ void CameraUIPanel::apply_settings_if_needed() {
     auto differs = [](float a, float b) {
         return std::fabs(a - b) > 0.0001f;
     };
-    auto differs_opt = [differs](const std::optional<float>& a, const std::optional<float>& b) {
-        if (a.has_value() != b.has_value()) {
-            return true;
-        }
-        if (!a.has_value()) {
-            return false;
-        }
-        return differs(*a, *b);
-    };
-
     bool changed = (effects_enabled != last_realism_enabled_) || (depthcue_enabled != last_depthcue_enabled_);
     const camera::RealismSettings& prev = last_settings_;
     changed = changed || differs(settings.zoom_low, prev.zoom_low) || differs(settings.zoom_high, prev.zoom_high);
     changed = changed || differs(settings.base_height_px, prev.base_height_px);
     changed = changed || differs(settings.tilt_zoom_in_degrees, prev.tilt_zoom_in_degrees) ||
         differs(settings.tilt_zoom_out_degrees, prev.tilt_zoom_out_degrees);
-    changed = changed || differs_opt(settings.horizon_y_at_zoom_low, prev.horizon_y_at_zoom_low);
-    changed = changed || differs_opt(settings.horizon_y_at_zoom_high, prev.horizon_y_at_zoom_high);
     changed = changed || differs(settings.foreshorten_at_zoom_low, prev.foreshorten_at_zoom_low) ||
         differs(settings.foreshorten_at_zoom_high, prev.foreshorten_at_zoom_high);
     changed = changed || differs(settings.distance_scale_at_zoom_low, prev.distance_scale_at_zoom_low) ||
@@ -1673,31 +1616,12 @@ camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
     const float min_high = std::min(camera::kMaxZoomAnchors, settings.zoom_low + 0.0001f);
     settings.zoom_high = std::clamp(settings.zoom_high, min_high, camera::kMaxZoomAnchors);
 
-    auto apply_horizon_setting = [this](float value,
-                                        std::optional<float>& target,
-                                        const std::optional<float>& previous,
-                                        float zoom_value) {
-        const float clamped = std::clamp(value, kHorizonSliderMin, kHorizonSliderMax);
-        if (!previous.has_value() && assets_) {
-            const float baseline = std::clamp(
-                static_cast<float>(assets_->getView().horizon_screen_y_for_scale_value(zoom_value)),
-                kHorizonSliderMin,
-                kHorizonSliderMax);
-            if (std::fabs(clamped - baseline) < 0.0001f) {
-                target.reset();
-                return;
-            }
-        }
-        target = clamped;
-    };
     if (zoom_in_keypoint_) {
-        apply_horizon_setting(min_values.horizon_y, settings.horizon_y_at_zoom_low, last_settings_.horizon_y_at_zoom_low, settings.zoom_low);
         settings.depth_offset_at_zoom_low = std::clamp(min_values.depth_offset_px, -4000.0f, 4000.0f);
         settings.distance_scale_at_zoom_low = std::max(0.0f, min_values.distance_strength);
         settings.foreshorten_at_zoom_low = std::max(0.0f, min_values.foreshorten_strength);
     }
     if (zoom_out_keypoint_) {
-        apply_horizon_setting(max_values.horizon_y, settings.horizon_y_at_zoom_high, last_settings_.horizon_y_at_zoom_high, settings.zoom_high);
         settings.depth_offset_at_zoom_high = std::clamp(max_values.depth_offset_px, -4000.0f, 4000.0f);
         settings.distance_scale_at_zoom_high = std::max(0.0f, max_values.distance_strength);
         settings.foreshorten_at_zoom_high = std::max(0.0f, max_values.foreshorten_strength);

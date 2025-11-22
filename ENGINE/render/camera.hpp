@@ -55,11 +55,6 @@ public:
         float tilt_zoom_in_degrees         = 345.0f;
         float tilt_zoom_out_degrees        = 310.0f;
 
-        // Screen-space horizon placement (distance from the top in px).
-        // When unset, the pitch-derived horizon is used.
-        std::optional<float> horizon_y_at_zoom_low{};
-        std::optional<float> horizon_y_at_zoom_high{};
-
         int   render_quality_percent       = 100;
         bool  smooth_motion_zoom           = true;
 
@@ -298,6 +293,5 @@ private:
     CameraGeometry compute_geometry() const;
     FloorDepthParams compute_floor_depth_params_for_geometry(const CameraGeometry& geom, double scale_value) const;
     FloorDepthParams compute_floor_depth_params_for_scale(double scale_value) const;
-    double apply_horizon_override(double base_horizon_y, double scale_value, double screen_height) const;
     void update_geometry_cache(const CameraGeometry& g);
 };
