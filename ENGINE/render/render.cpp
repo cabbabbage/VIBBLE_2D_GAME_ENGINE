@@ -1146,6 +1146,19 @@ SceneRenderer::SceneRenderer(PrevalidatedTag,
 {
     vibble::log::debug(std::string{"[SceneRenderer] Initializing for map '"} + map_id +
                        "' with screen " + std::to_string(screen_width_) + "x" + std::to_string(screen_height_) + ".");
+    // Load fog textures
+    auto load_fog_texture = [this](const char* rel_path) -> SDL_Texture* {
+        std::filesystem::path path = std::filesystem::path("SRC") / "misc_content" / rel_path;
+        SDL_Texture* tex = IMG_LoadTexture(renderer_, path.string().c_str());
+        if (!tex) {
+            vibble::log::error(std::string{"[SceneRenderer] Failed to load fog texture: "} + path.string() + ", SDL_image: " + IMG_GetError());
+        }
+        return tex;
+    };
+    fog_tex_1_ = load_fog_texture("fog_1.png");
+    fog_tex_2_ = load_fog_texture("fog_2.png");
+    fog_tex_3_ = load_fog_texture("fog_3.png");
+
     // Allow override of warmup frames via env var (optional): VIBBLE_DEPTHCUE_WARMUP_FRAMES
     if (const char* override_frames = std::getenv("VIBBLE_DEPTHCUE_WARMUP_FRAMES")) {
         const int v = std::atoi(override_frames);
@@ -1180,6 +1193,9 @@ SceneRenderer::SceneRenderer(PrevalidatedTag,
 SceneRenderer::~SceneRenderer() {
     destroy_darkness_overlay();
     destroy_sky_texture();
+    if (fog_tex_1_) { SDL_DestroyTexture(fog_tex_1_); fog_tex_1_ = nullptr; }
+    if (fog_tex_2_) { SDL_DestroyTexture(fog_tex_2_); fog_tex_2_ = nullptr; }
+    if (fog_tex_3_) { SDL_DestroyTexture(fog_tex_3_); fog_tex_3_ = nullptr; }
     if (scene_composite_tex_) { SDL_DestroyTexture(scene_composite_tex_); scene_composite_tex_ = nullptr; }
     if (postprocess_tex_)     { SDL_DestroyTexture(postprocess_tex_);     postprocess_tex_     = nullptr; }
     if (blur_tex_)            { SDL_DestroyTexture(blur_tex_);            blur_tex_            = nullptr; }
@@ -1547,10 +1563,51 @@ void SceneRenderer::render(){
         // SceneRenderer::render - build asset render commands
         //////////////////////////////////////////////////////////////////////////////////
         const auto& active = assets_->getActive();
-        // Screen-space culling rect (float) used to filter off-screen assets and attachments
-        const SDL_FRect screen_rect_f{ 0.0f, 0.0f,
-                                       static_cast<float>(screen_width_),
-                                       static_cast<float>(screen_height_) };
+        // Horizon-aware culling rect (float) for perspective/warping
+        float horizon_y = camera_state ? camera_state->horizon_screen_y_for_scale() : 0.0f;
+        float extra_margin = cam_settings.extra_cull_margin;
+        // Optionally scale margin by pitch or other camera params if desired
+        float cull_top = std::max(0.0f, horizon_y);
+        float cull_bottom = static_cast<float>(screen_height_) + extra_margin;
+        const SDL_FRect cull_rect{ 0.0f, cull_top, static_cast<float>(screen_width_), cull_bottom - cull_top };
+
+        // --- FOG LAYER Y POSITIONS (grid warping aware) ---
+        float fog_ys[3] = { horizon_y, horizon_y, horizon_y };
+        if (camera_state) {
+            // At pitch=0, all fog layers at horizon. At pitch=90, evenly spaced to bottom.
+            float pitch = camera_state->current_pitch_degrees();
+            float pitch_norm = std::clamp(pitch / 90.0f, 0.0f, 1.0f);
+            float bottom_y = static_cast<float>(screen_height_);
+            // Evenly space 3 layers between horizon and bottom, warped by grid logic
+            for (int i = 0; i < 3; ++i) {
+                float t = (i + 1) / 3.0f; // 1/3, 2/3, 3/3
+                float linear_y = horizon_y + (bottom_y - horizon_y) * t * pitch_norm;
+                // Use grid warping for correct placement
+                fog_ys[i] = camera_state->warp_floor_screen_y(/*world_y=*/0.0f, linear_y);
+            }
+        }
+
+        // --- FOG LAYER RENDERING ---
+        if (camera_state && fog_tex_1_ && fog_tex_2_ && fog_tex_3_) {
+            float pitch = camera_state->current_pitch_degrees();
+            // Opacity: full at pitch=0, fades out by pitch=40+
+            float fog_alpha = 1.0f - std::clamp(pitch / 40.0f, 0.0f, 1.0f);
+            Uint8 fog_opacities[3];
+            // Optionally, each layer can have a different base alpha (e.g., 0.7, 0.5, 0.3)
+            float base_alphas[3] = {0.7f, 0.5f, 0.3f};
+            for (int i = 0; i < 3; ++i) {
+                fog_opacities[i] = static_cast<Uint8>(std::clamp(base_alphas[i] * fog_alpha * 255.0f, 0.0f, 255.0f));
+            }
+            SDL_Texture* fog_textures[3] = { fog_tex_1_, fog_tex_2_, fog_tex_3_ };
+            for (int i = 0; i < 3; ++i) {
+                int tex_w = 0, tex_h = 0;
+                SDL_QueryTexture(fog_textures[i], nullptr, nullptr, &tex_w, &tex_h);
+                SDL_SetTextureBlendMode(fog_textures[i], SDL_BLENDMODE_BLEND);
+                SDL_SetTextureAlphaMod(fog_textures[i], fog_opacities[i]);
+                SDL_Rect dst_rect = { 0, static_cast<int>(std::round(fog_ys[i])), screen_width_, tex_h };
+                SDL_RenderCopy(renderer_, fog_textures[i], nullptr, &dst_rect);
+            }
+        }
         texture_commands_.clear();
         texture_commands_.reserve(active.size());
         remaining_commands_.clear();
@@ -1702,7 +1759,7 @@ void SceneRenderer::render(){
                     std::cout << "[Render] Child rect not drawable for '" << slot.asset_name << "'\n";
                     continue;
                 }
-                if (!intersects_padded(child_rect, screen_rect_f)) {
+                if (!intersects_padded(child_rect, cull_rect)) {
                     continue;
                 }
 
@@ -1806,8 +1863,8 @@ void SceneRenderer::render(){
             const bool has_expanded_bounds =
                 assets_ && assets_->asset_bounds_in_screen_space(asset, expanded_bounds);
             const SDL_FRect& cull_rect = has_expanded_bounds ? expanded_bounds : dst;
-            const bool sprite_visible  = intersects_padded(dst, screen_rect_f);
-            const bool bounds_visible  = intersects_padded(cull_rect, screen_rect_f);
+            const bool sprite_visible  = intersects_padded(dst, cull_rect);
+            const bool bounds_visible  = intersects_padded(cull_rect, cull_rect);
             const bool has_light_sources = asset->info && !asset->info->light_sources.empty();
 
             bool any_child_visible = false;
@@ -1884,8 +1941,8 @@ void SceneRenderer::render(){
             const bool has_expanded_bounds =
                 assets_ && assets_->asset_bounds_in_screen_space(a, expanded_bounds);
             const SDL_FRect& cull_rect = has_expanded_bounds ? expanded_bounds : dst;
-            const bool sprite_visible  = intersects_padded(dst, screen_rect_f);
-            const bool bounds_visible  = intersects_padded(cull_rect, screen_rect_f);
+            const bool sprite_visible  = intersects_padded(dst, cull_rect);
+            const bool bounds_visible  = intersects_padded(cull_rect, cull_rect);
 
             // Evaluate child attachments once so their visibility can keep the parent alive.
             ensure_child_commands(a, child_batch);

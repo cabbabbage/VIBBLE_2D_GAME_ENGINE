@@ -1231,12 +1231,21 @@ void CameraUIPanel::build_ui() {
         });
     }
 
+
     min_render_size_slider_ = std::make_unique<FloatSliderWidget>("Min On-Screen Size", 0.0f, 0.05f, 0.001f, defaults.min_visible_screen_ratio, 3);
     min_render_size_slider_->set_tooltip("Cull sprites once their height drops below this fraction of the screen (0.01 = 1%).");
     min_render_size_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+
+    // Cull margin slider
+    cull_margin_slider_ = std::make_unique<FloatSliderWidget>("Cull Margin (px)", 0.0f, 1000.0f, 1.0f, defaults.extra_cull_margin, 0);
+    cull_margin_slider_->set_tooltip("Extra margin below the screen for culling (for perspective/warping). Increase if assets pop in/out at the bottom edge.");
+    cull_margin_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
+
     render_quality_slider_ = std::make_unique<DiscreteSliderWidget>("Render Quality (%)", std::vector<int>{100, 75, 50, 25, 10}, defaults.render_quality_percent);
     render_quality_slider_->set_tooltip("Trade fidelity for speed; lowers the number of sprites drawn each frame.");
     render_quality_slider_->set_on_value_changed([this](int) { on_control_value_changed(); });
+std::unique_ptr<FloatSliderWidget> cull_margin_slider_;
+    if (cull_margin_slider_) cull_margin_slider_->set_value(last_settings_.extra_cull_margin);
 
     ZoomKeyPointWidget::Values zoom_in_defaults;
     zoom_in_defaults.zoom = defaults.zoom_low;

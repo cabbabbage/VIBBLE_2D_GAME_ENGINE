@@ -994,7 +994,40 @@ void Assets::update(const Input& input)
     // Update the world grid using the current camera view before
     // filling the visible candidate buffer so chunk queries are fresh,
     // and parallax conversions are accurate for renderers/editors.
-    world_grid_.update_active_chunks(screen_world_rect(), 0);
+    // Aggressively expand the grid region: extend by 2x screen size in all directions
+    constexpr int kGridCullingMarginPx = 100;
+    SDL_Rect screen_rect{0, 0, screen_width, screen_height};
+    SDL_Point screen_corners[4] = {
+        {screen_rect.x, screen_rect.y},
+        {screen_rect.x + screen_rect.w, screen_rect.y},
+        {screen_rect.x, screen_rect.y + screen_rect.h},
+        {screen_rect.x + screen_rect.w, screen_rect.y + screen_rect.h}
+    };
+    float min_world_x = std::numeric_limits<float>::max();
+    float max_world_x = std::numeric_limits<float>::lowest();
+    float min_world_y = std::numeric_limits<float>::max();
+    float max_world_y = std::numeric_limits<float>::lowest();
+    for (int i = 0; i < 4; ++i) {
+        SDL_FPoint world = camera_.screen_to_map(screen_corners[i]);
+        min_world_x = std::min(min_world_x, world.x);
+        max_world_x = std::max(max_world_x, world.x);
+        min_world_y = std::min(min_world_y, world.y);
+        max_world_y = std::max(max_world_y, world.y);
+    }
+    // Expand aggressively: add 2x screen width/height in all directions
+    const float expand_x = static_cast<float>(screen_width) * 2.0f;
+    const float expand_y = static_cast<float>(screen_height) * 2.0f;
+    min_world_x -= expand_x;
+    max_world_x += expand_x;
+    min_world_y -= expand_y;
+    max_world_y += expand_y;
+    SDL_Rect expanded_world_rect{
+        static_cast<int>(std::floor(min_world_x)),
+        static_cast<int>(std::floor(min_world_y)),
+        static_cast<int>(std::ceil(max_world_x - min_world_x)),
+        static_cast<int>(std::ceil(max_world_y - min_world_y))
+    };
+    world_grid_.update_active_chunks(expanded_world_rect, kGridCullingMarginPx);
     world_grid_.update_parallax(camera_, last_frame_dt_seconds_);
 
     auto& new_active_assets = visible_candidate_buffer_;
@@ -1072,6 +1105,7 @@ void Assets::update(const Input& input)
         push_active_asset(asset);
     };
 
+    // Now, only consider assets that are in the grid after warping, which covers the full screen plus margin
     const auto& chunks = world_grid_.active_chunks();
     if (chunks.empty()) {
         for (Asset* asset : all) {

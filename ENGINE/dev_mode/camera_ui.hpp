@@ -78,6 +78,7 @@ private:
     std::unique_ptr<ZoomKeyPointWidget> zoom_in_keypoint_;
     std::unique_ptr<ZoomKeyPointWidget> zoom_out_keypoint_;
     std::unique_ptr<FloatSliderWidget> min_render_size_slider_;
+    std::unique_ptr<FloatSliderWidget> cull_margin_slider_;
 
     std::unique_ptr<FloatSliderWidget> foreground_texture_opacity_slider_;
     std::unique_ptr<FloatSliderWidget> background_texture_opacity_slider_;

@@ -76,6 +76,9 @@ public:
         float background_plane_screen_y       = 0.0f;
         BlurFalloffMethod texture_opacity_falloff_method = BlurFalloffMethod::Linear;
 
+        // Extra margin for culling below screen (for warping)
+        float extra_cull_margin = 300.0f;
+
         // Grid depth parameters
         // Distance (in screen px) to place the depth offset below the bottom of the screen.
         float grid_depth_offset_px           = 240.0f;
