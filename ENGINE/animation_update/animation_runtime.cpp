@@ -357,6 +357,7 @@ void AnimationRuntime::ensure_child_slots(Animation& anim) {
 
     AssetLibrary* library = assets_owner_ ? &assets_owner_->library() : nullptr;
 
+    bool any_slot_changed = false;
     for (std::size_t i = 0; i < requested.size(); ++i) {
         auto& slot = slots[i];
         const AnimationFrame* previous_frame = slot.current_frame;
@@ -380,6 +381,7 @@ void AnimationRuntime::ensure_child_slots(Animation& anim) {
             slot.was_visible = false;
             slot.last_parent_frame_index = -1;
             slot.visible = false;
+            any_slot_changed = true;
             std::cout << "[AnimationRuntime] Initializing child slot " << i << ": name='" << slot.asset_name << "'\n";
         }
         if (!slot.info && library && !slot.asset_name.empty()) {
@@ -419,6 +421,21 @@ void AnimationRuntime::ensure_child_slots(Animation& anim) {
         }
         if (slot.current_frame != previous_frame) {
             animation_update::child_attachments::update_dimensions(slot);
+        }
+    }
+
+    // Force update child visibility if any slot changed
+    if (any_slot_changed && self_) {
+        std::cout << "[AnimationRuntime] Forcing child frame data update after slot changes\n";
+        animation_update::child_attachments::ParentState parent_state;
+        parent_state.position = self_->pos;
+        parent_state.flipped = self_->flipped;
+        parent_state.animation_id = self_->current_animation;
+        animation_update::child_attachments::apply_frame_data(self_->animation_children_, parent_state, self_->current_frame);
+        // Debug: print child slot visibility
+        for (std::size_t i = 0; i < self_->animation_children_.size(); ++i) {
+            const auto& slot = self_->animation_children_[i];
+            std::cout << "[AnimationRuntime] Child slot " << i << " ('" << slot.asset_name << "') visible=" << slot.visible << ", index=" << slot.child_index << "\n";
         }
     }
 

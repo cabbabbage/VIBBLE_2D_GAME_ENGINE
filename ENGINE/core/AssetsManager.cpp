@@ -994,38 +994,38 @@ void Assets::update(const Input& input)
     // Update the world grid using the current camera view before
     // filling the visible candidate buffer so chunk queries are fresh,
     // and parallax conversions are accurate for renderers/editors.
-    // Aggressively expand the grid region: extend by 2x screen size in all directions
+    // Compute the world Y range so that, after warping, the grid covers from the horizon to the bottom of the screen
     constexpr int kGridCullingMarginPx = 100;
-    SDL_Rect screen_rect{0, 0, screen_width, screen_height};
-    SDL_Point screen_corners[4] = {
-        {screen_rect.x, screen_rect.y},
-        {screen_rect.x + screen_rect.w, screen_rect.y},
-        {screen_rect.x, screen_rect.y + screen_rect.h},
-        {screen_rect.x + screen_rect.w, screen_rect.y + screen_rect.h}
+    // Get the horizon and bottom in screen space
+    double horizon_y = camera_.horizon_screen_y_for_scale();
+    double bottom_y = static_cast<double>(screen_height);
+    // Find world_y such that warp_floor_screen_y(world_y) == horizon_y and == bottom_y
+    // We'll use a simple search (binary search) for these values
+    auto find_world_y_for_screen_y = [&](double target_screen_y, double initial_guess, double step, int max_iter = 32) -> float {
+        float world_y = static_cast<float>(initial_guess);
+        for (int i = 0; i < max_iter; ++i) {
+            float warped = camera_.warp_floor_screen_y(world_y, camera_.map_to_screen_f(SDL_FPoint{0, world_y}).y);
+            float diff = warped - static_cast<float>(target_screen_y);
+            if (std::fabs(diff) < 0.5f) break;
+            world_y -= diff * step;
+        }
+        return world_y;
     };
-    float min_world_x = std::numeric_limits<float>::max();
-    float max_world_x = std::numeric_limits<float>::lowest();
-    float min_world_y = std::numeric_limits<float>::max();
-    float max_world_y = std::numeric_limits<float>::lowest();
-    for (int i = 0; i < 4; ++i) {
-        SDL_FPoint world = camera_.screen_to_map(screen_corners[i]);
-        min_world_x = std::min(min_world_x, world.x);
-        max_world_x = std::max(max_world_x, world.x);
-        min_world_y = std::min(min_world_y, world.y);
-        max_world_y = std::max(max_world_y, world.y);
-    }
-    // Expand aggressively: add 2x screen width/height in all directions
-    const float expand_x = static_cast<float>(screen_width) * 2.0f;
-    const float expand_y = static_cast<float>(screen_height) * 2.0f;
-    min_world_x -= expand_x;
-    max_world_x += expand_x;
-    min_world_y -= expand_y;
-    max_world_y += expand_y;
+    // Guess a reasonable world_y range (using camera area bounds)
+    auto [minx, miny, maxx, maxy] = camera_.get_camera_area().get_bounds();
+    float world_y_horizon = find_world_y_for_screen_y(horizon_y, static_cast<double>(miny), 0.2);
+    float world_y_bottom  = find_world_y_for_screen_y(bottom_y, static_cast<double>(maxy), 0.2);
+    // Expand a bit for safety
+    world_y_horizon -= 64.0f;
+    world_y_bottom  += 128.0f;
+    // Use the full X range of the camera area, expanded for margin
+    float min_world_x = static_cast<float>(minx) - 256.0f;
+    float max_world_x = static_cast<float>(maxx) + 256.0f;
     SDL_Rect expanded_world_rect{
         static_cast<int>(std::floor(min_world_x)),
-        static_cast<int>(std::floor(min_world_y)),
+        static_cast<int>(std::floor(world_y_horizon)),
         static_cast<int>(std::ceil(max_world_x - min_world_x)),
-        static_cast<int>(std::ceil(max_world_y - min_world_y))
+        static_cast<int>(std::ceil(world_y_bottom - world_y_horizon))
     };
     world_grid_.update_active_chunks(expanded_world_rect, kGridCullingMarginPx);
     world_grid_.update_parallax(camera_, last_frame_dt_seconds_);
