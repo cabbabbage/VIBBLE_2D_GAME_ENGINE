@@ -1712,7 +1712,12 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             const float mid_world_x = (min_world_x + max_world_x) * 0.5f;
 
             // Vertical lines (sample along Y then warp through the camera + parallax)
+            // Also compute the screen X where a vertical grid line crosses the horizon
+            // so we can draw a distinct orange vertical marker there.
             float start_x = std::floor(min_world_x / cell) * cell;
+            bool have_horizon_x = false;
+            float best_horizon_x = 0.0f;
+            const float screen_center_x = static_cast<float>(screen_w_) * 0.5f;
             for (float x = start_x; x <= max_world_x + cell; x += cell) {
                 std::vector<SDL_Point> polyline;
                 polyline.reserve(static_cast<std::size_t>(samples_per_line + 1));
@@ -1735,6 +1740,41 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                     SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
                     SDL_RenderDrawLines(renderer, polyline.data(), static_cast<int>(polyline.size()));
                 }
+
+                // If we have a horizon Y, check if this polyline crosses it and record
+                // the intersection X that is closest to the screen center.
+                if (depth_params.enabled && horizon_screen_y) {
+                    const float hy = *horizon_screen_y;
+                    // scan segments for crossing
+                    for (size_t i = 1; i < polyline.size(); ++i) {
+                        const float y0 = static_cast<float>(polyline[i-1].y);
+                        const float y1 = static_cast<float>(polyline[i].y);
+                        if ((y0 <= hy && hy <= y1) || (y1 <= hy && hy <= y0)) {
+                            const float x0 = static_cast<float>(polyline[i-1].x);
+                            const float x1 = static_cast<float>(polyline[i].x);
+                            if (std::fabs(y1 - y0) > 1e-6f) {
+                                const float t = (hy - y0) / (y1 - y0);
+                                const float ix = x0 + t * (x1 - x0);
+                                const float dist = std::fabs(ix - screen_center_x);
+                                if (!have_horizon_x || dist < std::fabs(best_horizon_x - screen_center_x)) {
+                                    have_horizon_x = true;
+                                    best_horizon_x = ix;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Draw the orange vertical horizon marker (closest intersection to center)
+            if (have_horizon_x) {
+                const int xi = static_cast<int>(std::lround(best_horizon_x));
+                SDL_BlendMode prev_mode2 = SDL_BLENDMODE_NONE;
+                SDL_GetRenderDrawBlendMode(renderer, &prev_mode2);
+                SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(renderer, 255, 140, 0, 220);
+                SDL_RenderDrawLine(renderer, xi, 0, xi, screen_h_);
+                SDL_SetRenderDrawBlendMode(renderer, prev_mode2);
             }
 
             // Horizontal lines (sample along X; stop when screen spacing collapses near the horizon).

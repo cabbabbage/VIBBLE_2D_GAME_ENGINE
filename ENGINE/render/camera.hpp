@@ -238,6 +238,12 @@ private:
         float value_for_render() const { return current; }
     };
 
+public:
+    CameraGeometry compute_geometry() const;
+    FloorDepthParams compute_floor_depth_params_for_geometry(const CameraGeometry& geom, double scale_value) const;
+    FloorDepthParams compute_floor_depth_params_for_scale(double scale_value) const;
+    void update_geometry_cache(const CameraGeometry& g);
+
     int    screen_width_  = 0;
     int    screen_height_ = 0;
     double aspect_        = 1.0;
@@ -289,9 +295,4 @@ private:
 
     Room*  starting_room_ = nullptr;
     double starting_area_ = 1.0;
-
-    CameraGeometry compute_geometry() const;
-    FloorDepthParams compute_floor_depth_params_for_geometry(const CameraGeometry& geom, double scale_value) const;
-    FloorDepthParams compute_floor_depth_params_for_scale(double scale_value) const;
-    void update_geometry_cache(const CameraGeometry& g);
 };

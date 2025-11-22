@@ -18,6 +18,7 @@
 #include "get_best_path.hpp"
 #include "utils/area.hpp"
 #include "util/grid.hpp"
+#include <iostream>
 #include "animation_update.hpp" // planner interface
 #include "animation_update/child_attachment_controller.hpp"
 

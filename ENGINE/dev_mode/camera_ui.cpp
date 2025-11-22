@@ -1526,6 +1526,8 @@ void CameraUIPanel::apply_settings_to_camera(const camera::RealismSettings& sett
     cam.set_realism_settings(effective);
     cam.set_realism_enabled(effects_enabled);
     cam.set_parallax_enabled(effects_enabled);
+    // Force camera to update geometry immediately so pitch/foreshorten changes apply
+    cam.update_geometry_cache(cam.compute_geometry());
 
     // Keep runtime zoom inside the newly defined bounds with a small safety margin.
     const float kZoomGuard = 0.01f;
