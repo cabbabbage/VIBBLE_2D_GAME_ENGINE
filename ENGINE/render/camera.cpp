@@ -21,6 +21,16 @@ T lerp(T a, T b, double t) {
     return static_cast<T>(a + (b - a) * t);
 }
 
+    template <typename T>
+    T sanitize_finite(T value, T fallback) {
+        return std::isfinite(value) ? value : fallback;
+    }
+
+    double clamp_finite_double(double v, double lo, double hi) {
+        if (!std::isfinite(v)) return lo;
+        return std::clamp(v, lo, hi);
+    }
+
 namespace {
     constexpr float  kMinTau    = 1e-4f;
     constexpr double SCALE_EPS  = 1e-4;
@@ -178,32 +188,28 @@ namespace {
     }
 
     double camera_height_from_scale(double scale_value, const camera::RealismSettings& settings) {
-        const double safe_scale = std::max(0.0001, scale_value);
         const double low_zoom  = std::max(static_cast<double>(camera::kMinZoomAnchors),
                                           static_cast<double>(settings.zoom_low));
-        const double high_zoom = std::max(low_zoom + 0.001, static_cast<double>(settings.zoom_high)); // Min separation
-        const double denom = std::max(0.001, high_zoom - low_zoom);
-        const double t_raw = (safe_scale - low_zoom) / denom;
+        const double high_zoom = std::max(low_zoom + 1e-4, static_cast<double>(settings.zoom_high));
+        const double t_raw = (scale_value - low_zoom) / std::max(1e-4, high_zoom - low_zoom);
         const double t = std::clamp(t_raw, 0.0, 1.0);
 
         const double base_height_low = std::isfinite(settings.base_height_at_zoom_low)
-            ? std::max(0.1, static_cast<double>(settings.base_height_at_zoom_low))
+            ? std::max(0.0, static_cast<double>(settings.base_height_at_zoom_low))
             : std::max(1.0, static_cast<double>(settings.base_height_px));
         const double base_height_high = std::isfinite(settings.base_height_at_zoom_high)
-            ? std::max(0.1, static_cast<double>(settings.base_height_at_zoom_high))
+            ? std::max(0.0, static_cast<double>(settings.base_height_at_zoom_high))
             : std::max(1.0, static_cast<double>(settings.base_height_px));
         const double base_height = lerp(base_height_low, base_height_high, t);
 
-        return std::max(0.01, std::isfinite(base_height * safe_scale) ? base_height * safe_scale : 0.01);
+        return std::max(0.0, base_height * scale_value);
     }
 
     double pitch_from_scale(double scale_value, const camera::RealismSettings& settings) {
-        const double safe_scale = std::max(0.0001, scale_value);
         const double low_zoom  = std::max(static_cast<double>(camera::kMinZoomAnchors),
                                           static_cast<double>(settings.zoom_low));
-        const double high_zoom = std::max(low_zoom + 0.001, static_cast<double>(settings.zoom_high)); // Min separation
-        const double denom = std::max(0.001, high_zoom - low_zoom);
-        const double t_raw = (safe_scale - low_zoom) / denom;
+        const double high_zoom = std::max(low_zoom + 1e-4, static_cast<double>(settings.zoom_high));
+        const double t_raw = (scale_value - low_zoom) / std::max(1e-4, high_zoom - low_zoom);
         const double t     = std::clamp(t_raw, 0.0, 1.0);
 
         bool clamped_in  = false;
@@ -300,8 +306,9 @@ void camera::TransformSmoother1D::set_params(const TransformSmoothingParams& p) 
 }
 
 void camera::TransformSmoother1D::reset(float value) {
-    current  = value;
-    target   = value;
+    const float safe = std::isfinite(value) ? value : 0.0f;
+    current  = safe;
+    target   = safe;
     velocity = 0.0f;
 }
 
@@ -613,9 +620,22 @@ void camera::update(float dt) {
     center_smoothing_y_.advance(dt);
     zoom_smoothing_.advance(dt);
 
-    smoothed_center_.x = center_smoothing_x_.value_for_render();
-    smoothed_center_.y = center_smoothing_y_.value_for_render();
-    smoothed_scale_    = std::max(0.0001f, zoom_smoothing_.value_for_render());
+    // Grab smoothed values and sanitize them to avoid NaN/inf propagation
+    const float raw_sx = center_smoothing_x_.value_for_render();
+    const float raw_sy = center_smoothing_y_.value_for_render();
+    const float raw_ss = zoom_smoothing_.value_for_render();
+
+    // If smoothing produced non-finite values, fall back to the last known good center/scale
+    const float safe_sx = std::isfinite(raw_sx) ? raw_sx : static_cast<float>(screen_center_.x);
+    const float safe_sy = std::isfinite(raw_sy) ? raw_sy : static_cast<float>(screen_center_.y);
+    const float safe_ss = std::isfinite(raw_ss) ? raw_ss : std::max(0.0001f, scale_);
+
+    // Clamp scale to valid zoom anchors range
+    const float clamped_ss = static_cast<float>(std::clamp(static_cast<double>(safe_ss), 0.0001, static_cast<double>(camera::kMaxZoomAnchors)));
+
+    smoothed_center_.x = std::clamp(safe_sx, -1e8f, 1e8f);
+    smoothed_center_.y = std::clamp(safe_sy, -1e8f, 1e8f);
+    smoothed_scale_    = clamped_ss;
 
     recompute_current_view();
 }
@@ -901,7 +921,11 @@ SDL_FPoint camera::map_to_screen_f(SDL_FPoint world) const {
             : 1e6;
     const double sx = (static_cast<double>(world.x) - static_cast<double>(left)) * inv_scale;
     const double sy = (static_cast<double>(world.y) - static_cast<double>(top)) * inv_scale;
-    return SDL_FPoint{ static_cast<float>(sx), static_cast<float>(sy) };
+    const double safe_sx = std::isfinite(sx) ? sx : static_cast<double>(left);
+    const double safe_sy = std::isfinite(sy) ? sy : static_cast<double>(top);
+    const float out_x = static_cast<float>(std::clamp(safe_sx, -1e8, 1e8));
+    const float out_y = static_cast<float>(std::clamp(safe_sy, -1e8, 1e8));
+    return SDL_FPoint{ out_x, out_y };
 }
 
 SDL_FPoint camera::map_to_screen(SDL_Point world) const {
@@ -915,7 +939,11 @@ SDL_FPoint camera::screen_to_map(SDL_Point screen) const {
     const double s = static_cast<double>(std::max(0.000001f, smoothed_scale_));
     double wx = static_cast<double>(left) + static_cast<double>(screen.x) * s;
     double wy = static_cast<double>(top)  + static_cast<double>(screen.y) * s;
-    return SDL_FPoint{ static_cast<float>(wx), static_cast<float>(wy) };
+    const double safe_wx = std::isfinite(wx) ? wx : static_cast<double>(left);
+    const double safe_wy = std::isfinite(wy) ? wy : static_cast<double>(top);
+    const float out_wx = static_cast<float>(std::clamp(safe_wx, -1e8, 1e8));
+    const float out_wy = static_cast<float>(std::clamp(safe_wy, -1e8, 1e8));
+    return SDL_FPoint{ out_wx, out_wy };
 }
 
 camera::RenderEffects camera::compute_render_effects(
@@ -1017,18 +1045,15 @@ camera::RenderEffects camera::compute_render_effects(
             squash_base *= (0.6 + 0.4 * depth_norm);
             squash_base *= (1.0 - 0.5 * tilt_up);
 
-            const double height_factor_raw = static_cast<double>(asset_screen_height) / ref_h;
-            const double height_factor = (std::isfinite(height_factor_raw) && height_factor_raw >= 0.0)
-                ? std::sqrt(height_factor_raw)
-                : 1.0;
+            const double height_factor = std::sqrt(
+                static_cast<double>(asset_screen_height) / ref_h
+            );
             const double squash_height = squash_base * height_factor;
 
             const double squash = SQUASH_BASE_WT * squash_base +
                                   SQUASH_HEIGHT_WT * squash_height;
 
-            const double new_vertical_scale = std::isfinite(squash)
-                ? std::clamp(1.0 - squash, 0.1, 1.0)
-                : 1.0;
+            const double new_vertical_scale = std::clamp(1.0 - squash, 0.1, 1.0);
             result.vertical_scale = static_cast<float>(new_vertical_scale);
         }
     }
@@ -1049,13 +1074,11 @@ camera::RenderEffects camera::compute_render_effects(
             // Effective depth that grows slightly faster than linear with distance.
             const double r_weighted = depth_abs * depth_weight + EPS;
 
-            const double scale_numer   = camera_height + R_REF;
-            const double scale_denom   = camera_height + r_weighted + EPS;
-            const double safe_numer    = std::isfinite(scale_numer) ? scale_numer : R_REF;
-            const double safe_denom    = std::isfinite(scale_denom) && scale_denom > EPS ? scale_denom : EPS;
-            const double ratio         = safe_numer / safe_denom;
-            const double sqrt_ratio    = (ratio >= 0.0) ? std::sqrt(ratio) : 1.0;
-            const double base_scale    = std::isfinite(sqrt_ratio) ? sqrt_ratio : 1.0;
+            const double base_scale =
+                std::sqrt(
+                    (camera_height + R_REF) /
+                    (camera_height + r_weighted + EPS)
+                );
 
             double distance_scale = 1.0 + (base_scale - 1.0) * distance_strength;
 
@@ -1063,22 +1086,19 @@ camera::RenderEffects camera::compute_render_effects(
             double horizon_y = horizon_screen_y_for_scale();
             double depth_screen = 0.0;
             if (screen_height_ > 0.0) {
-                const float screen_y = std::isfinite(result.screen_position.y) ? result.screen_position.y : 0.0f;
-                const float safe_horizon = std::isfinite(horizon_y) ? horizon_y : screen_height_ * 0.5;
-                const float safe_extent = std::max(1.0f, screen_height_ - safe_horizon);
-                depth_screen = std::clamp((screen_y - safe_horizon) / safe_extent, 0.0f, 1.0f);
+                depth_screen = std::clamp(
+                    (result.screen_position.y - static_cast<float>(horizon_y)) /
+                    std::max(1.0f, static_cast<float>(screen_height_) - static_cast<float>(horizon_y)),
+                    0.0f, 1.0f);
             }
             const double far_boost = 1.0 + tilt_up * (1.0 - depth_screen);
             distance_scale = 1.0 + (distance_scale - 1.0) * far_boost;
 
-            const double squash_factor = std::isfinite(result.vertical_scale) ? 
-                std::clamp(static_cast<double>(result.vertical_scale), 0.1, 2.0) : 1.0;
-            const double pow_factor = std::pow(squash_factor, DIST_EXPONENT);
-            const double safe_pow = std::isfinite(pow_factor) ? pow_factor : 1.0;
-            
-            distance_scale = 1.0 + (distance_scale - 1.0) * safe_pow;
-            distance_scale = std::isfinite(distance_scale) ? 
-                std::clamp(distance_scale, DIST_MIN, DIST_MAX) : 1.0;
+            const double squash_factor = static_cast<double>(result.vertical_scale);
+            distance_scale = 1.0 + (distance_scale - 1.0) *
+                             std::pow(squash_factor, DIST_EXPONENT);
+
+            distance_scale = std::clamp(distance_scale, DIST_MIN, DIST_MAX);
             result.distance_scale = static_cast<float>(distance_scale);
         }
     }
@@ -1530,9 +1550,8 @@ double camera::anchor_world_y() const {
 double camera::zoom_lerp_t_for_scale(double scale_value) const {
     const double low_zoom  = std::max(static_cast<double>(camera::kMinZoomAnchors),
                                       static_cast<double>(settings_.zoom_low));
-    const double high_zoom = std::max(low_zoom + 0.001, static_cast<double>(settings_.zoom_high)); // Min separation
-    const double denom     = std::max(0.001, high_zoom - low_zoom);
-    const double t_raw     = (scale_value - low_zoom) / denom;
+    const double high_zoom = std::max(low_zoom + 1e-4, static_cast<double>(settings_.zoom_high));
+    const double t_raw     = (scale_value - low_zoom) / std::max(1e-4, high_zoom - low_zoom);
     return std::clamp(t_raw, 0.0, 1.0);
 }
 
