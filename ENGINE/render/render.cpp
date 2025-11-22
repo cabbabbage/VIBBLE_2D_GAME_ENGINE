@@ -1514,7 +1514,7 @@ void SceneRenderer::render(){
         }
 
         if (camera_state) {
-            render_sky_layer(*camera_state);
+            render_sky_layer(*camera_state, depthcue_setting_enabled);
         }
 
         const int fg_max_opacity = std::clamp(cam_settings.foreground_texture_max_opacity, 0, 255);
@@ -1667,10 +1667,12 @@ void SceneRenderer::render(){
                 }
 
                 if (!slot.visible || !frame_ptr) {
+                    std::cout << "[Render] Skipping child '" << slot.asset_name << "' (visible=" << slot.visible << ", frame_ptr=" << (frame_ptr ? "yes" : "no") << ")\n";
                     continue;
                 }
                 SDL_Texture* child_tex = frame_ptr->get_base_texture();
                 if (!child_tex) {
+                    std::cout << "[Render] No texture for child '" << slot.asset_name << "'\n";
                     continue;
                 }
 
@@ -1684,6 +1686,7 @@ void SceneRenderer::render(){
                     }
                 }
                 if (child_fw <= 0 || child_fh <= 0) {
+                    std::cout << "[Render] Invalid child texture size for '" << slot.asset_name << "'\n";
                     continue;
                 }
 
@@ -1696,6 +1699,7 @@ void SceneRenderer::render(){
                                                                min_h,
                                                                player_sh);
                 if (child_rect.w <= 0.0f || child_rect.h <= 0.0f) {
+                    std::cout << "[Render] Child rect not drawable for '" << slot.asset_name << "'\n";
                     continue;
                 }
                 if (!intersects_padded(child_rect, screen_rect_f)) {
@@ -1975,6 +1979,11 @@ void SceneRenderer::render(){
                                 cmd.depthcue_foreground_alpha = static_cast<Uint8>(std::clamp(alpha_value, 0, 255));
                                 if (cmd.depthcue_foreground_alpha > 0) {
                                     cmd.depthcue_foreground_texture = fg_overlay;
+                                    try {
+                                        vibble::log::debug(std::string{"[SceneRenderer] Assigned FG depthcue tex ptr="} +
+                                                           std::to_string(reinterpret_cast<std::uintptr_t>(fg_overlay)) +
+                                                           " alpha=" + std::to_string(static_cast<int>(cmd.depthcue_foreground_alpha)));
+                                    } catch (...) {}
                                 }
                             } else if (depth_sample.plane == DepthCuePlane::Background && bg_overlay && bg_max_opacity > 0) {
                                 const float normalized = compute_depthcue_opacity(
@@ -1985,6 +1994,11 @@ void SceneRenderer::render(){
                                 cmd.depthcue_background_alpha = static_cast<Uint8>(std::clamp(alpha_value, 0, 255));
                                 if (cmd.depthcue_background_alpha > 0) {
                                     cmd.depthcue_background_texture = bg_overlay;
+                                    try {
+                                        vibble::log::debug(std::string{"[SceneRenderer] Assigned BG depthcue tex ptr="} +
+                                                           std::to_string(reinterpret_cast<std::uintptr_t>(bg_overlay)) +
+                                                           " alpha=" + std::to_string(static_cast<int>(cmd.depthcue_background_alpha)));
+                                    } catch (...) {}
                                 }
                             }
                         }
@@ -2411,6 +2425,16 @@ void SceneRenderer::render(){
                 if (!overlay_tex || overlay_alpha == 0) {
                     return;
                 }
+                // Defensive: ensure texture is still valid (may have been destroyed elsewhere).
+                int tex_w = 0, tex_h = 0; Uint32 fmt = 0; int access = 0;
+                if (SDL_QueryTexture(overlay_tex, &fmt, &access, &tex_w, &tex_h) != 0) {
+                    // Texture invalid or destroyed; skip drawing to avoid crash.
+                    try {
+                        vibble::log::debug(std::string{"[SceneRenderer] Skipping invalid depthcue tex ptr="} +
+                                           std::to_string(reinterpret_cast<std::uintptr_t>(overlay_tex)));
+                    } catch (...) {}
+                    return;
+                }
                 // Match the sprite's overall alpha so overlays fade alongside the base.
                 const Uint8 combined_alpha =
                     static_cast<Uint8>((static_cast<int>(overlay_alpha) * base_alpha_mod) / 255);
@@ -2601,7 +2625,10 @@ void SceneRenderer::destroy_sky_texture() {
     sky_texture_height_ = 0;
 }
 
-void SceneRenderer::render_sky_layer(const camera& cam) {
+void SceneRenderer::render_sky_layer(const camera& cam, bool depth_effects_enabled) {
+    if (!depth_effects_enabled) {
+        return;
+    }
     if (!renderer_ || screen_width_ <= 0 || screen_height_ <= 0) {
         return;
     }

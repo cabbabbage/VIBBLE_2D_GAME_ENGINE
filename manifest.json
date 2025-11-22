@@ -2024,18 +2024,18 @@
       "camera_settings": {
         "background_plane_screen_y": 198.0,
         "background_texture_max_opacity": 0,
-        "base_height_px": 1295.0,
+        "base_height_px": 2745.0,
         "depth_offset_at_zoom_high": -1830.0,
-        "depth_offset_at_zoom_low": -485.0,
+        "depth_offset_at_zoom_low": -680.0,
         "distance_scale_at_zoom_high": 0.12999999523162842,
         "distance_scale_at_zoom_low": 0.20999999344348907,
         "distance_scale_strength": 0.16999998688697815,
         "foreground_plane_screen_y": 902.0,
         "foreground_texture_max_opacity": 0,
         "foreshorten_at_zoom_high": 0.28999999165534973,
-        "foreshorten_at_zoom_low": 0.32999998331069946,
-        "foreshorten_strength": 0.3100000023841858,
-        "grid_depth_offset_px": -1157.5,
+        "foreshorten_at_zoom_low": 0.5699999928474426,
+        "foreshorten_strength": 0.4300000071525574,
+        "grid_depth_offset_px": -1255.0,
         "min_visible_screen_ratio": 0.006000000052154064,
         "motion_smoothing_max_step": 300.0,
         "motion_smoothing_method": 1,
@@ -2355,9 +2355,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            242,
-            241,
+            37,
             36,
+            242,
             255
           ],
           "edge_smoothness": 43,
@@ -2408,9 +2408,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            31,
-            204,
-            31,
+            85,
+            242,
+            241,
             255
           ],
           "edge_smoothness": 101,

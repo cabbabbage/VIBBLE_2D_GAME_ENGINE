@@ -59,6 +59,7 @@
 #include <SDL_log.h>
 
 #include <nlohmann/json.hpp>
+#include "utils/log.hpp"
 
 using devmode::spawn::ensure_spawn_groups_array;
 using devmode::spawn::find_spawn_groups_array;
@@ -242,11 +243,8 @@ std::optional<double> ray_segment_distance(SDL_Point origin,
 
 void room_editor_trace(const std::string& message) {
     try {
-        std::ofstream log("dev_mode_trace.log", std::ios::app);
-        log << message << '\n';
-    } catch (...) {
-
-    }
+        vibble::log::debug(std::string{"[RoomEditor] "} + message);
+    } catch (...) {}
 }
 
 }

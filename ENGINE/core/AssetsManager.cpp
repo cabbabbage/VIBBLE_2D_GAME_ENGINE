@@ -46,8 +46,7 @@ namespace {
 
 void dev_mode_trace(const std::string& message) {
     try {
-        std::ofstream log("dev_mode_trace.log", std::ios::app);
-        log << message << '\n';
+        vibble::log::debug(std::string{"[DevMode] "} + message);
     } catch (...) {
 
     }
@@ -751,6 +750,12 @@ void Assets::ensure_dev_controls() {
         return;
     }
 
+    // Suppress returning a renderer during creation/wiring so dev-mode UI
+    // components cannot accidentally call into animation/texture loading while
+    // we are still wiring up DevControls. This prevents unexpected rebuilds
+    // when toggling dev mode on.
+    suppress_dev_renderer_ = true;
+
     const char* msg_create = "[Assets] Creating Dev Controls";
     std::cout << msg_create << "\n";
     dev_mode_trace(msg_create);
@@ -772,6 +777,8 @@ void Assets::ensure_dev_controls() {
         const char* msg_fail = "[Assets] Failed to allocate Dev Controls";
         std::cout << msg_fail << "\n";
         dev_mode_trace(msg_fail);
+        // Clear suppression before returning
+        suppress_dev_renderer_ = false;
         return;
     }
 
@@ -799,6 +806,10 @@ void Assets::ensure_dev_controls() {
         dev_controls_->set_map_info(&map_info_json_, [this]() { return on_map_light_changed(); });
         dev_mode_trace("[Assets] Dev Controls -> set_map_context");
         dev_controls_->set_map_context(&map_info_json_, map_path_);
+        // Wiring complete enough; stop suppressing the renderer so any further
+        // deliberate requests for the renderer (e.g., when user interacts)
+        // will work normally. Avoid leaving this suppressed across frames.
+        suppress_dev_renderer_ = false;
         dev_mode_trace("[Assets] Dev Controls wiring complete");
     } catch (const std::exception& ex) {
         std::cout << "[Assets] Failed to wire Dev Controls: " << ex.what() << "\n";
@@ -1900,6 +1911,9 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
 // Legacy chunk tiling implementation removed.
 
 SDL_Renderer* Assets::renderer() const {
+    if (suppress_dev_renderer_) {
+        return nullptr;
+    }
     return scene ? scene->get_renderer() : nullptr;
 }
 

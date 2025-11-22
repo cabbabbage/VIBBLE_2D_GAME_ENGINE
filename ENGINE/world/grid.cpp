@@ -619,7 +619,10 @@ void Grid::update_parallax(const camera& cam, float dt) {
                     std::max(std::abs(depth_with_offset), kParallaxEpsilon),
                     depth_with_offset);
                 const double projected_x_px = (dx_world / safe_depth) * focal_px;
-                parallax_px = (projected_x_px - ortho_x_px) * pitch_norm;
+                // Scale parallax strength based on pitch: stronger when looking down (high pitch_norm)
+                // and weaker when level (low pitch_norm). Range 0.6-1.0 for smooth effect
+                const double pitch_parallax_factor = 0.6 + 0.4 * pitch_norm;
+                parallax_px = (projected_x_px - ortho_x_px) * pitch_norm * pitch_parallax_factor;
             }
 
             if (!std::isfinite(parallax_px)) {

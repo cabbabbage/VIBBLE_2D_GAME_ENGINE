@@ -379,9 +379,15 @@ void AnimationRuntime::ensure_child_slots(Animation& anim) {
             slot.was_visible = false;
             slot.last_parent_frame_index = -1;
             slot.visible = false;
+            std::cout << "[AnimationRuntime] Initializing child slot " << i << ": name='" << slot.asset_name << "'\n";
         }
         if (!slot.info && library && !slot.asset_name.empty()) {
             slot.info = library->get(slot.asset_name);
+            if (!slot.info) {
+                std::cout << "[AnimationRuntime] Failed to find AssetInfo for child '" << slot.asset_name << "'\n";
+            } else {
+                std::cout << "[AnimationRuntime] Loaded AssetInfo for child '" << slot.asset_name << "'\n";
+            }
         }
         if (!slot.animation && slot.info) {
             auto child_anim_it =
@@ -397,13 +403,18 @@ void AnimationRuntime::ensure_child_slots(Animation& anim) {
                 slot.cached_h = 0;
                 slot.was_visible = false;
                 slot.last_parent_frame_index = -1;
+                std::cout << "[AnimationRuntime] Bound animation for child '" << slot.asset_name << "'\n";
+            } else {
+                std::cout << "[AnimationRuntime] No animation found for child '" << slot.asset_name << "'\n";
             }
         }
         if (slot.animation && !slot.current_frame) {
             animation_update::child_attachments::restart(slot);
+            std::cout << "[AnimationRuntime] Restarted animation for child '" << slot.asset_name << "'\n";
         }
         if (!slot.spawned_asset && slot.info && slot.visible) {
             slot.spawned_asset = spawn_child_asset(slot);
+            std::cout << "[AnimationRuntime] Spawned asset for child '" << slot.asset_name << "'\n";
         }
         if (slot.current_frame != previous_frame) {
             animation_update::child_attachments::update_dimensions(slot);

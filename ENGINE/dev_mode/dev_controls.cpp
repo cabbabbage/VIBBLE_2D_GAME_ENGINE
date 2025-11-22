@@ -21,6 +21,7 @@
 #include "dev_mode/font_cache.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
+#include "utils/log.hpp"
 #include "asset/asset_info.hpp"
 #include "dm_styles.hpp"
 #include "draw_utils.hpp"
@@ -79,11 +80,8 @@ using vibble::strings::to_lower_copy;
 
 void dev_mode_trace(const std::string& message) {
     try {
-        std::ofstream log("dev_mode_trace.log", std::ios::app);
-        log << message << '\n';
-    } catch (...) {
-
-    }
+        vibble::log::debug(std::string{"[DevMode] "} + message);
+    } catch (...) {}
 }
 
 constexpr const char* kModeIdRoom = "room";

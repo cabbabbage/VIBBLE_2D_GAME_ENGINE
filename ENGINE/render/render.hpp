@@ -396,7 +396,7 @@ private:
     bool has_dark_mask_overlay_sources();
     bool ensure_sky_texture();
     void destroy_sky_texture();
-    void render_sky_layer(const camera& cam);
+    void render_sky_layer(const camera& cam, bool depth_effects_enabled);
 
 
     SDL_Renderer*  renderer_;
