@@ -44,16 +44,16 @@ public:
         float distance_scale_strength      = 0.0f;
         float min_visible_screen_ratio     = 0.015f;
 
-        // Zoom boundaries; also drive tilt mapping.
+        // Zoom boundaries; also drive pitch mapping.
         float zoom_low                     = 0.75f;
         float zoom_high                    = 3.0f;
 
         // Single baseline height that scales with zoom for perspective depth.
         float base_height_px               = 720.0f;
 
-        // Tilt mapping: zooming in lifts the horizon, zooming out tilts downward.
-        float tilt_zoom_in_degrees         = 345.0f;
-        float tilt_zoom_out_degrees        = 310.0f;
+        // Pitch mapping: zooming in lifts the horizon, zooming out tilts downward.
+        float tilt_zoom_in_degrees        = 345.0f;
+        float tilt_zoom_out_degrees       = 310.0f;
 
         int   render_quality_percent       = 100;
         bool  smooth_motion_zoom           = true;
@@ -87,6 +87,8 @@ public:
         float distance_scale_at_zoom_high = 0.0f;
         float depth_offset_at_zoom_low  = 240.0f;
         float depth_offset_at_zoom_high = 240.0f;
+        float base_height_at_zoom_low  = 720.0f;
+        float base_height_at_zoom_high = 720.0f;
 
         // Image effects for foreground and background
         camera_effects::ImageEffectSettings foreground_effects{};
@@ -287,7 +289,6 @@ public:
     bool pan_override_          = false;
     bool manual_zoom_override_  = false;
     bool focus_override_        = false;
-    bool intro                  = true;
 
     SDL_Point focus_point_{0, 0};
     SDL_Point start_center_{0, 0};

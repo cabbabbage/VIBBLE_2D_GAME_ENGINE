@@ -15,6 +15,12 @@
 #include <string>
 #include <nlohmann/json.hpp>
 
+// Helper function for linear interpolation
+template <typename T>
+T lerp(T a, T b, double t) {
+    return static_cast<T>(a + (b - a) * t);
+}
+
 namespace {
     constexpr float  kMinTau    = 1e-4f;
     constexpr double SCALE_EPS  = 1e-4;
@@ -172,12 +178,20 @@ namespace {
     }
 
     double camera_height_from_scale(double scale_value, const camera::RealismSettings& settings) {
-        const double base_height = std::isfinite(settings.base_height_px)
-            ? std::max(0.0, static_cast<double>(settings.base_height_px))
-            : 0.0;
-        if (base_height <= 0.0) {
-            return 0.0;
-        }
+        const double low_zoom  = std::max(static_cast<double>(camera::kMinZoomAnchors),
+                                          static_cast<double>(settings.zoom_low));
+        const double high_zoom = std::max(low_zoom + 1e-4, static_cast<double>(settings.zoom_high));
+        const double t_raw = (scale_value - low_zoom) / std::max(1e-4, high_zoom - low_zoom);
+        const double t = std::clamp(t_raw, 0.0, 1.0);
+
+        const double base_height_low = std::isfinite(settings.base_height_at_zoom_low)
+            ? std::max(0.0, static_cast<double>(settings.base_height_at_zoom_low))
+            : std::max(1.0, static_cast<double>(settings.base_height_px));
+        const double base_height_high = std::isfinite(settings.base_height_at_zoom_high)
+            ? std::max(0.0, static_cast<double>(settings.base_height_at_zoom_high))
+            : std::max(1.0, static_cast<double>(settings.base_height_px));
+        const double base_height = lerp(base_height_low, base_height_high, t);
+
         return std::max(0.0, base_height * scale_value);
     }
 
@@ -199,16 +213,6 @@ namespace {
         return wrap_degrees_0_360(pitch);
     }
 
-    template <typename T>
-    T lerp(T a, T b, double t) {
-        return static_cast<T>(a + (b - a) * t);
-    }
-
-    float clamp_foreshorten(float raw_value) {
-        const float value = std::isfinite(raw_value) ? std::max(0.0f, raw_value) : 0.0f;
-        return std::clamp(value, 0.0f, kMaxForeshortenSliderStrength);
-    }
-
     float clamp_distance_strength(float raw_value) {
         const float value = std::isfinite(raw_value) ? std::max(0.0f, raw_value) : 0.0f;
         return std::clamp(value, 0.0f, kMaxDistanceSliderStrength);
@@ -219,12 +223,16 @@ namespace {
         return std::clamp(value, -4000.0f, 4000.0f);
     }
 
+    float clamp_foreshorten(float raw_value) {
+        const float value = std::isfinite(raw_value) ? std::max(0.0f, raw_value) : 0.0f;
+        return std::clamp(value, 0.0f, kMaxForeshortenSliderStrength);
+    }
+
     double depth_offset_world_units(double depth_offset_px, double scale_value) {
         const double safe_scale = std::max(0.0001, scale_value);
         return static_cast<double>(depth_offset_px) * safe_scale;
     }
 }
-
 camera::CameraGeometry camera::compute_geometry_for_scale(double scale_value) const {
     CameraGeometry g{};
     if (!realism_enabled_) {
@@ -591,8 +599,6 @@ void camera::update(float dt) {
             steps_done_   = 0;
             start_scale_  = target_scale_;
         }
-    } else {
-        intro = false;
     }
 
     center_smoothing_x_.target = static_cast<float>(screen_center_.x);
@@ -1098,27 +1104,23 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
 
     try_read_float("foreshorten_strength",       settings_.foreshorten_strength);
     try_read_float("distance_scale_strength",    settings_.distance_scale_strength);
-    bool foreshorten_low_seen  = try_read_float("foreshorten_at_zoom_low", settings_.foreshorten_at_zoom_low);
-    bool foreshorten_high_seen = try_read_float("foreshorten_at_zoom_high", settings_.foreshorten_at_zoom_high);
-    bool distance_low_seen     = try_read_float("distance_scale_at_zoom_low", settings_.distance_scale_at_zoom_low);
-    bool distance_high_seen    = try_read_float("distance_scale_at_zoom_high", settings_.distance_scale_at_zoom_high);
+    try_read_float("foreshorten_at_zoom_low", settings_.foreshorten_at_zoom_low);
+    try_read_float("foreshorten_at_zoom_high", settings_.foreshorten_at_zoom_high);
+    try_read_float("distance_scale_at_zoom_low", settings_.distance_scale_at_zoom_low);
+    try_read_float("distance_scale_at_zoom_high", settings_.distance_scale_at_zoom_high);
+    try_read_float("base_height_at_zoom_low", settings_.base_height_at_zoom_low);
+    try_read_float("base_height_at_zoom_high", settings_.base_height_at_zoom_high);
     try_read_float("zoom_low",                    settings_.zoom_low);
     try_read_float("zoom_high",                   settings_.zoom_high);
-    const bool base_height_read = try_read_float("base_height_px",         settings_.base_height_px);
-    float legacy_height_low  = settings_.base_height_px;
-    float legacy_height_high = settings_.base_height_px;
-    const bool legacy_low_seen  = try_read_float("height_low_px",  legacy_height_low);
-    const bool legacy_high_seen = try_read_float("height_high_px", legacy_height_high);
+    try_read_float("base_height_px",             settings_.base_height_px);
     try_read_float("min_visible_screen_ratio",   settings_.min_visible_screen_ratio);
 
-    // Grid depth / pitch controls (strength was deprecated).
-    const bool tilt_in_seen  = try_read_float("tilt_zoom_in_degrees",  settings_.tilt_zoom_in_degrees);
-    const bool tilt_out_seen = try_read_float("tilt_zoom_out_degrees", settings_.tilt_zoom_out_degrees);
-    float legacy_pitch = settings_.tilt_zoom_out_degrees;
-    const bool legacy_pitch_seen    = try_read_float("grid_pitch_degrees", legacy_pitch);
+    // Grid depth / pitch controls.
+    try_read_float("pitch_zoom_in_degrees ",  settings_.tilt_zoom_in_degrees );
+    try_read_float("pitch_zoom_out_degrees", settings_.tilt_zoom_out_degrees);
     try_read_float("grid_depth_offset_px",       settings_.grid_depth_offset_px);
-    bool depth_low_seen  = try_read_float("depth_offset_at_zoom_low", settings_.depth_offset_at_zoom_low);
-    bool depth_high_seen = try_read_float("depth_offset_at_zoom_high", settings_.depth_offset_at_zoom_high);
+    try_read_float("depth_offset_at_zoom_low", settings_.depth_offset_at_zoom_low);
+    try_read_float("depth_offset_at_zoom_high", settings_.depth_offset_at_zoom_high);
 
     auto try_read_int = [&](const char* key, int& target) {
         auto it = data.find(key);
@@ -1227,25 +1229,11 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
             std::clamp(settings_.background_plane_screen_y, 0.0f, 4000.0f);
     }
 
-    settings_.foreshorten_strength = clamp_foreshorten(settings_.foreshorten_strength);
-    if (!foreshorten_low_seen) {
-        settings_.foreshorten_at_zoom_low = settings_.foreshorten_strength;
-    }
-    if (!foreshorten_high_seen) {
-        settings_.foreshorten_at_zoom_high = settings_.foreshorten_strength;
-    }
     settings_.foreshorten_at_zoom_low = clamp_foreshorten(settings_.foreshorten_at_zoom_low);
     settings_.foreshorten_at_zoom_high = clamp_foreshorten(settings_.foreshorten_at_zoom_high);
     settings_.foreshorten_strength =
         0.5f * (settings_.foreshorten_at_zoom_low + settings_.foreshorten_at_zoom_high);
 
-    settings_.distance_scale_strength = clamp_distance_strength(settings_.distance_scale_strength);
-    if (!distance_low_seen) {
-        settings_.distance_scale_at_zoom_low = settings_.distance_scale_strength;
-    }
-    if (!distance_high_seen) {
-        settings_.distance_scale_at_zoom_high = settings_.distance_scale_strength;
-    }
     settings_.distance_scale_at_zoom_low = clamp_distance_strength(settings_.distance_scale_at_zoom_low);
     settings_.distance_scale_at_zoom_high = clamp_distance_strength(settings_.distance_scale_at_zoom_high);
     settings_.distance_scale_strength =
@@ -1259,43 +1247,21 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
         settings_.zoom_high = std::max(settings_.zoom_low + 0.25f, 1.0f);
     }
 
-    if (!base_height_read) {
-        if (legacy_low_seen && legacy_high_seen) {
-            settings_.base_height_px = 0.5f * (legacy_height_low + legacy_height_high);
-        } else if (legacy_low_seen) {
-            settings_.base_height_px = legacy_height_low;
-        } else if (legacy_high_seen) {
-            settings_.base_height_px = legacy_height_high;
-        }
-    }
+
     if (!std::isfinite(settings_.base_height_px) || settings_.base_height_px <= 0.0f) {
         settings_.base_height_px = 720.0f;
     }
 
-    if (legacy_pitch_seen) {
-        if (!tilt_in_seen) {
-            settings_.tilt_zoom_in_degrees = legacy_pitch;
-        }
-        if (!tilt_out_seen) {
-            settings_.tilt_zoom_out_degrees = legacy_pitch;
-        }
-    }
-    if (!std::isfinite(settings_.tilt_zoom_in_degrees)) {
-        settings_.tilt_zoom_in_degrees = 345.0f;
+
+    if (!std::isfinite(settings_.tilt_zoom_in_degrees )) {
+        settings_.tilt_zoom_in_degrees  = 345.0f;
     }
     if (!std::isfinite(settings_.tilt_zoom_out_degrees)) {
         settings_.tilt_zoom_out_degrees = 310.0f;
     }
-    settings_.tilt_zoom_in_degrees  = sanitize_pitch_degrees(settings_.tilt_zoom_in_degrees);
+    settings_.tilt_zoom_in_degrees   = sanitize_pitch_degrees(settings_.tilt_zoom_in_degrees );
     settings_.tilt_zoom_out_degrees = sanitize_pitch_degrees(settings_.tilt_zoom_out_degrees);
 
-    settings_.grid_depth_offset_px = clamp_depth_offset(settings_.grid_depth_offset_px);
-    if (!depth_low_seen) {
-        settings_.depth_offset_at_zoom_low = settings_.grid_depth_offset_px;
-    }
-    if (!depth_high_seen) {
-        settings_.depth_offset_at_zoom_high = settings_.grid_depth_offset_px;
-    }
     settings_.depth_offset_at_zoom_low = clamp_depth_offset(settings_.depth_offset_at_zoom_low);
     settings_.depth_offset_at_zoom_high = clamp_depth_offset(settings_.depth_offset_at_zoom_high);
     settings_.grid_depth_offset_px =
@@ -1375,11 +1341,13 @@ nlohmann::json camera::camera_settings_to_json() const {
     j["distance_scale_at_zoom_high"]     = settings_.distance_scale_at_zoom_high;
     j["depth_offset_at_zoom_low"]        = settings_.depth_offset_at_zoom_low;
     j["depth_offset_at_zoom_high"]       = settings_.depth_offset_at_zoom_high;
+    j["base_height_at_zoom_low"]         = settings_.base_height_at_zoom_low;
+    j["base_height_at_zoom_high"]        = settings_.base_height_at_zoom_high;
     j["zoom_low"]                        = settings_.zoom_low;
     j["zoom_high"]                       = settings_.zoom_high;
     j["base_height_px"]                  = settings_.base_height_px;
-    j["tilt_zoom_in_degrees"]            = settings_.tilt_zoom_in_degrees;
-    j["tilt_zoom_out_degrees"]           = settings_.tilt_zoom_out_degrees;
+    j["pitch_zoom_in_degrees "]            = settings_.tilt_zoom_in_degrees ;
+    j["pitch_zoom_out_degrees"]           = settings_.tilt_zoom_out_degrees;
     j["min_visible_screen_ratio"]        = settings_.min_visible_screen_ratio;
     j["render_quality_percent"]          = settings_.render_quality_percent;
     j["smooth_motion_zoom"]              = settings_.smooth_motion_zoom;

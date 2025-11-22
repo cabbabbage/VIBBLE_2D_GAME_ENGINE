@@ -74,10 +74,7 @@ namespace {
     }
 
     float angle_to_pitch_deg(float angle_deg) {
-        const float rad = wrap_angle_deg(angle_deg) * (kPi / 180.0f);
-        const float downward = std::max(0.0f, -std::sin(rad));
-        const float span = std::abs(camera::kMinPitchDegrees);
-        return -downward * span;
+        return wrap_angle_deg(angle_deg);
     }
 
     float angular_distance_deg(float a, float b) {
@@ -87,19 +84,7 @@ namespace {
     }
 
     float pitch_to_angle_deg(float pitch_deg, float preferred_angle_deg = 0.0f) {
-        const float span = std::abs(camera::kMinPitchDegrees);
-        if (span <= 1e-5f) {
-            return wrap_angle_deg(preferred_angle_deg);
-        }
-        const float clamped = std::clamp(pitch_deg, camera::kMinPitchDegrees, camera::kMaxPitchDegrees);
-        const float ratio = std::clamp(-clamped / span, 0.0f, 1.0f);
-        const float angle_offset = std::asin(std::clamp(ratio, 0.0f, 1.0f)) * (180.0f / kPi);
-        const float candidate_left  = wrap_angle_deg(180.0f + angle_offset);
-        const float candidate_right = wrap_angle_deg(360.0f - angle_offset);
-        const float preferred = wrap_angle_deg(preferred_angle_deg);
-        const float dist_left  = angular_distance_deg(candidate_left, preferred);
-        const float dist_right = angular_distance_deg(candidate_right, preferred);
-        return (dist_left < dist_right) ? candidate_left : candidate_right;
+        return wrap_angle_deg(pitch_deg);
     }
 }
 
@@ -774,6 +759,7 @@ public:
         float depth_offset_px = 0.0f;
         float distance_strength = 0.0f;
         float foreshorten_strength = 0.0f;
+        float base_height = 720.0f;
     };
 
     ZoomKeyPointWidget(std::string label, const Values& values, bool expanded, float zoom_min, float zoom_max)
@@ -826,6 +812,13 @@ public:
             foreshorten_slider_->set_tooltip("Scale bias for tall sprites at this zoom.");
             foreshorten_slider_->set_on_value_changed([this](float) { notify_change(); });
         }
+
+        base_height_slider_ = std::make_unique<FloatSliderWidget>(
+            "Base Height (px)", 80.0f, 4000.0f, 5.0f, values.base_height, 0);
+        if (base_height_slider_) {
+            base_height_slider_->set_tooltip("Reference camera height for parallax depth at this zoom level.");
+            base_height_slider_->set_on_value_changed([this](float) { notify_change(); });
+        }
     }
 
     void set_on_value_changed(std::function<void()> cb) { on_change_ = std::move(cb); }
@@ -839,6 +832,7 @@ public:
         if (depth_offset_slider_) depth_offset_slider_->set_value(values.depth_offset_px);
         if (distance_slider_) distance_slider_->set_value(values.distance_strength);
         if (foreshorten_slider_) foreshorten_slider_->set_value(values.foreshorten_strength);
+        if (base_height_slider_) base_height_slider_->set_value(values.base_height);
         layout_children();
     }
 
@@ -849,6 +843,7 @@ public:
         v.depth_offset_px = depth_offset_slider_ ? depth_offset_slider_->value() : 0.0f;
         v.distance_strength = distance_slider_ ? distance_slider_->value() : 0.0f;
         v.foreshorten_strength = foreshorten_slider_ ? foreshorten_slider_->value() : 0.0f;
+        v.base_height = base_height_slider_ ? base_height_slider_->value() : 720.0f;
         return v;
     }
 
@@ -886,6 +881,7 @@ public:
             add_height(depth_offset_slider_.get());
             add_height(distance_slider_.get());
             add_height(foreshorten_slider_.get());
+            add_height(base_height_slider_.get());
         }
         return height;
     }
@@ -981,6 +977,7 @@ private:
         place_child(depth_offset_slider_.get());
         place_child(distance_slider_.get());
         place_child(foreshorten_slider_.get());
+        place_child(base_height_slider_.get());
     }
 
 private:
@@ -997,6 +994,7 @@ private:
     std::unique_ptr<FloatSliderWidget> depth_offset_slider_;
     std::unique_ptr<FloatSliderWidget> distance_slider_;
     std::unique_ptr<FloatSliderWidget> foreshorten_slider_;
+    std::unique_ptr<FloatSliderWidget> base_height_slider_;
 
     std::function<void()> on_change_{};
     std::function<void(bool)> on_expanded_changed_{};
@@ -1141,7 +1139,6 @@ void CameraUIPanel::sync_from_camera() {
         parallax_smoothing_slider_->set_value(slider_value);
     }
     if (hysteresis_margin_slider_) hysteresis_margin_slider_->set_value(last_settings_.scale_variant_hysteresis_margin);
-    if (base_height_slider_) base_height_slider_->set_value(last_settings_.base_height_px);
     if (zoom_in_keypoint_ || zoom_out_keypoint_) {
         ZoomKeyPointWidget::Values min_values;
         min_values.zoom = last_settings_.zoom_low;
@@ -1149,6 +1146,7 @@ void CameraUIPanel::sync_from_camera() {
         min_values.depth_offset_px = last_settings_.depth_offset_at_zoom_low;
         min_values.distance_strength = last_settings_.distance_scale_at_zoom_low;
         min_values.foreshorten_strength = last_settings_.foreshorten_at_zoom_low;
+        min_values.base_height = last_settings_.base_height_at_zoom_low;
         if (zoom_in_keypoint_) {
             zoom_in_keypoint_->set_values(min_values);
         }
@@ -1159,6 +1157,7 @@ void CameraUIPanel::sync_from_camera() {
         max_values.depth_offset_px = last_settings_.depth_offset_at_zoom_high;
         max_values.distance_strength = last_settings_.distance_scale_at_zoom_high;
         max_values.foreshorten_strength = last_settings_.foreshorten_at_zoom_high;
+        max_values.base_height = last_settings_.base_height_at_zoom_high;
         if (zoom_out_keypoint_) {
             zoom_out_keypoint_->set_values(max_values);
         }
@@ -1236,9 +1235,6 @@ void CameraUIPanel::build_ui() {
     render_quality_slider_ = std::make_unique<DiscreteSliderWidget>("Render Quality (%)", std::vector<int>{100, 75, 50, 25, 10}, defaults.render_quality_percent);
     render_quality_slider_->set_tooltip("Trade fidelity for speed; lowers the number of sprites drawn each frame.");
     render_quality_slider_->set_on_value_changed([this](int) { on_control_value_changed(); });
-    base_height_slider_ = std::make_unique<FloatSliderWidget>("Base Camera Height (px)", 80.0f, 4000.0f, 5.0f, defaults.base_height_px, 0);
-    base_height_slider_->set_tooltip("Reference camera height; scales with zoom to drive depth and parallax.");
-    base_height_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     ZoomKeyPointWidget::Values zoom_in_defaults;
     zoom_in_defaults.zoom = defaults.zoom_low;
@@ -1246,6 +1242,7 @@ void CameraUIPanel::build_ui() {
     zoom_in_defaults.depth_offset_px = defaults.depth_offset_at_zoom_low;
     zoom_in_defaults.distance_strength = defaults.distance_scale_at_zoom_low;
     zoom_in_defaults.foreshorten_strength = defaults.foreshorten_at_zoom_low;
+    zoom_in_defaults.base_height = defaults.base_height_at_zoom_low;
     zoom_in_keypoint_ = std::make_unique<ZoomKeyPointWidget>(
         "Zoomed In Settings",
         zoom_in_defaults,
@@ -1269,6 +1266,7 @@ void CameraUIPanel::build_ui() {
     zoom_out_defaults.depth_offset_px = defaults.depth_offset_at_zoom_high;
     zoom_out_defaults.distance_strength = defaults.distance_scale_at_zoom_high;
     zoom_out_defaults.foreshorten_strength = defaults.foreshorten_at_zoom_high;
+    zoom_out_defaults.base_height = defaults.base_height_at_zoom_high;
     zoom_out_keypoint_ = std::make_unique<ZoomKeyPointWidget>(
         "Zoomed Out Settings",
         zoom_out_defaults,
@@ -1424,7 +1422,6 @@ void CameraUIPanel::rebuild_rows() {
 
     if (depth_section_header_) rows.push_back({ depth_section_header_.get() });
     if (depth_section_expanded_) {
-        if (base_height_slider_) rows.push_back({ base_height_slider_.get() });
         if (zoom_in_keypoint_) rows.push_back({ zoom_in_keypoint_.get() });
         if (zoom_out_keypoint_) rows.push_back({ zoom_out_keypoint_.get() });
     }
@@ -1597,8 +1594,6 @@ camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
         settings.scale_variant_hysteresis_margin = std::max(0.0f, hysteresis_margin_slider_->value());
     }
 
-    if (base_height_slider_) settings.base_height_px = std::max(0.0f, base_height_slider_->value());
-
     ZoomKeyPointWidget::Values min_values{};
     ZoomKeyPointWidget::Values max_values{};
     if (zoom_in_keypoint_) {
@@ -1622,11 +1617,13 @@ camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
         settings.depth_offset_at_zoom_low = std::clamp(min_values.depth_offset_px, -4000.0f, 4000.0f);
         settings.distance_scale_at_zoom_low = std::max(0.0f, min_values.distance_strength);
         settings.foreshorten_at_zoom_low = std::max(0.0f, min_values.foreshorten_strength);
+        settings.base_height_at_zoom_low = std::max(1.0f, min_values.base_height);
     }
     if (zoom_out_keypoint_) {
         settings.depth_offset_at_zoom_high = std::clamp(max_values.depth_offset_px, -4000.0f, 4000.0f);
         settings.distance_scale_at_zoom_high = std::max(0.0f, max_values.distance_strength);
         settings.foreshorten_at_zoom_high = std::max(0.0f, max_values.foreshorten_strength);
+        settings.base_height_at_zoom_high = std::max(1.0f, max_values.base_height);
     }
     settings.tilt_zoom_in_degrees  = std::clamp(settings.tilt_zoom_in_degrees, camera::kMinPitchDegrees, camera::kMaxPitchDegrees);
     settings.tilt_zoom_out_degrees = std::clamp(settings.tilt_zoom_out_degrees, camera::kMinPitchDegrees, camera::kMaxPitchDegrees);
@@ -1637,6 +1634,8 @@ camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
         0.5f * (settings.distance_scale_at_zoom_low + settings.distance_scale_at_zoom_high);
     settings.grid_depth_offset_px =
         0.5f * (settings.depth_offset_at_zoom_low + settings.depth_offset_at_zoom_high);
+    settings.base_height_px =
+        0.5f * (settings.base_height_at_zoom_low + settings.base_height_at_zoom_high);
     // Depth cue texture settings
     auto slider_to_opacity = [](const FloatSliderWidget* slider) -> int {
         if (!slider) return 0;

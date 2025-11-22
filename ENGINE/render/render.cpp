@@ -1667,12 +1667,12 @@ void SceneRenderer::render(){
                 }
 
                 if (!slot.visible || !frame_ptr) {
-                    std::cout << "[Render] Skipping child '" << slot.asset_name << "' (visible=" << slot.visible << ", frame_ptr=" << (frame_ptr ? "yes" : "no") << ")\n";
+                    //std::cout << "[Render] Skipping child '" << slot.asset_name << "' (visible=" << slot.visible << ", frame_ptr=" << (frame_ptr ? "yes" : "no") << ")\n";
                     continue;
                 }
                 SDL_Texture* child_tex = frame_ptr->get_base_texture();
                 if (!child_tex) {
-                    std::cout << "[Render] No texture for child '" << slot.asset_name << "'\n";
+                    //std::cout << "[Render] No texture for child '" << slot.asset_name << "'\n";
                     continue;
                 }
 
