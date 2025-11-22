@@ -916,6 +916,7 @@ public:
         used = handle_child(depth_offset_slider_.get()) || used;
         used = handle_child(distance_slider_.get()) || used;
         used = handle_child(foreshorten_slider_.get()) || used;
+        used = handle_child(base_height_slider_.get()) || used;
         return used;
     }
 
@@ -927,8 +928,9 @@ public:
         if (tilt_widget_) tilt_widget_->render(renderer);
         if (depth_offset_slider_) depth_offset_slider_->render(renderer);
         if (distance_slider_) distance_slider_->render(renderer);
-        if (foreshorten_slider_) foreshorten_slider_->render(renderer);
-    }
+    if (foreshorten_slider_) foreshorten_slider_->render(renderer);
+    if (base_height_slider_) base_height_slider_->render(renderer);
+}
 
     bool wants_full_row() const override { return true; }
 

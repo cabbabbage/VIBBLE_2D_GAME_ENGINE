@@ -1116,8 +1116,8 @@ void camera::apply_camera_settings(const nlohmann::json& data) {
     try_read_float("min_visible_screen_ratio",   settings_.min_visible_screen_ratio);
 
     // Grid depth / pitch controls.
-    try_read_float("pitch_zoom_in_degrees ",  settings_.tilt_zoom_in_degrees );
-    try_read_float("pitch_zoom_out_degrees", settings_.tilt_zoom_out_degrees);
+    try_read_float("tilt_zoom_in_degrees",  settings_.tilt_zoom_in_degrees );
+    try_read_float("tilt_zoom_out_degrees", settings_.tilt_zoom_out_degrees);
     try_read_float("grid_depth_offset_px",       settings_.grid_depth_offset_px);
     try_read_float("depth_offset_at_zoom_low", settings_.depth_offset_at_zoom_low);
     try_read_float("depth_offset_at_zoom_high", settings_.depth_offset_at_zoom_high);
@@ -1346,8 +1346,8 @@ nlohmann::json camera::camera_settings_to_json() const {
     j["zoom_low"]                        = settings_.zoom_low;
     j["zoom_high"]                       = settings_.zoom_high;
     j["base_height_px"]                  = settings_.base_height_px;
-    j["pitch_zoom_in_degrees "]            = settings_.tilt_zoom_in_degrees ;
-    j["pitch_zoom_out_degrees"]           = settings_.tilt_zoom_out_degrees;
+    j["tilt_zoom_in_degrees"]            = settings_.tilt_zoom_in_degrees ;
+    j["tilt_zoom_out_degrees"]           = settings_.tilt_zoom_out_degrees;
     j["min_visible_screen_ratio"]        = settings_.min_visible_screen_ratio;
     j["render_quality_percent"]          = settings_.render_quality_percent;
     j["smooth_motion_zoom"]              = settings_.smooth_motion_zoom;
