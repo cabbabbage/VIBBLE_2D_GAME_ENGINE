@@ -389,6 +389,7 @@ private:
 
     RoomAssetsSavedCallback room_assets_saved_callback_;
     std::string rename_active_room(const std::string& old_name, const std::string& desired_name);
+    std::shared_ptr<AssetInfo> last_selected_from_library_;  // Last asset selected from library
 
     friend class DevControls;
 

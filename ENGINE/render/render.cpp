@@ -31,7 +31,7 @@
 #include "core/AssetsManager.hpp"
 #include "dev_mode/depth_cue_settings.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
-#include "render/camera.hpp"
+#include "render/camera_grid.hpp"
 #include "tiling/grid_tile.hpp"
 #include "utils/log.hpp"
 #include "utils/grid.hpp"
@@ -1332,7 +1332,7 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
     float distance_scale = 1.0f;
     float vertical_scale = 1.0f;
 
-    world::GridPoint* gp = (assets_ && a) ? assets_->screen_grid().point_for_asset(a) : nullptr;
+    world::GridPoint* gp = (assets_ && a) ? assets_->getView().grid_point_for_asset(a) : nullptr;
     if (gp) {
         distance_scale = (a && a->info && a->info->apply_distance_scaling) ? gp->distance_scale : 1.0f;
         vertical_scale = (a && a->info && a->info->apply_vertical_scaling) ? gp->vertical_scale : 1.0f;
@@ -1425,7 +1425,7 @@ SDL_FRect SceneRenderer::get_child_position_rect(const Asset* parent,
     float distance_scale = 1.0f;
     float vertical_scale = 1.0f;
 
-    world::GridPoint* gp = assets_ ? assets_->screen_grid().point_for_asset(parent) : nullptr;
+    world::GridPoint* gp = assets_ ? assets_->getView().grid_point_for_asset(parent) : nullptr;
     if (gp) {
         distance_scale = apply_distance ? gp->distance_scale : 1.0f;
         vertical_scale = apply_vertical ? gp->vertical_scale : 1.0f;
@@ -1627,7 +1627,7 @@ void SceneRenderer::render(){
         const std::vector<world::GridPoint*>& active_points = assets_->active_points();
         std::vector<Asset*> active;
         active.reserve(active_points.size() * 2 + 16);
-        auto& screen_grid = assets_->screen_grid();
+        auto& cam_grid = assets_->getView();
         for (world::GridPoint* gp : active_points) {
             if (!gp) continue;
             for (const auto& occ_up : gp->occupants) {
@@ -1636,8 +1636,8 @@ void SceneRenderer::render(){
         }
         std::stable_sort(active.begin(), active.end(), [&](Asset* lhs, Asset* rhs) {
             if (lhs == rhs) return false;
-            world::GridPoint* lp = screen_grid.point_for_asset(lhs);
-            world::GridPoint* rp = screen_grid.point_for_asset(rhs);
+            world::GridPoint* lp = cam_grid.grid_point_for_asset(lhs);
+            world::GridPoint* rp = cam_grid.grid_point_for_asset(rhs);
             const float ly = lp ? lp->screen.y : 0.0f;
             const float ry = rp ? rp->screen.y : 0.0f;
             if (std::fabs(ly - ry) > 0.5f) return ly < ry;

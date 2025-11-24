@@ -35,7 +35,7 @@
 #include "asset/asset_types.hpp"
 #include "asset/asset_utils.hpp"
 #include "core/AssetsManager.hpp"
-#include "render/camera.hpp"
+#include "render/camera_grid.hpp"
 #include "map_generation/room.hpp"
 #include "spawn/asset_spawn_planner.hpp"
 #include "spawn/asset_spawner.hpp"

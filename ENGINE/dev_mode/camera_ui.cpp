@@ -24,7 +24,7 @@
 #include "dev_mode/float_slider_widget.hpp"
 #include "dev_mode/shared/formatting.hpp"
 #include "dev_mode/widgets.hpp"
-#include "render/camera.hpp"
+#include "render/camera_grid.hpp"
 #include "utils/input.hpp"
 
 namespace {
@@ -85,6 +85,10 @@ namespace {
 
     float pitch_to_angle_deg(float pitch_deg, float preferred_angle_deg = 0.0f) {
         return wrap_angle_deg(pitch_deg);
+    }
+
+    float clamp_angle_deg(float raw_value, float min_deg, float max_deg) {
+        return std::clamp(raw_value, min_deg, max_deg);
     }
 }
 
@@ -441,9 +445,11 @@ class PitchDialWidget : public Widget {
 public:
     using ChangeCallback = std::function<void(float)>;
 
-    PitchDialWidget(std::string label, float angle_degrees = 0.0f)
+    PitchDialWidget(std::string label, float angle_degrees = 0.0f, float min_deg = 0.0f, float max_deg = 360.0f)
         : label_(std::move(label)),
-          angle_deg_(wrap_angle_deg(angle_degrees)) {
+          angle_deg_(clamp_angle_deg(wrap_angle_deg(angle_degrees), min_deg, max_deg)),
+          min_deg_(min_deg),
+          max_deg_(max_deg) {
         label_style_ = DMStyles::Label();
         value_style_ = DMStyles::Slider().value;
         value_style_.font_size = std::max(value_style_.font_size, label_style_.font_size);
@@ -712,11 +718,11 @@ private:
     }
 
     void set_angle_from_user(float deg) {
-        const float normalized = wrap_angle_deg(deg);
-        if (std::fabs(normalized - angle_deg_) < 0.0001f) {
+        const float clamped = clamp_angle_deg(deg, min_deg_, max_deg_);
+        if (std::fabs(clamped - angle_deg_) < 0.0001f) {
             return;
         }
-        angle_deg_ = normalized;
+        angle_deg_ = clamped;
         if (on_change_) {
             on_change_(angle_deg_);
         }
@@ -744,6 +750,8 @@ private:
     DMLabelStyle label_style_{};
     DMLabelStyle value_style_{};
     float angle_deg_ = 0.0f;
+    float min_deg_ = 0.0f;
+    float max_deg_ = 360.0f;
     bool dragging_ = false;
     bool hovered_ = false;
     ChangeCallback on_change_{};
@@ -786,7 +794,7 @@ public:
             zoom_slider_->set_on_value_changed([this](float) { notify_change(); });
         }
 
-        tilt_widget_ = std::make_unique<PitchDialWidget>("Tilt (Pitch)", pitch_to_angle_deg(values.pitch_degrees));
+        tilt_widget_ = std::make_unique<PitchDialWidget>("Tilt (Pitch)", pitch_to_angle_deg(values.pitch_degrees), camera::kMinPitchDegrees, camera::kMaxPitchDegrees);
         if (tilt_widget_) {
             tilt_widget_->set_tooltip("Camera pitch at this zoom level.");
             tilt_widget_->set_on_angle_changed([this](float) { notify_change(); });

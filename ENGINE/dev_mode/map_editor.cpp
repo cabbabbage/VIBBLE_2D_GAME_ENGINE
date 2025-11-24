@@ -7,7 +7,7 @@
 #include "dev_mode/dev_mode_utils.hpp"
 #include "dev_mode_color_utils.hpp"
 #include "room_overlay_renderer.hpp"
-#include "render/camera.hpp"
+#include "render/camera_grid.hpp"
 #include "map_generation/room.hpp"
 #include "utils/area.hpp"
 #include "utils/input.hpp"

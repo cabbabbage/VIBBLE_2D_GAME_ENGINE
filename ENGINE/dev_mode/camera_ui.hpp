@@ -3,7 +3,7 @@
 #include <functional>
 #include <memory>
 #include "DockableCollapsible.hpp"
-#include "render/camera.hpp"
+#include "render/camera_grid.hpp"
 
 class Assets;
 class DMCheckbox;

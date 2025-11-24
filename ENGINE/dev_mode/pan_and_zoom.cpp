@@ -1,6 +1,6 @@
 #include "dev_mode/pan_and_zoom.hpp"
 
-#include "render/camera.hpp"
+#include "render/camera_grid.hpp"
 #include "utils/input.hpp"
 
 #include <algorithm>

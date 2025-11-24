@@ -25,7 +25,7 @@
 #include "dev_mode/widgets.hpp"
 #include "dm_styles.hpp"
 #include "room_overlay_renderer.hpp"
-#include "render/camera.hpp"
+#include "render/camera_grid.hpp"
 #include "map_generation/room.hpp"
 #include "spawn/asset_spawn_planner.hpp"
 #include "spawn/asset_spawner.hpp"
@@ -908,35 +908,36 @@ void RoomEditor::update_ui(const Input& input) {
     }
 
     if (library_ui_) {
-        if (auto selected = library_ui_->consume_selection()) {
-            const bool had_pending_spawn = pending_spawn_world_pos_.has_value();
-            bool spawned_asset = false;
-            if (pending_spawn_world_pos_) {
-                SDL_Point world = *pending_spawn_world_pos_;
-                pending_spawn_world_pos_.reset();
-                if (current_room_ && assets_) {
-                    bool inside_room = !current_room_->room_area ||
-                                       current_room_->room_area->contains_point(world);
-                    if (inside_room) {
-                        if (Asset* spawned = assets_->spawn_asset(selected->name, world)) {
-                            finalize_asset_drag(spawned, selected);
-                            selected_assets_.clear();
-                            selected_assets_.push_back(spawned);
-                            if (hovered_asset_ != spawned) {
-                                hovered_asset_ = spawned;
-                            }
-                            mark_highlight_dirty();
-                            update_highlighted_assets();
-                            sync_spawn_group_panel_with_selection();
-                            spawned_asset = true;
-                        }
+if (auto selected = library_ui_->consume_selection()) {
+    last_selected_from_library_ = selected;
+    const bool had_pending_spawn = pending_spawn_world_pos_.has_value();
+    bool spawned_asset = false;
+    if (pending_spawn_world_pos_) {
+        SDL_Point world = *pending_spawn_world_pos_;
+        pending_spawn_world_pos_.reset();
+        if (current_room_ && assets_) {
+            bool inside_room = !current_room_->room_area ||
+                               current_room_->room_area->contains_point(world);
+            if (inside_room) {
+                if (Asset* spawned = assets_->spawn_asset(selected->name, world)) {
+                    finalize_asset_drag(spawned, selected);
+                    selected_assets_.clear();
+                    selected_assets_.push_back(spawned);
+                    if (hovered_asset_ != spawned) {
+                        hovered_asset_ = spawned;
                     }
+                    mark_highlight_dirty();
+                    update_highlighted_assets();
+                    sync_spawn_group_panel_with_selection();
+                    spawned_asset = true;
                 }
             }
-            if (!spawned_asset && !had_pending_spawn) {
-                pending_spawn_world_pos_.reset();
-                open_asset_info_editor(selected);
-            }
+        }
+    }
+    if (!spawned_asset && !had_pending_spawn) {
+        pending_spawn_world_pos_.reset();
+        open_asset_info_editor(selected);
+    }
         }
         // Handle room area selection from library
         if (auto area_sel = library_ui_->consume_area_selection()) {

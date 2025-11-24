@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "asset/Asset.hpp"
-#include "render/camera.hpp"
+#include "render/camera_grid.hpp"
 #include "utils/grid.hpp"
 #include "utils/area.hpp"
 #include "utils/log.hpp"
@@ -751,14 +751,6 @@ void Grid::update_parallax(const camera& cam, float dt) {
     const auto& settings = cam.realism_settings();
 
     const double pitch_rad  = floor.pitch_radians;
-    const double pitch_norm = std::min(std::abs(pitch_rad) / (kPi / 3.0), 1.0);
-    const double horizon_screen_y = std::isfinite(floor.horizon_screen_y)
-        ? floor.horizon_screen_y
-        : 0.0;
-    const double bottom_screen_y = std::isfinite(floor.bottom_screen_y)
-        ? floor.bottom_screen_y
-        : horizon_screen_y + std::max(1.0, static_cast<double>(cam.get_scale()));
-    const double depth_span_px = std::max(1.0, bottom_screen_y - horizon_screen_y);
 
     const SDL_FPoint center_px = cam.get_view_center_f();
     const double base_x = static_cast<double>(center_px.x);
@@ -775,12 +767,6 @@ void Grid::update_parallax(const camera& cam, float dt) {
             ? static_cast<double>(warped)
             : static_cast<double>(linear.y);
     };
-
-    const double depth_offset_px = std::max(0.0, static_cast<double>(cam.current_depth_offset_px()));
-    const double depth_ref_effect = std::max(
-        kParallaxEpsilon,
-        camera_height + depth_offset_px
-    );
 
     TransformSmoothingParams smoothing =
         sanitize_smoothing(settings.parallax_smoothing);
@@ -893,38 +879,23 @@ void Grid::update_parallax(const camera& cam, float dt) {
 
             const double dx_world = cell_cx - base_x;
 
-            const double ground_depth = cell_cy - anchor_y;
-
-            const double screen_y = warped_screen_y(cell_cy);
-            if (!std::isfinite(screen_y)) {
+            const double depth_world = anchor_y - cell_cy;
+            const double y_cam = depth_world * cos_p + camera_height * sin_p;
+            const double z_cam = depth_world * sin_p - camera_height * cos_p;
+            const double forward = -z_cam;
+            if (forward <= kParallaxEpsilon || !std::isfinite(forward)) {
                 continue;
             }
-            const double depth_t = std::clamp(
-                (screen_y - horizon_screen_y) / depth_span_px,
-                0.0,
-                1.0);
-            const double fan = depth_t;
-
-            const double forward_depth = (camera_height * cos_p) - (ground_depth * sin_p);
-            const double depth_with_offset = forward_depth + depth_ref_effect;
 
             const double ortho_x_px = dx_world * inv_scale;
+            const double projected_x_px = (dx_world / forward) * focal_px;
 
-            double parallax_px = 0.0;
-            if (focal_px > kParallaxEpsilon) {
-                const double safe_depth = std::max(
-                    std::abs(depth_with_offset),
-                    kParallaxEpsilon);
-                const double projected_x_px = (dx_world / safe_depth) * focal_px;
-                const double pitch_parallax_factor = 0.6 + 0.4 * pitch_norm;
-                parallax_px = (projected_x_px - ortho_x_px) * pitch_norm * pitch_parallax_factor;
-            }
-
+            double parallax_px = projected_x_px - ortho_x_px;
+            const double pitch_factor = std::clamp(std::abs(std::sin(pitch_rad)), 0.0, 1.0);
+            parallax_px *= pitch_factor;
             if (!std::isfinite(parallax_px)) {
                 parallax_px = 0.0;
             }
-
-            parallax_px *= fan;
             parallax_px = std::clamp(parallax_px, -max_parallax_px, max_parallax_px);
             const float target = static_cast<float>(parallax_px);
 

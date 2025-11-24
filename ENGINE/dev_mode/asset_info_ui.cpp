@@ -49,7 +49,7 @@
 #include "asset_sections/animation_editor_window/AnimationEditorWindow.hpp"
 #include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
-#include "render/camera.hpp"
+#include "render/camera_grid.hpp"
 #include "render/render.hpp"
 #include "search_assets.hpp"
 #include "draw_utils.hpp"

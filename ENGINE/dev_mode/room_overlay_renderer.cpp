@@ -6,7 +6,7 @@
 
 #include "draw_utils.hpp"
 #include "utils/area.hpp"
-#include "render/camera.hpp"
+#include "render/camera_grid.hpp"
 
 namespace {
 

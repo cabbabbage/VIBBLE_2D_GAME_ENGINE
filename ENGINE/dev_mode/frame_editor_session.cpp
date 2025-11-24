@@ -25,7 +25,7 @@
 #include "dev_mode/widgets.hpp"
 #include "dev_mode/pan_and_zoom.hpp"
 #include "dev_mode/rebuildAnimation.hpp"
-#include "render/camera.hpp"
+#include "render/camera_grid.hpp"
 #include "render/render.hpp"
 #include "utils/input.hpp"
 

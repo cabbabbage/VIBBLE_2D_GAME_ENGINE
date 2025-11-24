@@ -15,7 +15,7 @@
 #include "animation.hpp"
 #include "asset_info.hpp"
 
-#include "render/camera.hpp"
+#include "render/camera_grid.hpp"
 #include "render/render.hpp"
 #include "utils/area.hpp"
 #include "utils/cache_manager.hpp"

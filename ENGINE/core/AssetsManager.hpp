@@ -1,6 +1,6 @@
 #pragma once
 
-#include "render/camera.hpp"
+#include "render/camera_grid.hpp"
 #include "asset/asset_library.hpp"
 #include <SDL.h>
 #include <atomic>
@@ -15,7 +15,6 @@
 #include <nlohmann/json.hpp>
 #include "map_generation/room.hpp"
 #include "world/grid.hpp"
-#include "world/screen_grid.hpp"
 #include "asset/Asset.hpp"
 #include "world/grid_point.hpp"
 
@@ -81,8 +80,8 @@ public:
     const std::vector<Asset*>& getActiveStaticLightAssets() const { return active_static_light_assets_; }
     const std::vector<Asset*>& getActiveMovingLightAssets() const { return active_moving_light_assets_; }
     std::vector<Asset*>& mutable_filtered_active_assets() { return filtered_active_assets; }
-    camera& getView() { return camera_; }
-    const camera& getView() const { return camera_; }
+    camera_grid& getView() { return camera_; }
+    const camera_grid& getView() const { return camera_; }
 
     float frame_delta_seconds() const { return last_frame_dt_seconds_; }
 
@@ -140,8 +139,6 @@ public:
     const std::string& map_id() const { return map_id_; }
     world::Grid& world_grid() { return world_grid_; }
     const world::Grid& world_grid() const { return world_grid_; }
-    world::ScreenGrid& screen_grid() { return screen_grid_; }
-    const world::ScreenGrid& screen_grid() const { return screen_grid_; }
 
     void persist_map_info_json();
 
@@ -218,7 +215,7 @@ private:
     int  effective_render_quality_percent() const;
     void sync_dev_controls_current_room(Room* room, bool force_refresh = false);
     void reset_dev_controls_current_room_cache();
-    void update_motion_smoothing_settings(const camera::RealismSettings& settings);
+    void update_motion_smoothing_settings(const camera_grid::RealismSettings& settings);
     static TransformSmoothingParams sanitize_smoothing(const TransformSmoothingParams& params);
 
     friend class SceneRenderer;
@@ -238,7 +235,7 @@ private:
     DevControls* dev_controls_ = nullptr;
     Room* dev_controls_last_room_ = nullptr;
     std::unique_ptr<QuickTaskPopup> quick_task_popup_;
-    camera camera_;
+    camera_grid camera_;
     SceneRenderer* scene = nullptr;
     int screen_width;
     int screen_height;
@@ -265,7 +262,6 @@ private:
     bool depth_effects_enabled_ = false;
     bool asset_boundary_box_display_enabled_ = false;
     world::Grid world_grid_{};
-    world::ScreenGrid screen_grid_{};
     std::vector<world::GridPoint*> active_points_;
     std::vector<Asset*> removal_queue;
     std::mutex removal_queue_mutex_;

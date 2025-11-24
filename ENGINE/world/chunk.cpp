@@ -11,7 +11,7 @@
 
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
-#include "render/camera.hpp"
+#include "render/camera_grid.hpp"
 #include "render/render.hpp"
 #include "world/grid.hpp"
 

@@ -995,7 +995,7 @@ void Assets::update(const Input& input)
     // Build the warped screen grid then derive visible assets directly from it.
     std::vector<Asset*> prev_static_lights = active_static_light_assets_;
     std::vector<Asset*> prev_moving_lights = active_moving_light_assets_;
-    screen_grid_.rebuild(world_grid_, camera_, last_frame_dt_seconds_);
+    camera_.rebuild_grid(world_grid_, last_frame_dt_seconds_);
     rebuild_active_from_screen_grid();
 
     const bool static_changed = (prev_static_lights != active_static_light_assets_);
@@ -1488,7 +1488,7 @@ bool Assets::asset_bounds_in_screen_space(const Asset* asset, SDL_FRect& out_rec
     SDL_FRect sprite_rect{0.0f, 0.0f, 0.0f, 0.0f};
     bool      have_sprite_rect = false;
 
-    if (auto* gp = screen_grid_.point_for_asset(asset)) {
+    if (auto* gp = camera_.grid_point_for_asset(asset)) {
         const float inv_scale = 1.0f / std::max(0.000001f, camera_.get_scale());
         const float distance_scale = (asset->info->apply_distance_scaling) ? gp->distance_scale : 1.0f;
         const float vertical_scale = (asset->info->apply_vertical_scaling) ? gp->vertical_scale : 1.0f;
@@ -2201,14 +2201,14 @@ void Assets::open_animation_editor_for_asset(const std::shared_ptr<AssetInfo>& i
     }
 }
 void Assets::rebuild_active_from_screen_grid() {
-    active_points_.assign(screen_grid_.visible_points().begin(),
-                          screen_grid_.visible_points().end());
+    active_points_.assign(camera_.grid_visible_points().begin(),
+                          camera_.grid_visible_points().end());
 
     std::unordered_set<Asset*> seen;
     visible_candidate_buffer_.clear();
     visible_candidate_buffer_.reserve(active_points_.size() * 2);
 
-    for (world::GridPoint* point : screen_grid_.visible_points()) {
+    for (world::GridPoint* point : camera_.grid_visible_points()) {
         if (!point) {
             continue;
         }
@@ -2229,8 +2229,8 @@ void Assets::rebuild_active_from_screen_grid() {
                   if (!lhs || !rhs) {
                       return rhs != nullptr;
                   }
-                  world::GridPoint* lp = screen_grid_.point_for_asset(lhs);
-                  world::GridPoint* rp = screen_grid_.point_for_asset(rhs);
+                  world::GridPoint* lp = camera_.grid_point_for_asset(lhs);
+                  world::GridPoint* rp = camera_.grid_point_for_asset(rhs);
                   const float ly = lp ? lp->screen.y : 0.0f;
                   const float ry = rp ? rp->screen.y : 0.0f;
                   if (std::fabs(ly - ry) > 0.5f) {

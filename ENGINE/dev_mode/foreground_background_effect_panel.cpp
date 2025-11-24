@@ -7,7 +7,7 @@
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/font_cache.hpp"
 #include "dev_mode/widgets.hpp"
-#include "render/camera.hpp"
+#include "render/camera_grid.hpp"
 #include "utils/cache_manager.hpp"
 
 #include <SDL_image.h>

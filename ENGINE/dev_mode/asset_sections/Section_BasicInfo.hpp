@@ -5,7 +5,7 @@
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
 #include "asset/asset_types.hpp"
-#include "render/camera.hpp"
+#include "render/camera_grid.hpp"
 #include "render/render.hpp"
 #include "widgets.hpp"
 #include "dev_mode/asset_info_sections.hpp"
