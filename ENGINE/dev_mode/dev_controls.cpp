@@ -1783,7 +1783,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
 
             // Horizontal lines (sample along X; stop when screen spacing collapses near the horizon).
             float start_y = std::floor(max_world_y / cell) * cell;
-            float last_horizontal_screen_y = std::numeric_limits<float>::quiet_NaN();
+            float highest_horizontal_screen_y = std::numeric_limits<float>::infinity();
             for (float y = start_y; y >= min_world_y - cell; y -= cell) {
                 SDL_Point sample_world{
                     static_cast<int>(std::lround(mid_world_x)),
@@ -1791,7 +1791,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                 };
                 SDL_FPoint sample_screen = grid.floor_warped_screen_position(cam, sample_world);
                 const float screen_y = sample_screen.y;
-                last_horizontal_screen_y = screen_y;
+                if (std::isfinite(screen_y)) {
+                    highest_horizontal_screen_y = std::min(highest_horizontal_screen_y, screen_y);
+                }
 
                 std::vector<SDL_Point> polyline;
                 polyline.reserve(static_cast<std::size_t>(samples_per_line + 1));
@@ -1819,8 +1821,8 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             if (grid_overlay_enabled_ && horizon_screen_y) {
                 const float hy = *horizon_screen_y;
                 const bool already_at_horizon =
-                    std::isfinite(last_horizontal_screen_y) &&
-                    std::fabs(last_horizontal_screen_y - hy) < 0.5f;
+                    std::isfinite(highest_horizontal_screen_y) &&
+                    std::fabs(highest_horizontal_screen_y - hy) < 0.5f;
                 if (!already_at_horizon) {
                     SDL_Color c = major;
                     SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);

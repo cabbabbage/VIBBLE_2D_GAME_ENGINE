@@ -33,8 +33,8 @@ private:
     int    dy_ = 0;
 
     // Dashing variables
-    bool canDash = true;
-    bool isDashing;
+    bool canDash    = true;
+    bool isDashing  = false;
     float dashingPower = 20;
     float dashingTime = 0.1;
     float dashingCooldown = 1;

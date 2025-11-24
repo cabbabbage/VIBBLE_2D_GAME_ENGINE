@@ -94,8 +94,20 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
                         current_frame = f;
                 }
         }
-        translation_smoothing_x_.set_params(transform_smoothing::asset_translation_params());
-        translation_smoothing_y_.set_params(transform_smoothing::asset_translation_params());
+        
+        // Player uses instant snap (no smoothing) since movement is already smooth at update rate
+        // with grid_resolution=0 for pixel-perfect movement
+        const bool is_player_asset = info && asset_types::canonicalize(info->type) == asset_types::player;
+        if (is_player_asset) {
+                TransformSmoothingParams instant_snap{};
+                instant_snap.method = TransformSmoothingMethod::None;
+                instant_snap.snap_threshold = 0.0f;
+                translation_smoothing_x_.set_params(instant_snap);
+                translation_smoothing_y_.set_params(instant_snap);
+        } else {
+                translation_smoothing_x_.set_params(transform_smoothing::asset_translation_params());
+                translation_smoothing_y_.set_params(transform_smoothing::asset_translation_params());
+        }
         scale_smoothing_.set_params(transform_smoothing::asset_scale_params());
         alpha_smoothing_.set_params(transform_smoothing::asset_alpha_params());
 

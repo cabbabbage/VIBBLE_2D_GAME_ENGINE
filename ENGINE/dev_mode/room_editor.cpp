@@ -2258,11 +2258,7 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     const bool shift_down =
         input.isScancodeDown(SDL_SCANCODE_LSHIFT) || input.isScancodeDown(SDL_SCANCODE_RSHIFT);
 
-    if (shift_asset_modifier_active_ && !shift_down) {
-        if (dragging_) {
-            finalize_drag_session();
-            dragging_ = false;
-        }
+    if (shift_asset_modifier_active_ && !shift_down && !left_down && !dragging_) {
         clear_selection();
     }
     shift_asset_modifier_active_ = shift_down;
@@ -2311,7 +2307,7 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     static bool       was_dragged    = false;
     static const int  kDragPx        = 4;
 
-    if (!shift_down) {
+    if (!shift_down && !left_down && !dragging_) {
         pressed_asset = nullptr;
         was_dragged = false;
     }
@@ -2365,17 +2361,17 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     }
 
     // ---- While held: detect & run drag ----
-    if (shift_down && left_down && pressed_asset) {
+    if (left_down && pressed_asset) {
         const int dx = screen_pt.x - press_screen.x;
         const int dy = screen_pt.y - press_screen.y;
         const int dist2 = dx*dx + dy*dy;
 
-        if (!was_dragged && dist2 > kDragPx*kDragPx) {
+        if (!was_dragged && shift_down && dist2 > kDragPx*kDragPx) {
             was_dragged = true;
             dragging_ = true;
             drag_last_world_ = world_pt;
-            const bool ctrl = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
-            begin_drag_session(world_pt, ctrl);
+            const bool shift_modifier = input.isScancodeDown(SDL_SCANCODE_LSHIFT) || input.isScancodeDown(SDL_SCANCODE_RSHIFT);
+            begin_drag_session(world_pt, shift_modifier);
         }
 
         if (was_dragged && dragging_) {
@@ -2389,7 +2385,7 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     }
 
     // ---- LEFT UP edge ----
-    if (shift_down && !left_down && prev_left_down) {
+    if (!left_down && prev_left_down && pressed_asset) {
         if (pressed_asset) {
             if (was_dragged) {
                 // End drag: do NOT treat as click, do NOT open Room Config
@@ -3016,29 +3012,29 @@ void RoomEditor::handle_click(const Input& input) {
         }
         rclick_buffer_frames_ = 2;
 
-        // NEW: Ctrl modifier required for "add asset" with right click
-        const bool ctrl_down =
-            input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
+        // Shift modifier required for "add asset" with right click
+        const bool shift_modifier =
+            input.isScancodeDown(SDL_SCANCODE_LSHIFT) || input.isScancodeDown(SDL_SCANCODE_RSHIFT);
 
         if (hovered_asset_) {
             // Right Click on an existing asset -> open Asset Info UI for that asset
-            // Ctrl+Right Click on an existing asset -> open Asset Library at point (add on top)
-            if (ctrl_down) {
+            // Shift+Right Click on an existing asset -> open Asset Library at point (add on top)
+            if (shift_modifier) {
                 pending_spawn_world_pos_ = world_mouse;
                 open_asset_library();
                 if (!is_asset_library_open()) {
                     pending_spawn_world_pos_.reset();
                 }
-        } else {
-            open_asset_info_editor_for_asset(hovered_asset_);
-        }
+            } else {
+                open_asset_info_editor_for_asset(hovered_asset_);
+            }
         } else {
             bool inside_room = true;
             if (current_room_ && current_room_->room_area) {
                 inside_room = current_room_->room_area->contains_point(world_mouse);
             }
-            // CHANGED: only open asset library to add when Ctrl is held
-            if (inside_room && ctrl_down) {
+            // Only open asset library to add when Shift is held
+            if (inside_room && shift_modifier) {
                 pending_spawn_world_pos_ = world_mouse;
                 open_asset_library();
                 if (!is_asset_library_open()) {
@@ -3670,7 +3666,7 @@ void RoomEditor::handle_delete_shortcut(const Input& input) {
     }
 }
 
-void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modifier) {
+void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool shift_modifier) {
     // If primary selection belongs to a locked group, do not start drag
     if (!selected_assets_.empty()) {
         Asset* primary = selected_assets_.front();
@@ -3725,7 +3721,7 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
     } else if (method == "Percent") {
         drag_mode_ = DragMode::Percent;
     } else if (method == "Perimeter") {
-        drag_mode_ = ctrl_modifier ? DragMode::PerimeterCenter : DragMode::Perimeter;
+        drag_mode_ = shift_modifier ? DragMode::PerimeterCenter : DragMode::Perimeter;
     } else if (method == "Edge") {
         drag_mode_ = DragMode::Edge;
     } else if (method == "Random") {
@@ -3959,6 +3955,9 @@ void RoomEditor::update_drag_session(const SDL_Point& world_mouse) {
     // Critical: ensure hover uses updated positions right away
     invalidate_after_move();
     ensure_spatial_index(assets_->getView()); // force rebuild now (not later)
+
+    // Update JSON and refresh UI panel during drag for real-time feedback
+    update_spawn_json_during_drag();
 }
 
 
@@ -4031,6 +4030,25 @@ void RoomEditor::apply_perimeter_drag(const SDL_Point& world_mouse) {
     if (changed || snapped) {
         refresh_spatial_entries_for_dragged_assets();
     }
+
+    drag_last_world_ = world_mouse;
+    drag_moved_ = true;
+    
+    // Invalidate caches for all dragged assets
+    for (auto& st : drag_states_) {
+        if (st.asset) {
+            auto it = asset_bounds_cache_.find(st.asset);
+            if (it != asset_bounds_cache_.end()) {
+                asset_bounds_cache_.erase(it);
+            }
+        }
+    }
+    mark_spatial_index_dirty();
+    mark_highlight_dirty();
+    ensure_spatial_index(assets_->getView()); // force rebuild now (not later)
+
+    // Update JSON and refresh UI panel during drag for real-time feedback
+    update_spawn_json_during_drag();
 }
 
 void RoomEditor::apply_edge_drag(const SDL_Point& world_mouse) {
@@ -4149,6 +4167,78 @@ void RoomEditor::apply_edge_drag(const SDL_Point& world_mouse) {
     const bool snapped = snap_dragged_assets_to_grid();
     if (assets_changed || snapped) {
         refresh_spatial_entries_for_dragged_assets();
+    }
+
+    // Update JSON and refresh UI panel during drag for real-time feedback
+    update_spawn_json_during_drag();
+}
+
+void RoomEditor::update_spawn_json_during_drag() {
+    // Skip if not dragging a spawn group
+    if (drag_spawn_id_.empty() || drag_states_.empty()) {
+        return;
+    }
+
+    // Skip if panel is not visible or doesn't exist
+    if (!spawn_group_panel_ || !spawn_group_panel_->is_visible()) {
+        return;
+    }
+
+    // Find the spawn entry
+    nlohmann::json* entry = find_spawn_entry(drag_spawn_id_);
+    if (!entry) {
+        return;
+    }
+
+    // Get primary asset
+    Asset* primary = selected_assets_.empty() ? nullptr : selected_assets_.front();
+    if (!primary) {
+        return;
+    }
+
+    // Get room dimensions
+    SDL_Point center = get_room_center();
+    auto [width, height] = get_room_dimensions();
+
+    // Temporarily update JSON values based on drag mode (without saving to disk)
+    switch (drag_mode_) {
+        case DragMode::Exact:
+            update_exact_json(*entry, *primary, center, width, height);
+            break;
+
+        case DragMode::Percent:
+            update_percent_json(*entry, *primary, center, width, height);
+            break;
+
+        case DragMode::Perimeter:
+        case DragMode::PerimeterCenter: {
+            const int curr_w = std::max(1, drag_perimeter_curr_w_ > 0 ? drag_perimeter_curr_w_ : width);
+            const int curr_h = std::max(1, drag_perimeter_curr_h_ > 0 ? drag_perimeter_curr_h_ : height);
+            const int orig_w = std::max(1, drag_perimeter_orig_w_ > 0 ? drag_perimeter_orig_w_ : curr_w);
+            const int orig_h = std::max(1, drag_perimeter_orig_h_ > 0 ? drag_perimeter_orig_h_ : curr_h);
+            SDL_Point stored = RelativeRoomPosition::ToOriginal(drag_perimeter_center_offset_world_, orig_w, orig_h, curr_w, curr_h);
+            const double dist = std::hypot(static_cast<double>(primary->pos.x - drag_perimeter_circle_center_.x),
+                                          static_cast<double>(primary->pos.y - drag_perimeter_circle_center_.y));
+            const int radius = static_cast<int>(std::lround(dist));
+            save_perimeter_json(*entry, stored.x, stored.y, orig_w, orig_h, radius);
+            break;
+        }
+
+        case DragMode::Edge: {
+            int inset = static_cast<int>(std::lround(drag_edge_inset_percent_));
+            inset = std::clamp(inset, 0, 200);
+            save_edge_json(*entry, inset);
+            break;
+        }
+
+        default:
+            break;
+    }
+
+    // Refresh the UI panel to show updated values (reads from the temporarily updated JSON)
+    // Note: We use rebuild_rows instead of full refresh to avoid losing expansion state
+    if (spawn_group_panel_) {
+        spawn_group_panel_->rebuild_rows();
     }
 }
 

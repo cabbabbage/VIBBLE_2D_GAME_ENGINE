@@ -2,6 +2,7 @@
 
 #include <SDL.h>
 #include <cstdint>
+#include <memory>
 #include <utility>
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -12,6 +13,9 @@
 #include "utils/transform_smoothing_settings.hpp"
 #include "render/image_effect_settings.hpp"
 #include "world/grid_point.hpp"
+#include "render/ndc.hpp"
+#include "render/grid_camera.hpp"
+#include "render/parallax.hpp"
 
 
 // Forward declarations to avoid heavy includes in the header.
@@ -117,21 +121,8 @@ public:
 
     using RenderSmoothingKey = std::uintptr_t;
 
-    struct FloorDepthParams {
-        double horizon_screen_y   = 0.0;
-        double bottom_screen_y    = 0.0;
-        double base_world_y       = 0.0; // focus point on the floor (world y that maps to screen center)
-        double camera_world_y     = 0.0; // camera projection origin on the floor plane
-        double horizon_ndc        = 0.0;
-        double near_ndc           = -1.0;
-        double ndc_scale          = 1.0; // scales NDC so the nearest visible point reaches the bottom of the screen
-        double camera_height      = 0.0;
-        double pitch_radians      = 0.0;
-        double focus_ndc_offset   = 0.0;
-        double pitch_norm         = 0.0;
-        double strength           = 0.0;
-        bool   enabled            = false;
-    };
+    // Use FloorDepthParams from ndc class
+    using FloorDepthParams = ndc::FloorDepthParams;
 
     camera_grid(int screen_width, int screen_height, const Area& starting_zoom);
 
@@ -229,16 +220,8 @@ public:
     double compute_room_scale_from_area(const Room* room) const;
 
 private:
-    struct CameraGeometry {
-        double camera_height = 0.0;
-        double focus_depth   = 0.0;
-        double anchor_world_y = 0.0;
-        double camera_world_y = 0.0;
-        double focus_ndc_offset = 0.0;
-        double pitch_radians = 0.0;
-        float  pitch_degrees = 0.0f;
-        bool   valid         = false;
-    };
+    // Use CameraGeometry from ndc class
+    using CameraGeometry = ndc::CameraGeometry;
 
     double view_height_world() const;
     double anchor_world_y() const;
@@ -266,24 +249,19 @@ public:
     FloorDepthParams compute_floor_depth_params_for_scale(double scale_value) const;
     void update_geometry_cache(const CameraGeometry& g);
 
-    // Unified grid projection + visibility helpers
-    struct GridBounds {
-        float left   = 0.0f;
-        float right  = 0.0f;
-        float top    = 0.0f;
-        float bottom = 0.0f;
-    };
+    // Use GridBounds from grid_camera class to avoid type mismatch issues
+    using GridBounds = grid_camera::GridBounds;
 
     void rebuild_grid(world::Grid& world_grid, float dt_seconds);
 
     const std::vector<world::GridPoint*>& grid_warped_points() const { return warped_points_; }
     const std::vector<Asset*>& grid_visible_assets() const { return visible_assets_; }
     const std::vector<world::GridPoint*>& grid_visible_points() const { return visible_points_; }
-    const std::vector<world::Chunk*>& grid_active_chunks() const { return active_chunks_; }
-    const GridBounds& grid_bounds() const { return bounds_; }
+    const std::vector<world::Chunk*>& grid_active_chunks() const { return grid_calculator_ ? grid_calculator_->grid_active_chunks() : active_chunks_; }
+    const GridBounds& grid_bounds() const { return grid_calculator_ ? grid_calculator_->grid_bounds() : bounds_; }
     world::GridPoint* grid_point_for_asset(const Asset* asset);
     const world::GridPoint* grid_point_for_asset(const Asset* asset) const;
-    SDL_Rect grid_world_rect() const { return cached_world_rect_; }
+    SDL_Rect grid_world_rect() const { return grid_calculator_ ? grid_calculator_->grid_world_rect() : cached_world_rect_; }
 
 private:
     void clear_grid_state();
@@ -352,4 +330,13 @@ private:
     std::vector<world::GridPoint*> visible_points_{};
     std::vector<world::Chunk*> active_chunks_{};
     std::unordered_map<world::GridId, std::size_t> id_to_index_{};
+
+    // NDC calculator for perspective transformations
+    std::unique_ptr<ndc> ndc_calculator_;
+
+    // Grid camera for grid projection and visibility
+    std::unique_ptr<grid_camera> grid_calculator_;
+
+    // Parallax controller for parallax effects
+    std::unique_ptr<parallax> parallax_calculator_;
 };

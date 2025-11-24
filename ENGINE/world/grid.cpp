@@ -879,7 +879,7 @@ void Grid::update_parallax(const camera_grid& cam, float dt) {
 
             const double dx_world = cell_cx - base_x;
 
-            const double depth_world = anchor_y - cell_cy;
+            const double depth_world = cell_cy - anchor_y;
             const double y_cam = depth_world * cos_p + camera_height * sin_p;
             const double z_cam = depth_world * sin_p - camera_height * cos_p;
             const double forward = -z_cam;

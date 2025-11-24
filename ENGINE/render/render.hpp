@@ -359,10 +359,7 @@ private:
                                       float reference_screen_height);
     bool initialize_static_light_chunks();
 
-    // Fog layer textures
-    SDL_Texture* fog_tex_1_ = nullptr;
-    SDL_Texture* fog_tex_2_ = nullptr;
-    SDL_Texture* fog_tex_3_ = nullptr;
+
 
     private:
         using LightOverlaySource = runtime_lighting::AssetLight;

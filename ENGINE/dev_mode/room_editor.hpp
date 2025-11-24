@@ -178,6 +178,7 @@ private:
     void apply_perimeter_drag(const SDL_Point& world_mouse);
     void apply_edge_drag(const SDL_Point& world_mouse);
     bool snap_dragged_assets_to_grid();
+    void update_spawn_json_during_drag();
     void finalize_drag_session();
     void reset_drag_state();
     nlohmann::json* find_spawn_entry(const std::string& spawn_id);

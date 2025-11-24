@@ -22,7 +22,7 @@ void VibbleController::movement(const Input& input) {
     const bool dash = input.isScancodeDown(SDL_SCANCODE_SPACE);
 
     const int raw_x = (right ? 1 : 0) - (left ? 1 : 0);
-    const int raw_y = (down  ? 1 : 0) - (up    ? 1 : 0);
+    const int raw_y = (up    ? 1 : 0) - (down  ? 1 : 0);
 
     if (raw_x == 0 && raw_y == 0) {
         player_->anim_->move(SDL_Point{ 0, 0 }, animation_update::detail::kDefaultAnimation);
