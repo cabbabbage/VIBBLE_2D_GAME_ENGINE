@@ -138,7 +138,7 @@ bool compute_asset_world_bounds(const Asset* asset,
 
 }
 
-Assets::Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
+Assets::Assets(std::vector<Asset*>&& loaded,
                AssetLibrary& library,
                Asset*,
                std::vector<Room*> rooms,
@@ -994,6 +994,7 @@ void Assets::update(const Input& input)
 
     // Build the warped screen grid then derive visible assets directly from it.
     screen_grid_.rebuild(world_grid_, camera_, last_frame_dt_seconds_);
+    active_points_.assign(screen_grid_.visible_points().begin(), screen_grid_.visible_points().end());
 
     auto& new_active_assets = visible_candidate_buffer_;
     new_active_assets.clear();
@@ -1406,9 +1407,8 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
     raw->set_camera(&camera_);
     raw->finalize_setup();
 
-    // Register with grid and containers
-    world_grid_.register_asset(raw);
-    owned_assets.emplace_back(std::move(uptr));
+    // Register with grid (transfers ownership to grid points) and containers
+    raw = world_grid_.register_asset(std::move(uptr));
     all.push_back(raw);
 
     // Invalidate caches and mark dirty so next cycle rebuilds active lists
@@ -1690,14 +1690,6 @@ bool Assets::process_removals() {
 
     std::unordered_set<Asset*> removal_lookup(pending_removals.begin(), pending_removals.end());
 
-    for (auto it = owned_assets.begin(); it != owned_assets.end();) {
-        if (removal_lookup.count(it->get()) > 0) {
-            it = owned_assets.erase(it);
-        } else {
-            ++it;
-        }
-    }
-
     auto erase_ptrs = [&removal_lookup](auto& vec) {
         vec.erase(
             std::remove_if(vec.begin(), vec.end(),
@@ -1966,9 +1958,7 @@ bool Assets::contains_asset(const Asset* asset) const {
         return true;
     }
 
-    return std::any_of(owned_assets.begin(), owned_assets.end(), [asset](const auto& candidate) {
-        return candidate.get() == asset;
-    });
+    return false;
 }
 
 Global_Light_Source* Assets::map_light_source() {
@@ -2005,9 +1995,6 @@ void Assets::force_shaded_assets_rerender() {
 
     for (Asset* asset : all) {
         flush_asset(asset);
-    }
-    for (const auto& owned : owned_assets) {
-        flush_asset(owned.get());
     }
     for (Asset* asset : active_assets) {
         flush_asset(asset);

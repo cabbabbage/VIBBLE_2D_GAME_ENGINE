@@ -15,6 +15,7 @@ namespace world {
 void ScreenGrid::clear() {
     warped_points_.clear();
     visible_assets_.clear();
+    visible_points_.clear();
     active_chunks_.clear();
     id_to_index_.clear();
 }
@@ -106,6 +107,8 @@ void ScreenGrid::warp_points(const Grid& world_grid, const camera& cam) {
     std::unordered_set<Chunk*> seen_chunks;
     const auto& floor = cam.current_floor_depth_params();
 
+    visible_points_.clear();
+
     for (GridPoint& point : warped_points_) {
         SDL_FPoint base = cam.map_to_screen(point.world);
         const float warped_y = cam.warp_floor_screen_y(static_cast<float>(point.world.y), base.y);
@@ -141,7 +144,12 @@ void ScreenGrid::warp_points(const Grid& world_grid, const camera& cam) {
             active_chunks_.push_back(point.chunk);
         }
 
-        for (Asset* occupant : point.occupants) {
+        if (!point.occupants.empty()) {
+            visible_points_.push_back(&point);
+        }
+
+        for (const auto& occupant_up : point.occupants) {
+            Asset* occupant = occupant_up.get();
             if (occupant && seen_assets.insert(occupant).second) {
                 visible_assets_.push_back(occupant);
             }
@@ -162,6 +170,21 @@ void ScreenGrid::rebuild_active_chunks(const Grid& world_grid) {
 }
 
 GridPoint* ScreenGrid::point_for_asset(const Asset* asset) {
+    if (!asset) {
+        return nullptr;
+    }
+    const GridId id = asset->grid_id();
+    auto it = id_to_index_.find(id);
+    if (it == id_to_index_.end()) {
+        return nullptr;
+    }
+    if (it->second >= warped_points_.size()) {
+        return nullptr;
+    }
+    return &warped_points_[it->second];
+}
+
+const GridPoint* ScreenGrid::point_for_asset(const Asset* asset) const {
     if (!asset) {
         return nullptr;
     }

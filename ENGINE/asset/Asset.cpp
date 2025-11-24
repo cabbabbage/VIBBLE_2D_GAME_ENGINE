@@ -175,6 +175,7 @@ Asset::Asset(const Asset& o)
 , last_rendered_frame_(nullptr)
 , scale_variant_state_(o.scale_variant_state_)
 , base_bounds_local_(o.base_bounds_local_)
+, grid_id_(o.grid_id_)
 {
         clear_downscale_cache();
         clear_render_caches();
@@ -247,6 +248,7 @@ Asset& Asset::operator=(const Asset& o) {
         animation_children_       = o.animation_children_;
         finalized_                = o.finalized_;
         base_bounds_local_        = o.base_bounds_local_;
+        grid_id_                  = o.grid_id_;
         return *this;
 }
 
@@ -1164,6 +1166,14 @@ bool Asset::has_grid_residency_cache() const {
 
 SDL_Point Asset::grid_residency_cache() const {
         return cached_grid_residency_;
+}
+
+void Asset::set_grid_id(std::uint64_t id) {
+        grid_id_ = id;
+}
+
+void Asset::clear_grid_id() {
+        grid_id_ = 0;
 }
 
 float Asset::smoothed_translation_x() const { return translation_smoothing_x_.value_for_render(); }

@@ -290,7 +290,26 @@ GridPoint* Grid::point_for_id(GridId id) {
     return &it->second;
 }
 
+const GridPoint* Grid::point_for_id(GridId id) const {
+    auto it = points_.find(id);
+    if (it == points_.end()) {
+        return nullptr;
+    }
+    return &it->second;
+}
+
 GridPoint* Grid::point_for_asset(const Asset* asset) {
+    if (!asset) {
+        return nullptr;
+    }
+    auto it = asset_to_point_.find(const_cast<Asset*>(asset));
+    if (it == asset_to_point_.end()) {
+        return nullptr;
+    }
+    return point_for_id(it->second);
+}
+
+const GridPoint* Grid::point_for_asset(const Asset* asset) const {
     if (!asset) {
         return nullptr;
     }
@@ -305,7 +324,8 @@ void Grid::remove_asset_from_point(Asset* a, GridPoint& point) {
     if (!a) {
         return;
     }
-    auto it = std::find(point.occupants.begin(), point.occupants.end(), a);
+    auto it = std::find_if(point.occupants.begin(), point.occupants.end(),
+        [a](const std::unique_ptr<Asset>& up) { return up.get() == a; });
     if (it != point.occupants.end()) {
         point.occupants.erase(it);
     }
@@ -326,6 +346,23 @@ GridPoint& Grid::ensure_point(SDL_Point grid_index) {
     return point;
 }
 
+std::unique_ptr<Asset> Grid::extract_from_point(Asset* a, GridPoint& point) {
+    if (!a) {
+        return nullptr;
+    }
+    auto it = std::find_if(point.occupants.begin(), point.occupants.end(),
+        [a](const std::unique_ptr<Asset>& up) { return up.get() == a; });
+    if (it == point.occupants.end()) {
+        return nullptr;
+    }
+    std::unique_ptr<Asset> owned = std::move(*it);
+    point.occupants.erase(it);
+    if (owned) {
+        owned->clear_grid_id();
+    }
+    return owned;
+}
+
 void Grid::bind_asset_to_point(Asset* a,
                                GridPoint& point,
                                SDL_Point world_pos,
@@ -336,9 +373,6 @@ void Grid::bind_asset_to_point(Asset* a,
     point.chunk       = owning_chunk;
     point.chunk_index = chunk_index;
     if (a) {
-        if (std::find(point.occupants.begin(), point.occupants.end(), a) == point.occupants.end()) {
-            point.occupants.push_back(a);
-        }
         asset_to_point_[a] = point.id;
         a->set_grid_id(point.id);
     }
@@ -363,40 +397,63 @@ SDL_Point world_point_for_asset(const Asset* asset) {
 }
 } // namespace
 
-void Grid::register_asset(Asset* a) {
+Asset* Grid::register_asset(std::unique_ptr<Asset> a) {
     if (!a) {
-        return;
+        return nullptr;
     }
+    Asset* raw = a.get();
     const int chunk_step = 1 << r_chunk_;
     if (chunk_step <= 0) {
-        return;
+        return raw;
     }
 
-    const SDL_Point world_pos = world_point_for_asset(a);
+    const SDL_Point world_pos = world_point_for_asset(raw);
+    const SDL_Point grid_index = grid_index_from_world(world_pos);
+    const GridId new_point_id = parallax_key(grid_index.x, grid_index.y);
+
+    auto existing_point_it = asset_to_point_.find(raw);
+    if (existing_point_it != asset_to_point_.end() && existing_point_it->second != new_point_id) {
+        auto point_it = points_.find(existing_point_it->second);
+        if (point_it != points_.end()) {
+            remove_asset_from_point(raw, point_it->second);
+        }
+        asset_to_point_.erase(existing_point_it);
+        prune_empty_points();
+    }
+
     const int i = grid_floor_div(world_pos.x - origin_.x, chunk_step);
     const int j = grid_floor_div(world_pos.y - origin_.y, chunk_step);
     Chunk& chunk = chunks_.ensure(i, j, r_chunk_, origin_);
 
     auto ensure_asset_in_chunk = [&]() {
-        auto it = std::find(chunk.assets.begin(), chunk.assets.end(), a);
+        auto it = std::find(chunk.assets.begin(), chunk.assets.end(), raw);
         if (it == chunk.assets.end()) {
-            chunk.assets.push_back(a);
+            chunk.assets.push_back(raw);
         }
     };
 
-    auto existing = residency_.find(a);
+    auto existing = residency_.find(raw);
     if (existing != residency_.end()) {
         Chunk* previous = existing->second;
         if (previous == &chunk) {
             ensure_asset_in_chunk();
-            return;
+            return raw;
         }
-        remove_from_chunk(a, previous);
+        remove_from_chunk(raw, previous);
         existing->second = &chunk;
     } else {
-        residency_[a] = &chunk;
+        residency_[raw] = &chunk;
     }
     ensure_asset_in_chunk();
+
+    GridPoint& point = ensure_point(grid_index);
+    bind_asset_to_point(raw, point, world_pos, &chunk, SDL_Point{i, j});
+    point.occupants.push_back(std::move(a));
+    return raw;
+}
+
+Asset* Grid::register_asset(Asset* a) {
+    return register_asset(std::unique_ptr<Asset>(a));
 }
 
 Chunk* Grid::ensure_chunk_from_world(SDL_Point world_px) {
@@ -477,6 +534,27 @@ void Grid::move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos) {
         target.assets.push_back(a);
     }
     residency_[a] = &target;
+
+    const SDL_Point old_index = grid_index_from_world(old_pos);
+    const SDL_Point new_index = grid_index_from_world(new_pos);
+    const GridId    new_point_id = parallax_key(new_index.x, new_index.y);
+    const GridId    old_point_id = parallax_key(old_index.x, old_index.y);
+
+    std::unique_ptr<Asset> owned;
+    if (new_point_id != old_point_id) {
+        auto old_point_it = points_.find(old_point_id);
+        if (old_point_it != points_.end()) {
+            owned = extract_from_point(a, old_point_it->second);
+        }
+    }
+
+    GridPoint& point = ensure_point(new_index);
+    bind_asset_to_point(a, point, new_pos, &target, SDL_Point{new_i, new_j});
+    if (!owned) {
+        owned = std::unique_ptr<Asset>(a);
+    }
+    point.occupants.push_back(std::move(owned));
+    prune_empty_points();
 }
 
 void Grid::unregister_asset(Asset* a) {
@@ -490,27 +568,36 @@ void Grid::unregister_asset(Asset* a) {
     Chunk* chunk = it->second;
     remove_from_chunk(a, chunk);
     residency_.erase(it);
+
+    auto point_lookup = asset_to_point_.find(a);
+    if (point_lookup != asset_to_point_.end()) {
+        auto point_it = points_.find(point_lookup->second);
+        if (point_it != points_.end()) {
+            extract_from_point(a, point_it->second);
+        }
+        asset_to_point_.erase(point_lookup);
+    }
+    prune_empty_points();
 }
 
 void Grid::rebuild_chunks() {
-    if (residency_.empty()) {
-        chunks_.reset();
-        invalidate_active_cache();
-        return;
-    }
-    std::vector<Asset*> assets;
-    assets.reserve(residency_.size());
-    for (const auto& entry : residency_) {
-        if (entry.first) {
-            assets.push_back(entry.first);
+    std::vector<std::unique_ptr<Asset>> owned_assets;
+    for (auto& entry : points_) {
+        for (auto& occ : entry.second.occupants) {
+            if (occ) {
+                owned_assets.push_back(std::move(occ));
+            }
         }
+        entry.second.occupants.clear();
     }
-    chunks_.reset();
+    points_.clear();
+    asset_to_point_.clear();
     residency_.clear();
+    chunks_.reset();
     invalidate_active_cache();
 
-    for (Asset* asset : assets) {
-        register_asset(asset);
+    for (auto& uptr : owned_assets) {
+        register_asset(std::move(uptr));
     }
 }
 

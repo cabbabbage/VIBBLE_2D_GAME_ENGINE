@@ -4,7 +4,6 @@
 #include "asset/asset_library.hpp"
 #include <SDL.h>
 #include <atomic>
-#include <deque>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -18,6 +17,7 @@
 #include "world/grid.hpp"
 #include "world/screen_grid.hpp"
 #include "asset/Asset.hpp"
+#include "world/grid_point.hpp"
 
 class Asset;
 class SceneRenderer;
@@ -40,7 +40,7 @@ class ManifestStore;
 }
 class Assets {
 public:
-    Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
+    Assets(std::vector<Asset*>&& loaded,
            AssetLibrary& library,
            Asset*,
            std::vector<Room*> rooms,
@@ -75,6 +75,7 @@ public:
 
     const std::vector<Asset*>& getActive() const;
     const std::vector<Asset*>& getFilteredActiveAssets() const;
+    const std::vector<world::GridPoint*>& active_points() const { return active_points_; }
     const std::vector<Asset*>& getActiveRaw() const { return active_assets; }
     const std::vector<Asset*>& getActiveLightAssets() const { return active_light_assets_; }
     const std::vector<Asset*>& getActiveLitAssets() const { return active_light_assets_; }
@@ -190,7 +191,6 @@ public:
     void notify_light_map_asset_moved(const Asset* asset);
     void notify_light_map_static_assets_changed();
 
-    std::deque<std::unique_ptr<Asset>> owned_assets;
     std::vector<Asset*> all;
     Asset* player = nullptr;
 
@@ -265,6 +265,7 @@ private:
     bool asset_boundary_box_display_enabled_ = false;
     world::Grid world_grid_{};
     world::ScreenGrid screen_grid_{};
+    std::vector<world::GridPoint*> active_points_;
     std::vector<Asset*> removal_queue;
     std::mutex removal_queue_mutex_;
     std::vector<Asset*> non_player_update_buffer_;

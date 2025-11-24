@@ -29,10 +29,12 @@ public:
 
     const std::vector<GridPoint>& warped_points() const { return warped_points_; }
     const std::vector<Asset*>& visible_assets() const { return visible_assets_; }
+    const std::vector<GridPoint*>& visible_points() const { return visible_points_; }
     const Bounds& bounds() const { return bounds_; }
     const std::vector<Chunk*>& active_chunks() const { return active_chunks_; }
 
     GridPoint* point_for_asset(const Asset* asset);
+    const GridPoint* point_for_asset(const Asset* asset) const;
 
 private:
     void clear();
@@ -45,6 +47,7 @@ private:
     Bounds bounds_{};
     std::vector<GridPoint> warped_points_{};
     std::vector<Asset*> visible_assets_{};
+    std::vector<GridPoint*> visible_points_{};
     std::vector<Chunk*> active_chunks_{};
     std::unordered_map<GridId, std::size_t> id_to_index_{};
 };

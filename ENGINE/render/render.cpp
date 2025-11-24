@@ -1624,7 +1624,28 @@ void SceneRenderer::render(){
         //////////////////////////////////////////////////////////////////////////////////
         // SceneRenderer::render - build asset render commands
         //////////////////////////////////////////////////////////////////////////////////
-        const auto& active = assets_->getActive();
+        const std::vector<world::GridPoint*>& active_points = assets_->active_points();
+        std::vector<Asset*> active;
+        active.reserve(active_points.size() * 2 + 16);
+        auto& screen_grid = assets_->screen_grid();
+        for (world::GridPoint* gp : active_points) {
+            if (!gp) continue;
+            for (const auto& occ_up : gp->occupants) {
+                if (occ_up) active.push_back(occ_up.get());
+            }
+        }
+        std::stable_sort(active.begin(), active.end(), [&](Asset* lhs, Asset* rhs) {
+            if (lhs == rhs) return false;
+            world::GridPoint* lp = screen_grid.point_for_asset(lhs);
+            world::GridPoint* rp = screen_grid.point_for_asset(rhs);
+            const float ly = lp ? lp->screen.y : 0.0f;
+            const float ry = rp ? rp->screen.y : 0.0f;
+            if (std::fabs(ly - ry) > 0.5f) return ly < ry;
+            const int lz = lhs ? lhs->z_index : 0;
+            const int rz = rhs ? rhs->z_index : 0;
+            if (lz != rz) return lz < rz;
+            return lhs < rhs;
+        });
         // Horizon-aware culling rect (float) for perspective/warping
         float horizon_y = camera_state ? camera_state->horizon_screen_y_for_scale() : 0.0f;
         float cull_top = std::max(0.0f, horizon_y);

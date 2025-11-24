@@ -10,6 +10,7 @@
 #include "utils/grid.hpp"
 #include "utils/transform_smoothing_settings.hpp"
 #include "world/chunk_manager.hpp"
+#include "world/grid_point.hpp"
 
 // Forward declarations
 typedef std::uint64_t ParallaxKey;
@@ -34,7 +35,8 @@ public:
     SDL_Point origin() const { return origin_; }
     void set_origin(SDL_Point origin);
 
-    void register_asset(Asset* a);
+    Asset* register_asset(std::unique_ptr<Asset> a);
+    Asset* register_asset(Asset* a); // legacy helper; does not take ownership
     Chunk* ensure_chunk_from_world(SDL_Point world_px);
     Chunk* chunk_from_world(SDL_Point world_px) const;
     Chunk* get_or_create_chunk_ij(int i, int j);
@@ -61,6 +63,15 @@ public:
 
     ChunkManager& chunks();
     const ChunkManager& chunks() const;
+
+    // Grid point helpers for linking to ScreenGrid / render
+    SDL_Point grid_index_from_world(SDL_Point world) const;
+    GridId point_id_from_world(SDL_Point world) const;
+    const std::unordered_map<GridId, GridPoint>& points() const { return points_; }
+    GridPoint* point_for_id(GridId id);
+    const GridPoint* point_for_id(GridId id) const;
+    GridPoint* point_for_asset(const Asset* asset);
+    const GridPoint* point_for_asset(const Asset* asset) const;
 
 private:
     struct ParallaxSmoothingState {
@@ -104,6 +115,15 @@ private:
     void invalidate_active_cache();
     void clear_parallax_state();
     ParallaxKey parallax_key(int i, int j) const;
+    void remove_asset_from_point(Asset* a, GridPoint& point);
+    GridPoint& ensure_point(SDL_Point grid_index);
+    void bind_asset_to_point(Asset* a,
+                             GridPoint& point,
+                             SDL_Point world_pos,
+                             Chunk* owning_chunk,
+                             SDL_Point chunk_index);
+    void prune_empty_points();
+    std::unique_ptr<Asset> extract_from_point(Asset* a, GridPoint& point);
 
     SDL_Point origin_{0, 0};
     int       r_chunk_ = 0;
@@ -122,6 +142,9 @@ private:
 
     std::unordered_map<std::uint64_t, ParallaxEntry> parallax_entries_;
     ParallaxCache parallax_cache_;
+
+    std::unordered_map<GridId, GridPoint> points_;
+    std::unordered_map<Asset*, GridId> asset_to_point_;
 };
 
 } // namespace world

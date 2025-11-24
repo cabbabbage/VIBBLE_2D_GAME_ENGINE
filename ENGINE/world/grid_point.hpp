@@ -3,6 +3,7 @@
 #include <SDL.h>
 
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 class Asset;
@@ -34,7 +35,7 @@ struct GridPoint {
     float      tilt_radians      = 0.0f;
     bool       on_screen         = false;
 
-    std::vector<Asset*> occupants;
+    std::vector<std::unique_ptr<Asset>> occupants;
 };
 
 }  // namespace world
