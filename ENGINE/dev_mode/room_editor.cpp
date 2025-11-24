@@ -861,6 +861,10 @@ void RoomEditor::update(const Input& input) {
 
     handle_delete_shortcut(input);
 
+    const int mx = input.getX();
+    const int my = input.getY();
+    const bool ui_blocked = is_ui_blocking_input(mx, my);
+
     if (!should_enable_mouse_controls()) {
         enforce_mouse_controls_disabled();
         if (assets_) {
@@ -872,14 +876,13 @@ void RoomEditor::update(const Input& input) {
 
     mouse_controls_enabled_last_frame_ = true;
 
-    const int mx = input.getX();
-    const int my = input.getY();
-
-    if (!is_ui_blocking_input(mx, my)) {
+    if (!ui_blocked || dragging_) {
         handle_mouse_input(input);
+    } else if (assets_) {
+        pan_zoom_.cancel(assets_->getView());
     }
 
-    // ✅ APPLY the queued highlight/selection state every frame
+    // APPLY the queued highlight/selection state every frame
     update_highlighted_assets();
 }
 
@@ -3380,18 +3383,10 @@ bool RoomEditor::should_enable_mouse_controls() const {
     }
 
     // Do not globally disable mouse controls just because Asset Info is open.
-    // Only block for other modal types (none exist yet), keeping pan/zoom active
-    // when the AssetInfo sliding window is visible but the mouse is over the scene.
+    // Only block for other modal types (none exist yet). UI blocking is handled
+    // by the caller so active selections stay intact while hovering panels.
     if (active_modal_ != ActiveModal::None && active_modal_ != ActiveModal::AssetInfo) {
         return false;
-    }
-
-    if (input_) {
-        const int mx = input_->getX();
-        const int my = input_->getY();
-        if (is_ui_blocking_input(mx, my)) {
-            return false;
-        }
     }
 
     return true;

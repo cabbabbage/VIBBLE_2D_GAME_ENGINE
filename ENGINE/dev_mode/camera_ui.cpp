@@ -765,7 +765,7 @@ public:
         float zoom = 1.0f;
         float pitch_degrees = 0.0f;
         float depth_offset_px = 0.0f;
-        float distance_strength = 0.0f;
+        float distance_strength = 1.0f;
         float foreshorten_strength = 0.0f;
         float base_height = 720.0f;
     };
@@ -807,13 +807,6 @@ public:
             depth_offset_slider_->set_on_value_changed([this](float) { notify_change(); });
         }
 
-        distance_slider_ = std::make_unique<FloatSliderWidget>(
-            "Distance Scaling", 0.0f, 1.0f, 0.01f, values.distance_strength, 2);
-        if (distance_slider_) {
-            distance_slider_->set_tooltip("How much sprites shrink with distance at this zoom.");
-            distance_slider_->set_on_value_changed([this](float) { notify_change(); });
-        }
-
         foreshorten_slider_ = std::make_unique<FloatSliderWidget>(
             "Vertical Foreshortening", 0.0f, 2.0f, 0.01f, values.foreshorten_strength, 2);
         if (foreshorten_slider_) {
@@ -838,7 +831,6 @@ public:
         if (zoom_slider_) zoom_slider_->set_value(values.zoom);
         if (tilt_widget_) tilt_widget_->set_angle_degrees(pitch_to_angle_deg(values.pitch_degrees, preferred_angle));
         if (depth_offset_slider_) depth_offset_slider_->set_value(values.depth_offset_px);
-        if (distance_slider_) distance_slider_->set_value(values.distance_strength);
         if (foreshorten_slider_) foreshorten_slider_->set_value(values.foreshorten_strength);
         if (base_height_slider_) base_height_slider_->set_value(values.base_height);
         layout_children();
@@ -849,7 +841,7 @@ public:
         v.zoom = zoom_slider_ ? zoom_slider_->value() : 1.0f;
         v.pitch_degrees = tilt_widget_ ? angle_to_pitch_deg(tilt_widget_->angle_degrees()) : 0.0f;
         v.depth_offset_px = depth_offset_slider_ ? depth_offset_slider_->value() : 0.0f;
-        v.distance_strength = distance_slider_ ? distance_slider_->value() : 0.0f;
+        v.distance_strength = 1.0f;
         v.foreshorten_strength = foreshorten_slider_ ? foreshorten_slider_->value() : 0.0f;
         v.base_height = base_height_slider_ ? base_height_slider_->value() : 720.0f;
         return v;
@@ -887,7 +879,6 @@ public:
             add_height(zoom_slider_.get());
             add_height(tilt_widget_.get());
             add_height(depth_offset_slider_.get());
-            add_height(distance_slider_.get());
             add_height(foreshorten_slider_.get());
             add_height(base_height_slider_.get());
         }
@@ -922,7 +913,6 @@ public:
         used = handle_child(zoom_slider_.get()) || used;
         used = handle_child(tilt_widget_.get()) || used;
         used = handle_child(depth_offset_slider_.get()) || used;
-        used = handle_child(distance_slider_.get()) || used;
         used = handle_child(foreshorten_slider_.get()) || used;
         used = handle_child(base_height_slider_.get()) || used;
         return used;
@@ -935,10 +925,9 @@ public:
         if (zoom_slider_) zoom_slider_->render(renderer);
         if (tilt_widget_) tilt_widget_->render(renderer);
         if (depth_offset_slider_) depth_offset_slider_->render(renderer);
-        if (distance_slider_) distance_slider_->render(renderer);
-    if (foreshorten_slider_) foreshorten_slider_->render(renderer);
-    if (base_height_slider_) base_height_slider_->render(renderer);
-}
+        if (foreshorten_slider_) foreshorten_slider_->render(renderer);
+        if (base_height_slider_) base_height_slider_->render(renderer);
+    }
 
     bool wants_full_row() const override { return true; }
 
@@ -985,7 +974,6 @@ private:
         place_child(zoom_slider_.get());
         place_child(tilt_widget_.get());
         place_child(depth_offset_slider_.get());
-        place_child(distance_slider_.get());
         place_child(foreshorten_slider_.get());
         place_child(base_height_slider_.get());
     }
@@ -1002,7 +990,6 @@ private:
     std::unique_ptr<FloatSliderWidget> zoom_slider_;
     std::unique_ptr<PitchDialWidget> tilt_widget_;
     std::unique_ptr<FloatSliderWidget> depth_offset_slider_;
-    std::unique_ptr<FloatSliderWidget> distance_slider_;
     std::unique_ptr<FloatSliderWidget> foreshorten_slider_;
     std::unique_ptr<FloatSliderWidget> base_height_slider_;
 
@@ -1154,7 +1141,7 @@ void CameraUIPanel::sync_from_camera() {
         min_values.zoom = last_settings_.zoom_low;
         min_values.pitch_degrees = last_settings_.tilt_zoom_in_degrees;
         min_values.depth_offset_px = last_settings_.depth_offset_at_zoom_low;
-        min_values.distance_strength = last_settings_.distance_scale_at_zoom_low;
+        min_values.distance_strength = 1.0f;
         min_values.foreshorten_strength = last_settings_.foreshorten_at_zoom_low;
         min_values.base_height = last_settings_.base_height_at_zoom_low;
         if (zoom_in_keypoint_) {
@@ -1165,7 +1152,7 @@ void CameraUIPanel::sync_from_camera() {
         max_values.zoom = last_settings_.zoom_high;
         max_values.pitch_degrees = last_settings_.tilt_zoom_out_degrees;
         max_values.depth_offset_px = last_settings_.depth_offset_at_zoom_high;
-        max_values.distance_strength = last_settings_.distance_scale_at_zoom_high;
+        max_values.distance_strength = 1.0f;
         max_values.foreshorten_strength = last_settings_.foreshorten_at_zoom_high;
         max_values.base_height = last_settings_.base_height_at_zoom_high;
         if (zoom_out_keypoint_) {
@@ -1258,7 +1245,7 @@ void CameraUIPanel::build_ui() {
     zoom_in_defaults.zoom = defaults.zoom_low;
     zoom_in_defaults.pitch_degrees = defaults.tilt_zoom_in_degrees;
     zoom_in_defaults.depth_offset_px = defaults.depth_offset_at_zoom_low;
-    zoom_in_defaults.distance_strength = defaults.distance_scale_at_zoom_low;
+    zoom_in_defaults.distance_strength = 1.0f;
     zoom_in_defaults.foreshorten_strength = defaults.foreshorten_at_zoom_low;
     zoom_in_defaults.base_height = defaults.base_height_at_zoom_low;
     zoom_in_keypoint_ = std::make_unique<ZoomKeyPointWidget>(
@@ -1282,7 +1269,7 @@ void CameraUIPanel::build_ui() {
     zoom_out_defaults.zoom = defaults.zoom_high;
     zoom_out_defaults.pitch_degrees = defaults.tilt_zoom_out_degrees;
     zoom_out_defaults.depth_offset_px = defaults.depth_offset_at_zoom_high;
-    zoom_out_defaults.distance_strength = defaults.distance_scale_at_zoom_high;
+    zoom_out_defaults.distance_strength = 1.0f;
     zoom_out_defaults.foreshorten_strength = defaults.foreshorten_at_zoom_high;
     zoom_out_defaults.base_height = defaults.base_height_at_zoom_high;
     zoom_out_keypoint_ = std::make_unique<ZoomKeyPointWidget>(
@@ -1501,8 +1488,6 @@ void CameraUIPanel::apply_settings_if_needed() {
         differs(settings.tilt_zoom_out_degrees, prev.tilt_zoom_out_degrees);
     changed = changed || differs(settings.foreshorten_at_zoom_low, prev.foreshorten_at_zoom_low) ||
         differs(settings.foreshorten_at_zoom_high, prev.foreshorten_at_zoom_high);
-    changed = changed || differs(settings.distance_scale_at_zoom_low, prev.distance_scale_at_zoom_low) ||
-        differs(settings.distance_scale_at_zoom_high, prev.distance_scale_at_zoom_high);
     changed = changed || differs(settings.depth_offset_at_zoom_low, prev.depth_offset_at_zoom_low) ||
         differs(settings.depth_offset_at_zoom_high, prev.depth_offset_at_zoom_high);
     changed = changed || differs(settings.min_visible_screen_ratio, prev.min_visible_screen_ratio);
@@ -1641,13 +1626,13 @@ camera_grid::RealismSettings CameraUIPanel::read_settings_from_ui() const {
 
     if (zoom_in_keypoint_) {
         settings.depth_offset_at_zoom_low = std::clamp(min_values.depth_offset_px, -4000.0f, 4000.0f);
-        settings.distance_scale_at_zoom_low = std::max(0.0f, min_values.distance_strength);
+        settings.distance_scale_at_zoom_low = 1.0f;
         settings.foreshorten_at_zoom_low = std::max(0.0f, min_values.foreshorten_strength);
         settings.base_height_at_zoom_low = std::max(1.0f, min_values.base_height);
     }
     if (zoom_out_keypoint_) {
         settings.depth_offset_at_zoom_high = std::clamp(max_values.depth_offset_px, -4000.0f, 4000.0f);
-        settings.distance_scale_at_zoom_high = std::max(0.0f, max_values.distance_strength);
+        settings.distance_scale_at_zoom_high = 1.0f;
         settings.foreshorten_at_zoom_high = std::max(0.0f, max_values.foreshorten_strength);
         settings.base_height_at_zoom_high = std::max(1.0f, max_values.base_height);
     }
@@ -1656,8 +1641,7 @@ camera_grid::RealismSettings CameraUIPanel::read_settings_from_ui() const {
 
     settings.foreshorten_strength =
         0.5f * (settings.foreshorten_at_zoom_low + settings.foreshorten_at_zoom_high);
-    settings.distance_scale_strength =
-        0.5f * (settings.distance_scale_at_zoom_low + settings.distance_scale_at_zoom_high);
+    settings.distance_scale_strength = 1.0f;
     settings.grid_depth_offset_px =
         0.5f * (settings.depth_offset_at_zoom_low + settings.depth_offset_at_zoom_high);
     settings.base_height_px =

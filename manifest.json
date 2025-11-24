@@ -2086,9 +2086,9 @@
       "camera_settings": {
         "background_plane_screen_y": 198.0,
         "background_texture_max_opacity": 0,
-        "base_height_at_zoom_high": 315.0,
-        "base_height_at_zoom_low": 4000.0,
-        "base_height_px": 2157.5,
+        "base_height_at_zoom_high": 2690.0,
+        "base_height_at_zoom_low": 855.0,
+        "base_height_px": 1772.5,
         "depth_offset_at_zoom_high": 4000.0,
         "depth_offset_at_zoom_low": 4000.0,
         "distance_scale_at_zoom_high": 1.0,
@@ -2097,10 +2097,10 @@
         "foreground_plane_screen_y": 902.0,
         "foreground_texture_max_opacity": 0,
         "foreshorten_at_zoom_high": 0.0,
-        "foreshorten_at_zoom_low": 0.5699999928474426,
-        "foreshorten_strength": 0.2849999964237213,
+        "foreshorten_at_zoom_low": 0.0,
+        "foreshorten_strength": 0.0,
         "grid_depth_offset_px": 4000.0,
-        "min_visible_screen_ratio": 0.009000000543892384,
+        "min_visible_screen_ratio": 0.0010000000474974513,
         "motion_smoothing_max_step": 300.0,
         "motion_smoothing_method": 1,
         "motion_smoothing_snap_threshold": 0.25,
@@ -2116,10 +2116,10 @@
         "scale_hysteresis_margin": 0.029999999329447746,
         "smooth_motion_zoom": true,
         "texture_opacity_falloff_method": 3,
-        "tilt_zoom_in_degrees": 48.01278305053711,
-        "tilt_zoom_out_degrees": 25.1593017578125,
+        "tilt_zoom_in_degrees": 12.295265197753906,
+        "tilt_zoom_out_degrees": 78.02386474609375,
         "zoom_high": 3.999999761581421,
-        "zoom_low": 0.25
+        "zoom_low": 0.5400000214576721
       },
       "content_root": "MAPS/FORREST",
       "map_assets_data": {
@@ -2419,9 +2419,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            37,
-            36,
             242,
+            36,
+            36,
             255
           ],
           "edge_smoothness": 43,
@@ -2472,9 +2472,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            85,
+            36,
             242,
-            241,
+            242,
             255
           ],
           "edge_smoothness": 101,
@@ -2532,37 +2532,8 @@
                 }
               ],
               "display_name": "trail",
-              "dx": 36,
-              "dy": 2468,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": true,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 6904,
-              "origional_width": 6904,
-              "position": "Exact",
-              "priority": 1,
-              "resolution": 6,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-1048b1d75926"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Grass_1"
-                }
-              ],
-              "display_name": "Grass_1",
-              "dx": -2074,
-              "dy": -1355,
+              "dx": -156,
+              "dy": 868,
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
@@ -2572,40 +2543,10 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 2,
               "resolution": 7,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-85da9d60f33d"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Candle"
-                }
-              ],
-              "display_name": "Candle",
-              "dx": -1982,
-              "dy": -1503,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 6904,
-              "origional_width": 6904,
-              "position": "Exact",
-              "priority": 3,
-              "resolution": 7,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-960cbc4c866e"
+              "spawn_id": "spn-ed314c8d8471"
             }
           ]
         }

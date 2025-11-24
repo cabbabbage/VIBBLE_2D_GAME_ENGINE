@@ -227,11 +227,6 @@ namespace {
         const float value = std::isfinite(raw_value) ? std::max(0.0f, raw_value) : 0.0f;
         return std::clamp(value, 0.0f, kMaxForeshortenSliderStrength);
     }
-
-    double depth_offset_world_units(double depth_offset_px, double scale_value) {
-        const double safe_scale = std::max(0.0001, scale_value);
-        return static_cast<double>(depth_offset_px) * safe_scale;
-    }
 }
 camera_grid::CameraGeometry camera_grid::compute_geometry_for_scale(double scale_value) const {
     CameraGeometry g{};
@@ -245,16 +240,25 @@ camera_grid::CameraGeometry camera_grid::compute_geometry_for_scale(double scale
         return g;
     }
 
-    g.anchor_world_y = anchor_world_y();
-    g.focus_depth = 0.0; // measured in world units along +Y from anchor
-
     const double target_pitch_deg = pitch_from_scale(clamped_scale, settings_);
     g.pitch_degrees = static_cast<float>(target_pitch_deg);
     g.pitch_radians = signed_radians_from_degrees(target_pitch_deg);
 
+    const double tan_pitch = std::tan(g.pitch_radians);
+    if (!std::isfinite(tan_pitch) || std::abs(tan_pitch) < 1e-6) {
+        return g;
+    }
+
+    g.anchor_world_y = anchor_world_y();
+    if (!std::isfinite(g.anchor_world_y)) {
+        return g;
+    }
+
+    g.focus_depth   = g.camera_height / tan_pitch;
+    g.camera_world_y = g.anchor_world_y - g.focus_depth;
     g.focus_ndc_offset = 0.0;
 
-    g.valid = true;
+    g.valid = std::isfinite(g.camera_world_y) && std::isfinite(g.focus_depth);
     return g;
 }
 
@@ -454,17 +458,9 @@ void camera_grid::set_realism_settings(const RealismSettings& settings) {
     settings_.foreshorten_strength =
         0.5f * (settings_.foreshorten_at_zoom_low + settings_.foreshorten_at_zoom_high);
 
-    settings_.distance_scale_strength = clamp_distance_strength(settings_.distance_scale_strength);
-    settings_.distance_scale_at_zoom_low = clamp_distance_strength(
-        std::isfinite(settings_.distance_scale_at_zoom_low)
-            ? settings_.distance_scale_at_zoom_low
-            : settings_.distance_scale_strength);
-    settings_.distance_scale_at_zoom_high = clamp_distance_strength(
-        std::isfinite(settings_.distance_scale_at_zoom_high)
-            ? settings_.distance_scale_at_zoom_high
-            : settings_.distance_scale_strength);
-    settings_.distance_scale_strength =
-        0.5f * (settings_.distance_scale_at_zoom_low + settings_.distance_scale_at_zoom_high);
+    settings_.distance_scale_strength = 1.0f;
+    settings_.distance_scale_at_zoom_low = 1.0f;
+    settings_.distance_scale_at_zoom_high = 1.0f;
 
     // Lock the depth offset at the fixed value so the convergence point never flips.
     settings_.depth_offset_at_zoom_low  = kFixedDepthOffsetPx;
@@ -974,16 +970,12 @@ camera_grid::RenderEffects camera_grid::compute_render_effects(
         static_cast<double>(runtime_foreshorten_strength_),
         0.0,
         static_cast<double>(kMaxForeshortenSliderStrength));
-    const double slider_distance_strength = std::clamp(
-        static_cast<double>(runtime_distance_scale_strength_),
-        0.0,
-        static_cast<double>(kMaxDistanceSliderStrength));
 
     const double horizon_y = horizon_screen_y_for_scale();
-    const double bottom_y  = static_cast<double>(screen_height_) + 4000.0;
+    const double bottom_y  = static_cast<double>(screen_height_);
     const double depth_span = std::max(1.0, bottom_y - horizon_y);
     const double depth_t = std::clamp(
-        (static_cast<double>(warped_screen.y) - horizon_y) / depth_span,
+        (bottom_y - static_cast<double>(warped_screen.y)) / depth_span,
         0.0,
         1.0);
 
@@ -998,7 +990,7 @@ camera_grid::RenderEffects camera_grid::compute_render_effects(
     result.vertical_scale = static_cast<float>(vertical_scale);
 
     const double distance_scale = std::clamp(
-        1.0 - slider_distance_strength * (1.0 - depth_t),
+        1.0 - depth_t,
         0.35,
         1.35);
     result.distance_scale = static_cast<float>(distance_scale);
@@ -1067,6 +1059,10 @@ void camera_grid::apply_camera_settings(const nlohmann::json& data) {
     try_read_float("grid_depth_offset_px",       settings_.grid_depth_offset_px);
     try_read_float("depth_offset_at_zoom_low", settings_.depth_offset_at_zoom_low);
     try_read_float("depth_offset_at_zoom_high", settings_.depth_offset_at_zoom_high);
+    // Distance scaling is now fixed to a realistic value; ignore any persisted values.
+    settings_.distance_scale_strength = 1.0f;
+    settings_.distance_scale_at_zoom_low = 1.0f;
+    settings_.distance_scale_at_zoom_high = 1.0f;
 
     auto try_read_int = [&](const char* key, int& target) {
         auto it = data.find(key);
@@ -1346,6 +1342,7 @@ SDL_FPoint camera_grid::get_view_center_f() const {
 
 
 camera_grid::FloorDepthParams camera_grid::compute_floor_depth_params_for_geometry(const CameraGeometry& geom, double scale_value) const {
+    (void)scale_value;
     FloorDepthParams p{};
     if (!realism_enabled_ || !geom.valid) {
         return p;
@@ -1355,14 +1352,16 @@ camera_grid::FloorDepthParams camera_grid::compute_floor_depth_params_for_geomet
     if (screen_h <= 1.0) {
         return p;
     }
-    if (!std::isfinite(geom.camera_height) || !std::isfinite(geom.pitch_radians)) {
+    if (!std::isfinite(geom.camera_height) ||
+        !std::isfinite(geom.pitch_radians) ||
+        !std::isfinite(geom.camera_world_y) ||
+        !std::isfinite(geom.anchor_world_y)) {
         return p;
     }
 
-    constexpr double kMinConvergencePx = 6.0;
-    const double top_margin  = std::max(32.0, screen_h * 0.05);
-    const double max_horizon = screen_h * 0.45;  // allow horizon slightly above mid-screen at shallow pitch.
-    const double min_horizon = -screen_h * 4.0;  // keep vanishing point safely above extreme views.
+    constexpr double kMaxHorizonRatio = 0.45;
+    const double max_horizon = screen_h * kMaxHorizonRatio;
+    const double min_horizon = -screen_h * 4.0;
 
     const double tan_fov   = std::tan(HALF_FOV_Y);
     const double tan_pitch = std::tan(geom.pitch_radians);
@@ -1370,51 +1369,44 @@ camera_grid::FloorDepthParams camera_grid::compute_floor_depth_params_for_geomet
         return p;
     }
 
-    const double depth_offset_world = depth_offset_world_units(
-        depth_offset_for_scale(scale_value),
-        scale_value);
+    // Clamp the bottom ray so it always intersects the floor in front of the camera.
+    const double max_phi = (PI_D * 0.5) - 1e-3;
+    double phi_bottom = geom.pitch_radians + HALF_FOV_Y;
+    phi_bottom = std::clamp(phi_bottom, 1e-3, max_phi);
 
-    double pitch_norm = geom.pitch_radians / (PI_D / 3.0);
-    pitch_norm = std::clamp(pitch_norm, -1.0, 1.0);
-    if (pitch_norm < 0.0 && pitch_norm > -1e-4) {
-        pitch_norm = 0.0;
+    const double ndc_bottom_raw = std::tan(geom.pitch_radians - phi_bottom) / tan_fov;
+    const double ndc_scale = (std::isfinite(ndc_bottom_raw) && ndc_bottom_raw < -1e-4)
+        ? (-1.0 / ndc_bottom_raw)
+        : 1.0;
+    double near_ndc = ndc_bottom_raw * ndc_scale;
+    if (!std::isfinite(near_ndc)) {
+        near_ndc = -1.0;
     }
 
-    // Depth offsets subtly shift the horizon when the camera_grid rigs higher or lower than the grid.
-    const double height_mix = std::clamp(
-        depth_offset_world / std::max(1.0, geom.camera_height),
-        -2.0,
-        2.0);
-    const double focus_offset_from_depth = height_mix * 0.12 * std::cos(geom.pitch_radians);
-
-    double horizon_ndc = (tan_pitch / tan_fov) - geom.focus_ndc_offset - focus_offset_from_depth;
-    if (!std::isfinite(horizon_ndc)) {
+    const double horizon_ndc_raw = tan_pitch / tan_fov;
+    if (!std::isfinite(horizon_ndc_raw)) {
         return p;
     }
-    horizon_ndc = std::clamp(horizon_ndc, -10.0, 10.0);
+    const double horizon_ndc = horizon_ndc_raw * ndc_scale;
     double horizon_y = screen_h * (0.5 - 0.5 * horizon_ndc);
-    if (!std::isfinite(horizon_y)) {
-        return p;
-    }
     horizon_y = std::clamp(horizon_y, min_horizon, max_horizon);
 
-    // Recompute the NDC focus offset so the warped grid tracks the chosen horizon.
-    double horizon_ndc_target = 1.0 - 2.0 * (horizon_y / screen_h);
-    horizon_ndc_target = std::clamp(horizon_ndc_target, -10.0, 10.0);
-    const double focus_ndc_offset = (tan_pitch / tan_fov) - horizon_ndc_target;
-    if (!std::isfinite(focus_ndc_offset)) {
-        return p;
-    }
+    double pitch_norm = geom.pitch_radians / (HALF_FOV_Y * 2.0);
+    pitch_norm = std::clamp(pitch_norm, 0.0, 1.0);
 
-    p.horizon_screen_y     = horizon_y;
-    p.bottom_screen_y      = screen_h;
-    p.base_world_y         = anchor_world_y() + depth_offset_world;
-    p.camera_height        = geom.camera_height;
-    p.pitch_radians        = geom.pitch_radians;
-    p.pitch_norm           = pitch_norm;
-    p.focus_ndc_offset     = focus_ndc_offset;
-    p.strength             = 1.0;
-    p.enabled              = true;
+    p.horizon_screen_y = horizon_y;
+    p.bottom_screen_y  = screen_h;
+    p.base_world_y     = geom.anchor_world_y;
+    p.camera_world_y   = geom.camera_world_y;
+    p.camera_height    = geom.camera_height;
+    p.pitch_radians    = geom.pitch_radians;
+    p.pitch_norm       = pitch_norm;
+    p.focus_ndc_offset = 0.0;
+    p.horizon_ndc      = horizon_ndc;
+    p.near_ndc         = near_ndc;
+    p.ndc_scale        = ndc_scale;
+    p.strength         = 1.0;
+    p.enabled          = true;
 
     return p;
 }
@@ -1438,37 +1430,42 @@ float camera_grid::warp_floor_screen_y(float world_y, float linear_screen_y) con
         !std::isfinite(p.horizon_screen_y) ||
         !std::isfinite(p.bottom_screen_y) ||
         !std::isfinite(p.base_world_y) ||
+        !std::isfinite(p.camera_world_y) ||
         !std::isfinite(p.camera_height) ||
-        !std::isfinite(p.pitch_radians)) {
+        !std::isfinite(p.pitch_radians) ||
+        !std::isfinite(p.ndc_scale)) {
         // No pitch or realism disabled, keep the original linear mapping.
         return std::isfinite(linear_screen_y) ? linear_screen_y : 0.0f;
     }
 
     const double screen_h = static_cast<double>(screen_height_);
     const double safe_linear_y = std::isfinite(linear_screen_y) ? linear_screen_y : 0.0;
-    const double cos_p = std::cos(p.pitch_radians);
-    const double sin_p = std::sin(p.pitch_radians);
     const double tan_fov = std::tan(HALF_FOV_Y);
+    if (!std::isfinite(tan_fov) || std::abs(tan_fov) < 1e-6) {
+        return static_cast<float>(safe_linear_y);
+    }
 
-    const double depth_world = p.base_world_y - static_cast<double>(world_y);
-    const double y_cam = depth_world * cos_p + p.camera_height * sin_p;
-    const double z_cam = depth_world * sin_p - p.camera_height * cos_p;
-    double forward = -z_cam;
-
-    if (forward < 1e-6) {
-        // Clamp to the projected horizon when the point lies beyond the viewing direction.
+    const double depth_world = static_cast<double>(world_y) - p.camera_world_y;
+    if (!std::isfinite(depth_world) || depth_world <= 1e-4) {
         return static_cast<float>(p.horizon_screen_y);
     }
 
-    double y_ndc = (y_cam / forward) / tan_fov;
+    const double phi       = std::atan2(p.camera_height, depth_world);
+    double       alpha     = p.pitch_radians - phi;
+    const double max_alpha = HALF_FOV_Y - 1e-3;
+    alpha = std::clamp(alpha, -max_alpha, max_alpha);
+
+    double y_ndc = std::tan(alpha) / tan_fov;
     y_ndc -= p.focus_ndc_offset;
+    y_ndc *= p.ndc_scale;
 
     const double screen_y = screen_h * (0.5 - 0.5 * y_ndc);
     if (!std::isfinite(screen_y)) {
         return static_cast<float>(safe_linear_y);
     }
 
-    return static_cast<float>(screen_y);
+    const double clamped_y = std::clamp(screen_y, p.horizon_screen_y, p.bottom_screen_y);
+    return static_cast<float>(clamped_y);
 }
 
 double camera_grid::view_height_world() const {
@@ -1500,12 +1497,8 @@ float camera_grid::foreshorten_for_scale(double scale_value) const {
 }
 
 float camera_grid::distance_scale_for_scale(double scale_value) const {
-    const double t = zoom_lerp_t_for_scale(scale_value);
-    const double value = lerp(
-        static_cast<double>(settings_.distance_scale_at_zoom_low),
-        static_cast<double>(settings_.distance_scale_at_zoom_high),
-        t);
-    return clamp_distance_strength(static_cast<float>(value));
+    (void)scale_value;
+    return 1.0f;
 }
 
 float camera_grid::depth_offset_for_scale(double scale_value) const {
@@ -1585,22 +1578,96 @@ void camera_grid::rebuild_grid_bounds() {
     bounds_.bottom = static_cast<float>(screen_height_);
 }
 
-void camera_grid::rebuild_grid(world::Grid& world_grid, float /*dt_seconds*/) {
+void camera_grid::rebuild_grid(world::Grid& world_grid, float dt_seconds) {
     clear_grid_state();
+
+    world_grid.update_parallax(*this, dt_seconds);
 
     std::vector<Asset*> assets = world_grid.all_assets();
     warped_points_.reserve(assets.size());
     visible_assets_.reserve(assets.size());
     visible_points_.reserve(assets.size());
 
+    const float inv_scale   = 1.0f / std::max(0.000001f, smoothed_scale_);
+    const float screen_w    = static_cast<float>(screen_width_);
+    const float screen_h    = static_cast<float>(screen_height_);
+    const float horizon_y   = static_cast<float>(horizon_screen_y_for_scale());
+    const float margin_px   = std::max(0.0f, settings_.extra_cull_margin);
+    const float bottom_pad  = std::max(settings_.grid_depth_offset_px, margin_px);
+    const float cull_top    = std::max(0.0f, horizon_y - margin_px);
+    const SDL_FRect cull_rect{
+        -margin_px,
+        cull_top,
+        screen_w + margin_px * 2.0f,
+        (screen_h + bottom_pad) - cull_top
+    };
+    const float min_visible_px =
+        screen_h * std::clamp(settings_.min_visible_screen_ratio, 0.0f, 0.5f);
+
+    auto rects_intersect = [](const SDL_FRect& a, const SDL_FRect& b) -> bool {
+        const float ax1 = a.x + a.w;
+        const float ay1 = a.y + a.h;
+        const float bx1 = b.x + b.w;
+        const float by1 = b.y + b.h;
+        return !(ax1 < b.x || bx1 < a.x || ay1 < b.y || by1 < a.y);
+    };
+
     for (Asset* a : assets) {
         if (!a) continue;
         world::GridPoint* gp = world_grid.point_for_asset(a);
         if (!gp) continue;
+
+        const SDL_Point world_pos{ gp->world.x, gp->world.y };
+
+        SDL_FPoint screen_pos = world_grid.floor_warped_screen_position(*this, world_pos);
+        if (!std::isfinite(screen_pos.x) || !std::isfinite(screen_pos.y)) {
+            screen_pos = map_to_screen(world_pos);
+        }
+
+        const float parallax_dx = world_grid.parallax_offset(world_pos);
+        const RenderEffects effects = compute_render_effects(
+            world_pos,
+            0.0f,
+            settings_.base_height_px);
+
+        float base_scale = a->smoothed_scale();
+        if (!std::isfinite(base_scale) || base_scale <= 0.0f) {
+            base_scale = 1.0f;
+        }
+
+        const int fw = (a && a->info) ? std::max(1, a->info->original_canvas_width) : 1;
+        const int fh = (a && a->info) ? std::max(1, a->info->original_canvas_height) : 1;
+        const float base_sw = static_cast<float>(fw) * base_scale * inv_scale;
+        const float base_sh = static_cast<float>(fh) * base_scale * inv_scale;
+
+        float approx_w = base_sw * effects.distance_scale;
+        float approx_h = base_sh * effects.distance_scale * effects.vertical_scale;
+        const float min_size = std::max(1.0f, min_visible_px);
+        approx_w = std::isfinite(approx_w) && approx_w > 0.0f ? std::max(approx_w, min_size) : min_size;
+        approx_h = std::isfinite(approx_h) && approx_h > 0.0f ? std::max(approx_h, min_size) : min_size;
+
+        SDL_FRect bounds{
+            screen_pos.x - approx_w * 0.5f,
+            screen_pos.y - approx_h,
+            approx_w,
+            approx_h
+        };
+        const bool on_screen = rects_intersect(bounds, cull_rect);
+
+        gp->screen             = screen_pos;
+        gp->parallax_dx        = parallax_dx;
+        gp->vertical_scale     = effects.vertical_scale;
+        gp->distance_scale     = effects.distance_scale;
+        gp->distance_to_camera = 0.0f;
+        gp->tilt_radians       = runtime_pitch_rad_;
+        gp->on_screen          = on_screen;
+
         id_to_index_[gp->id] = warped_points_.size();
         warped_points_.push_back(gp);
-        visible_assets_.push_back(a);
-        visible_points_.push_back(gp);
+        if (on_screen) {
+            visible_assets_.push_back(a);
+            visible_points_.push_back(gp);
+        }
         if (gp->chunk) active_chunks_.push_back(gp->chunk);
     }
 
@@ -1611,6 +1678,10 @@ void camera_grid::rebuild_grid(world::Grid& world_grid, float /*dt_seconds*/) {
     }
 
     rebuild_grid_bounds();
+    bounds_.left   = cull_rect.x;
+    bounds_.top    = cull_rect.y;
+    bounds_.right  = cull_rect.x + cull_rect.w;
+    bounds_.bottom = cull_rect.y + cull_rect.h;
 }
 
 world::GridPoint* camera_grid::grid_point_for_asset(const Asset* asset) {

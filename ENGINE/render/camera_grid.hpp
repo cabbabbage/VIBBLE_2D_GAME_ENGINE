@@ -50,7 +50,7 @@ public:
     struct RealismSettings {
         // Parallax and perspective sliders
         float foreshorten_strength         = 0.0f;
-        float distance_scale_strength      = 0.0f;
+        float distance_scale_strength      = 1.0f;
         float min_visible_screen_ratio     = 0.015f;
 
         // Zoom boundaries; also drive pitch mapping.
@@ -96,8 +96,8 @@ public:
         // Per-zoom interpolation values
         float foreshorten_at_zoom_low  = 0.0f;
         float foreshorten_at_zoom_high = 0.0f;
-        float distance_scale_at_zoom_low  = 0.0f;
-        float distance_scale_at_zoom_high = 0.0f;
+        float distance_scale_at_zoom_low  = 1.0f;
+        float distance_scale_at_zoom_high = 1.0f;
         float depth_offset_at_zoom_low  = 4000.0f;
         float depth_offset_at_zoom_high = 4000.0f;
         float base_height_at_zoom_low  = 720.0f;
@@ -120,7 +120,11 @@ public:
     struct FloorDepthParams {
         double horizon_screen_y   = 0.0;
         double bottom_screen_y    = 0.0;
-        double base_world_y       = 0.0;
+        double base_world_y       = 0.0; // focus point on the floor (world y that maps to screen center)
+        double camera_world_y     = 0.0; // camera projection origin on the floor plane
+        double horizon_ndc        = 0.0;
+        double near_ndc           = -1.0;
+        double ndc_scale          = 1.0; // scales NDC so the nearest visible point reaches the bottom of the screen
         double camera_height      = 0.0;
         double pitch_radians      = 0.0;
         double focus_ndc_offset   = 0.0;
@@ -229,6 +233,7 @@ private:
         double camera_height = 0.0;
         double focus_depth   = 0.0;
         double anchor_world_y = 0.0;
+        double camera_world_y = 0.0;
         double focus_ndc_offset = 0.0;
         double pitch_radians = 0.0;
         float  pitch_degrees = 0.0f;

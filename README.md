@@ -1,8 +1,8 @@
 # VIBBLE - 2D Game Engine
 
-VIBBLE is an SDL2-based 2D engine with external data files for maps, assets, and animations. The engine keeps game content out of the executable so builds stay small and iteration does not require recompilation.
+VIBBLE is an SDL2-based 2D game engine with external data files for maps, assets, and animations. The engine keeps game content out of the executable so builds stay small and iteration does not require recompilation.
 
----
+Built with CMake and managed via vcpkg for dependency resolution.
 
 ## Game Loop and Loading Pipeline
 
@@ -17,44 +17,64 @@ VIBBLE is an SDL2-based 2D engine with external data files for maps, assets, and
 * `SceneRenderer` draws the active assets, applies animation movement, and uses lighting data from asset metadata.
 
 ### Running the Engine
-```bash
-./run.bat
-```
-The script configures a RelWithDebInfo build, runs CMake, and launches the engine from the correct working directory. Manual CMake builds work as well.
+On Windows, use the provided `run.bat` script:
 
-Project layout:
-- `ENGINE/`: runtime code for assets, controllers, rendering, UI, and developer tools.
-- `SRC/`: asset folders with `info.json`, sprites, areas, and lighting data.
-- `MAPS/`: map layouts and spawn definitions referenced by the manifest.
-- `loading/`: splash art and copy for the loading screen.
-
-### Loader Debugging
-
-To diagnose hangs during map loading or asset spawning, enable detailed logs:
-
-- Set `VIBBLE_LOADER_DEBUG=1` to temporarily elevate log level to `DEBUG` during the loading phase only.
-- Alternatively, set `VIBBLE_LOG_LEVEL=debug` to enable debug logs globally.
-- To mirror logs to a file, set `VIBBLE_LOG_FILE=engine.log` (and optionally `VIBBLE_LOG_APPEND=1` to append instead of overwrite).
-
-Windows (PowerShell):
-
-```
-$env:VIBBLE_LOADER_DEBUG = "1"
-$env:VIBBLE_LOG_FILE     = "engine.log"
+```cmd
+run.bat
 ```
 
-Windows (cmd.exe):
+This script automatically:
+- Installs prerequisites (Git, Visual Studio Build Tools, CMake, Ninja, vcpkg)
+- Sets up dependencies via vcpkg
+- Configures a RelWithDebInfo build via CMake
+- Compiles the project
+- Launches the engine from the correct working directory
 
-```
-set VIBBLE_LOADER_DEBUG=1
-set VIBBLE_LOG_FILE=engine.log
-```
+## Project Layout
 
-Notes:
-- The loading screen pumps OS events to keep the window responsive during load.
-- Loader logs include timing for map parse, audio init, room creation, animation preload, and asset extraction/registration.
+- `ENGINE/`: Runtime source code for assets, controllers, rendering, UI, developer tools, and game logic.
+- `SRC/`: Asset directories with `info.json` files, sprites, areas, and lighting data.
+  - `SRC/assets/`: Game assets (characters, objects, etc.)
+  - `SRC/LOADING CONTENT/`: Loading screen images and copy.
+  - `SRC/loading_screen_content/`: Additional loading resources.
+- `MAPS/`: Map layouts, room definitions, and spawn configurations referenced by the manifest.
+- `content/`: Dynamic content folders (e.g., `content/test`, `content/forrest`) containing map-specific assets and music.
+- `manifest.json`: Central configuration file defining assets, maps, image effects, and game settings.
+- `vcpkg/`: Local vcpkg installation for dependency management.
+- `external/`: Bundled external libraries (e.g., nlohmann_json).
+- `TESTS/`: Unit tests for core engine systems.
+- `CMakeLists.txt`, `CMakePresets.json`: Build configuration files.
+- `run.bat`: Automated Windows build and run script.
+- `LICENSE`: MIT License.
 
----
+The manifest system separates content from code, allowing for rapid iteration without recompilation.
+
+## Prerequisites
+
+### Windows (Primary Platform)
+- Windows 10/11
+- Internet connection (for automatic dependency downloads)
+- Administrator privileges (recommended for system-wide tool installs)
+
+The `run.bat` script handles all prerequisite setup automatically on first run.
+
+### Manual Setup (Optional)
+If preferred, install manually:
+- Git
+- Visual Studio Build Tools (or full VS 2022) with MSVC, CMake, and Windows SDK
+- CMake 3.16+
+- vcpkg
+
+## Dependencies
+
+Dependencies are managed via vcpkg and specified in `vcpkg.json`. Key libraries include:
+
+- **SDL2**: Core multimedia library
+- **SDL2_image**: Image loading support
+- **SDL2_mixer**: Audio playback
+- **SDL2_ttf**: Font rendering
+- **GLAD**: OpenGL loader
+- **nlohmann_json**: JSON parsing (bundled in `external/` if not available via vcpkg)
 
 ## Developer Mode
 
@@ -72,8 +92,6 @@ Notes:
 2. Interact with assets to open editors, adjust room geometry, or modify lighting.
 3. Save changes through the panels so updates reach the content files.
 
----
-
 ## Custom Controllers
 
 ### File Layout
@@ -90,41 +108,22 @@ Store controller headers and source files under `ENGINE/animation_update/custom_
 
 Custom controllers allow new behaviour without modifying unrelated engine systems.
 
+## Testing
+
+Unit tests are located in the `TESTS/` directory. Build and run tests with:
+
+```cmd
+# From project root (after running run.bat once to set up environment)
+cmake --build --preset windows-vcpkg-release --target engine_tests
+ENGINE/engine_tests.exe
+```
+
+Tests cover core systems like asset loading, manifest parsing, and rendering prerequisites.
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
 ---
 
-## Dev Tasks
-
-- Light color picker: fix ENGINE/dev_mode/color_range_widget.cpp Picker class to render with background, enable scrolling, ensure all 4 RGBA sliders are visible and adjustable when opened from asset_info_ui lighting section; verify proper event handling and layout; validate by opening color picker in lighting section and adjusting all channels.
-<!--
-assignee: Any
-assigner: Cal
-status: pending
--->
-
-- Asset drag/drop parallax: update ENGINE/dev_mode/room_editor.cpp (hit testing + drag loop) to lock cursor to selected asset anchor; unify world↔screen conversions via active camera to remove drift; validate by dragging while panning/zooming across room boundaries.
-<!--
-assignee: Any
-assigner: Cal
-status: pending
--->
-
-- Light drag parallax: update ENGINE/dev_mode/asset_info_ui.cpp (light drag handler) to account for camera parallax in screen↔world conversions; ensure light positions remain consistent during camera movement; validate by dragging lights while panning/zooming.
-<!--
-assignee: Any
-assigner: Cal
-status: pending
--->
-
-- Light blend mode: add blend mode option to ENGINE/utils/light_source.hpp and ENGINE/asset/asset_info.hpp; implement norm blend rendering in scene renderer; allow switching between mod blend and norm blend for light objects.
-<!--
-assignee: Any
-assigner: Cal
-status: pending
--->
-
-- Tiled asset spawning: design grid-based tile spawn system in ENGINE/spawn/ for large assets; implement tile subdivision logic; add spawn method for tiled assets with grid alignment.
-<!--
-assignee: Cal
-assigner: Cal
-status: pending
--->
+This engine is designed for 2D game development with an emphasis on content-driven workflows and rapid prototyping.

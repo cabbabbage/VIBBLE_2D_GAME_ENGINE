@@ -614,7 +614,7 @@ nlohmann::json build_default_map_manifest(const std::string& map_name) {
         {"base_height_px", 720.0},
         {"tilt_zoom_in_degrees", 345.0},
         {"tilt_zoom_out_degrees", 310.0},
-        {"distance_scale_strength", 0.1},
+        {"distance_scale_strength", 1.0},
         {"foreshorten_strength", 0.5},
         {"motion_smoothing_method", 1},
         {"motion_smoothing_max_step", 8000.0},

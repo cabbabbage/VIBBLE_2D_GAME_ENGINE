@@ -4,13 +4,13 @@
             "current_room": true,
             "filters_expanded": false,
             "initialized": true,
-            "map_assets": false,
+            "map_assets": true,
             "methods": {
                 "center": true,
                 "childrandom": true,
                 "edge": true,
                 "exact": true,
-                "exact_position": true,
+                "exact_position": false,
                 "percent": false,
                 "perimeter": true,
                 "random": true
@@ -18,7 +18,7 @@
             "render_dark_mask": false,
             "types": {
                 "area": false,
-                "boundary": false,
+                "boundary": true,
                 "enemy": true,
                 "npc": false,
                 "object": true,
@@ -40,7 +40,7 @@
     "dev_ui": {
         "camera": {
             "background_texture_max_opacity": 0.0,
-            "depthcue_enabled": true,
+            "depthcue_enabled": false,
             "foreground_texture_max_opacity": 0.0
         },
         "lighting": {
