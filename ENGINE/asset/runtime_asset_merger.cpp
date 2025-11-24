@@ -244,7 +244,7 @@ std::shared_ptr<AssetInfo> TemporaryMergedAssetInfo::finalize(const std::vector<
     return info_;
 }
 
-AssetMerger::AssetMerger(SDL_Renderer* renderer, const camera* active_camera)
+AssetMerger::AssetMerger(SDL_Renderer* renderer, const camera_grid* active_camera)
     : renderer_(renderer), camera_(active_camera) {
     if (!renderer_) {
         throw std::invalid_argument("AssetMerger requires a valid SDL_Renderer");

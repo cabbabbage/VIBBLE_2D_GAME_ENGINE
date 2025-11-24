@@ -191,7 +191,7 @@ void GridTileRenderer::render(SDL_Renderer* renderer) {
     render(renderer, assets_->getView(), assets_->world_grid());
 }
 
-void GridTileRenderer::render(SDL_Renderer* renderer, const camera& cam, const world::Grid& grid) {
+void GridTileRenderer::render(SDL_Renderer* renderer, const camera_grid& cam, const world::Grid& grid) {
     if (!renderer) return;
 
     const auto& chunks = grid.active_chunks();
@@ -924,26 +924,26 @@ struct DepthCueSample {
     float         t     = 0.0f;
 };
 
-float evaluate_depth_curve(camera::BlurFalloffMethod method, float t) {
+float evaluate_depth_curve(camera_grid::BlurFalloffMethod method, float t) {
     t = std::clamp(t, 0.0f, 1.0f);
     switch (method) {
-        case camera::BlurFalloffMethod::Quadratic:
+        case camera_grid::BlurFalloffMethod::Quadratic:
             return t * t;
-        case camera::BlurFalloffMethod::Cubic:
+        case camera_grid::BlurFalloffMethod::Cubic:
             return t * t * t;
-        case camera::BlurFalloffMethod::Logarithmic: {
+        case camera_grid::BlurFalloffMethod::Logarithmic: {
             const float k = 4.0f;
             const float num = std::log1p(k * t);
             const float den = std::log1p(k);
             return (den > 0.0f) ? (num / den) : t;
         }
-        case camera::BlurFalloffMethod::Exponential: {
+        case camera_grid::BlurFalloffMethod::Exponential: {
             const float k = 3.0f;
             const float num = std::exp(k * t) - 1.0f;
             const float den = std::exp(k) - 1.0f;
             return (den > 0.0f) ? (num / den) : t;
         }
-        case camera::BlurFalloffMethod::Linear:
+        case camera_grid::BlurFalloffMethod::Linear:
         default:
             return t;
     }
@@ -978,7 +978,7 @@ DepthCueSample make_depthcue_sample(float screen_y,
 
 float compute_depthcue_opacity(const DepthCueSample& sample,
                                int max_opacity,
-                               camera::BlurFalloffMethod method) {
+                               camera_grid::BlurFalloffMethod method) {
     if (sample.plane == DepthCuePlane::None || max_opacity <= 0) {
         return 0.0f;
     }
@@ -1319,7 +1319,7 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
     const float base_sw   = scaled_fw * inv_scale;
     const float base_sh   = scaled_fh * inv_scale;
 
-    camera& cam = assets_->getView();
+    camera_grid& cam = assets_->getView();
     const SDL_Point world_point{
         static_cast<int>(std::lround(world_x)),
         static_cast<int>(std::lround(world_y))
@@ -1342,9 +1342,9 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
             center_x -= gp->parallax_dx;
         }
     } else {
-        const camera::RenderSmoothingKey smoothing_key = a ?
-            reinterpret_cast<camera::RenderSmoothingKey>(a) : 0;
-        camera::RenderEffects ef = cam.compute_render_effects(
+        const camera_grid::RenderSmoothingKey smoothing_key = a ?
+            reinterpret_cast<camera_grid::RenderSmoothingKey>(a) : 0;
+        camera_grid::RenderEffects ef = cam.compute_render_effects(
             world_point,
             base_sh,
             ref_sh,
@@ -1414,7 +1414,7 @@ SDL_FRect SceneRenderer::get_child_position_rect(const Asset* parent,
     const float base_sw   = scaled_fw * inv_scale;
     const float base_sh   = scaled_fh * inv_scale;
 
-    camera& cam = assets_->getView();
+    camera_grid& cam = assets_->getView();
     const float horizon_y = cam.horizon_screen_y_for_scale();
     const float bottom_limit = static_cast<float>(screen_height_) + 4000.0f;
 
@@ -1439,9 +1439,9 @@ SDL_FRect SceneRenderer::get_child_position_rect(const Asset* parent,
         center_x += dx;
         center_y += dy;
     } else {
-        const camera::RenderSmoothingKey smoothing_key =
-            reinterpret_cast<camera::RenderSmoothingKey>(parent);
-        camera::RenderEffects ef = cam.compute_render_effects(
+        const camera_grid::RenderSmoothingKey smoothing_key =
+            reinterpret_cast<camera_grid::RenderSmoothingKey>(parent);
+        camera_grid::RenderEffects ef = cam.compute_render_effects(
             world_point,
             base_sh,
             reference_screen_height,
@@ -1542,10 +1542,10 @@ void SceneRenderer::render(){
     // SceneRenderer::render - depth cue and quality setup
     //////////////////////////////////////////////////////////////////////////////////
     if (!light_map_only_mode_){
-        const camera* camera_state = assets_ ? &assets_->getView() : nullptr;
-        const camera::RealismSettings cam_settings = camera_state
+        const camera_grid* camera_state = assets_ ? &assets_->getView() : nullptr;
+        const camera_grid::RealismSettings cam_settings = camera_state
             ? camera_state->realism_settings()
-            : camera::RealismSettings{};
+            : camera_grid::RealismSettings{};
         const bool depthcue_setting_enabled = assets_
             ? assets_->depth_effects_enabled()
             : devmode::camera_prefs::load_depthcue_enabled();
@@ -2375,7 +2375,7 @@ void SceneRenderer::render(){
                         static_cast<int>(std::lround(cmd.asset->smoothed_translation_x())),
                         static_cast<int>(std::lround(cmd.asset->smoothed_translation_y()))
                     };
-                    camera::RenderEffects ef = cam.compute_render_effects(world_point, base_sh, ref_sh, reinterpret_cast<camera::RenderSmoothingKey>(cmd.asset));
+                    camera_grid::RenderEffects ef = cam.compute_render_effects(world_point, base_sh, ref_sh, reinterpret_cast<camera_grid::RenderSmoothingKey>(cmd.asset));
                     const float distance_scale = (cmd.asset->info && cmd.asset->info->apply_distance_scaling) ? ef.distance_scale : 1.0f;
                     const float vertical_scale = (cmd.asset->info && cmd.asset->info->apply_vertical_scaling) ? ef.vertical_scale : 1.0f;
 
@@ -2763,7 +2763,7 @@ void SceneRenderer::destroy_sky_texture() {
     sky_texture_height_ = 0;
 }
 
-void SceneRenderer::render_sky_layer(const camera& cam, bool depth_effects_enabled) {
+void SceneRenderer::render_sky_layer(const camera_grid& cam, bool depth_effects_enabled) {
     if (!depth_effects_enabled) {
         return;
     }
@@ -2970,11 +2970,11 @@ const Global_Light_Source& StageContext::main_light() const {
     return lighting->main_light;
 }
 
-camera& StageContext::camera_view() {
+camera_grid& StageContext::camera_view() {
     return lighting->camera_view;
 }
 
-const camera& StageContext::camera_view() const {
+const camera_grid& StageContext::camera_view() const {
     return lighting->camera_view;
 }
 
@@ -2997,7 +2997,7 @@ void StageContext::update_projection(Asset& asset) {
         return;
     }
 
-    camera& cam = lighting->camera_view;
+    camera_grid& cam = lighting->camera_view;
     const float scale = cam.get_scale();
     const float inv_scale = (std::isfinite(scale) && scale > 1e-6f) ? (1.0f / scale) : 1.0f;
 
@@ -3030,12 +3030,12 @@ void StageContext::update_projection(Asset& asset) {
         static_cast<int>(std::lround(world_x)),
         static_cast<int>(std::lround(world_y))
     };
-    const camera::RenderEffects effects =
+    const camera_grid::RenderEffects effects =
         cam.compute_render_effects(
             SDL_Point{ static_cast<int>(std::lround(world_x)), static_cast<int>(std::lround(world_y)) },
             base_sh,
             reference_height,
-            reinterpret_cast<camera::RenderSmoothingKey>(&asset));
+            reinterpret_cast<camera_grid::RenderSmoothingKey>(&asset));
 
     world::Grid* grid = (lighting && lighting->world_grid) ? lighting->world_grid : nullptr;
     const float distance_scale  = (asset.info && asset.info->apply_distance_scaling) ? effects.distance_scale : 1.0f;

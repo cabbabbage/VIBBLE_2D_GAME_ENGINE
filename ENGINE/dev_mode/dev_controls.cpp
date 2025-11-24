@@ -909,7 +909,7 @@ void DevControls::set_rooms(std::vector<Room*>* rooms, std::size_t generation) {
     if (map_editor_) map_editor_->set_rooms(rooms);
 }
 
-void DevControls::set_camera_override_for_testing(camera* camera_override) {
+void DevControls::set_camera_override_for_testing(camera_grid* camera_override) {
     camera_override_for_testing_ = camera_override;
     if (map_editor_) {
         map_editor_->set_camera_override_for_testing(camera_override);
@@ -1003,7 +1003,7 @@ void DevControls::set_enabled(bool enabled) {
         const char* msg = "[DevControls] preparing enable flow";
         dev_mode_trace(msg);
         std::cout << msg << "\n";
-        camera* camera_ptr = assets_ ? &assets_->getView() : nullptr;
+        camera_grid* camera_ptr = assets_ ? &assets_->getView() : nullptr;
         SDL_Point preserved_center{0, 0};
         float preserved_scale = 1.0f;
         bool should_restore_camera = false;
@@ -1205,8 +1205,8 @@ void DevControls::update(const Input& input) {
 
     // Update depth cue hover states
     if (camera_panel_ && camera_panel_->is_blur_section_visible() && assets_ && enabled_) {
-        const camera& cam = assets_->getView();
-        const camera::RealismSettings& settings = cam.realism_settings();
+        const camera_grid& cam = assets_->getView();
+        const camera_grid::RealismSettings& settings = cam.realism_settings();
         auto clamp_line = [&](float value) -> float {
             if (!std::isfinite(value)) {
                 return static_cast<float>(screen_h_) * 0.5f;
@@ -1237,7 +1237,7 @@ void DevControls::update(const Input& input) {
     // If we are suppressing render during a Map→Room transition, resume
     // once the camera finishes its pan/zoom animation.
     if (render_suppression_in_progress_) {
-        camera* cam = assets_ ? &assets_->getView() : nullptr;
+        camera_grid* cam = assets_ ? &assets_->getView() : nullptr;
         const bool camera_idle = !cam || !cam->is_zooming();
         if (camera_idle) {
             if (assets_) {
@@ -1622,8 +1622,8 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
             int delta_y = event.motion.y - depthcue_drag_mouse_start_;
             float new_y = depthcue_drag_start_y_ + delta_y;
             if (assets_) {
-                camera& cam = assets_->getView();
-                camera::RealismSettings new_settings = cam.realism_settings();
+                camera_grid& cam = assets_->getView();
+                camera_grid::RealismSettings new_settings = cam.realism_settings();
                 if (depthcue_drag_state_ == DepthCueDragState::Foreground) {
                     new_settings.foreground_plane_screen_y = new_y;
                 } else if (depthcue_drag_state_ == DepthCueDragState::Background) {
@@ -1677,8 +1677,8 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     // Render grid overlay if enabled (moved to beginning to render behind UI)
         const bool need_grid_helpers = assets_ && (grid_overlay_enabled_ || show_depth_guides);
         if (renderer && need_grid_helpers) {
-            const camera& cam = assets_->getView();
-            const camera::FloorDepthParams depth_params = cam.compute_floor_depth_params();
+            const camera_grid& cam = assets_->getView();
+            const camera_grid::FloorDepthParams depth_params = cam.compute_floor_depth_params();
             world::Grid& grid = assets_->world_grid();
         SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
         Uint8 pr = 0, pg = 0, pb = 0, pa = 0;
@@ -1870,7 +1870,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     }
 
     if (renderer && camera_panel_ && camera_panel_->is_visible() && assets_) {
-        const camera& cam = assets_->getView();
+        const camera_grid& cam = assets_->getView();
         const camera::FloorDepthParams depth_params = cam.compute_floor_depth_params();
         if (depth_params.enabled) {
             SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
@@ -1937,7 +1937,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         }
         // Draw room area overlays (always visible in Room mode)
         if (renderer && assets_ && current_room_) {
-            const camera& cam = assets_->getView();
+            const camera_grid& cam = assets_->getView();
             SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
             SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -3042,7 +3042,7 @@ void DevControls::toggle_map_assets_modal() {
 }
 
 void DevControls::apply_camera_area_render_flag() {
-    camera* cam_ptr = nullptr;
+    camera_grid* cam_ptr = nullptr;
     if (camera_override_for_testing_) {
         cam_ptr = camera_override_for_testing_;
     } else if (assets_) {
@@ -3485,7 +3485,7 @@ void DevControls::handle_map_selection() {
         render_suppression_in_progress_ = true;
     }
     if (assets_) {
-        camera* cam = &assets_->getView();
+        camera_grid* cam = &assets_->getView();
         if (cam && selected && selected->room_area) {
             const SDL_Point center = selected->room_area->get_center();
             const double current_scale = std::max(0.0001, static_cast<double>(cam->get_scale()));

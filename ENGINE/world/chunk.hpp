@@ -12,7 +12,7 @@
 
 class Assets;
 class Asset;
-class camera;
+class camera_grid;
 namespace world {
 class Grid;
 }

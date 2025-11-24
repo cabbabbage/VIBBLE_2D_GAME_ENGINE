@@ -2,7 +2,7 @@
 
 #include <SDL.h>
 class Area;
-class camera;
+class camera_grid;
 
 namespace dm_draw {
 

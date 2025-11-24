@@ -732,11 +732,11 @@ bool Grid::parallax_active() const {
     return parallax_active_;
 }
 
-void Grid::update_parallax(const camera& cam, float dt) {
+void Grid::update_parallax(const camera_grid& cam, float dt) {
     const float clamped_dt = (std::isfinite(dt) && dt > 0.0f) ? dt : kDefaultParallaxDt;
     ++parallax_frame_counter_;
 
-    const camera::FloorDepthParams& floor = cam.current_floor_depth_params();
+    const camera_grid::FloorDepthParams& floor = cam.current_floor_depth_params();
     parallax_active_ = cam.realism_enabled();
     const bool floor_ready = floor.enabled &&
         std::isfinite(floor.camera_height) &&
@@ -982,7 +982,7 @@ SDL_FPoint Grid::parallax_adjusted_screen_position(SDL_Point world, SDL_FPoint b
     return base_screen;
 }
 
-SDL_FPoint Grid::floor_warped_screen_position(const camera& cam, SDL_Point world) const {
+SDL_FPoint Grid::floor_warped_screen_position(const camera_grid& cam, SDL_Point world) const {
     SDL_FPoint base = cam.map_to_screen(world);
 
     const float safe_world_y  = std::isfinite(static_cast<float>(world.y)) ? static_cast<float>(world.y) : 0.0f;

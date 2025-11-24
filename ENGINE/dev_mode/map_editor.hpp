@@ -12,7 +12,7 @@
 class Assets;
 class Input;
 class Room;
-class camera;
+class camera_grid;
 
 class MapEditor {
 public:

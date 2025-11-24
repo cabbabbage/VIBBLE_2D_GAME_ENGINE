@@ -10,7 +10,7 @@ void PanAndZoom::set_zoom_scale_factor(double factor) {
     zoom_scale_factor_ = (factor > 0.0) ? factor : 1.0;
 }
 
-void PanAndZoom::handle_input(camera& cam, const Input& input, bool pan_blocked) {
+void PanAndZoom::handle_input(camera_grid& cam, const Input& input, bool pan_blocked) {
     const SDL_Point mouse{ input.getX(), input.getY() };
     const int wheel_y = input.getScrollY();
     if (wheel_y != 0) {
@@ -27,7 +27,7 @@ void PanAndZoom::handle_input(camera& cam, const Input& input, bool pan_blocked)
         const double target_scale = std::clamp(
             unclamped_target,
             0.0001,
-            static_cast<double>(camera::kMaxZoomAnchors));
+            static_cast<double>(camera_grid::kMaxZoomAnchors));
         const double adjusted_eff = target_scale / base_scale;
 
         if (std::abs(adjusted_eff - 1.0) > 1e-6) {
@@ -97,7 +97,7 @@ void PanAndZoom::handle_input(camera& cam, const Input& input, bool pan_blocked)
     cam.set_screen_center(new_center);    // and actually move the view
 }
 
-void PanAndZoom::cancel(camera& cam) {
+void PanAndZoom::cancel(camera_grid& cam) {
     pan_drag_pending_ = false;
     if (!panning_) {
         return;

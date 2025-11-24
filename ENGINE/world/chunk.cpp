@@ -243,7 +243,7 @@ void LightMap::render_visible_chunks(SDL_Renderer* renderer,
         return;
     }
 
-    const camera& cam = assets_->getView();
+    const camera_grid& cam = assets_->getView();
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
     for (world::Chunk* chunk : active_chunks()) {

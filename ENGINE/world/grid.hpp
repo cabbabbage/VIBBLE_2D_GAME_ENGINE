@@ -15,7 +15,7 @@
 // Forward declarations
 typedef std::uint64_t ParallaxKey;
 class Asset;
-class camera;
+class camera_grid;
 
 namespace world {
 
@@ -56,14 +56,14 @@ public:
 
     const std::vector<Chunk*>& active_chunks() const;
 
-    void update_parallax(const camera& cam, float dt);
+    void update_parallax(const camera_grid& cam, float dt);
     float parallax_offset(SDL_Point world) const;
 
     float parallax_adjusted_screen_x(SDL_Point world, float base_screen_x) const;
     SDL_FPoint parallax_adjusted_screen_position(SDL_Point world, SDL_FPoint base_screen) const;
 
     // Helper that applies camera floor warping on Y then grid parallax on X.
-    SDL_FPoint floor_warped_screen_position(const camera& cam, SDL_Point world) const;
+    SDL_FPoint floor_warped_screen_position(const camera_grid& cam, SDL_Point world) const;
 
     bool parallax_active() const;
 

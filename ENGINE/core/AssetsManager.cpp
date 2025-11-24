@@ -418,7 +418,7 @@ void Assets::reload_camera_settings() {
 }
 
 int Assets::saved_render_quality_percent() const {
-    const camera::RealismSettings& settings = camera_.realism_settings();
+    const camera_grid::RealismSettings& settings = camera_.realism_settings();
     const int clamped = std::clamp(settings.render_quality_percent, kMinRenderQuality, kQualityOptions[0]);
     return align_render_quality_percent(clamped);
 }
@@ -439,7 +439,7 @@ void Assets::apply_camera_runtime_settings() {
         const bool low_quality = (effective_percent < 100) && !force_high_quality_rendering_;
         scene->set_low_quality_rendering(low_quality);
     }
-    const camera::RealismSettings& settings = camera_.realism_settings();
+    const camera_grid::RealismSettings& settings = camera_.realism_settings();
     update_motion_smoothing_settings(settings);
     // Image effects are now handled by Python, so no longer setting global state here
 }
@@ -478,9 +478,9 @@ TransformSmoothingParams Assets::sanitize_smoothing(const TransformSmoothingPara
     return result;
 }
 
-void Assets::update_motion_smoothing_settings(const camera::RealismSettings& settings) {
+void Assets::update_motion_smoothing_settings(const camera_grid::RealismSettings& settings) {
     constexpr float kMinTau = 1e-4f;
-    auto build_translation_params = [&](const camera::RealismSettings& s) {
+    auto build_translation_params = [&](const camera_grid::RealismSettings& s) {
         TransformSmoothingParams result{};
         result.method = s.motion_smoothing_method;
         switch (result.method) {

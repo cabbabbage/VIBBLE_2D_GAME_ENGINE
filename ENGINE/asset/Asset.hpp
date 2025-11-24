@@ -22,7 +22,7 @@
 #include "animation_update/animation_update.hpp"
 #include "render/render.hpp"
 
-class camera;
+class camera_grid;
 class Assets;
 class Input;
 class AnimationFrame;
@@ -166,7 +166,7 @@ class Asset {
     void reset_last_rendered_frame() { last_rendered_frame_ = nullptr; }
     SDL_Texture* get_final_texture() const;
     void set_final_texture(SDL_Texture* tex);
-    void set_camera(camera* v) { window = v; }
+    void set_camera(camera_grid* v) { window = v; }
     void set_assets(Assets* a);
     Assets* get_assets() const { return assets_; }
     void set_tiling_info(std::optional<TilingInfo> info);
@@ -249,7 +249,7 @@ private:
     friend class FrameEditorSession;
     friend class Assets;
     friend class devmode::AnimationRegenerator;
-    camera* window = nullptr;
+    camera_grid* window = nullptr;
     bool highlighted = false;
     bool hidden = false;
     bool selected = false;

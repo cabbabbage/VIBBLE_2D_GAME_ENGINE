@@ -29,7 +29,8 @@ class Asset;
 class AnimationFrame;
 class LightMap;
 class AssetLibrary;
-class camera;
+class camera_grid;
+using camera = camera_grid;
 class LightSource;
 namespace world { class Chunk; }
 namespace world { class Grid; }
@@ -84,7 +85,7 @@ public:
     void render(SDL_Renderer* renderer);
 
     // Render using explicit camera and grid references.
-    void render(SDL_Renderer* renderer, const camera& cam, const world::Grid& grid);
+    void render(SDL_Renderer* renderer, const camera_grid& cam, const world::Grid& grid);
 
 private:
     Assets* assets_ = nullptr;
@@ -221,7 +222,7 @@ public:
 
 
 struct SceneLighting {
-    camera&                camera_view;
+    camera_grid&                camera_view;
     Global_Light_Source&   main_light;
     Asset*                 player = nullptr;
     const LightMap*        light_map_sampler = nullptr;
@@ -262,8 +263,8 @@ struct StageContext {
     Uint8                    main_light_brightness() const;
     Global_Light_Source&     main_light();
     const Global_Light_Source& main_light() const;
-    camera&                  camera_view();
-    const camera&            camera_view() const;
+    camera_grid&                  camera_view();
+    const camera_grid&            camera_view() const;
     Asset*                   player() const;
     const LightMap*   light_map() const { return lighting ? lighting->light_map_sampler : nullptr; }
     void update_projection(Asset& asset);
@@ -401,7 +402,7 @@ private:
     bool has_dark_mask_overlay_sources();
     bool ensure_sky_texture();
     void destroy_sky_texture();
-    void render_sky_layer(const camera& cam, bool depth_effects_enabled);
+    void render_sky_layer(const camera_grid& cam, bool depth_effects_enabled);
 
 
     SDL_Renderer*  renderer_;
@@ -1055,5 +1056,3 @@ public:
 };
 
 }
-
-
