@@ -1422,7 +1422,7 @@ void Assets::rebuild_all_assets_from_grid() {
     std::vector<std::pair<world::GridId, Asset*>> collected;
     collected.reserve(world_grid_.points().size());
     for (const auto& entry : world_grid_.points()) {
-        const GridId id = entry.first;
+        const world::GridId id = entry.first;
         const world::GridPoint& point = entry.second;
         for (const auto& occ : point.occupants) {
             if (occ) {
@@ -1636,25 +1636,26 @@ bool Assets::process_removals() {
         return false;
     }
 
-    std::vector<std::unique_ptr<Asset>> owned_removed;
-    owned_removed.reserve(pending_removals.size());
-
     for (Asset* asset : pending_removals) {
-        render_pipeline::shading::ClearShadowStateFor(asset);
-
-        std::unique_ptr<Asset> owned = world_grid_.remove_asset(asset);
-        Asset* raw = owned.get();
-        if (raw) {
-            raw->clear_grid_residency_cache();
-            if (raw->info && !raw->info->light_sources.empty()) {
-                if (raw->info->moving_asset) {
-                    notify_light_map_asset_moved(raw);
-                } else {
-                    notify_light_map_static_assets_changed();
-                }
-            }
-            owned_removed.push_back(std::move(owned));
+        if (!asset) {
+            continue;
         }
+
+        const bool has_light_sources = asset->info && !asset->info->light_sources.empty();
+        const bool moving_light      = has_light_sources && asset->info->moving_asset;
+
+        render_pipeline::shading::ClearShadowStateFor(asset);
+        asset->clear_grid_residency_cache();
+
+        if (has_light_sources) {
+            if (moving_light) {
+                notify_light_map_asset_moved(asset);
+            } else {
+                notify_light_map_static_assets_changed();
+            }
+        }
+
+        (void)world_grid_.remove_asset(asset);
     }
 
     rebuild_all_assets_from_grid();

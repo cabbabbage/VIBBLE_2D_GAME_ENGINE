@@ -2087,19 +2087,19 @@
         "background_plane_screen_y": 198.0,
         "background_texture_max_opacity": 0,
         "base_height_at_zoom_high": 315.0,
-        "base_height_at_zoom_low": 2225.0,
-        "base_height_px": 1270.0,
+        "base_height_at_zoom_low": 1980.0,
+        "base_height_px": 1147.5,
         "depth_offset_at_zoom_high": -845.0,
-        "depth_offset_at_zoom_low": 2440.0,
+        "depth_offset_at_zoom_low": -2565.0,
         "distance_scale_at_zoom_high": 1.0,
-        "distance_scale_at_zoom_low": 0.5899999737739563,
-        "distance_scale_strength": 0.7949999570846558,
+        "distance_scale_at_zoom_low": 0.25,
+        "distance_scale_strength": 0.625,
         "foreground_plane_screen_y": 902.0,
         "foreground_texture_max_opacity": 0,
         "foreshorten_at_zoom_high": 0.0,
-        "foreshorten_at_zoom_low": 0.44999998807907104,
-        "foreshorten_strength": 0.22499999403953552,
-        "grid_depth_offset_px": 797.5,
+        "foreshorten_at_zoom_low": 0.47999998927116394,
+        "foreshorten_strength": 0.23999999463558197,
+        "grid_depth_offset_px": -1705.0,
         "min_visible_screen_ratio": 0.006000000052154064,
         "motion_smoothing_max_step": 300.0,
         "motion_smoothing_method": 1,
@@ -2116,10 +2116,10 @@
         "scale_hysteresis_margin": 0.029999999329447746,
         "smooth_motion_zoom": true,
         "texture_opacity_falloff_method": 3,
-        "tilt_zoom_in_degrees": 60.1409797668457,
+        "tilt_zoom_in_degrees": 22.011281967163086,
         "tilt_zoom_out_degrees": 25.1593017578125,
         "zoom_high": 3.999999761581421,
-        "zoom_low": 0.19999998807907104
+        "zoom_low": 0.25
       },
       "content_root": "MAPS/FORREST",
       "map_assets_data": {
@@ -2419,9 +2419,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            36,
+            37,
             242,
-            113,
+            36,
             255
           ],
           "edge_smoothness": 43,
@@ -2472,8 +2472,8 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            242,
             85,
+            239,
             242,
             255
           ],

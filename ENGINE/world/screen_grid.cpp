@@ -76,8 +76,8 @@ SDL_Rect ScreenGrid::compute_world_rect(const camera& cam) const {
     return world_rect;
 }
 
-void ScreenGrid::collect_candidates(const Grid& world_grid) {
-    const auto& source_points = world_grid.points();
+void ScreenGrid::collect_candidates(Grid& world_grid) {
+    auto& source_points = world_grid.points();
     if (source_points.empty()) {
         return;
     }
@@ -90,14 +90,14 @@ void ScreenGrid::collect_candidates(const Grid& world_grid) {
     const bool use_active_filter = !active_lookup.empty();
 
     warped_points_.reserve(source_points.size());
-    for (const auto& entry : source_points) {
-        const GridPoint& src = entry.second;
+    for (auto& entry : source_points) {
+        GridPoint& src = entry.second;
         if (use_active_filter) {
             if (!src.chunk || active_lookup.find(src.chunk) == active_lookup.end()) {
                 continue;
             }
         }
-        warped_points_.push_back(src);
+        warped_points_.push_back(&src);
         id_to_index_[src.id] = warped_points_.size() - 1;
     }
 }
@@ -109,46 +109,49 @@ void ScreenGrid::warp_points(const Grid& world_grid, const camera& cam) {
 
     visible_points_.clear();
 
-    for (GridPoint& point : warped_points_) {
-        SDL_FPoint base = cam.map_to_screen(point.world);
-        const float warped_y = cam.warp_floor_screen_y(static_cast<float>(point.world.y), base.y);
+    for (GridPoint* point : warped_points_) {
+        if (!point) {
+            continue;
+        }
+        SDL_FPoint base = cam.map_to_screen(point->world);
+        const float warped_y = cam.warp_floor_screen_y(static_cast<float>(point->world.y), base.y);
         if (std::isfinite(warped_y)) {
             base.y = warped_y;
         }
-        const float parallax_dx = world_grid.parallax_offset(point.world);
+        const float parallax_dx = world_grid.parallax_offset(point->world);
         base.x += parallax_dx;
 
-        point.parallax_dx    = parallax_dx;
-        point.screen         = base;
-        camera::RenderEffects effects = cam.compute_render_effects(point.world, 1.0f, 1.0f);
-        point.vertical_scale = effects.vertical_scale;
-        point.distance_scale = effects.distance_scale;
+        point->parallax_dx    = parallax_dx;
+        point->screen         = base;
+        camera::RenderEffects effects = cam.compute_render_effects(point->world, 1.0f, 1.0f);
+        point->vertical_scale = effects.vertical_scale;
+        point->distance_scale = effects.distance_scale;
 
         if (floor.enabled && std::isfinite(floor.camera_height)) {
-            const float ground_depth = static_cast<float>(point.world.y - floor.base_world_y);
-            point.distance_to_camera = std::hypot(ground_depth, static_cast<float>(floor.camera_height));
-            point.tilt_radians       = static_cast<float>(floor.pitch_radians);
+            const float ground_depth = static_cast<float>(point->world.y - floor.base_world_y);
+            point->distance_to_camera = std::hypot(ground_depth, static_cast<float>(floor.camera_height));
+            point->tilt_radians       = static_cast<float>(floor.pitch_radians);
         } else {
-            point.distance_to_camera = 0.0f;
-            point.tilt_radians       = 0.0f;
+            point->distance_to_camera = 0.0f;
+            point->tilt_radians       = 0.0f;
         }
 
-        point.on_screen = (base.x >= bounds_.left && base.x <= bounds_.right &&
-                           base.y >= bounds_.top && base.y <= bounds_.bottom);
+        point->on_screen = (base.x >= bounds_.left && base.x <= bounds_.right &&
+                            base.y >= bounds_.top && base.y <= bounds_.bottom);
 
-        if (!point.on_screen) {
+        if (!point->on_screen) {
             continue;
         }
 
-        if (point.chunk && seen_chunks.insert(point.chunk).second) {
-            active_chunks_.push_back(point.chunk);
+        if (point->chunk && seen_chunks.insert(point->chunk).second) {
+            active_chunks_.push_back(point->chunk);
         }
 
-        if (!point.occupants.empty()) {
-            visible_points_.push_back(&point);
+        if (!point->occupants.empty()) {
+            visible_points_.push_back(point);
         }
 
-        for (const auto& occupant_up : point.occupants) {
+        for (const auto& occupant_up : point->occupants) {
             Asset* occupant = occupant_up.get();
             if (occupant && seen_assets.insert(occupant).second) {
                 visible_assets_.push_back(occupant);
@@ -181,7 +184,7 @@ GridPoint* ScreenGrid::point_for_asset(const Asset* asset) {
     if (it->second >= warped_points_.size()) {
         return nullptr;
     }
-    return &warped_points_[it->second];
+    return warped_points_[it->second];
 }
 
 const GridPoint* ScreenGrid::point_for_asset(const Asset* asset) const {
@@ -196,7 +199,7 @@ const GridPoint* ScreenGrid::point_for_asset(const Asset* asset) const {
     if (it->second >= warped_points_.size()) {
         return nullptr;
     }
-    return &warped_points_[it->second];
+    return warped_points_[it->second];
 }
 
 }  // namespace world

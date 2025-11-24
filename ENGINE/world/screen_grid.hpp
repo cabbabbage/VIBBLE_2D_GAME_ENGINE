@@ -27,7 +27,7 @@ public:
 
     void rebuild(Grid& world_grid, const camera& cam, float dt_seconds);
 
-    const std::vector<GridPoint>& warped_points() const { return warped_points_; }
+    const std::vector<GridPoint*>& warped_points() const { return warped_points_; }
     const std::vector<Asset*>& visible_assets() const { return visible_assets_; }
     const std::vector<GridPoint*>& visible_points() const { return visible_points_; }
     const Bounds& bounds() const { return bounds_; }
@@ -40,12 +40,12 @@ private:
     void clear();
     void rebuild_bounds(const camera& cam);
     SDL_Rect compute_world_rect(const camera& cam) const;
-    void collect_candidates(const Grid& world_grid);
+    void collect_candidates(Grid& world_grid);
     void warp_points(const Grid& world_grid, const camera& cam);
     void rebuild_active_chunks(const Grid& world_grid);
 
     Bounds bounds_{};
-    std::vector<GridPoint> warped_points_{};
+    std::vector<GridPoint*> warped_points_{};
     std::vector<Asset*> visible_assets_{};
     std::vector<GridPoint*> visible_points_{};
     std::vector<Chunk*> active_chunks_{};

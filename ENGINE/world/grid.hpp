@@ -46,9 +46,9 @@ public:
     std::vector<Chunk*> all_chunks() const;
 
     Asset* move_asset_to_point(Asset* a, SDL_Point old_pos, SDL_Point new_pos);
-    void move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos);
-    // Removes an asset from the grid, returning ownership to the caller.
-    std::unique_ptr<Asset> remove_asset(Asset* a);
+    Asset* move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos);
+    // Removes an asset from the grid; ownership is destroyed internally.
+    Asset* remove_asset(Asset* a);
     void unregister_asset(Asset* a);
     void rebuild_chunks();
 
@@ -75,6 +75,7 @@ public:
     SDL_Point grid_index_from_world(SDL_Point world) const;
     GridId point_id_from_world(SDL_Point world) const;
     const std::unordered_map<GridId, GridPoint>& points() const { return points_; }
+    std::unordered_map<GridId, GridPoint>& points() { return points_; }
     GridPoint* point_for_id(GridId id);
     const GridPoint* point_for_id(GridId id) const;
     GridPoint* point_for_asset(const Asset* asset);
