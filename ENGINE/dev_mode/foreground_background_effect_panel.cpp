@@ -831,8 +831,8 @@ void ForegroundBackgroundEffectPanel::refresh_from_camera() {
         load_current_mode_settings();
         return;
     }
-    camera& cam = assets_->getView();
-    const camera::RealismSettings& settings = cam.realism_settings();
+    camera_grid& cam = assets_->getView();
+    const camera_grid::RealismSettings& settings = cam.realism_settings();
     fg_settings_ = settings.foreground_effects;
     bg_settings_ = settings.background_effects;
     saved_fg_ = fg_settings_;
@@ -973,8 +973,8 @@ void ForegroundBackgroundEffectPanel::apply_and_regenerate() {
 
     // Save settings to manifest and camera
     save_depth_cue_settings_to_manifest();
-    camera& cam = assets_->getView();
-    camera::RealismSettings settings = cam.realism_settings();
+    camera_grid& cam = assets_->getView();
+    camera_grid::RealismSettings settings = cam.realism_settings();
     settings.foreground_effects = fg_settings_;
     settings.background_effects = bg_settings_;
     cam.set_realism_settings(settings);

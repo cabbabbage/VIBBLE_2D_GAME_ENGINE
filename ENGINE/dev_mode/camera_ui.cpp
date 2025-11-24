@@ -794,7 +794,7 @@ public:
             zoom_slider_->set_on_value_changed([this](float) { notify_change(); });
         }
 
-        tilt_widget_ = std::make_unique<PitchDialWidget>("Tilt (Pitch)", pitch_to_angle_deg(values.pitch_degrees), camera::kMinPitchDegrees, camera::kMaxPitchDegrees);
+        tilt_widget_ = std::make_unique<PitchDialWidget>("Tilt (Pitch)", pitch_to_angle_deg(values.pitch_degrees), camera_grid::kMinPitchDegrees, camera_grid::kMaxPitchDegrees);
         if (tilt_widget_) {
             tilt_widget_->set_tooltip("Camera pitch at this zoom level.");
             tilt_widget_->set_on_angle_changed([this](float) { notify_change(); });
@@ -1129,7 +1129,7 @@ void CameraUIPanel::layout_custom_content(int screen_w, int screen_h) const {
 
 void CameraUIPanel::sync_from_camera() {
     if (!assets_) return;
-    camera& cam = assets_->getView();
+    camera_grid& cam = assets_->getView();
     last_settings_ = cam.realism_settings();
     bool effects_enabled = cam.realism_enabled() && cam.parallax_enabled();
     last_realism_enabled_ = effects_enabled;
@@ -1212,7 +1212,7 @@ void CameraUIPanel::build_ui() {
     depthcue_widget_ = std::make_unique<CheckboxWidget>(depthcue_checkbox_.get());
     depthcue_widget_->set_tooltip("Toggle depth cue texture compositing.\nDoes not affect parallax or foreshortening.");
 
-    camera::RealismSettings defaults = last_settings_;
+    camera_grid::RealismSettings defaults = last_settings_;
     if (assets_) {
         defaults = assets_->getView().realism_settings();
     }
@@ -1266,7 +1266,7 @@ void CameraUIPanel::build_ui() {
         zoom_in_defaults,
         zoom_in_settings_expanded_,
         0.1f,
-        camera::kMaxZoomAnchors);
+        camera_grid::kMaxZoomAnchors);
     if (zoom_in_keypoint_) {
         zoom_in_keypoint_->set_on_value_changed([this]() { on_control_value_changed(); });
         zoom_in_keypoint_->set_on_expanded_changed([this](bool expanded) {
@@ -1290,7 +1290,7 @@ void CameraUIPanel::build_ui() {
         zoom_out_defaults,
         zoom_out_settings_expanded_,
         0.1f,
-        camera::kMaxZoomAnchors);
+        camera_grid::kMaxZoomAnchors);
     if (zoom_out_keypoint_) {
         zoom_out_keypoint_->set_on_value_changed([this]() { on_control_value_changed(); });
         zoom_out_keypoint_->set_on_expanded_changed([this](bool expanded) {
@@ -1410,8 +1410,8 @@ void CameraUIPanel::snap_zoom_to_anchor(float target_zoom, bool anchor_is_min_se
     if (!assets_ || !is_visible()) return;
     (void)anchor_is_min_section;
 
-    camera& cam = assets_->getView();
-    const float clamped_target = std::clamp(target_zoom, camera::kMinZoomAnchors, camera::kMaxZoomAnchors);
+    camera_grid& cam = assets_->getView();
+    const float clamped_target = std::clamp(target_zoom, camera_grid::kMinZoomAnchors, camera_grid::kMaxZoomAnchors);
     SDL_Point focus = cam.get_screen_center();
     cam.set_manual_zoom_override(true);
     if (assets_->player) {
@@ -1484,7 +1484,7 @@ void CameraUIPanel::apply_settings_if_needed() {
         explicit ScopedApplyingGuard(bool& f) : flag(f) { flag = true; }
         ~ScopedApplyingGuard() { flag = false; }
     } guard(applying_settings_);
-    camera::RealismSettings settings = read_settings_from_ui();
+    camera_grid::RealismSettings settings = read_settings_from_ui();
     const bool effects_enabled = realism_enabled_checkbox_
         ? realism_enabled_checkbox_->value()
         : last_realism_enabled_;
@@ -1494,7 +1494,7 @@ void CameraUIPanel::apply_settings_if_needed() {
         return std::fabs(a - b) > 0.0001f;
     };
     bool changed = (effects_enabled != last_realism_enabled_) || (depthcue_enabled != last_depthcue_enabled_);
-    const camera::RealismSettings& prev = last_settings_;
+    const camera_grid::RealismSettings& prev = last_settings_;
     changed = changed || differs(settings.zoom_low, prev.zoom_low) || differs(settings.zoom_high, prev.zoom_high);
     changed = changed || differs(settings.base_height_px, prev.base_height_px);
     changed = changed || differs(settings.tilt_zoom_in_degrees, prev.tilt_zoom_in_degrees) ||
@@ -1536,12 +1536,12 @@ void CameraUIPanel::apply_settings_if_needed() {
 
 
 
-void CameraUIPanel::apply_settings_to_camera(const camera::RealismSettings& settings,
+void CameraUIPanel::apply_settings_to_camera(const camera_grid::RealismSettings& settings,
                                              bool effects_enabled,
                                              bool depthcue_enabled) {
     if (!assets_) return;
-    camera& cam = assets_->getView();
-    camera::RealismSettings effective = settings;
+    camera_grid& cam = assets_->getView();
+    camera_grid::RealismSettings effective = settings;
     if (!depthcue_enabled) {
         effective.foreground_texture_max_opacity = 0;
         effective.background_texture_max_opacity = 0;
@@ -1588,8 +1588,8 @@ void CameraUIPanel::apply_settings_to_camera(const camera::RealismSettings& sett
     last_depthcue_enabled_ = depthcue_enabled;
 }
 
-camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
-    camera::RealismSettings settings = last_settings_;
+camera_grid::RealismSettings CameraUIPanel::read_settings_from_ui() const {
+    camera_grid::RealismSettings settings = last_settings_;
     if (min_render_size_slider_) settings.min_visible_screen_ratio = std::clamp(min_render_size_slider_->value(), 0.0f, 0.5f);
     if (render_quality_slider_) settings.render_quality_percent = render_quality_slider_->value();
     if (smoothing_checkbox_) settings.smooth_motion_zoom = smoothing_checkbox_->value();
@@ -1634,10 +1634,10 @@ camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
     }
 
     settings.zoom_low = std::clamp(settings.zoom_low,
-                                   camera::kMinZoomAnchors,
-                                   camera::kMaxZoomAnchors);
-    const float min_high = std::min(camera::kMaxZoomAnchors, settings.zoom_low + 0.0001f);
-    settings.zoom_high = std::clamp(settings.zoom_high, min_high, camera::kMaxZoomAnchors);
+                                   camera_grid::kMinZoomAnchors,
+                                   camera_grid::kMaxZoomAnchors);
+    const float min_high = std::min(camera_grid::kMaxZoomAnchors, settings.zoom_low + 0.0001f);
+    settings.zoom_high = std::clamp(settings.zoom_high, min_high, camera_grid::kMaxZoomAnchors);
 
     if (zoom_in_keypoint_) {
         settings.depth_offset_at_zoom_low = std::clamp(min_values.depth_offset_px, -4000.0f, 4000.0f);
@@ -1651,8 +1651,8 @@ camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
         settings.foreshorten_at_zoom_high = std::max(0.0f, max_values.foreshorten_strength);
         settings.base_height_at_zoom_high = std::max(1.0f, max_values.base_height);
     }
-    settings.tilt_zoom_in_degrees  = std::clamp(settings.tilt_zoom_in_degrees, camera::kMinPitchDegrees, camera::kMaxPitchDegrees);
-    settings.tilt_zoom_out_degrees = std::clamp(settings.tilt_zoom_out_degrees, camera::kMinPitchDegrees, camera::kMaxPitchDegrees);
+    settings.tilt_zoom_in_degrees  = std::clamp(settings.tilt_zoom_in_degrees, camera_grid::kMinPitchDegrees, camera_grid::kMaxPitchDegrees);
+    settings.tilt_zoom_out_degrees = std::clamp(settings.tilt_zoom_out_degrees, camera_grid::kMinPitchDegrees, camera_grid::kMaxPitchDegrees);
 
     settings.foreshorten_strength =
         0.5f * (settings.foreshorten_at_zoom_low + settings.foreshorten_at_zoom_high);
@@ -1670,11 +1670,11 @@ camera::RealismSettings CameraUIPanel::read_settings_from_ui() const {
     };
     settings.foreground_texture_max_opacity = slider_to_opacity(foreground_texture_opacity_slider_.get());
     settings.background_texture_max_opacity = slider_to_opacity(background_texture_opacity_slider_.get());
-    auto clamp_curve_selection = [](DMDropdown* dropdown) -> camera::BlurFalloffMethod {
-        if (!dropdown) return camera::BlurFalloffMethod::Linear;
+    auto clamp_curve_selection = [](DMDropdown* dropdown) -> camera_grid::BlurFalloffMethod {
+        if (!dropdown) return camera_grid::BlurFalloffMethod::Linear;
         int sel = dropdown->selected();
         sel = std::clamp(sel, 0, 4);
-        return static_cast<camera::BlurFalloffMethod>(sel);
+        return static_cast<camera_grid::BlurFalloffMethod>(sel);
     };
     settings.texture_opacity_falloff_method = clamp_curve_selection(texture_opacity_interp_dropdown_.get());
     return settings;

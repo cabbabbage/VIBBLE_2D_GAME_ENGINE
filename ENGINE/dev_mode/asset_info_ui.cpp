@@ -724,7 +724,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
         const bool pointer_event =
             (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
         if (pointer_event && target_asset_ && target_asset_->info.get() == info_.get()) {
-            const camera& cam = assets_->getView();
+            const camera_grid& cam = assets_->getView();
 
             // Build a transform consistent with SceneRenderer::render_lights_for_source
             auto compute_light_transform = [&]() {
@@ -750,8 +750,8 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                 const float base_sh = static_cast<float>(fh) * base_scale * inv_scale;
 
                 const float ref_sh = compute_player_screen_height(cam);
-                const camera::RenderSmoothingKey smoothing_key = reinterpret_cast<camera::RenderSmoothingKey>(target_asset_);
-                camera::RenderEffects ef = cam.compute_render_effects(
+                const camera_grid::RenderSmoothingKey smoothing_key = reinterpret_cast<camera_grid::RenderSmoothingKey>(target_asset_);
+                camera_grid::RenderEffects ef = cam.compute_render_effects(
                     SDL_Point{ target_asset_->pos.x, target_asset_->pos.y },
                     base_sh,
                     ref_sh,
@@ -1155,7 +1155,7 @@ void AssetInfoUI::apply_camera_override(bool enable) {
     }
 }
 
-float AssetInfoUI::compute_player_screen_height(const camera& cam) const {
+float AssetInfoUI::compute_player_screen_height(const camera_grid& cam) const {
     if (!assets_ || !assets_->player) return 1.0f;
     Asset* player_asset = assets_->player;
     if (!player_asset) return 1.0f;
@@ -1183,7 +1183,7 @@ float AssetInfoUI::compute_player_screen_height(const camera& cam) const {
     return 1.0f;
 }
 
-void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const {
+void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera_grid& cam) const {
     if (!visible_ || !info_) return;
 
     validate_target_asset();
@@ -1201,7 +1201,7 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
         SDL_SetRenderDrawColor(r, lh.r, lh.g, lh.b, 220);
 
         // Compute transform consistent with runtime light rendering
-        const camera& cam = assets_->getView();
+        const camera_grid& cam = assets_->getView();
         auto compute_light_transform = [&]() {
             struct Xform { float cx; float cy; float sx; float sy; } out{0,0,1,1};
             int fw = target_asset_->cached_w;
@@ -1224,8 +1224,8 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera& cam) const
             const float base_sh = static_cast<float>(fh) * base_scale * inv_scale;
 
             const float ref_sh = compute_player_screen_height(cam);
-            const camera::RenderSmoothingKey smoothing_key = reinterpret_cast<camera::RenderSmoothingKey>(target_asset_);
-            camera::RenderEffects ef = cam.compute_render_effects(
+            const camera_grid::RenderSmoothingKey smoothing_key = reinterpret_cast<camera_grid::RenderSmoothingKey>(target_asset_);
+            camera_grid::RenderEffects ef = cam.compute_render_effects(
                 SDL_Point{ target_asset_->pos.x, target_asset_->pos.y },
                 base_sh,
                 ref_sh,

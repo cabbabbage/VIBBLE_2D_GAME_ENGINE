@@ -1599,7 +1599,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
             };
             if (hover_depthcue_foreground_) {
                 depthcue_drag_state_ = DepthCueDragState::Foreground;
-                const camera::RealismSettings& settings = assets_->getView().realism_settings();
+                const camera_grid::RealismSettings& settings = assets_->getView().realism_settings();
                 depthcue_drag_start_y_ = clamp_line(settings.foreground_plane_screen_y);
                 depthcue_drag_mouse_start_ = event.button.y;
                 if (input_) {
@@ -1608,7 +1608,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                 return;
             } else if (hover_depthcue_background_) {
                 depthcue_drag_state_ = DepthCueDragState::Background;
-                const camera::RealismSettings& settings = assets_->getView().realism_settings();
+                const camera_grid::RealismSettings& settings = assets_->getView().realism_settings();
                 depthcue_drag_start_y_ = clamp_line(settings.background_plane_screen_y);
                 depthcue_drag_mouse_start_ = event.button.y;
                 if (input_) {
@@ -1871,7 +1871,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
 
     if (renderer && camera_panel_ && camera_panel_->is_visible() && assets_) {
         const camera_grid& cam = assets_->getView();
-        const camera::FloorDepthParams depth_params = cam.compute_floor_depth_params();
+        const camera_grid::FloorDepthParams depth_params = cam.compute_floor_depth_params();
         if (depth_params.enabled) {
             SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
             SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
@@ -2037,7 +2037,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         }
     }
     if (renderer && map_mode_ui_ && map_mode_ui_->is_light_panel_visible() && assets_) {
-        const camera& cam = assets_->getView();
+        const camera_grid& cam = assets_->getView();
         SDL_Point screen_center_map = cam.get_screen_center();
         SDL_FPoint screen_center_f = cam.map_to_screen(screen_center_map);
         SDL_Point screen_center{static_cast<int>(std::lround(screen_center_f.x)),
@@ -2057,8 +2057,8 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     }
 
     if (renderer && camera_panel_ && camera_panel_->is_blur_section_visible() && assets_ && screen_w_ > 0 && screen_h_ > 0) {
-        const camera& cam = assets_->getView();
-        const camera::RealismSettings& settings = cam.realism_settings();
+        const camera_grid& cam = assets_->getView();
+        const camera_grid::RealismSettings& settings = cam.realism_settings();
         SDL_FPoint center_world_f = cam.get_view_center_f();
         SDL_FPoint center_screen_f = cam.map_to_screen_f(center_world_f);
         float center_y = std::isfinite(center_screen_f.y)
@@ -2135,7 +2135,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
 
     // When the Camera Settings panel is open, draw a crosshair at the rendered focus point (actual view center).
     if (renderer && camera_panel_ && camera_panel_->is_visible() && assets_) {
-        const camera& cam = assets_->getView();
+        const camera_grid& cam = assets_->getView();
         SDL_FPoint center_world_f = cam.get_view_center_f();
         SDL_FPoint center_screen_f = cam.map_to_screen_f(center_world_f);
         const int cx = static_cast<int>(std::lround(center_screen_f.x));

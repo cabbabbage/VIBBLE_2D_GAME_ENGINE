@@ -28,7 +28,7 @@ class Section_BasicInfo : public DockableCollapsible {
     void layout() override { DockableCollapsible::layout(); }
     bool handle_event(const SDL_Event& e) override;
     void render_content(SDL_Renderer* r) const override {}
-    void render_world_overlay(SDL_Renderer* r, const camera& cam, const Asset* target, float reference_screen_height) const;
+    void render_world_overlay(SDL_Renderer* r, const camera_grid& cam, const Asset* target, float reference_screen_height) const;
 
   private:
     static int find_index(const std::vector<std::string>& opts, const std::string& value);
@@ -233,7 +233,7 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
 }
 
 inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
-                                                    const camera& cam,
+                                                    const camera_grid& cam,
                                                     const Asset* target,
                                                     float reference_screen_height) const {
     if (!is_expanded() || !target || !target->info) return;
@@ -265,7 +265,7 @@ inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
         SDL_Point{target->pos.x, target->pos.y},
         base_sh,
         reference_screen_height <= 0.0f ? 1.0f : reference_screen_height,
-        reinterpret_cast<camera::RenderSmoothingKey>(target));
+                                                    reinterpret_cast<camera_grid::RenderSmoothingKey>(target));
 
     float scaled_sw = base_sw * effects.distance_scale;
     float scaled_sh = base_sh * effects.distance_scale;

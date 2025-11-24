@@ -2628,12 +2628,12 @@ bool RoomEditor::compute_asset_screen_bounds(const camera& cam,
 
     const float world_x = static_cast<float>(asset->pos.x);
     const float world_y = static_cast<float>(asset->pos.y);
-    const camera::RenderEffects effects =
+    const camera_grid::RenderEffects effects =
         cam.compute_render_effects(
             SDL_Point{ static_cast<int>(std::lround(world_x)), static_cast<int>(std::lround(world_y)) },
             base_sh,
             reference_height,
-            reinterpret_cast<camera::RenderSmoothingKey>(asset));
+            reinterpret_cast<camera_grid::RenderSmoothingKey>(asset));
 
     const float scaled_sw = base_sw * effects.distance_scale;
     const float scaled_sh = base_sh * effects.distance_scale;

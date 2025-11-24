@@ -2350,7 +2350,7 @@ void SceneRenderer::render(){
                     const int grid_step = std::max(1, 1 << std::clamp(cmd.asset->grid_resolution, 0, vibble::grid::kMaxResolution));
 
                     // Camera parameters
-                    camera& cam = assets_->getView();
+                    camera_grid& cam = assets_->getView();
                     const float scale = std::max(1e-6f, cam.get_scale());
                     const float inv_scale_local = 1.0f / scale;
 

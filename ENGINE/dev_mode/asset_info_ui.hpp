@@ -47,7 +47,7 @@ class AssetInfoUI {
     void update(const Input& input, int screen_w, int screen_h);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r, int screen_w, int screen_h) const;
-    void render_world_overlay(SDL_Renderer* r, const class camera& cam) const;
+    void render_world_overlay(SDL_Renderer* r, const class camera_grid& cam) const;
     void pulse_header();
     void set_assets(Assets* a);
     Assets* assets() const { return assets_; }
@@ -79,7 +79,7 @@ class AssetInfoUI {
     void rebuild_default_sections();
     void layout_widgets(int screen_w, int screen_h) const;
     void apply_camera_override(bool enable);
-    float compute_player_screen_height(const class camera& cam) const;
+    float compute_player_screen_height(const class camera_grid& cam) const;
     void save_now() const;
     bool apply_section_to_assets(AssetInfoSectionId section_id, const std::vector<std::string>& asset_names);
     static const char* section_display_name(AssetInfoSectionId section_id);

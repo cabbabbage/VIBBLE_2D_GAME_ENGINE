@@ -306,9 +306,9 @@ SDL_FRect child_preview_rect(Assets* assets,
         static_cast<int>(std::lround(child_world.x)),
         static_cast<int>(std::lround(child_world.y))
     };
-    const camera::RenderSmoothingKey smoothing_key =
-        reinterpret_cast<camera::RenderSmoothingKey>(parent);
-    camera::RenderEffects ef = cam.compute_render_effects(
+    const camera_grid::RenderSmoothingKey smoothing_key =
+        reinterpret_cast<camera_grid::RenderSmoothingKey>(parent);
+    camera_grid::RenderEffects ef = cam.compute_render_effects(
         world_point,
         base_sh,
         ctx.reference_screen_height,

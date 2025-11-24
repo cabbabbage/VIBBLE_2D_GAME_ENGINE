@@ -53,7 +53,7 @@ void MapEditor::set_label_safe_area_provider(std::function<SDL_Rect()> provider)
     label_safe_area_provider_ = std::move(provider);
 }
 
-void MapEditor::set_camera_override_for_testing(camera* camera_override) {
+void MapEditor::set_camera_override_for_testing(camera_grid* camera_override) {
     camera_override_for_testing_ = camera_override;
 }
 
@@ -72,7 +72,7 @@ void MapEditor::enter() {
     pending_selection_ = nullptr;
     has_entry_center_ = false;
 
-    if (camera* cam = active_camera()) {
+    if (camera_grid* cam = active_camera()) {
         prev_manual_override_ = cam->is_manual_zoom_override();
         prev_focus_override_ = cam->has_focus_override();
         if (prev_focus_override_) {
@@ -101,7 +101,7 @@ void MapEditor::exit(bool focus_player, bool restore_previous_state) {
 
 void MapEditor::update(const Input& input) {
     if (!enabled_) return;
-    camera* cam = active_camera();
+    camera_grid* cam = active_camera();
     if (!cam) return;
 
     SDL_Point screen_pt{input.getX(), input.getY()};
