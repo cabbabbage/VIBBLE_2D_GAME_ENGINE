@@ -293,12 +293,7 @@ void Asset::finalize_setup() {
                 << "\" at (" << asset_child->pos.x << ", " << asset_child->pos.y << ")\n";
         }
 #endif
-        if (assets_ && !anim_) {
-                anim_runtime_ = std::make_unique<AnimationRuntime>(this, assets_);
-                anim_ = std::make_unique<AnimationUpdate>(this, assets_);
-                if (anim_runtime_) anim_runtime_->set_planner(anim_.get());
-                if (anim_) anim_->set_runtime(anim_runtime_.get());
-        }
+        ensure_animation_runtime(false);
         if (assets_ && !controller_) {
                 ControllerFactory cf(assets_);
                 controller_ = cf.create_for_asset(this);
@@ -511,12 +506,7 @@ void Asset::set_assets(Assets* a) {
     if (assets_) {
         assets_->track_asset_for_grid(this);
     }
-    if (assets_ && !anim_) {
-            anim_runtime_ = std::make_unique<AnimationRuntime>(this, assets_);
-            anim_ = std::make_unique<AnimationUpdate>(this, assets_);
-            if (anim_runtime_) anim_runtime_->set_planner(anim_.get());
-            if (anim_) anim_->set_runtime(anim_runtime_.get());
-    }
+    ensure_animation_runtime(false);
     if (!controller_ && assets_) {
             ControllerFactory cf(assets_);
             controller_ = cf.create_for_asset(this);
@@ -533,6 +523,25 @@ void Asset::set_tiling_info(std::optional<TilingInfo> info) {
 
 void Asset::set_owning_room_name(std::string name) {
     owning_room_name_ = std::move(name);
+}
+
+void Asset::rebuild_animation_runtime() {
+    ensure_animation_runtime(true);
+}
+
+void Asset::ensure_animation_runtime(bool force_recreate) {
+    if (!assets_) {
+        return;
+    }
+    if (!force_recreate && anim_ && anim_runtime_) {
+        return;
+    }
+    anim_runtime_.reset();
+    anim_.reset();
+    anim_runtime_ = std::make_unique<AnimationRuntime>(this, assets_);
+    anim_ = std::make_unique<AnimationUpdate>(this, assets_);
+    if (anim_runtime_) anim_runtime_->set_planner(anim_.get());
+    if (anim_) anim_->set_runtime(anim_runtime_.get());
 }
 
 AssetList* Asset::get_neighbors_list() { return neighbors.get(); }

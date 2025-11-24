@@ -93,7 +93,11 @@ class FrameChildrenEditor {
     SDL_Point drag_start_screen_{0, 0};
     SDL_FPoint drag_start_world_{0.0f, 0.0f};
     ChildFrame drag_snapshot_;
+    // Track the last-seen payload and children signature separately so we can safely
+    // detect changes without corrupting the cached JSON.
     std::string payload_signature_;
+    std::string payload_cache_;
+    std::string children_signature_cache_;
     struct ChildPreviewTexture {
         SDL_Renderer* renderer = nullptr;
         std::shared_ptr<SDL_Texture> texture;

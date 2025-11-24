@@ -1298,6 +1298,8 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     const bool pointer_event = is_pointer_event(event);
     const bool wheel_event = (event.type == SDL_MOUSEWHEEL);
     const bool pointer_relevant = pointer_event || wheel_event;
+    const bool keyboard_like_event =
+        (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP || event.type == SDL_TEXTINPUT);
     SDL_Point pointer{0, 0};
     if (pointer_relevant) {
         pointer = event_point(event);
@@ -1487,7 +1489,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
     }
 
     bool block_for_camera = pointer_event_inside_camera;
-    if ((event.type == SDL_KEYDOWN || event.type == SDL_KEYUP || event.type == SDL_TEXTINPUT) && pointer_over_camera_panel_) {
+    if (keyboard_like_event && pointer_over_camera_panel_) {
         block_for_camera = true;
     }
     if (block_for_camera) {
@@ -1497,7 +1499,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         return;
     }
     const bool block_image_effect = pointer_event_inside_image_effect_panel ||
-        ((event.type == SDL_KEYDOWN || event.type == SDL_KEYUP || event.type == SDL_TEXTINPUT) && pointer_over_image_effect_panel_);
+        (keyboard_like_event && pointer_over_image_effect_panel_);
     if (block_image_effect) {
         if (!pointer_relevant && input_) {
             input_->consumeEvent(event);
@@ -1641,7 +1643,8 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         }
     }
 
-    if (!(frame_editor_session_ && frame_editor_session_->is_active()) && can_route_room_editor && camera_panel_->is_visible()) {
+    if (!(frame_editor_session_ && frame_editor_session_->is_active()) && can_route_room_editor &&
+        (camera_panel_->is_visible() || keyboard_like_event)) {
         const bool handled = room_editor_ && room_editor_->handle_sdl_event(event);
         if (handled && input_) {
             const bool pointer_inside_room_ui = pointer_relevant && room_editor_ && room_editor_->is_room_ui_blocking_point(pointer.x, pointer.y);
@@ -1864,6 +1867,39 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         const int text_x = DMSpacing::panel_padding();
         const int text_y = screen_h_ - style.font_size - DMSpacing::panel_padding();
         DrawLabelText(renderer, *parallax_probe_label, text_x, text_y, style);
+    }
+
+    if (renderer && camera_panel_ && camera_panel_->is_visible() && assets_) {
+        const camera& cam = assets_->getView();
+        const camera::FloorDepthParams depth_params = cam.compute_floor_depth_params();
+        if (depth_params.enabled) {
+            SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
+            SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
+            Uint8 pr = 0, pg = 0, pb = 0, pa = 0;
+            SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
+
+            const world::Grid& grid = assets_->world_grid();
+            SDL_FPoint center_world = cam.get_view_center_f();
+            SDL_Point depth_world{
+                static_cast<int>(std::lround(center_world.x)),
+                static_cast<int>(std::lround(depth_params.base_world_y))
+            };
+            SDL_FPoint depth_screen = grid.floor_warped_screen_position(cam, depth_world);
+            const int y_line = static_cast<int>(std::lround(depth_screen.y));
+
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(renderer, 160, 210, 255, 200);
+            SDL_RenderDrawLine(renderer, 0, y_line, screen_w_, y_line);
+            const int marker_x = screen_w_ / 2;
+            SDL_RenderDrawLine(renderer, marker_x - 8, y_line, marker_x + 8, y_line);
+            DMLabelStyle style = DMStyles::Label();
+            style.color = SDL_Color{160, 210, 255, 200};
+            const int label_y = std::max(0, y_line - style.font_size - 2);
+            DrawLabelText(renderer, "Depth", marker_x + 12, label_y, style);
+
+            SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
+            SDL_SetRenderDrawBlendMode(renderer, prev_mode);
+        }
     }
 
     if (renderer && show_depth_guides) {

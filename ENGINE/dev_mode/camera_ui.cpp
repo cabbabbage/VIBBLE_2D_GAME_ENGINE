@@ -1244,7 +1244,6 @@ void CameraUIPanel::build_ui() {
     render_quality_slider_ = std::make_unique<DiscreteSliderWidget>("Render Quality (%)", std::vector<int>{100, 75, 50, 25, 10}, defaults.render_quality_percent);
     render_quality_slider_->set_tooltip("Trade fidelity for speed; lowers the number of sprites drawn each frame.");
     render_quality_slider_->set_on_value_changed([this](int) { on_control_value_changed(); });
-std::unique_ptr<FloatSliderWidget> cull_margin_slider_;
     if (cull_margin_slider_) cull_margin_slider_->set_value(last_settings_.extra_cull_margin);
 
     ZoomKeyPointWidget::Values zoom_in_defaults;
@@ -1469,6 +1468,14 @@ void CameraUIPanel::rebuild_rows() {
 
 void CameraUIPanel::apply_settings_if_needed() {
     if (!assets_) return;
+    if (applying_settings_) {
+        return;
+    }
+    struct ScopedApplyingGuard {
+        bool& flag;
+        explicit ScopedApplyingGuard(bool& f) : flag(f) { flag = true; }
+        ~ScopedApplyingGuard() { flag = false; }
+    } guard(applying_settings_);
     camera::RealismSettings settings = read_settings_from_ui();
     const bool effects_enabled = realism_enabled_checkbox_
         ? realism_enabled_checkbox_->value()

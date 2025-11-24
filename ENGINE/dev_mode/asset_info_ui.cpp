@@ -58,6 +58,7 @@
 #include "dev_mode/manifest_asset_utils.hpp"
 #include "dev_mode/asset_paths.hpp"
 #include "asset_info_methods/animation_loader.hpp"
+#include "dev_mode/rebuildAnimation.hpp"
 
 namespace asset_paths = devmode::asset_paths;
 
@@ -2102,46 +2103,14 @@ void AssetInfoUI::refresh_loaded_asset_instances() {
         (void)profile;
     }
 
-    // First refresh direct instances
-    bool updated_any = apply_to_assets_with_info([&](Asset* asset) {
-        asset->clear_render_caches();
-        asset->clear_downscale_cache();
-        asset->set_final_texture(nullptr);
-        asset->current_frame = nullptr;
-        asset->frame_progress = 0.0f;
-        asset->static_frame = false;
+    if (assets_) {
+        devmode::AnimationRegenerator::refresh_loaded_instances(assets_, info_);
+    }
 
-        std::string desired = asset->current_animation.empty() ? std::string{"default"} : asset->current_animation;
-        if (asset->anim_) {
-            asset->anim_->move(SDL_Point{ 0, 0 }, desired);
-        } else if (asset->info) {
-            auto it = asset->info->animations.find(desired);
-            if (it == asset->info->animations.end()) {
-                it = asset->info->animations.find("default");
-            }
-            if (it == asset->info->animations.end() && !asset->info->animations.empty()) {
-                it = asset->info->animations.begin();
-            }
-            if (it != asset->info->animations.end()) {
-                auto& anim = it->second;
-                asset->current_animation = it->first;
-                asset->current_frame = anim.get_first_frame();
-asset->static_frame = anim.is_frozen() || anim.locked;
-            } else {
-                asset->current_animation.clear();
-                asset->current_frame = nullptr;
-            }
-        }
-
-        asset->refresh_cached_dimensions();
-    });
-
-    // Also refresh sourced animations that reference this animation
     if (assets_ && !info_->name.empty()) {
         for (auto& [lib_name, lib_info] : assets_->library().all()) {
             if (!lib_info || lib_name == info_->name) continue;
 
-            // Check if this asset has animations that source from the updated asset
             bool needs_refresh = false;
             for (const auto& [anim_id, anim_data] : lib_info->animations) {
                 if (anim_data.source.kind == "animation" && anim_data.source.path == info_->name) {
@@ -2150,63 +2119,12 @@ asset->static_frame = anim.is_frozen() || anim.locked;
                 }
             }
 
-            if (needs_refresh) {
-                // Refresh instances of this sourced asset
-                std::unordered_set<Asset*> visited;
-                auto visit = [&](Asset* asset) {
-                    if (!asset || asset->info.get() != lib_info.get()) {
-                        return;
-                    }
-                    if (!visited.insert(asset).second) {
-                        return;
-                    }
-                    asset->clear_render_caches();
-                    asset->clear_downscale_cache();
-                    asset->set_final_texture(nullptr);
-                    asset->current_frame = nullptr;
-                    asset->frame_progress = 0.0f;
-                    asset->static_frame = false;
-
-                    std::string desired = asset->current_animation.empty() ? std::string{"default"} : asset->current_animation;
-                    if (asset->anim_) {
-                        asset->anim_->move(SDL_Point{ 0, 0 }, desired);
-                    } else if (asset->info) {
-                        auto it = asset->info->animations.find(desired);
-                        if (it == asset->info->animations.end()) {
-                            it = asset->info->animations.find("default");
-                        }
-                        if (it == asset->info->animations.end() && !asset->info->animations.empty()) {
-                            it = asset->info->animations.begin();
-                        }
-                        if (it != asset->info->animations.end()) {
-                            auto& anim = it->second;
-                            asset->current_animation = it->first;
-                            asset->current_frame = anim.get_first_frame();
-asset->static_frame = anim.is_frozen() || anim.locked;
-                        } else {
-                            asset->current_animation.clear();
-                            asset->current_frame = nullptr;
-                        }
-                    }
-
-                    asset->refresh_cached_dimensions();
-                };
-
-                if (assets_) {
-                    for (Asset* asset : assets_->all) {
-                        visit(asset);
-                    }
-                    for (const auto& owned : assets_->owned_assets) {
-                        visit(owned.get());
-                    }
-                }
-                updated_any = true;
+            if (!needs_refresh) {
+                continue;
             }
-        }
-    }
 
-    if (updated_any && assets_) {
-        assets_->mark_active_assets_dirty();
+            devmode::AnimationRegenerator::refresh_loaded_instances(assets_, lib_info);
+        }
     }
 }
 

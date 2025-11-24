@@ -22,8 +22,6 @@ public:
     static AnimationRegenerationResult regenerate_animation(Assets* assets,
                                                             const std::shared_ptr<AssetInfo>& info,
                                                             const std::string& animation_id);
-
-private:
     static void refresh_loaded_instances(Assets* assets,
                                          const std::shared_ptr<AssetInfo>& info);
 };

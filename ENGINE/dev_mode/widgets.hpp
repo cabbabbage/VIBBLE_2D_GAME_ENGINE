@@ -73,6 +73,8 @@ public:
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     bool is_editing() const { return editing_; }
+    void start_editing();
+    void stop_editing();
 
     int preferred_height(int width) const;
     static int height() { return 32; }

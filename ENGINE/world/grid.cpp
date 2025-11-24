@@ -15,43 +15,54 @@
 
 namespace world {
 
-int floor_div(int value, int step) {
-    if (step == 0) {
-        return 0;
-    }
-    const int quotient = value / step;
-    const int remainder = value % step;
-    if (remainder == 0) {
-        return quotient;
-    }
-    if ((remainder < 0) != (step < 0)) {
-        return quotient - 1;
-    }
-    return quotient;
-}
-
 namespace {
 
-// Default dt when caller passes bad dt.
-constexpr float  kDefaultParallaxDt = 1.0f / 60.0f;
-constexpr double kParallaxEpsilon   = 1e-6;
-constexpr double kPi                = 3.14159265358979323846;
-constexpr double kHalfFovY          = kPi / 4.0; // 45 deg vertical half-FOV
-constexpr double kParallaxMaxScreenRatio = 1.0 / 3.0; // player stays within ~1/3 screen, keep parallax subtle
+constexpr float kDefaultParallaxDt = 1.0f / 60.0f;
+constexpr double kPi = 3.14159265358979323846;
+constexpr double kHalfFovY = 3.14159265358979323846 / 3.0; // 60 degrees
+constexpr double kParallaxEpsilon = 1e-3;
+constexpr double kParallaxMaxScreenRatio = 0.35;
 
-TransformSmoothingParams sanitize_smoothing(const TransformSmoothingParams& params) {
-    TransformSmoothingParams out = params;
-    if (!std::isfinite(out.lerp_rate) || out.lerp_rate < 0.0f) out.lerp_rate = 0.0f;
-    if (!std::isfinite(out.spring_frequency) || out.spring_frequency < 0.0f) out.spring_frequency = 0.0f;
-    if (!std::isfinite(out.max_step) || out.max_step < 0.0f) out.max_step = 0.0f;
-    if (!std::isfinite(out.snap_threshold) || out.snap_threshold < 0.0f) out.snap_threshold = 0.0f;
-    switch (out.method) {
+int floor_div(int a, int b) {
+    if (b == 0) {
+        return 0;
+    }
+    int q = a / b;
+    int r = a % b;
+    if ((r != 0) && ((r > 0) != (b > 0))) {
+        --q;
+    }
+    return q;
+}
+
+TransformSmoothingParams sanitize_smoothing(TransformSmoothingParams p) {
+    TransformSmoothingParams out{};
+    out.method = p.method;
+    switch (p.method) {
     case TransformSmoothingMethod::None:
+        out.lerp_rate = 0.0f;
+        out.spring_frequency = 0.0f;
+        out.max_step = 0.0f;
+        out.snap_threshold = 0.0f;
+        break;
     case TransformSmoothingMethod::Lerp:
+        out.lerp_rate = std::isfinite(p.lerp_rate) && p.lerp_rate > 0.0f ? p.lerp_rate : 0.0f;
+        out.spring_frequency = 0.0f;
+        out.max_step = std::isfinite(p.max_step) && p.max_step > 0.0f ? p.max_step : 0.0f;
+        out.snap_threshold = std::isfinite(p.snap_threshold) && p.snap_threshold > 0.0f ? p.snap_threshold : 0.0f;
+        break;
     case TransformSmoothingMethod::CriticallyDampedSpring:
+        out.spring_frequency = std::isfinite(p.spring_frequency) && p.spring_frequency > 0.0f ? p.spring_frequency : 0.0f;
+        out.lerp_rate = 0.0f;
+        out.max_step = std::isfinite(p.max_step) && p.max_step > 0.0f ? p.max_step : 0.0f;
+        out.snap_threshold = std::isfinite(p.snap_threshold) && p.snap_threshold > 0.0f ? p.snap_threshold : 0.0f;
         break;
     default:
         out.method = TransformSmoothingMethod::None;
+        out.lerp_rate = 0.0f;
+        out.spring_frequency = 0.0f;
+        out.max_step = 0.0f;
+        out.snap_threshold = 0.0f;
         break;
     }
     return out;
@@ -63,46 +74,21 @@ double wrap_degrees_0_360(double raw_value) {
     }
     double wrapped = std::fmod(raw_value, 360.0);
     if (wrapped < 0.0) wrapped += 360.0;
-    if (wrapped >= 360.0) {
-        wrapped = std::fmod(wrapped, 360.0);
-        if (wrapped < 0.0) wrapped += 360.0;
-    }
-    return std::isfinite(wrapped) ? wrapped : 0.0;
+    if (wrapped >= 360.0) wrapped -= 360.0;
+    return wrapped;
 }
 
-double normalize_pitch_degrees(double raw_value) {
-    const double wrapped = wrap_degrees_0_360(raw_value);
-    return std::clamp(
-        wrapped,
-        static_cast<double>(camera::kMinPitchDegrees),
-        static_cast<double>(camera::kMaxPitchDegrees));
+} // namespace
+
+Grid::ParallaxSmoothingState::ParallaxSmoothingState()
+    : current(0.0f)
+    , target(0.0f)
+    , velocity(0.0f)
+    , params{}
+    , initialized(false) {
 }
 
-double signed_radians_from_degrees(double degrees) {
-    const double wrapped = normalize_pitch_degrees(degrees);
-    const double signed_deg = (wrapped > 180.0) ? wrapped - 360.0 : wrapped;
-    return signed_deg * (kPi / 180.0);
-}
-
-int width_from_area(const Area& a) {
-    int minx, miny, maxx, maxy;
-    std::tie(minx, miny, maxx, maxy) = a.get_bounds();
-    (void)miny; (void)maxy;
-    return std::max(0, maxx - minx);
-}
-
-int height_from_area(const Area& a) {
-    int minx, miny, maxx, maxy;
-    std::tie(minx, miny, maxx, maxy) = a.get_bounds();
-    (void)minx; (void)maxx;
-    return std::max(0, maxy - miny);
-}
-
-} // anonymous namespace
-
-// ParallaxSmoother1D implementation
-
-void Grid::ParallaxSmoother1D::set_params(const TransformSmoothingParams& p) {
+void Grid::ParallaxSmoothingState::set_params(const TransformSmoothingParams& p) {
     params = p;
     if (!std::isfinite(params.lerp_rate) || params.lerp_rate < 0.0f) {
         params.lerp_rate = 0.0f;
@@ -118,13 +104,13 @@ void Grid::ParallaxSmoother1D::set_params(const TransformSmoothingParams& p) {
     }
 }
 
-void Grid::ParallaxSmoother1D::reset(float value) {
+void Grid::ParallaxSmoothingState::reset(float value) {
     current  = value;
     target   = value;
-    velocity = 0.0f;
+    this->velocity = 0.0f;
 }
 
-void Grid::ParallaxSmoother1D::advance(float dt) {
+void Grid::ParallaxSmoothingState::advance(float dt) {
     if (!std::isfinite(dt) || dt <= 0.0f) {
         return;
     }
@@ -133,105 +119,119 @@ void Grid::ParallaxSmoother1D::advance(float dt) {
     const float max_step       = std::max(0.0f, params.max_step);
 
     const float delta = target - current;
-    if (snap_threshold > 0.0f && std::fabs(delta) < snap_threshold) {
+    if (!std::isfinite(delta)) {
+        return;
+    }
+
+    if (snap_threshold > 0.0f && std::fabs(delta) >= snap_threshold) {
         current  = target;
         velocity = 0.0f;
         return;
     }
 
     switch (params.method) {
-    case TransformSmoothingMethod::None: {
+    case TransformSmoothingMethod::None:
+        current  = target;
+        velocity = 0.0f;
+        break;
+    case TransformSmoothingMethod::Lerp:
+        {
+            float rate = params.lerp_rate;
+            if (!std::isfinite(rate) || rate <= 0.0f) {
+                rate = 0.0f;
+            }
+            const float alpha = 1.0f - std::exp(-rate * dt);
+            current = current + alpha * (target - current);
+            velocity = 0.0f;
+            break;
+        }
+    case TransformSmoothingMethod::CriticallyDampedSpring:
+        {
+            float freq = params.spring_frequency;
+            if (!std::isfinite(freq) || freq <= 0.0f) {
+                freq = 0.0f;
+            }
+            if (freq <= 0.0f) {
+                current  = target;
+                velocity = 0.0f;
+            } else {
+                const float omega = 2.0f * 3.14159265358979323846f * freq;
+                const float x     = current - target;
+                const float exp_term = std::exp(-omega * dt);
+                const float new_x    = (x + (velocity / omega)) * exp_term - (velocity / omega) * exp_term * exp_term;
+                const float new_v    = (velocity * exp_term * exp_term) - (omega * new_x);
+                current  = target + new_x;
+                velocity = new_v;
+            }
+            break;
+        }
+    default:
         current  = target;
         velocity = 0.0f;
         break;
     }
-    case TransformSmoothingMethod::Lerp: {
-        const float rate = std::max(0.0f, params.lerp_rate);
-        if (rate <= 0.0f) {
-            current  = target;
-            velocity = 0.0f;
-            break;
-        }
-        const float t = 1.0f - std::exp(-rate * dt);
-        float step = delta * t;
-        if (max_step > 0.0f) {
-            const float max_delta = max_step * dt;
-            if (step >  max_delta) step =  max_delta;
-            if (step < -max_delta) step = -max_delta;
-        }
-        current += step;
-        velocity = step / std::max(dt, 1e-6f);
-        break;
-    }
-    case TransformSmoothingMethod::CriticallyDampedSpring: {
-        const float PI_F = 3.14159265358979323846f;
-        const float freq = std::max(0.0f, params.spring_frequency);
-        if (freq <= 0.0f) {
-            current  = target;
-            velocity = 0.0f;
-            break;
-        }
-        const float omega = 2.0f * PI_F * freq;
-        const float x0    = current - target;
-        const float v0    = velocity;
-        const float e     = std::exp(-omega * dt);
 
-        const float x = (x0 + (v0 + omega * x0) * dt) * e;
-        const float v = (v0 - omega * (v0 + omega * x0) * dt) * e;
-
-        current  = target + x;
-        velocity = v;
-        break;
-    }
-    default:
-        break;
+    if (max_step > 0.0f && dt > 0.0f) {
+        const float max_delta = max_step * dt;
+        const float applied_delta = current - target;
+        if (std::fabs(applied_delta) > max_delta) {
+            const float clipped = target + std::copysign(max_delta, applied_delta);
+            current = clipped;
+        }
     }
 }
 
-// ParallaxCache implementation
-
-void Grid::ParallaxCache::reset() {
-    origin_i = origin_j = 0;
-    cells_x  = cells_y  = 0;
-    step     = 0;
-    values.clear();
-    ready = false;
+float Grid::ParallaxSmoothingState::value_for_render() const {
+    return current;
 }
 
-void Grid::ParallaxCache::configure(int origin_i_, int origin_j_,
-                                    int cells_x_, int cells_y_, int step_) {
-    origin_i = origin_i_;
-    origin_j = origin_j_;
-    cells_x  = cells_x_;
-    cells_y  = cells_y_;
-    step     = step_;
-    const std::size_t total = (cells_x > 0 && cells_y > 0)
-        ? static_cast<std::size_t>(cells_x) * static_cast<std::size_t>(cells_y)
-        : 0;
-    values.assign(total, 0.0f);
-    ready = false;
+Grid::ParallaxCache::ParallaxCache()
+    : origin_i(0)
+    , origin_j(0)
+    , width(0)
+    , height(0)
+    , step(0)
+    , ready(false) {
 }
 
-bool Grid::ParallaxCache::try_index(int i, int j, int step_param, std::size_t& out_index) const {
-    if (!ready) {
-        return false;
-    }
-    if (step_param != step || cells_x <= 0 || cells_y <= 0) {
+void Grid::ParallaxCache::configure(int i0, int j0, int w, int h, int s) {
+    origin_i = i0;
+    origin_j = j0;
+    width    = std::max(0, w);
+    height   = std::max(0, h);
+    step     = s;
+    const std::size_t count = static_cast<std::size_t>(std::max(0, width * height));
+    values.assign(count, 0.0f);
+    ready = true;
+}
+
+bool Grid::ParallaxCache::try_index(int i, int j, int s, std::size_t& out_index) const {
+    if (!ready || s != step || width <= 0 || height <= 0) {
         return false;
     }
     const int local_i = i - origin_i;
     const int local_j = j - origin_j;
-    if (local_i < 0 || local_j < 0 || local_i >= cells_x || local_j >= cells_y) {
+    if (local_i < 0 || local_i >= width || local_j < 0 || local_j >= height) {
         return false;
     }
-    const std::size_t idx =
-        static_cast<std::size_t>(local_j) * static_cast<std::size_t>(cells_x) +
-        static_cast<std::size_t>(local_i);
+    const std::size_t idx = static_cast<std::size_t>(local_j * width + local_i);
     if (idx >= values.size()) {
         return false;
     }
     out_index = idx;
     return true;
+}
+
+
+
+void Grid::ParallaxCache::clear() {
+    origin_i = 0;
+    origin_j = 0;
+    width    = 0;
+    height   = 0;
+    step     = 0;
+    ready    = false;
+    values.clear();
 }
 
 Grid::Grid(SDL_Point origin, int r_chunk)
@@ -253,213 +253,72 @@ void Grid::set_chunk_resolution(int r) {
         return;
     }
     r_chunk_ = clamped;
-    rebuild_chunks();
+    invalidate_active_cache();
+}
+
+void Grid::set_origin(SDL_Point origin) {
+    origin_ = origin;
+    invalidate_active_cache();
+}
+
+void Grid::invalidate_active_cache() {
+    chunks_.invalidate();
+    parallax_entries_.clear();
+    parallax_cache_.clear();
+}
+
+const Grid::ChunkGrid& Grid::chunks() const {
+    return chunks_;
+}
+
+Grid::ChunkGrid& Grid::chunks() {
+    return chunks_;
+}
+
+int Grid::chunk_resolution() const {
+    return r_chunk_;
+}
+
+SDL_Point Grid::origin() const {
+    return origin_;
 }
 
 void Grid::set_parallax_resolution(int r) {
     const int clamped = std::clamp(r, 0, vibble::grid::kMaxResolution);
-    if (clamped == parallax_resolution_) {
-        return;
+    if (clamped != parallax_resolution_) {
+        parallax_resolution_ = clamped;
+        parallax_entries_.clear();
+        parallax_cache_.clear();
     }
-    parallax_resolution_ = clamped;
-    clear_parallax_state();
+}
+
+int Grid::parallax_resolution() const {
+    return parallax_resolution_;
 }
 
 int Grid::parallax_step_size() const {
-    const int clamped = std::clamp(parallax_resolution_, 0, vibble::grid::kMaxResolution);
-    return 1 << clamped;
+    const int r = std::clamp(parallax_resolution_, 0, vibble::grid::kMaxResolution);
+    return 1 << r;
 }
 
-void Grid::register_asset(Asset* a) {
-    if (!a) return;
-    const SDL_Point p{a->pos.x, a->pos.y};
-    const int step = 1 << r_chunk_;
-    const int i = floor_div(p.x - origin_.x, step);
-    const int j = floor_div(p.y - origin_.y, step);
-    Chunk& c = chunks_.ensure(i, j, r_chunk_, origin_);
-    if (std::find(c.assets.begin(), c.assets.end(), a) == c.assets.end()) {
-        c.assets.push_back(a);
-        ++c.occlusion_revision;
-    }
-    residency_[a] = &c;
-}
-
-Chunk* Grid::ensure_chunk_from_world(SDL_Point world_px) {
-    const int step = 1 << r_chunk_;
-    const int i    = floor_div(world_px.x - origin_.x, step);
-    const int j    = floor_div(world_px.y - origin_.y, step);
-    return &chunks_.ensure(i, j, r_chunk_, origin_);
-}
-
-Chunk* Grid::chunk_from_world(SDL_Point world_px) const {
-    const int step = 1 << r_chunk_;
-    const int i    = floor_div(world_px.x - origin_.x, step);
-    const int j    = floor_div(world_px.y - origin_.y, step);
-    return chunks_.find(i, j);
-}
-
-Chunk* Grid::get_or_create_chunk_ij(int i, int j) {
-    return &chunks_.ensure(i, j, r_chunk_, origin_);
-}
-
-std::vector<Chunk*> Grid::all_chunks() const {
-    std::vector<Chunk*> result;
-    const auto& storage = chunks_.storage();
-    result.reserve(storage.size());
-    for (const auto& chunk : storage) {
-        if (chunk) {
-            result.push_back(chunk.get());
-        }
-    }
-    return result;
-}
-
-void Grid::move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos) {
-    if (!a) return;
-    const int step = 1 << r_chunk_;
-    const int old_i = floor_div(old_pos.x - origin_.x, step);
-    const int old_j = floor_div(old_pos.y - origin_.y, step);
-    const int new_i = floor_div(new_pos.x - origin_.x, step);
-    const int new_j = floor_div(new_pos.y - origin_.y, step);
-    if (old_i == new_i && old_j == new_j) return;
-
-    Chunk* current = nullptr;
-    if (auto it = residency_.find(a); it != residency_.end()) {
-        current = it->second;
-    }
-    if (current) {
-        remove_from_chunk(a, current);
-    }
-    Chunk& dest = chunks_.ensure(new_i, new_j, r_chunk_, origin_);
-    dest.assets.push_back(a);
-    ++dest.occlusion_revision;
-    residency_[a] = &dest;
-}
-
-void Grid::unregister_asset(Asset* a) {
-    if (!a) return;
-    auto it = residency_.find(a);
-    if (it == residency_.end()) return;
-    Chunk* c = it->second;
-    remove_from_chunk(a, c);
-    residency_.erase(it);
-}
-
-void Grid::rebuild_chunks() {
-    invalidate_active_cache();
-    std::vector<Asset*> assets;
-    assets.reserve(residency_.size());
-    for (auto& entry : residency_) {
-        if (entry.first) {
-            assets.push_back(entry.first);
-        }
-    }
-    residency_.clear();
-    chunks_.reset();
-    for (Asset* asset : assets) {
-        register_asset(asset);
-    }
-}
-
-const std::vector<Chunk*>& Grid::active_chunks() const {
-    return chunks_.active();
-}
-
-void Grid::update_active_chunks(const SDL_Rect& camera_world, int margin_px) {
-    const SDL_Rect expanded{
-        camera_world.x - margin_px,
-        camera_world.y - margin_px,
-        camera_world.w + margin_px * 2,
-        camera_world.h + margin_px * 2
-    };
-
-    if (has_cached_camera_rect_ &&
-        last_chunk_resolution_ == r_chunk_ &&
-        last_margin_px_ == margin_px &&
-        expanded.x == last_expanded_camera_.x &&
-        expanded.y == last_expanded_camera_.y &&
-        expanded.w == last_expanded_camera_.w &&
-        expanded.h == last_expanded_camera_.h) {
-        return;
-    }
-
-    chunks_.clear_active();
-    const int step = 1 << r_chunk_;
-    if (step <= 0) {
-        last_expanded_camera_ = expanded;
-        last_margin_px_ = margin_px;
-        last_chunk_resolution_ = r_chunk_;
-        has_cached_camera_rect_ = true;
-        return;
-    }
-
-    const int inclusive_right  = (expanded.w > 0) ? (expanded.x + expanded.w - 1) : expanded.x;
-    const int inclusive_bottom = (expanded.h > 0) ? (expanded.y + expanded.h - 1) : expanded.y;
-
-    int i_min = floor_div(expanded.x - origin_.x, step);
-    int j_min = floor_div(expanded.y - origin_.y, step);
-    int i_max = floor_div(inclusive_right - origin_.x, step);
-    int j_max = floor_div(inclusive_bottom - origin_.y, step);
-
-    constexpr int kBorderRadiusChunks = 1;
-    i_min -= kBorderRadiusChunks;
-    j_min -= kBorderRadiusChunks;
-    i_max += kBorderRadiusChunks;
-    j_max += kBorderRadiusChunks;
-
-    if (i_min > i_max || j_min > j_max) {
-        last_expanded_camera_ = expanded;
-        last_margin_px_ = margin_px;
-        last_chunk_resolution_ = r_chunk_;
-        has_cached_camera_rect_ = true;
-        return;
-    }
-
-    for (int j = j_min; j <= j_max; ++j) {
-        for (int i = i_min; i <= i_max; ++i) {
-            Chunk& c = chunks_.ensure(i, j, r_chunk_, origin_);
-            chunks_.active().push_back(&c);
-        }
-    }
-
-    last_expanded_camera_ = expanded;
-    last_margin_px_ = margin_px;
-    last_chunk_resolution_ = r_chunk_;
-    has_cached_camera_rect_ = true;
-}
-
-void Grid::remove_from_chunk(Asset* a, Chunk* c) {
-    if (!c) return;
-    auto& v = c->assets;
-    const auto old_size = v.size();
-    v.erase(std::remove(v.begin(), v.end(), a), v.end());
-    if (v.size() != old_size) {
-        ++c->occlusion_revision;
-    }
-}
-
-void Grid::invalidate_active_cache() {
-    has_cached_camera_rect_ = false;
-    last_expanded_camera_ = SDL_Rect{0, 0, 0, 0};
-    last_margin_px_ = -1;
-    last_chunk_resolution_ = -1;
+Grid::ParallaxKey Grid::parallax_key(int cell_i, int cell_j) const {
+    return ParallaxKey{cell_i, cell_j};
 }
 
 void Grid::clear_parallax_state() {
+    parallax_active_ = false;
     parallax_entries_.clear();
-    parallax_cache_.reset();
+    parallax_cache_.clear();
 }
 
-std::uint64_t Grid::parallax_key(int i, int j) const {
-    const auto hi = static_cast<std::uint32_t>(i);
-    const auto lo = static_cast<std::uint32_t>(j);
-    return (static_cast<std::uint64_t>(hi) << 32) | static_cast<std::uint64_t>(lo);
+bool Grid::parallax_active() const {
+    return parallax_active_;
 }
+
 void Grid::update_parallax(const camera& cam, float dt) {
     const float clamped_dt = (std::isfinite(dt) && dt > 0.0f) ? dt : kDefaultParallaxDt;
     ++parallax_frame_counter_;
 
-    // Realism flag controls whether parallax runs at all.
     const camera::FloorDepthParams& floor = cam.current_floor_depth_params();
     parallax_active_ = cam.realism_enabled();
     const bool floor_ready = floor.enabled &&
@@ -476,29 +335,44 @@ void Grid::update_parallax(const camera& cam, float dt) {
 
     const double pitch_rad  = floor.pitch_radians;
     const double pitch_norm = std::min(std::abs(pitch_rad) / (kPi / 3.0), 1.0);
+    const double horizon_screen_y = std::isfinite(floor.horizon_screen_y)
+        ? floor.horizon_screen_y
+        : 0.0;
+    const double bottom_screen_y = std::isfinite(floor.bottom_screen_y)
+        ? floor.bottom_screen_y
+        : horizon_screen_y + std::max(1.0, static_cast<double>(cam.get_scale()));
+    const double depth_span_px = std::max(1.0, bottom_screen_y - horizon_screen_y);
 
-    // Camera position in world coordinates (same basis as world positions).
     const SDL_FPoint center_px = cam.get_view_center_f();
     const double base_x = static_cast<double>(center_px.x);
-    // Ground anchor represents where the camera rig meets the floor plane.
     const double anchor_y = floor.base_world_y;
 
-    // Depth reference derived from camera height plus user depth offset.
+    const auto warped_screen_y = [&](double world_y) -> double {
+        const float wy = static_cast<float>(world_y);
+        SDL_FPoint linear = cam.map_to_screen_f(SDL_FPoint{
+            static_cast<float>(base_x),
+            wy
+        });
+        const float warped = cam.warp_floor_screen_y(wy, linear.y);
+        return std::isfinite(warped)
+            ? static_cast<double>(warped)
+            : static_cast<double>(linear.y);
+    };
+
+    const double depth_offset_px = std::max(0.0, static_cast<double>(cam.current_depth_offset_px()));
     const double depth_ref_effect = std::max(
         kParallaxEpsilon,
-        camera_height + static_cast<double>(cam.current_depth_offset_px())
+        camera_height + depth_offset_px
     );
 
-    // Only use parallax_smoothing for temporal smoothing, not for strength.
     TransformSmoothingParams smoothing =
         sanitize_smoothing(settings.parallax_smoothing);
     if (!settings.smooth_motion_zoom) {
         smoothing.method = TransformSmoothingMethod::None;
     }
-    // Make parallax smoothing snappy by default if unset.
     if (smoothing.method == TransformSmoothingMethod::Lerp &&
         smoothing.lerp_rate <= 0.0f) {
-        smoothing.lerp_rate = 12.5f; // ~0.08s time constant
+        smoothing.lerp_rate = 12.5f;
     } else if (smoothing.method == TransformSmoothingMethod::CriticallyDampedSpring &&
                smoothing.spring_frequency <= 0.0f) {
         smoothing.spring_frequency = 10.0f;
@@ -556,19 +430,17 @@ void Grid::update_parallax(const camera& cam, float dt) {
         return;
     }
 
-    // Derive a simple pinhole projection so parallax is measured in real screen pixels.
     const double aspect_ratio    = std::max(kParallaxEpsilon, screen_w_px / screen_h_px);
     const double tan_fov_y       = std::tan(kHalfFovY);
     const double tan_fov_x       = std::max(kParallaxEpsilon, tan_fov_y * aspect_ratio);
     const double focal_px        = 0.5 * screen_w_px / tan_fov_x;
-    const double max_parallax_px = screen_w_px * kParallaxMaxScreenRatio; // player stays near center
+    const double max_parallax_px = screen_w_px * kParallaxMaxScreenRatio;
 
     int world_min_x = origin_.x + active_min_i * chunk_step;
     int world_max_x = origin_.x + (active_max_i + 1) * chunk_step;
     int world_min_y = origin_.y + active_min_j * chunk_step;
     int world_max_y = origin_.y + (active_max_j + 1) * chunk_step;
 
-    // Grow bounds slightly so we have stable parallax near edges.
     world_min_x -= parallax_step;
     world_max_x += parallax_step;
     world_min_y -= parallax_step;
@@ -604,10 +476,18 @@ void Grid::update_parallax(const camera& cam, float dt) {
 
             const double dx_world = cell_cx - base_x;
 
-            // Signed depth relative to the anchor (negative when above).
             const double ground_depth = cell_cy - anchor_y;
 
-            // Keep the raw forward depth so layers above the anchor widen less.
+            const double screen_y = warped_screen_y(cell_cy);
+            if (!std::isfinite(screen_y)) {
+                continue;
+            }
+            const double depth_t = std::clamp(
+                (screen_y - horizon_screen_y) / depth_span_px,
+                0.0,
+                1.0);
+            const double fan = depth_t;
+
             const double forward_depth = (camera_height * cos_p) - (ground_depth * sin_p);
             const double depth_with_offset = forward_depth + depth_ref_effect;
 
@@ -615,12 +495,10 @@ void Grid::update_parallax(const camera& cam, float dt) {
 
             double parallax_px = 0.0;
             if (focal_px > kParallaxEpsilon) {
-                const double safe_depth = std::copysign(
-                    std::max(std::abs(depth_with_offset), kParallaxEpsilon),
-                    depth_with_offset);
+                const double safe_depth = std::max(
+                    std::abs(depth_with_offset),
+                    kParallaxEpsilon);
                 const double projected_x_px = (dx_world / safe_depth) * focal_px;
-                // Scale parallax strength based on pitch: stronger when looking down (high pitch_norm)
-                // and weaker when level (low pitch_norm). Range 0.6-1.0 for smooth effect
                 const double pitch_parallax_factor = 0.6 + 0.4 * pitch_norm;
                 parallax_px = (projected_x_px - ortho_x_px) * pitch_norm * pitch_parallax_factor;
             }
@@ -629,6 +507,7 @@ void Grid::update_parallax(const camera& cam, float dt) {
                 parallax_px = 0.0;
             }
 
+            parallax_px *= fan;
             parallax_px = std::clamp(parallax_px, -max_parallax_px, max_parallax_px);
             const float target = static_cast<float>(parallax_px);
 
@@ -636,9 +515,8 @@ void Grid::update_parallax(const camera& cam, float dt) {
             entry.smoothing.set_params(smoothing);
             entry.last_used_frame = parallax_frame_counter_;
 
-            bool force_snap = !entry.initialized ||
-                              smoothing.method == TransformSmoothingMethod::None;
-            if (!force_snap) {
+            bool force_snap = !entry.initialized;
+            if (!force_snap && smoothing.method != TransformSmoothingMethod::None) {
                 const float snap_threshold = std::max(0.0f, smoothing.snap_threshold);
                 const float max_step       = std::max(0.0f, smoothing.max_step);
                 const float current        = entry.smoothing.current;
@@ -685,7 +563,6 @@ void Grid::update_parallax(const camera& cam, float dt) {
     }
 }
 
-
 float Grid::parallax_offset(SDL_Point world) const {
     if (!parallax_active_) {
         return 0.0f;
@@ -718,17 +595,13 @@ SDL_FPoint Grid::parallax_adjusted_screen_position(SDL_Point world, SDL_FPoint b
 }
 
 SDL_FPoint Grid::floor_warped_screen_position(const camera& cam, SDL_Point world) const {
-    // Map to linear screen space first.
     SDL_FPoint base = cam.map_to_screen(world);
 
-    // Warp vertical placement to simulate perspective floor spacing.
-    const float warped_y = cam.warp_floor_screen_y(
-        static_cast<float>(world.y),
-        base.y
-    );
-    base.y = warped_y;
+    const float safe_world_y  = std::isfinite(static_cast<float>(world.y)) ? static_cast<float>(world.y) : 0.0f;
+    const float safe_linear_y = std::isfinite(base.y) ? base.y : 0.0f;
+    const float warped_y      = cam.warp_floor_screen_y(safe_world_y, safe_linear_y);
+    base.y = std::isfinite(warped_y) ? warped_y : safe_linear_y;
 
-    // Apply existing x parallax shift.
     return parallax_adjusted_screen_position(world, base);
 }
 

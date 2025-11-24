@@ -691,7 +691,7 @@ void FrameEditorSession::end() {
                 SDL_Renderer* renderer = saved_assets->renderer();
                 if (ok && renderer) {
                     info_to_reload->loadAnimations(renderer);
-                    saved_assets->mark_active_assets_dirty();
+                    devmode::AnimationRegenerator::refresh_loaded_instances(saved_assets, info_to_reload);
                     refreshed = true;
                 }
             } catch (const std::exception& ex) {

@@ -447,6 +447,23 @@ void DMTextBox::set_tooltip_state(DMWidgetTooltipState* state) {
     }
 }
 
+void DMTextBox::start_editing() {
+    if (editing_) {
+        return;
+    }
+    editing_ = true;
+    caret_pos_ = text_.size();
+    SDL_StartTextInput();
+}
+
+void DMTextBox::stop_editing() {
+    if (!editing_) {
+        return;
+    }
+    editing_ = false;
+    SDL_StopTextInput();
+}
+
 int DMTextBox::height_for_width(int w) const {
     return preferred_height(w);
 }

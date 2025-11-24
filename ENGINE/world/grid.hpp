@@ -12,6 +12,7 @@
 #include "world/chunk_manager.hpp"
 
 // Forward declarations
+typedef std::uint64_t ParallaxKey;
 class Asset;
 class camera;
 
@@ -30,6 +31,7 @@ public:
     int  parallax_step_size() const;
     int  chunk_resolution() const { return r_chunk_; }
     SDL_Point origin() const { return origin_; }
+    void set_origin(SDL_Point origin);
 
     void register_asset(Asset* a);
     Chunk* ensure_chunk_from_world(SDL_Point world_px);
@@ -54,13 +56,20 @@ public:
     // Helper that applies camera floor warping on Y then grid parallax on X.
     SDL_FPoint floor_warped_screen_position(const camera& cam, SDL_Point world) const;
 
+    bool parallax_active() const;
+
+    ChunkManager& chunks();
+    const ChunkManager& chunks() const;
+
 private:
-    struct ParallaxSmoother1D {
-        TransformSmoothingParams params{};
+    struct ParallaxSmoothingState {
+        TransformSmoothingParams params;
         float current  = 0.0f;
         float target   = 0.0f;
         float velocity = 0.0f;
+        bool initialized = false;
 
+        ParallaxSmoothingState();
         void set_params(const TransformSmoothingParams& p);
         void reset(float value);
         void advance(float dt);
@@ -68,8 +77,7 @@ private:
     };
 
     struct ParallaxEntry {
-        ParallaxSmoother1D smoothing{};
-        bool initialized            = false;
+        ParallaxSmoothingState smoothing{};
         std::uint64_t last_used_frame = 0;
         float last_value            = 0.0f;
     };
@@ -77,14 +85,14 @@ private:
     struct ParallaxCache {
         int origin_i = 0;
         int origin_j = 0;
-        int cells_x  = 0;
-        int cells_y  = 0;
+        int width    = 0;
+        int height   = 0;
         int step     = 0;
         std::vector<float> values;
         bool ready   = false;
 
-        void reset();
-        void configure(int origin_i, int origin_j, int cells_x, int cells_y, int step);
+        void clear();
+        void configure(int origin_i, int origin_j, int width, int height, int step);
         bool try_index(int i, int j, int step, std::size_t& out_index) const;
         void mark_ready() { ready = true; }
     };
@@ -92,7 +100,7 @@ private:
     void remove_from_chunk(Asset* a, Chunk* c);
     void invalidate_active_cache();
     void clear_parallax_state();
-    std::uint64_t parallax_key(int i, int j) const;
+    ParallaxKey parallax_key(int i, int j) const;
 
     SDL_Point origin_{0, 0};
     int       r_chunk_ = 0;

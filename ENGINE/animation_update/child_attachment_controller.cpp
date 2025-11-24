@@ -2,6 +2,7 @@
 
 #include <mutex>
 #include <random>
+#include <iostream>
 
 #include "animation_update/child_attachment_math.hpp"
 
@@ -105,6 +106,9 @@ void advance_frames(std::vector<Asset::AnimationChildAttachment>& slots,
         }
         if (slot.current_frame != previous_frame) {
             update_dimensions(slot);
+            std::cout << "[ChildAttachments] Slot " << slot.child_index
+                      << " advanced to frame " << (slot.current_frame ? slot.current_frame->frame_index : -1)
+                      << " (asset='" << slot.asset_name << "')\n";
         }
     }
 }
@@ -116,6 +120,7 @@ void apply_frame_data(std::vector<Asset::AnimationChildAttachment>& slots,
         return;
     }
     const int parent_frame_index = frame ? frame->frame_index : -1;
+    std::cout << "[ChildAttachments] Applying frame data (parent_frame_index=" << parent_frame_index << ")\n";
     for (auto& slot : slots) {
         const bool inactive = slot.child_index < 0;
         const bool parent_looped = parent_frame_index != -1 &&
@@ -141,15 +146,18 @@ void apply_frame_data(std::vector<Asset::AnimationChildAttachment>& slots,
     for (const auto& child_data : frame->children) {
         if (child_data.child_index < 0 ||
             child_data.child_index >= static_cast<int>(slots.size())) {
+            std::cout << "[ChildAttachments] Skipping child_data with out-of-range index " << child_data.child_index << "\n";
             continue;
         }
         auto& slot = slots[child_data.child_index];
         if (!slot.animation) {
+            std::cout << "[ChildAttachments] Slot " << child_data.child_index << " has no bound animation (asset='" << slot.asset_name << "')\n";
             continue;
         }
         if (!child_data.visible) {
             slot.visible = false;
             slot.render_in_front = child_data.render_in_front;
+            std::cout << "[ChildAttachments] Setting slot " << slot.child_index << " ('" << slot.asset_name << "') visible=false\n";
             continue;
         }
         const bool became_visible = !slot.was_visible;
@@ -157,6 +165,7 @@ void apply_frame_data(std::vector<Asset::AnimationChildAttachment>& slots,
             restart(slot);
         }
         slot.visible = true;
+        std::cout << "[ChildAttachments] Setting slot " << slot.child_index << " ('" << slot.asset_name << "') visible=true dx=" << child_data.dx << " dy=" << child_data.dy << " deg=" << child_data.degree << "\n";
         const int dx = parent_state.flipped ? -child_data.dx : child_data.dx;
         slot.world_pos.x = parent_state.position.x + dx;
         slot.world_pos.y = parent_state.position.y + child_data.dy;

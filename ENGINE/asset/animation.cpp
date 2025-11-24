@@ -636,10 +636,24 @@ void Animation::load(const std::string& trigger,
                                         }
                                         if (child_data.child_index < 0 ||
                                             child_data.child_index >= static_cast<int>(child_asset_names_.size())) {
+                                                std::cout << "[AnimationLoader] Ignoring child entry with invalid index " << child_data.child_index << " for asset list size " << child_asset_names_.size() << "\n";
                                                 continue;
                                         }
                                         fm.children.push_back(child_data);
                                 }
+                        }
+                        if (!fm.children.empty()) {
+                                // Debug: print mapping of child indices -> asset names for this frame
+                                std::cout << "[AnimationLoader] Parsed frame children: ";
+                                for (const auto& cd : fm.children) {
+                                        std::cout << "(idx=" << cd.child_index << ", dx=" << cd.dx << ", dy=" << cd.dy << ")";
+                                        if (cd.child_index >= 0 && cd.child_index < static_cast<int>(child_asset_names_.size())) {
+                                                std::cout << "->'" << child_asset_names_[cd.child_index] << "' ";
+                                        } else {
+                                                std::cout << "->'<invalid>' ";
+                                        }
+                                }
+                                std::cout << "\n";
                         }
                         if (fm.dx != 0 || fm.dy != 0 || mv.size() >= 3) {
                                 specified = true;

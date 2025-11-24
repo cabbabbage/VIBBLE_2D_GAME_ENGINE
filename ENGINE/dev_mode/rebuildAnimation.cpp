@@ -98,6 +98,7 @@ void AnimationRegenerator::refresh_loaded_instances(Assets* assets,
             return;
         }
 
+        asset->rebuild_animation_runtime();
         asset->clear_render_caches();
         asset->clear_downscale_cache();
         asset->set_final_texture(nullptr);

@@ -953,14 +953,20 @@ camera::RenderEffects camera::compute_render_effects(
     RenderSmoothingKey /*smoothing_key*/) const
 {
     RenderEffects result;
+
     SDL_FPoint world_f{ static_cast<float>(world.x), static_cast<float>(world.y) };
-    result.screen_position  = map_to_screen_f(world_f);
+    SDL_FPoint linear_screen = map_to_screen_f(world_f);
+    SDL_FPoint warped_screen = linear_screen;
     if (realism_enabled_) {
-        result.screen_position.y = warp_floor_screen_y(
-            world_f.y,
-            result.screen_position.y
-        );
+        warped_screen.y = warp_floor_screen_y(world_f.y, linear_screen.y);
+        if (!std::isfinite(warped_screen.y)) {
+            warped_screen.y = linear_screen.y;
+        }
     }
+    if (!std::isfinite(warped_screen.x) || !std::isfinite(warped_screen.y)) {
+        warped_screen = linear_screen;
+    }
+    result.screen_position  = warped_screen;
     result.vertical_scale   = 1.0f;
     result.distance_scale   = 1.0f;
 
@@ -968,15 +974,7 @@ camera::RenderEffects camera::compute_render_effects(
         return result;
     }
 
-    constexpr double EPS              = 1e-6;
-    constexpr double SCREEN_Y_SCALE   = 200.0;
-    constexpr double SQUASH_HEIGHT_WT = 0.3;
-    constexpr double SQUASH_BASE_WT   = 1.0 - SQUASH_HEIGHT_WT;
-    constexpr double DIST_EXPONENT    = 3.0;
-    constexpr double DIST_MIN         = 0.3;
-    constexpr double DIST_MAX         = 1.3;
-    constexpr double DEPTH_RANGE_PIXELS = 600.0;
-    constexpr double R_REF              = 400.0;
+    constexpr double EPS = 1e-6;
 
     const CameraGeometry geom = compute_geometry();
     if (!geom.valid || geom.camera_height <= EPS) {
@@ -987,9 +985,6 @@ camera::RenderEffects camera::compute_render_effects(
     const double height_reference = std::max(
         1.0,
         static_cast<double>(settings_.base_height_px));
-    const double pitch_rad     = geom.pitch_radians;
-    const double pitch_factor  = std::min(std::abs(pitch_rad) / (PI_D / 3.0), 1.0);
-    const double tilt_up       = 1.0 - pitch_factor; // 0 = steep down, 1 = level/upward
     const double slider_vertical_strength = std::clamp(
         static_cast<double>(runtime_foreshorten_strength_),
         0.0,
@@ -999,108 +994,42 @@ camera::RenderEffects camera::compute_render_effects(
         0.0,
         static_cast<double>(kMaxDistanceSliderStrength));
 
-    const double base_x = static_cast<double>(smoothed_center_.x);
-    const double depth_offset_world = depth_offset_world_units(
-        runtime_depth_offset_px_,
-        static_cast<double>(smoothed_scale_));
-    const double base_y = anchor_world_y() + depth_offset_world;
-    const double base_h = static_cast<double>(std::max(1, height_from_area(base_zoom_)));
+    const double horizon_y = horizon_screen_y_for_scale();
+    const double bottom_y  = static_cast<double>(screen_height_) + 4000.0;
+    const double depth_span = std::max(1.0, bottom_y - horizon_y);
+    const double depth_t = std::clamp(
+        (static_cast<double>(warped_screen.y) - horizon_y) / depth_span,
+        0.0,
+        1.0);
 
-    const double dx = static_cast<double>(world.x) - base_x;
-    const double dy = base_y - static_cast<double>(world.y);
+    const double foreshorten_strength = std::clamp(
+        camera_height / (camera_height + height_reference),
+        0.0,
+        1.0) * slider_vertical_strength;
+    const double vertical_scale = std::clamp(
+        1.0 - foreshorten_strength * (1.0 - depth_t),
+        0.35,
+        1.0);
+    result.vertical_scale = static_cast<float>(vertical_scale);
 
-    // View depth factor: stronger depth cues at higher camera and stronger pitch.
-    const double depth_height_mix = std::clamp(
-        depth_offset_world / std::max(1.0, camera_height),
-        -2.0,
-        2.0);
-    const double view_depth_factor =
-        (camera_height > EPS)
-            ? std::clamp(
-                  (camera_height / (camera_height + base_h)) *
-                      (0.25 + 0.75 * pitch_factor) *
-                      (1.0 + 0.25 * std::abs(depth_height_mix)),
-                  0.0, 1.0)
-            : 0.0;
+    const double distance_scale = std::clamp(
+        1.0 - slider_distance_strength * (1.0 - depth_t),
+        0.35,
+        1.35);
+    result.distance_scale = static_cast<float>(distance_scale);
 
-    // Vertical squash from perspective.
-    {
-        const double base_foreshorten_strength =
-            std::clamp(camera_height / (camera_height + height_reference), 0.0, 1.0);
-        const double effective_foreshorten_strength = base_foreshorten_strength * slider_vertical_strength;
-        if (effective_foreshorten_strength > EPS) {
-            const double ref_h = (reference_screen_height > EPS) ? reference_screen_height : 1.0;
-
-            // Bias: things lower on the screen are closer.
-            const double screen_bias = 0.5 + 0.5 * std::tanh(dy / SCREEN_Y_SCALE);
-
-            const double depth_norm = std::clamp(std::abs(dy) / (camera_height + height_reference), 0.0, 1.0);
-
-            double squash_base = effective_foreshorten_strength *
-                                 view_depth_factor *
-                                 screen_bias *
-                                 depth_norm;
-
-            // Near assets squash more; upward tilt reduces squash.
-            squash_base *= (0.6 + 0.4 * depth_norm);
-            squash_base *= (1.0 - 0.5 * tilt_up);
-
-            const double height_factor = std::sqrt(
-                static_cast<double>(asset_screen_height) / ref_h
-            );
-            const double squash_height = squash_base * height_factor;
-
-            const double squash = SQUASH_BASE_WT * squash_base +
-                                  SQUASH_HEIGHT_WT * squash_height;
-
-            const double new_vertical_scale = std::clamp(1.0 - squash, 0.1, 1.0);
-            result.vertical_scale = static_cast<float>(new_vertical_scale);
-        }
+    if (!std::isfinite(result.vertical_scale) || result.vertical_scale <= 0.0f) {
+        result.vertical_scale = 1.0f;
+    } else {
+        result.vertical_scale = std::clamp(result.vertical_scale, 0.1f, 2.0f);
     }
-
-    // Distance based scaling: objects further away in depth (dy) appear smaller.
-    {
-        double distance_strength = view_depth_factor;
-        // More extreme distance scaling when tilting upward (seeing farther).
-        distance_strength *= (1.0 + tilt_up);
-        distance_strength *= slider_distance_strength;
-        if (distance_strength > 0.0) {
-            // Only use vertical depth from the camera anchor, ignore lateral offset.
-            const double depth_abs = std::abs(dy);
-
-            const double depth_norm   = depth_abs / (DEPTH_RANGE_PIXELS + EPS);
-            const double depth_weight = 1.0 + depth_norm;
-
-            // Effective depth that grows slightly faster than linear with distance.
-            const double r_weighted = depth_abs * depth_weight + EPS;
-
-            const double base_scale =
-                std::sqrt(
-                    (camera_height + R_REF) /
-                    (camera_height + r_weighted + EPS)
-                );
-
-            double distance_scale = 1.0 + (base_scale - 1.0) * distance_strength;
-
-            // Push far (top) assets to shrink more when looking upward.
-            double horizon_y = horizon_screen_y_for_scale();
-            double depth_screen = 0.0;
-            if (screen_height_ > 0.0) {
-                depth_screen = std::clamp(
-                    (result.screen_position.y - static_cast<float>(horizon_y)) /
-                    std::max(1.0f, static_cast<float>(screen_height_) - static_cast<float>(horizon_y)),
-                    0.0f, 1.0f);
-            }
-            const double far_boost = 1.0 + tilt_up * (1.0 - depth_screen);
-            distance_scale = 1.0 + (distance_scale - 1.0) * far_boost;
-
-            const double squash_factor = static_cast<double>(result.vertical_scale);
-            distance_scale = 1.0 + (distance_scale - 1.0) *
-                             std::pow(squash_factor, DIST_EXPONENT);
-
-            distance_scale = std::clamp(distance_scale, DIST_MIN, DIST_MAX);
-            result.distance_scale = static_cast<float>(distance_scale);
-        }
+    if (!std::isfinite(result.distance_scale) || result.distance_scale <= 0.0f) {
+        result.distance_scale = 1.0f;
+    } else {
+        result.distance_scale = std::clamp(result.distance_scale, 0.1f, 4.0f);
+    }
+    if (!std::isfinite(result.screen_position.x) || !std::isfinite(result.screen_position.y)) {
+        result.screen_position = linear_screen;
     }
 
     return result;
@@ -1436,6 +1365,9 @@ camera::FloorDepthParams camera::compute_floor_depth_params_for_geometry(const C
     if (screen_h <= 1.0) {
         return p;
     }
+    if (!std::isfinite(geom.camera_height) || !std::isfinite(geom.pitch_radians)) {
+        return p;
+    }
 
     constexpr double kMinConvergencePx = 6.0;
     const double top_margin  = std::max(12.0, screen_h * 0.05);
@@ -1443,6 +1375,9 @@ camera::FloorDepthParams camera::compute_floor_depth_params_for_geometry(const C
 
     const double tan_fov   = std::tan(HALF_FOV_Y);
     const double tan_pitch = std::tan(geom.pitch_radians);
+    if (!std::isfinite(tan_fov) || !std::isfinite(tan_pitch) || std::abs(tan_fov) < 1e-6) {
+        return p;
+    }
 
     const double depth_offset_world = depth_offset_world_units(
         depth_offset_for_scale(scale_value),
@@ -1462,14 +1397,23 @@ camera::FloorDepthParams camera::compute_floor_depth_params_for_geometry(const C
     const double focus_offset_from_depth = height_mix * 0.12 * std::cos(geom.pitch_radians);
 
     double horizon_ndc = (tan_pitch / tan_fov) - geom.focus_ndc_offset - focus_offset_from_depth;
+    if (!std::isfinite(horizon_ndc)) {
+        return p;
+    }
     horizon_ndc = std::clamp(horizon_ndc, -10.0, 10.0);
     double horizon_y = screen_h * (0.5 - 0.5 * horizon_ndc);
+    if (!std::isfinite(horizon_y)) {
+        return p;
+    }
     horizon_y = std::max(min_horizon, horizon_y);
 
     // Recompute the NDC focus offset so the warped grid tracks the chosen horizon.
     double horizon_ndc_target = 1.0 - 2.0 * (horizon_y / screen_h);
     horizon_ndc_target = std::clamp(horizon_ndc_target, -10.0, 10.0);
     const double focus_ndc_offset = (tan_pitch / tan_fov) - horizon_ndc_target;
+    if (!std::isfinite(focus_ndc_offset)) {
+        return p;
+    }
 
     p.horizon_screen_y     = horizon_y;
     p.bottom_screen_y      = screen_h;
@@ -1499,17 +1443,23 @@ float camera::warp_floor_screen_y(float world_y, float linear_screen_y) const {
         // Fallback to a fresh computation if the cache is empty (e.g., before the first update).
         p = compute_floor_depth_params();
     }
-    if (!p.enabled) {
+    if (!p.enabled ||
+        !std::isfinite(p.horizon_screen_y) ||
+        !std::isfinite(p.bottom_screen_y) ||
+        !std::isfinite(p.base_world_y) ||
+        !std::isfinite(p.camera_height) ||
+        !std::isfinite(p.pitch_radians)) {
         // No pitch or realism disabled, keep the original linear mapping.
-        return linear_screen_y;
+        return std::isfinite(linear_screen_y) ? linear_screen_y : 0.0f;
     }
 
     const double screen_h = static_cast<double>(screen_height_);
+    const double safe_linear_y = std::isfinite(linear_screen_y) ? linear_screen_y : 0.0;
     const double cos_p = std::cos(p.pitch_radians);
     const double sin_p = std::sin(p.pitch_radians);
     const double tan_fov = std::tan(HALF_FOV_Y);
 
-    const double depth_world = p.base_world_y - static_cast<double>(world_y);
+    const double depth_world = static_cast<double>(world_y) - p.base_world_y;
     const double y_cam = depth_world * cos_p + p.camera_height * sin_p;
     const double z_cam = depth_world * sin_p - p.camera_height * cos_p;
     double forward = -z_cam;
@@ -1524,6 +1474,9 @@ float camera::warp_floor_screen_y(float world_y, float linear_screen_y) const {
 
     const double screen_y = screen_h * (0.5 - 0.5 * y_ndc);
     double clamped = std::clamp(screen_y, 0.0, std::max(1.0, screen_h));
+    if (!std::isfinite(clamped)) {
+        return static_cast<float>(safe_linear_y);
+    }
 
     // Compress spacing near the horizon so distant (top) assets cluster more when looking upward.
     const double denom = std::max(1.0, p.bottom_screen_y - p.horizon_screen_y);

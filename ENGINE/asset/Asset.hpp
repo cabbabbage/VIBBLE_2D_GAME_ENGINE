@@ -120,6 +120,7 @@ class Asset {
     Asset& operator=(Asset&&) noexcept = default;
     ~Asset();
     void finalize_setup();
+    void rebuild_animation_runtime();
     bool is_finalized() const { return finalized_; }
     void on_scale_factor_changed();
 
@@ -266,6 +267,7 @@ private:
     SDL_Point last_neighbor_origin_{ std::numeric_limits<int>::min(), std::numeric_limits<int>::min() };
     bool neighbor_lists_initialized_ = false;
     void update_neighbor_lists(bool force_update);
+    void ensure_animation_runtime(bool force_recreate);
 
     SDL_Point cached_grid_residency_{ std::numeric_limits<int>::min(), std::numeric_limits<int>::min() };
     bool      has_cached_grid_residency_ = false;

@@ -94,6 +94,8 @@ void FrameChildrenEditor::set_document(std::shared_ptr<AnimationDocument> docume
     }
     document_ = std::move(document);
     payload_signature_.clear();
+    payload_cache_.clear();
+    children_signature_cache_.clear();
     invalidate_child_caches();
     reload_from_document();
 }
@@ -104,6 +106,8 @@ void FrameChildrenEditor::set_animation_id(const std::string& animation_id) {
     }
     animation_id_ = animation_id;
     payload_signature_.clear();
+    payload_cache_.clear();
+    children_signature_cache_.clear();
     invalidate_child_caches();
     reload_from_document();
 }
@@ -145,10 +149,14 @@ void FrameChildrenEditor::update() {
         return;
     }
     auto payload_dump = document_->animation_payload(animation_id_);
-    std::string signature = payload_dump.has_value() ? *payload_dump : std::string{};
-    signature += "|" + document_->animation_children_signature();
+    std::string payload = payload_dump.has_value() ? *payload_dump : std::string{};
+    std::string children_sig = document_->animation_children_signature();
+    std::string signature = payload;
+    signature += "|" + children_sig;
     if (payload_signature_ != signature) {
         payload_signature_ = signature;
+        payload_cache_ = std::move(payload);
+        children_signature_cache_ = std::move(children_sig);
         reload_from_document();
     }
     refresh_tools_panel();
@@ -304,17 +312,35 @@ void FrameChildrenEditor::reload_from_document() {
     selected_child_index_ = 0;
     if (document_) {
         child_ids_ = document_->animation_children();
+        if (children_signature_cache_.empty()) {
+            children_signature_cache_ = document_->animation_children_signature();
+        }
+    }
+
+    if (payload_cache_.empty() && document_ && !animation_id_.empty()) {
+        auto payload_dump = document_->animation_payload(animation_id_);
+        payload_cache_ = payload_dump.has_value() ? *payload_dump : std::string{};
     }
 
     if (payload_signature_.empty()) {
+        payload_signature_ = payload_cache_;
+        if (!children_signature_cache_.empty()) {
+            payload_signature_ += "|" + children_signature_cache_;
+        }
+    }
+
+    if (payload_cache_.empty()) {
         frames_.push_back(MovementFrame{});
         refresh_tools_panel();
         return;
     }
 
-    nlohmann::json payload = nlohmann::json::parse(payload_signature_, nullptr, false);
-    if (!payload.is_object()) {
-        payload = nlohmann::json::object();
+    nlohmann::json payload = nlohmann::json::object();
+    {
+        nlohmann::json parsed = nlohmann::json::parse(payload_cache_, nullptr, false);
+        if (parsed.is_object()) {
+            payload = parsed;
+        }
     }
 
     nlohmann::json movement = nlohmann::json::array();
@@ -507,8 +533,8 @@ void FrameChildrenEditor::persist_changes() {
         return;
     }
     nlohmann::json payload = nlohmann::json::object();
-    if (!payload_signature_.empty()) {
-        nlohmann::json parsed = nlohmann::json::parse(payload_signature_, nullptr, false);
+    if (!payload_cache_.empty()) {
+        nlohmann::json parsed = nlohmann::json::parse(payload_cache_, nullptr, false);
         if (parsed.is_object()) {
             payload = parsed;
         }
@@ -562,10 +588,17 @@ void FrameChildrenEditor::persist_changes() {
     }
     payload["movement_total"] = nlohmann::json{{"dx", total_dx}, {"dy", total_dy}};
 
-    document_->replace_animation_payload(animation_id_, payload.dump());
+    const std::string updated_payload_dump = payload.dump();
+    document_->replace_animation_payload(animation_id_, updated_payload_dump);
     document_->save_to_file();
     auto refreshed = document_->animation_payload(animation_id_);
-    payload_signature_ = refreshed.has_value() ? *refreshed : std::string{};
+    payload_cache_ = refreshed.has_value() ? *refreshed : updated_payload_dump;
+    children_signature_cache_ = document_ ? document_->animation_children_signature() : std::string{};
+    payload_signature_.clear();
+    payload_signature_ = payload_cache_;
+    if (!children_signature_cache_.empty()) {
+        payload_signature_ += "|" + children_signature_cache_;
+    }
 }
 
 void FrameChildrenEditor::invalidate_child_caches() {

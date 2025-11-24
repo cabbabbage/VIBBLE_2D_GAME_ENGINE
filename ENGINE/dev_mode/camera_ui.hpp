@@ -106,6 +106,7 @@ private:
     bool zoom_out_settings_expanded_ = false;
     bool depthcue_section_expanded_ = false;
     bool smoothing_section_expanded_ = false;
+    bool applying_settings_ = false;
 
     bool last_depthcue_enabled_ = false;
     std::function<void()> open_image_effects_cb_;

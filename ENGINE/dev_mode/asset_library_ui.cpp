@@ -948,7 +948,10 @@ void AssetLibraryUI::toggle() {
         floating_->set_expanded(true);
             // Ensure at least header controls render immediately
         rebuild_rows();
-}
+        if (search_box_) search_box_->start_editing();
+    } else if (search_box_) {
+        search_box_->stop_editing();
+    }
 }
 
 bool AssetLibraryUI::is_visible() const { return floating_ && floating_->is_visible(); }
@@ -960,11 +963,13 @@ void AssetLibraryUI::open() {
         floating_->set_expanded(true);
             // Build initial rows so the body isn't empty before first update()
         rebuild_rows();
-}
+        if (search_box_) search_box_->start_editing();
+    }
 }
 
 void AssetLibraryUI::close() {
     if (floating_) floating_->set_visible(false);
+    if (search_box_) search_box_->stop_editing();
 }
 
 bool AssetLibraryUI::is_input_blocking() const {
@@ -2283,10 +2288,10 @@ bool AssetLibraryUI::handle_event(const SDL_Event& e) {
             case SDL_MOUSEMOTION:
             case SDL_MOUSEWHEEL:
             case SDL_KEYDOWN:
-            case SDL_TEXTINPUT:
-                return true;
-            default:
-                break;
+        case SDL_TEXTINPUT:
+            return true;
+        default:
+            break;
         }
     }
 
@@ -2294,6 +2299,15 @@ bool AssetLibraryUI::handle_event(const SDL_Event& e) {
 
     if (floating_->handle_event(e)) {
         handled = true;
+    }
+
+    if (!handled && search_widget_ && search_box_ && e.type == SDL_TEXTINPUT) {
+        if (!search_box_->is_editing()) {
+            search_box_->start_editing();
+        }
+        if (search_widget_->handle_event(e)) {
+            handled = true;
+        }
     }
 
     return handled;

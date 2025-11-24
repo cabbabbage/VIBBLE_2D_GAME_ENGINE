@@ -1332,6 +1332,14 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
         ref_sh,
         smoothing_key);
 
+    const float horizon_y = cam.horizon_screen_y_for_scale();
+    const float bottom_limit = static_cast<float>(screen_height_) + 4000.0f;
+    if (!std::isfinite(ef.screen_position.y) ||
+        ef.screen_position.y < horizon_y - 0.5f ||
+        ef.screen_position.y > bottom_limit + 1.0f) {
+        return SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
+    }
+
     float center_x = ef.screen_position.x;
     if (assets_) {
         // Do not apply grid parallax to the player asset
@@ -1393,6 +1401,14 @@ SDL_FRect SceneRenderer::get_child_position_rect(const Asset* parent,
         base_sh,
         reference_screen_height,
         smoothing_key);
+
+    const float horizon_y = cam.horizon_screen_y_for_scale();
+    const float bottom_limit = static_cast<float>(screen_height_) + 4000.0f;
+    if (!std::isfinite(ef.screen_position.y) ||
+        ef.screen_position.y < horizon_y - 0.5f ||
+        ef.screen_position.y > bottom_limit + 1.0f) {
+        return SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
+    }
 
     float center_x = ef.screen_position.x;
     if (assets_ && assets_->player != parent) {
@@ -1565,10 +1581,8 @@ void SceneRenderer::render(){
         const auto& active = assets_->getActive();
         // Horizon-aware culling rect (float) for perspective/warping
         float horizon_y = camera_state ? camera_state->horizon_screen_y_for_scale() : 0.0f;
-        float extra_margin = cam_settings.extra_cull_margin;
-        // Optionally scale margin by pitch or other camera params if desired
         float cull_top = std::max(0.0f, horizon_y);
-        float cull_bottom = static_cast<float>(screen_height_) + extra_margin;
+        float cull_bottom = static_cast<float>(screen_height_) + 4000.0f;
         const SDL_FRect cull_rect{ 0.0f, cull_top, static_cast<float>(screen_width_), cull_bottom - cull_top };
 
         // --- FOG LAYER Y POSITIONS (grid warping aware) ---

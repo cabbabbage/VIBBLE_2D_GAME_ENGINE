@@ -314,8 +314,7 @@
     },
     "Vibble": {
       "animation_children": [
-        "Vibble_eyes",
-        "Candle"
+        "Vibble_eyes"
       ],
       "animations": {
         "backward": {
@@ -355,10 +354,6 @@
               "melee": null,
               "projectile": null
             }
-          ],
-          "children": [
-            "Candle",
-            "Vibble_eyes"
           ],
           "flipped_source": false,
           "fps": 12,
@@ -735,6 +730,7 @@
       "z_threshold": -24
     },
     "Vibble_eyes": {
+      "animation_children": [],
       "animations": {
         "default": {
           "flipped_source": false,
@@ -764,10 +760,28 @@
           "speed_factor": 1.0
         }
       },
+      "anti_tags": [],
       "asset_directory": "SRC/assets/Vibble_eyes",
       "asset_name": "Vibble_eyes",
       "asset_type": "object",
-      "start": "default"
+      "neighbor_search_distance": 500,
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
+      },
+      "size_settings": {
+        "scale_percentage": 255.0
+      },
+      "spawn_groups": [],
+      "start": "default",
+      "tags": [],
+      "tillable": false
     },
     "barrel": {
       "animations": {
@@ -1557,6 +1571,54 @@
       "tillable": false,
       "update_radius": 0
     },
+    "church": {
+      "animations": {
+        "default": {
+          "flipped_source": false,
+          "fps": 24,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          },
+          "speed_factor": 1.0
+        }
+      },
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/church",
+      "asset_name": "church",
+      "asset_type": "object",
+      "can_invert": false,
+      "has_shading": false,
+      "lighting_info": [],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
+      "neighbor_search_distance": 500,
+      "render_radius": 0,
+      "size_settings": {
+        "scale_percentage": 100.0
+      },
+      "start": "default",
+      "tags": [],
+      "update_radius": 0
+    },
     "grass_3": {
       "animations": {
         "default": {
@@ -1914,6 +1976,7 @@
       "update_radius": 0
     },
     "trail": {
+      "animation_children": [],
       "animations": {
         "default": {
           "flipped_source": false,
@@ -1982,7 +2045,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 100.0
+        "scale_percentage": 137.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -2023,20 +2086,20 @@
       "camera_settings": {
         "background_plane_screen_y": 198.0,
         "background_texture_max_opacity": 0,
-        "base_height_at_zoom_high": 720.0,
-        "base_height_at_zoom_low": 2355.0,
-        "base_height_px": 1537.5,
-        "depth_offset_at_zoom_high": -700.0,
-        "depth_offset_at_zoom_low": -2330.0,
-        "distance_scale_at_zoom_high": 0.0,
-        "distance_scale_at_zoom_low": 0.1599999964237213,
-        "distance_scale_strength": 0.07999999821186066,
+        "base_height_at_zoom_high": 315.0,
+        "base_height_at_zoom_low": 4000.0,
+        "base_height_px": 2157.5,
+        "depth_offset_at_zoom_high": -845.0,
+        "depth_offset_at_zoom_low": -4000.0,
+        "distance_scale_at_zoom_high": 1.0,
+        "distance_scale_at_zoom_low": 1.0,
+        "distance_scale_strength": 1.0,
         "foreground_plane_screen_y": 902.0,
         "foreground_texture_max_opacity": 0,
-        "foreshorten_at_zoom_high": 0.17000000178813934,
-        "foreshorten_at_zoom_low": 1.0399999618530273,
-        "foreshorten_strength": 0.6049999594688416,
-        "grid_depth_offset_px": -1515.0,
+        "foreshorten_at_zoom_high": 0.0,
+        "foreshorten_at_zoom_low": 0.29999998211860657,
+        "foreshorten_strength": 0.14999999105930328,
+        "grid_depth_offset_px": -2422.5,
         "min_visible_screen_ratio": 0.006000000052154064,
         "motion_smoothing_max_step": 300.0,
         "motion_smoothing_method": 1,
@@ -2053,10 +2116,10 @@
         "scale_hysteresis_margin": 0.029999999329447746,
         "smooth_motion_zoom": true,
         "texture_opacity_falloff_method": 3,
-        "tilt_zoom_in_degrees": 17.560270309448242,
-        "tilt_zoom_out_degrees": 38.65980911254883,
-        "zoom_high": 3.2699997425079346,
-        "zoom_low": 0.8100000023841858
+        "tilt_zoom_in_degrees": 17.049030303955078,
+        "tilt_zoom_out_degrees": 50.194427490234375,
+        "zoom_high": 3.999999761581421,
+        "zoom_low": 0.19999998807907104
       },
       "content_root": "MAPS/FORREST",
       "map_assets_data": {
@@ -2356,8 +2419,8 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
+            170,
             242,
-            160,
             36,
             255
           ],
@@ -2409,8 +2472,8 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            31,
             32,
+            31,
             204,
             255
           ],
@@ -2469,19 +2532,19 @@
                 }
               ],
               "display_name": "trail",
-              "dx": 316,
-              "dy": 2364,
+              "dx": 36,
+              "dy": 2468,
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
-              "locked": false,
+              "locked": true,
               "max_number": 1,
               "min_number": 1,
-              "origional_height": 6902,
-              "origional_width": 6902,
+              "origional_height": 6904,
+              "origional_width": 6904,
               "position": "Exact",
               "priority": 1,
-              "resolution": 11,
+              "resolution": 6,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-1048b1d75926"
