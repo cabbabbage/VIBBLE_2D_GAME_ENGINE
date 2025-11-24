@@ -320,6 +320,58 @@ const GridPoint* Grid::point_for_asset(const Asset* asset) const {
     return point_for_id(it->second);
 }
 
+Asset* Grid::create_asset_at_point(std::unique_ptr<Asset> a) {
+    return register_asset(std::move(a));
+}
+
+Asset* Grid::create_asset_at_point(Asset* a) {
+    return register_asset(std::unique_ptr<Asset>(a));
+}
+
+Asset* Grid::move_asset_to_point(Asset* a, SDL_Point old_pos, SDL_Point new_pos) {
+    move_asset(a, old_pos, new_pos);
+    return a;
+}
+
+std::unique_ptr<Asset> Grid::remove_asset(Asset* a) {
+    if (!a) {
+        return nullptr;
+    }
+
+    std::unique_ptr<Asset> owned;
+
+    auto point_lookup = asset_to_point_.find(a);
+    if (point_lookup != asset_to_point_.end()) {
+        auto point_it = points_.find(point_lookup->second);
+        if (point_it != points_.end()) {
+            owned = extract_from_point(a, point_it->second);
+        }
+        asset_to_point_.erase(point_lookup);
+    }
+
+    auto it = residency_.find(a);
+    if (it != residency_.end()) {
+        remove_from_chunk(a, it->second);
+        residency_.erase(it);
+    }
+
+    prune_empty_points();
+
+    if (owned) {
+        return owned;
+    }
+    return std::unique_ptr<Asset>(a);
+}
+
+std::vector<Asset*> Grid::all_assets() const {
+    std::vector<Asset*> out;
+    out.reserve(asset_to_point_.size());
+    for (const auto& entry : asset_to_point_) {
+        out.push_back(entry.first);
+    }
+    return out;
+}
+
 void Grid::remove_asset_from_point(Asset* a, GridPoint& point) {
     if (!a) {
         return;
@@ -558,26 +610,8 @@ void Grid::move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos) {
 }
 
 void Grid::unregister_asset(Asset* a) {
-    if (!a) {
-        return;
-    }
-    auto it = residency_.find(a);
-    if (it == residency_.end()) {
-        return;
-    }
-    Chunk* chunk = it->second;
-    remove_from_chunk(a, chunk);
-    residency_.erase(it);
-
-    auto point_lookup = asset_to_point_.find(a);
-    if (point_lookup != asset_to_point_.end()) {
-        auto point_it = points_.find(point_lookup->second);
-        if (point_it != points_.end()) {
-            extract_from_point(a, point_it->second);
-        }
-        asset_to_point_.erase(point_lookup);
-    }
-    prune_empty_points();
+    auto owned = remove_asset(a);
+    (void)owned;
 }
 
 void Grid::rebuild_chunks() {

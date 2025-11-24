@@ -40,8 +40,7 @@ class ManifestStore;
 }
 class Assets {
 public:
-    Assets(std::vector<Asset*>&& loaded,
-           AssetLibrary& library,
+    Assets(AssetLibrary& library,
            Asset*,
            std::vector<Room*> rooms,
            int screen_width,
@@ -195,6 +194,8 @@ public:
     Asset* player = nullptr;
 
     Asset* spawn_asset(const std::string& name, SDL_Point world_pos);
+    // Rebuilds asset catalogs from the grid, refreshing active lists and filters.
+    void rebuild_from_grid_state();
 
     const std::vector<world::Chunk*>& active_chunks() const { return world_grid_.active_chunks(); }
 
@@ -304,6 +305,8 @@ private:
     void track_asset_for_grid(Asset* asset);
     void untrack_asset_for_grid(Asset* asset);
     void register_pending_static_assets();
+    void rebuild_all_assets_from_grid();
+    void rebuild_active_from_screen_grid();
 
     std::vector<Asset*> moving_assets_for_grid_;
     std::vector<Asset*> pending_static_grid_registration_;

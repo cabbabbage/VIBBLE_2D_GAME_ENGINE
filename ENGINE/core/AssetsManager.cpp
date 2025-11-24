@@ -23,6 +23,7 @@
 #include "utils/quick_task_popup.hpp"
 #include "utils/log.hpp"
 
+
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -138,8 +139,7 @@ bool compute_asset_world_bounds(const Asset* asset,
 
 }
 
-Assets::Assets(std::vector<Asset*>&& loaded,
-               AssetLibrary& library,
+Assets::Assets(AssetLibrary& library,
                Asset*,
                std::vector<Room*> rooms,
                int screen_width_,
@@ -184,7 +184,7 @@ Assets::Assets(std::vector<Asset*>&& loaded,
     load_camera_settings_from_json();
     depth_effects_enabled_ = devmode::camera_prefs::load_depthcue_enabled();
 
-    InitializeAssets::initialize(*this, std::move(loaded), std::move(rooms), screen_width_, screen_height_, screen_center_x, screen_center_y, map_radius);
+    InitializeAssets::initialize(*this, std::move(rooms), screen_width_, screen_height_, screen_center_x, screen_center_y, map_radius);
 
     finder_ = new CurrentRoomFinder(rooms_, player);
     if (finder_) {
@@ -993,66 +993,13 @@ void Assets::update(const Input& input)
     culled_debug_rects_.clear();
 
     // Build the warped screen grid then derive visible assets directly from it.
+    std::vector<Asset*> prev_static_lights = active_static_light_assets_;
+    std::vector<Asset*> prev_moving_lights = active_moving_light_assets_;
     screen_grid_.rebuild(world_grid_, camera_, last_frame_dt_seconds_);
-    active_points_.assign(screen_grid_.visible_points().begin(), screen_grid_.visible_points().end());
+    rebuild_active_from_screen_grid();
 
-    auto& new_active_assets = visible_candidate_buffer_;
-    new_active_assets.clear();
-    new_active_assets.reserve(screen_grid_.visible_assets().size() + 8);
-
-    for (Asset* asset : screen_grid_.visible_assets()) {
-        if (asset) {
-            new_active_assets.push_back(asset);
-        }
-    }
-
-    std::sort(new_active_assets.begin(),
-              new_active_assets.end(),
-              [this](Asset* lhs, Asset* rhs) {
-                  if (lhs == rhs) {
-                      return false;
-                  }
-                  if (!lhs || !rhs) {
-                      return rhs != nullptr;
-                  }
-                  world::GridPoint* lp = screen_grid_.point_for_asset(lhs);
-                  world::GridPoint* rp = screen_grid_.point_for_asset(rhs);
-                  const float ly = lp ? lp->screen.y : 0.0f;
-                  const float ry = rp ? rp->screen.y : 0.0f;
-                  if (std::fabs(ly - ry) > 0.5f) {
-                      return ly < ry;
-                  }
-                  if (lhs->z_index != rhs->z_index) {
-                      return lhs->z_index < rhs->z_index;
-                  }
-                  return lhs < rhs;
-              });
-
-    std::vector<Asset*> new_light_assets;
-    std::vector<Asset*> new_static_lights;
-    std::vector<Asset*> new_moving_lights;
-    new_light_assets.reserve(new_active_assets.size());
-    new_static_lights.reserve(new_active_assets.size());
-    new_moving_lights.reserve(new_active_assets.size());
-
-    for (Asset* asset : new_active_assets) {
-        if (!asset || !asset->info) {
-            continue;
-        }
-        const auto& info = asset->info;
-        if (info->light_sources.empty()) {
-            continue;
-        }
-        new_light_assets.push_back(asset);
-        if (info->moving_asset) {
-            new_moving_lights.push_back(asset);
-        } else {
-            new_static_lights.push_back(asset);
-        }
-    }
-
-    const bool static_changed = (new_static_lights != active_static_light_assets_);
-    const bool moving_changed = (new_moving_lights != active_moving_light_assets_);
+    const bool static_changed = (prev_static_lights != active_static_light_assets_);
+    const bool moving_changed = (prev_moving_lights != active_moving_light_assets_);
 
     if (static_changed) {
         notify_light_map_static_assets_changed();
@@ -1060,14 +1007,14 @@ void Assets::update(const Input& input)
 
     if (moving_changed) {
         scratch_moving_light_lookup_.clear();
-        for (Asset* asset : new_moving_lights) {
+        for (Asset* asset : active_moving_light_assets_) {
             scratch_moving_light_lookup_.insert(asset);
             if (active_moving_light_lookup_.find(asset) == active_moving_light_lookup_.end()) {
                 notify_light_map_asset_moved(asset);
             }
         }
 
-        for (Asset* asset : active_moving_light_assets_) {
+        for (Asset* asset : prev_moving_lights) {
             if (scratch_moving_light_lookup_.find(asset) == scratch_moving_light_lookup_.end()) {
                 notify_light_map_asset_moved(asset);
             }
@@ -1077,12 +1024,6 @@ void Assets::update(const Input& input)
         scratch_moving_light_lookup_.clear();
     }
 
-    active_assets.swap(new_active_assets);
-    new_active_assets.clear();
-    active_light_assets_        = std::move(new_light_assets);
-    active_static_light_assets_ = std::move(new_static_lights);
-    active_moving_light_assets_ = std::move(new_moving_lights);
-    active_assets_dirty_.store(false, std::memory_order_release);
     mark_non_player_update_buffer_dirty();
     rebuild_non_player_update_buffer_if_needed();
 
@@ -1408,7 +1349,7 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
     raw->finalize_setup();
 
     // Register with grid (transfers ownership to grid points) and containers
-    raw = world_grid_.register_asset(std::move(uptr));
+    raw = world_grid_.create_asset_at_point(std::move(uptr));
     all.push_back(raw);
 
     // Invalidate caches and mark dirty so next cycle rebuilds active lists
@@ -1418,6 +1359,13 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
 
     // Return the raw pointer for immediate usage by caller
     return raw;
+}
+
+void Assets::rebuild_from_grid_state() {
+    rebuild_all_assets_from_grid();
+    initialize_active_assets(camera_.get_screen_center());
+    refresh_filtered_active_assets();
+    mark_non_player_update_buffer_dirty();
 }
 
 const std::vector<Asset*>& Assets::get_selected_assets() const {
@@ -1453,29 +1401,46 @@ void Assets::notify_light_map_static_assets_changed() {
 }
 
 void Assets::track_asset_for_grid(Asset* asset) {
-    if (!asset) {
-        return;
-    }
-    world_grid_.register_asset(asset);
+    (void)asset;
+    // Assets register themselves with the grid when created; no-op here to avoid
+    // duplicating ownership.
 }
 
 void Assets::untrack_asset_for_grid(Asset* asset) {
     if (!asset) {
         return;
     }
-    world_grid_.unregister_asset(asset);
+    (void)world_grid_.remove_asset(asset);
 }
 
 void Assets::register_pending_static_assets() {
-    if (pending_static_grid_registration_.empty()) {
-        return;
-    }
-    for (Asset* asset : pending_static_grid_registration_) {
-        if (asset) {
-            world_grid_.register_asset(asset);
+    pending_static_grid_registration_.clear();
+}
+
+void Assets::rebuild_all_assets_from_grid() {
+    all.clear();
+    std::vector<std::pair<world::GridId, Asset*>> collected;
+    collected.reserve(world_grid_.points().size());
+    for (const auto& entry : world_grid_.points()) {
+        const GridId id = entry.first;
+        const world::GridPoint& point = entry.second;
+        for (const auto& occ : point.occupants) {
+            if (occ) {
+                collected.emplace_back(id, occ.get());
+            }
         }
     }
-    pending_static_grid_registration_.clear();
+    std::sort(collected.begin(), collected.end(),
+              [](const auto& lhs, const auto& rhs) {
+                  if (lhs.first != rhs.first) return lhs.first < rhs.first;
+                  return lhs.second < rhs.second;
+              });
+    all.reserve(collected.size());
+    for (const auto& pair : collected) {
+        if (pair.second) {
+            all.push_back(pair.second);
+        }
+    }
 }
 
 bool Assets::rebuild_active_assets_if_needed() {
@@ -1671,48 +1636,40 @@ bool Assets::process_removals() {
         return false;
     }
 
+    std::vector<std::unique_ptr<Asset>> owned_removed;
+    owned_removed.reserve(pending_removals.size());
+
     for (Asset* asset : pending_removals) {
         render_pipeline::shading::ClearShadowStateFor(asset);
 
-        untrack_asset_for_grid(asset);
-        world_grid_.unregister_asset(asset);
-        if (asset) {
-            asset->clear_grid_residency_cache();
-        }
-        if (asset && asset->info && !asset->info->light_sources.empty()) {
-            if (asset->info->moving_asset) {
-                notify_light_map_asset_moved(asset);
-            } else {
-                notify_light_map_static_assets_changed();
+        std::unique_ptr<Asset> owned = world_grid_.remove_asset(asset);
+        Asset* raw = owned.get();
+        if (raw) {
+            raw->clear_grid_residency_cache();
+            if (raw->info && !raw->info->light_sources.empty()) {
+                if (raw->info->moving_asset) {
+                    notify_light_map_asset_moved(raw);
+                } else {
+                    notify_light_map_static_assets_changed();
+                }
             }
+            owned_removed.push_back(std::move(owned));
         }
     }
 
-    std::unordered_set<Asset*> removal_lookup(pending_removals.begin(), pending_removals.end());
-
-    auto erase_ptrs = [&removal_lookup](auto& vec) {
-        vec.erase(
-            std::remove_if(vec.begin(), vec.end(),
-                           [&removal_lookup](auto* candidate) {
-                               return removal_lookup.count(candidate) > 0;
-                           }),
-            vec.end());
-};
-
-    erase_ptrs(all);
-    erase_ptrs(active_assets);
-    erase_ptrs(active_light_assets_);
-    erase_ptrs(active_static_light_assets_);
-    erase_ptrs(active_moving_light_assets_);
-    erase_ptrs(filtered_active_assets);
-    erase_ptrs(moving_assets_for_grid_);
-    erase_ptrs(pending_static_grid_registration_);
+    rebuild_all_assets_from_grid();
+    active_assets.clear();
+    active_light_assets_.clear();
+    active_static_light_assets_.clear();
+    active_moving_light_assets_.clear();
+    filtered_active_assets.clear();
+    moving_assets_for_grid_.clear();
+    pending_static_grid_registration_.clear();
+    active_points_.clear();
+    active_moving_light_lookup_.clear();
+    scratch_moving_light_lookup_.clear();
+    mark_active_assets_dirty();
     mark_non_player_update_buffer_dirty();
-
-    for (Asset* asset : pending_removals) {
-        active_moving_light_lookup_.erase(asset);
-        scratch_moving_light_lookup_.erase(asset);
-    }
 
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->clear_selection();
@@ -2034,11 +1991,12 @@ void Assets::apply_map_grid_settings(const MapGridSettings& settings, bool persi
     }
 
     for (Asset* asset : all) {
-        if (!asset || asset->has_grid_residency_cache()) {
+        if (!asset) {
             continue;
         }
-        world_grid_.register_asset(asset);
-        asset->cache_grid_residency(SDL_Point{asset->pos.x, asset->pos.y});
+        if (world_grid_.point_for_asset(asset)) {
+            asset->cache_grid_residency(SDL_Point{asset->pos.x, asset->pos.y});
+        }
     }
 
     if (chunk_changed) {
@@ -2240,4 +2198,78 @@ void Assets::open_animation_editor_for_asset(const std::shared_ptr<AssetInfo>& i
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->open_animation_editor_for_asset(info);
     }
+}
+void Assets::rebuild_active_from_screen_grid() {
+    active_points_.assign(screen_grid_.visible_points().begin(),
+                          screen_grid_.visible_points().end());
+
+    std::unordered_set<Asset*> seen;
+    visible_candidate_buffer_.clear();
+    visible_candidate_buffer_.reserve(active_points_.size() * 2);
+
+    for (world::GridPoint* point : screen_grid_.visible_points()) {
+        if (!point) {
+            continue;
+        }
+        for (const auto& occ : point->occupants) {
+            Asset* asset = occ.get();
+            if (asset && seen.insert(asset).second) {
+                visible_candidate_buffer_.push_back(asset);
+            }
+        }
+    }
+
+    std::sort(visible_candidate_buffer_.begin(),
+              visible_candidate_buffer_.end(),
+              [this](Asset* lhs, Asset* rhs) {
+                  if (lhs == rhs) {
+                      return false;
+                  }
+                  if (!lhs || !rhs) {
+                      return rhs != nullptr;
+                  }
+                  world::GridPoint* lp = screen_grid_.point_for_asset(lhs);
+                  world::GridPoint* rp = screen_grid_.point_for_asset(rhs);
+                  const float ly = lp ? lp->screen.y : 0.0f;
+                  const float ry = rp ? rp->screen.y : 0.0f;
+                  if (std::fabs(ly - ry) > 0.5f) {
+                      return ly < ry;
+                  }
+                  if (lhs->z_index != rhs->z_index) {
+                      return lhs->z_index < rhs->z_index;
+                  }
+                  return lhs < rhs;
+              });
+
+    active_assets.swap(visible_candidate_buffer_);
+    visible_candidate_buffer_.clear();
+
+    std::vector<Asset*> new_light_assets;
+    std::vector<Asset*> new_static_lights;
+    std::vector<Asset*> new_moving_lights;
+    new_light_assets.reserve(active_assets.size());
+    new_static_lights.reserve(active_assets.size());
+    new_moving_lights.reserve(active_assets.size());
+
+    for (Asset* asset : active_assets) {
+        if (!asset || !asset->info) {
+            continue;
+        }
+        const auto& info = asset->info;
+        if (info->light_sources.empty()) {
+            continue;
+        }
+        new_light_assets.push_back(asset);
+        if (info->moving_asset) {
+            new_moving_lights.push_back(asset);
+        } else {
+            new_static_lights.push_back(asset);
+        }
+    }
+
+    active_light_assets_        = std::move(new_light_assets);
+    active_static_light_assets_ = std::move(new_static_lights);
+    active_moving_light_assets_ = std::move(new_moving_lights);
+    active_assets_dirty_.store(false, std::memory_order_release);
+    mark_non_player_update_buffer_dirty();
 }

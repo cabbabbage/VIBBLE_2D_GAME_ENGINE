@@ -1307,11 +1307,6 @@ void AssetInfoUI::refresh_target_asset_scale() {
                 refreshed_any = true;
             }
         }
-        for (const auto& owned : assets_->owned_assets) {
-            if (refresh_asset(owned.get())) {
-                refreshed_any = true;
-            }
-        }
     }
 
     if (target_valid && validated_target) {
@@ -1349,11 +1344,6 @@ void AssetInfoUI::sync_target_z_threshold() {
     if (assets_) {
         for (Asset* asset : assets_->all) {
             if (sync_asset(asset)) {
-                updated_any = true;
-            }
-        }
-        for (const auto& owned : assets_->owned_assets) {
-            if (sync_asset(owned.get())) {
                 updated_any = true;
             }
         }
@@ -1526,9 +1516,6 @@ void AssetInfoUI::sync_target_tiling_state() {
     bool updated_any = false;
     for (Asset* asset : assets_->all) {
         updated_any |= apply_for_asset(asset);
-    }
-    for (const auto& owned : assets_->owned_assets) {
-        updated_any |= apply_for_asset(owned.get());
     }
     if (!updated_any && target_valid && current_target) {
         (void)apply_for_asset(current_target);
@@ -2073,9 +2060,6 @@ bool AssetInfoUI::apply_to_assets_with_info(const std::function<void(Asset*)>& f
     if (assets_) {
         for (Asset* asset : assets_->all) {
             visit(asset);
-        }
-        for (const auto& owned : assets_->owned_assets) {
-            visit(owned.get());
         }
     }
     visit(target_asset_);

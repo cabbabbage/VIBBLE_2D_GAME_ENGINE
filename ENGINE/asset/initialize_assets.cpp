@@ -18,43 +18,42 @@ constexpr bool kAssetLoggingEnabled = false;
 }
 
 void InitializeAssets::initialize(Assets& assets,
-                                  std::vector<std::unique_ptr<Asset>>&& loaded,
                                   std::vector<Room*> rooms,
-                                  int ,
-                                  int ,
-                                  int screen_center_x,
-                                  int screen_center_y,
-                                  int )
+                                  int,
+                                  int,
+                                  int /*screen_center_x*/,
+                                  int /*screen_center_y*/,
+                                  int)
 {
         if (kAssetLoggingEnabled) {
                 std::cout << "[InitializeAssets] Initializing Assets manager...\n";
         }
         assets.set_rooms(std::move(rooms));
-        assets.all.reserve(loaded.size());
-        while (!loaded.empty()) {
-                std::unique_ptr<Asset> asset = std::move(loaded.back());
-                loaded.pop_back();
-                if (!asset) {
+        assets.all.clear();
+        auto grid_assets = assets.world_grid().all_assets();
+        assets.all.reserve(grid_assets.size());
+        for (Asset* raw : grid_assets) {
+                if (!raw) {
                         continue;
                 }
-                if (!asset->info) {
+                if (!raw->info) {
                         if (kAssetLoggingEnabled) {
                                 std::cerr << "[InitializeAssets] Skipping asset: info is null\n";
                         }
+                        assets.world_grid().remove_asset(raw);
                         continue;
                 }
-                auto it = asset->info->animations.find("default");
-                if (it == asset->info->animations.end() || it->second.frames.empty()) {
+                auto it = raw->info->animations.find("default");
+                if (it == raw->info->animations.end() || it->second.frames.empty()) {
                         if (kAssetLoggingEnabled) {
-                                std::cerr << "[InitializeAssets] Skipping asset '" << asset->info->name
+                                std::cerr << "[InitializeAssets] Skipping asset '" << raw->info->name
                                 << "': missing or empty default animation\n";
                         }
+                        assets.world_grid().remove_asset(raw);
                         continue;
                 }
-                Asset* raw = asset.get();
                 set_camera_recursive(raw, &assets.getView());
                 set_assets_owner_recursive(raw, &assets);
-                assets.owned_assets.push_back(std::move(asset));
                 assets.all.push_back(raw);
                 // Assets should already be finalized by AssetLoader::finalizeAssets().
                 // Guard to avoid double-initialization; finalize only if somehow not finalized.

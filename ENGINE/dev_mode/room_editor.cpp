@@ -4901,10 +4901,13 @@ bool RoomEditor::remove_spawn_group_by_id(const std::string& spawn_id) {
         }
         for (Asset* asset : to_delete) {
             purge_asset(asset);
-            auto& all = assets_->all;
-            all.erase(std::remove(all.begin(), all.end(), asset), all.end());
-            asset->Delete();
+            if (asset) {
+                asset->Delete();
+                (void)assets_->world_grid().remove_asset(asset);
+            }
         }
+        assets_->rebuild_from_grid_state();
+        assets_->refresh_active_asset_lists();
     }
     return true;
 }
@@ -5051,8 +5054,10 @@ void RoomEditor::integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& s
         set_camera_recursive(raw, &assets_->getView());
         set_assets_owner_recursive(raw, assets_);
         raw->finalize_setup();
-        assets_->owned_assets.emplace_back(std::move(uptr));
-        assets_->all.push_back(raw);
+        raw = assets_->world_grid().create_asset_at_point(std::move(uptr));
+        if (raw) {
+            assets_->all.push_back(raw);
+        }
     }
     assets_->initialize_active_assets(assets_->getView().get_screen_center());
     assets_->refresh_active_asset_lists();
@@ -5083,10 +5088,13 @@ void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
     }
     for (Asset* asset : to_remove) {
         purge_asset(asset);
-        auto& all = assets_->all;
-        all.erase(std::remove(all.begin(), all.end(), asset), all.end());
-        asset->Delete();
+        if (asset) {
+            asset->Delete();
+            (void)assets_->world_grid().remove_asset(asset);
+        }
     }
+    assets_->rebuild_from_grid_state();
+    assets_->refresh_active_asset_lists();
 
     auto occupancy = build_room_grid(spawn_id);
     vibble::grid::Grid& grid_service = vibble::grid::global_grid();
@@ -5293,10 +5301,13 @@ void RoomEditor::respawn_asset_child_spawn_group(Asset* owner, const nlohmann::j
             asset->parent = nullptr;
         }
         purge_asset(asset);
-        auto& all = assets_->all;
-        all.erase(std::remove(all.begin(), all.end(), asset), all.end());
-        asset->Delete();
+        if (asset) {
+            asset->Delete();
+            (void)assets_->world_grid().remove_asset(asset);
+        }
     }
+    assets_->rebuild_from_grid_state();
+    assets_->refresh_active_asset_lists();
 
     nlohmann::json wrapper = nlohmann::json::object();
     wrapper["spawn_groups"] = nlohmann::json::array();
@@ -5502,10 +5513,13 @@ void RoomEditor::regenerate_current_room() {
         if (player_ == asset) {
             player_ = nullptr;
         }
-        auto& all = assets_->all;
-        all.erase(std::remove(all.begin(), all.end(), asset), all.end());
-        asset->Delete();
+        if (asset) {
+            asset->Delete();
+            (void)assets_->world_grid().remove_asset(asset);
+        }
     }
+    assets_->rebuild_from_grid_state();
+    assets_->refresh_active_asset_lists();
 
     current_room_->room_area = std::make_unique<Area>(new_area);
 

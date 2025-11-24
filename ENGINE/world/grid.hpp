@@ -35,14 +35,20 @@ public:
     SDL_Point origin() const { return origin_; }
     void set_origin(SDL_Point origin);
 
+    // Creation helpers that store ownership inside the grid points.
+    Asset* create_asset_at_point(std::unique_ptr<Asset> a);
+    Asset* create_asset_at_point(Asset* a); // convenience overload; transfers ownership
     Asset* register_asset(std::unique_ptr<Asset> a);
-    Asset* register_asset(Asset* a); // legacy helper; does not take ownership
+    Asset* register_asset(Asset* a); // legacy helper; transfers ownership
     Chunk* ensure_chunk_from_world(SDL_Point world_px);
     Chunk* chunk_from_world(SDL_Point world_px) const;
     Chunk* get_or_create_chunk_ij(int i, int j);
     std::vector<Chunk*> all_chunks() const;
 
+    Asset* move_asset_to_point(Asset* a, SDL_Point old_pos, SDL_Point new_pos);
     void move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos);
+    // Removes an asset from the grid, returning ownership to the caller.
+    std::unique_ptr<Asset> remove_asset(Asset* a);
     void unregister_asset(Asset* a);
     void rebuild_chunks();
 
@@ -63,6 +69,7 @@ public:
 
     ChunkManager& chunks();
     const ChunkManager& chunks() const;
+    std::vector<Asset*> all_assets() const;
 
     // Grid point helpers for linking to ScreenGrid / render
     SDL_Point grid_index_from_world(SDL_Point world) const;

@@ -286,10 +286,9 @@ void MenuUI::doRestart() {
                 }
                 world::Grid world_grid{};
                 loader_->createAssets(world_grid);
-                auto all_assets = loader_->take_spawned_assets();
+                auto all_assets = world_grid.all_assets();
                 Asset* player_ptr = nullptr;
-                for (auto& a : all_assets) {
-                    Asset* candidate = a.get();
+                for (Asset* candidate : all_assets) {
                     if (candidate && candidate->info && candidate->info->type == asset_types::player) { player_ptr = candidate; break; }
                 }
                 int start_px = player_ptr ? player_ptr->pos.x : static_cast<int>(loader_->getMapRadius());
@@ -298,7 +297,7 @@ void MenuUI::doRestart() {
                 if (!restart_library) {
                         throw std::runtime_error("Asset library unavailable during restart.");
                 }
-                game_assets_ = new Assets(std::move(all_assets), *restart_library, player_ptr, loader_->getRooms(), screen_w_, screen_h_, start_px, start_py, static_cast<int>(loader_->getMapRadius() * 1.2), renderer_, loader_->map_identifier(), loader_->map_manifest(), loader_->content_root(), std::move(world_grid));
+                game_assets_ = new Assets(*restart_library, player_ptr, loader_->getRooms(), screen_w_, screen_h_, start_px, start_py, static_cast<int>(loader_->getMapRadius() * 1.2), renderer_, loader_->map_identifier(), loader_->map_manifest(), loader_->content_root(), std::move(world_grid));
                 if (!input_) input_ = new Input();
                 game_assets_->set_input(input_);
                 if (!player_ptr) {

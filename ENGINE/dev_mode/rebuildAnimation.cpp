@@ -133,9 +133,6 @@ void AnimationRegenerator::refresh_loaded_instances(Assets* assets,
     for (Asset* asset : assets->all) {
         refresh(asset);
     }
-    for (const auto& owned : assets->owned_assets) {
-        refresh(owned.get());
-    }
 
     assets->mark_active_assets_dirty();
 }

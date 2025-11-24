@@ -257,7 +257,7 @@ void MainApp::setup() {
                 auto spawn_begin = std::chrono::steady_clock::now();
                 world::Grid world_grid{};
                 loader_->createAssets(world_grid);
-                auto all_assets = loader_->take_spawned_assets();
+                auto all_assets = world_grid.all_assets();
                 vibble::log::info(std::string("[MainApp] Asset spawning finished for map '") +
                                   map_identifier + "'.");
                 vibble::log::info(std::string("[MainApp] ") +
@@ -274,8 +274,7 @@ void MainApp::setup() {
                 const auto room_count = loader_->getRooms().size();
 
                 Asset* player_ptr = nullptr;
-                for (auto& a : all_assets) {
-                        Asset* candidate = a.get();
+                for (Asset* candidate : all_assets) {
                         if (candidate && candidate->info &&
                             candidate->info->type == asset_types::player) {
                                 player_ptr = candidate;
@@ -294,7 +293,6 @@ void MainApp::setup() {
                 }
 
                 game_assets_ = new Assets(
-                        std::move(all_assets),
                         *active_library,
                         player_ptr,
                         loader_->getRooms(),

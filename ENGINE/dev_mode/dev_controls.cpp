@@ -2730,10 +2730,13 @@ void DevControls::remove_spawn_group_assets(const std::string& spawn_id) {
     }
     for (Asset* asset : to_remove) {
         purge_asset(asset);
-        auto& all = assets_->all;
-        all.erase(std::remove(all.begin(), all.end(), asset), all.end());
-        asset->Delete();
+        if (asset) {
+            asset->Delete();
+            (void)assets_->world_grid().remove_asset(asset);
+        }
     }
+    assets_->rebuild_from_grid_state();
+    assets_->refresh_active_asset_lists();
 }
 
 void DevControls::integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& spawned) {
@@ -2748,8 +2751,10 @@ void DevControls::integrate_spawned_assets(std::vector<std::unique_ptr<Asset>>& 
         set_camera_recursive(raw, &assets_->getView());
         set_assets_owner_recursive(raw, assets_);
         raw->finalize_setup();
-        assets_->owned_assets.emplace_back(std::move(uptr));
-        assets_->all.push_back(raw);
+        raw = assets_->world_grid().create_asset_at_point(std::move(uptr));
+        if (raw) {
+            assets_->all.push_back(raw);
+        }
     }
     spawned.clear();
     assets_->initialize_active_assets(assets_->getView().get_screen_center());

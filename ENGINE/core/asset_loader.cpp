@@ -405,32 +405,27 @@ void AssetLoader::createAssets(world::Grid& grid) {
         grid.set_parallax_resolution(std::max(0, map_grid_settings_.resolution));
         vibble::log::debug(std::string("[AssetLoader] createAssets: requested r_chunk=") + std::to_string(map_grid_settings_.r_chunk));
 
-        spawned_assets_ = extract_all_assets();
-        vibble::log::info(std::string("[AssetLoader] Extracted ") + std::to_string(spawned_assets_.size()) + " visible assets from rooms");
+        auto extracted_assets = extract_all_assets();
+        std::vector<Asset*> registered_assets;
+        registered_assets.reserve(extracted_assets.size());
+        vibble::log::info(std::string("[AssetLoader] Extracted ") + std::to_string(extracted_assets.size()) + " visible assets from rooms");
 
-        for (const auto& asset_up : spawned_assets_) {
-                Asset* asset = asset_up.get();
-                if (!asset) continue;
-                grid.register_asset(asset);
+        for (auto& asset_up : extracted_assets) {
+                if (!asset_up) continue;
+                Asset* asset = grid.create_asset_at_point(std::move(asset_up));
+                if (asset) {
+                        registered_assets.push_back(asset);
+                }
         }
-        vibble::log::debug(std::string("[AssetLoader] Registered assets: total=") + std::to_string(spawned_assets_.size()));
+        vibble::log::debug(std::string("[AssetLoader] Registered assets: total=") + std::to_string(registered_assets.size()));
 
         const auto t1 = std::chrono::steady_clock::now();
         // Build per-grid tiles once assets are registered to chunks.
         {
-            std::vector<Asset*> raw_assets;
-            raw_assets.reserve(spawned_assets_.size());
-            for (const auto& up : spawned_assets_) {
-                if (up) raw_assets.push_back(up.get());
-            }
-            loader_tiles::build_grid_tiles(renderer_, grid, map_grid_settings_, raw_assets);
+            loader_tiles::build_grid_tiles(renderer_, grid, map_grid_settings_, registered_assets);
         }
 
         vibble::log::debug(std::string("[AssetLoader] createAssets total ") + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()) + "ms");
-}
-
-std::vector<std::unique_ptr<Asset>> AssetLoader::take_spawned_assets() {
-        return std::move(spawned_assets_);
 }
 
 std::vector<const Area*> AssetLoader::getAllRoomAndTrailAreas() const {
