@@ -38,8 +38,8 @@
 #include "spawn/methods/random_spawner.hpp"
 #include "spawn/spawn_context.hpp"
 #include "utils/input.hpp"
-#include "util/grid.hpp"
-#include "util/grid_occupancy.hpp"
+#include "utils/grid.hpp"
+#include "utils/grid_occupancy.hpp"
 #include "utils/map_grid_settings.hpp"
 #include "utils/relative_room_position.hpp"
 

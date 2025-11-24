@@ -27,7 +27,7 @@
 #include "map_generation/map_layers_geometry.hpp"
 #include "world/chunk.hpp"
 #include "world/grid.hpp"
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 #include "core/tile_builder.hpp"
 #include <nlohmann/json.hpp>
 #include "utils/loading_status_notifier.hpp"

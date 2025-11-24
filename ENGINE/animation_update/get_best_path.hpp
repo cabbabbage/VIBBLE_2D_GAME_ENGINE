@@ -5,7 +5,7 @@
 #include <SDL.h>
 
 #include "stride_types.hpp"
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 
 class Asset;
 

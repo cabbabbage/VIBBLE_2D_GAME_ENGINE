@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 #include "utils/transform_smoothing_settings.hpp"
 #include "world/chunk_manager.hpp"
 
@@ -29,6 +29,7 @@ public:
     void set_chunk_resolution(int r);
     void set_parallax_resolution(int r);
     int  parallax_step_size() const;
+    int  parallax_resolution() const;
     int  chunk_resolution() const { return r_chunk_; }
     SDL_Point origin() const { return origin_; }
     void set_origin(SDL_Point origin);
@@ -80,6 +81,7 @@ private:
         ParallaxSmoothingState smoothing{};
         std::uint64_t last_used_frame = 0;
         float last_value            = 0.0f;
+        bool initialized = false;
     };
 
     struct ParallaxCache {
@@ -91,6 +93,7 @@ private:
         std::vector<float> values;
         bool ready   = false;
 
+        ParallaxCache();
         void clear();
         void configure(int origin_i, int origin_j, int width, int height, int step);
         bool try_index(int i, int j, int step, std::size_t& out_index) const;

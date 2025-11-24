@@ -7,7 +7,7 @@
 #include <SDL.h>
 
 #include "asset/asset_types.hpp"
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 #include "utils/range_util.hpp"
 
 namespace {

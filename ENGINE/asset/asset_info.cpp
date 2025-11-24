@@ -21,7 +21,7 @@
 #include <unordered_set>
 
 #include "dev_mode/core/manifest_store.hpp"
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 
 namespace fs = std::filesystem;
 

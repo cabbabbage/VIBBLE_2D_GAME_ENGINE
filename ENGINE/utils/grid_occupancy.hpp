@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 #include "utils/area.hpp"
 
 namespace vibble::grid {

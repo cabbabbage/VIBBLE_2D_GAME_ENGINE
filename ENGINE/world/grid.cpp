@@ -9,7 +9,7 @@
 
 #include "asset/Asset.hpp"
 #include "render/camera.hpp"
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 #include "utils/area.hpp"
 #include "utils/log.hpp"
 
@@ -23,7 +23,7 @@ constexpr double kHalfFovY = 3.14159265358979323846 / 3.0; // 60 degrees
 constexpr double kParallaxEpsilon = 1e-3;
 constexpr double kParallaxMaxScreenRatio = 0.35;
 
-int floor_div(int a, int b) {
+int grid_floor_div(int a, int b) {
     if (b == 0) {
         return 0;
     }
@@ -181,9 +181,7 @@ void Grid::ParallaxSmoothingState::advance(float dt) {
     }
 }
 
-float Grid::ParallaxSmoothingState::value_for_render() const {
-    return current;
-}
+
 
 Grid::ParallaxCache::ParallaxCache()
     : origin_i(0)
@@ -262,25 +260,305 @@ void Grid::set_origin(SDL_Point origin) {
 }
 
 void Grid::invalidate_active_cache() {
-    chunks_.invalidate();
+    chunks_.clear_active();
     parallax_entries_.clear();
     parallax_cache_.clear();
 }
 
-const Grid::ChunkGrid& Grid::chunks() const {
+const ChunkManager& Grid::chunks() const {
     return chunks_;
 }
 
-Grid::ChunkGrid& Grid::chunks() {
+ChunkManager& Grid::chunks() {
     return chunks_;
 }
 
-int Grid::chunk_resolution() const {
-    return r_chunk_;
+SDL_Point Grid::grid_index_from_world(SDL_Point world) const {
+    return vibble::grid::world_to_grid_index(world, parallax_resolution_, origin_);
 }
 
-SDL_Point Grid::origin() const {
-    return origin_;
+GridId Grid::point_id_from_world(SDL_Point world) const {
+    SDL_Point idx = grid_index_from_world(world);
+    return parallax_key(idx.x, idx.y);
+}
+
+GridPoint* Grid::point_for_id(GridId id) {
+    auto it = points_.find(id);
+    if (it == points_.end()) {
+        return nullptr;
+    }
+    return &it->second;
+}
+
+GridPoint* Grid::point_for_asset(const Asset* asset) {
+    if (!asset) {
+        return nullptr;
+    }
+    auto it = asset_to_point_.find(const_cast<Asset*>(asset));
+    if (it == asset_to_point_.end()) {
+        return nullptr;
+    }
+    return point_for_id(it->second);
+}
+
+void Grid::remove_asset_from_point(Asset* a, GridPoint& point) {
+    if (!a) {
+        return;
+    }
+    auto it = std::find(point.occupants.begin(), point.occupants.end(), a);
+    if (it != point.occupants.end()) {
+        point.occupants.erase(it);
+    }
+    if (a->grid_id() == point.id) {
+        a->clear_grid_id();
+    }
+}
+
+GridPoint& Grid::ensure_point(SDL_Point grid_index) {
+    const GridId id = parallax_key(grid_index.x, grid_index.y);
+    auto [it, inserted] = points_.try_emplace(id);
+    GridPoint& point = it->second;
+    if (inserted) {
+        point.id = id;
+        point.occupants.clear();
+    }
+    point.grid_index = grid_index;
+    return point;
+}
+
+void Grid::bind_asset_to_point(Asset* a,
+                               GridPoint& point,
+                               SDL_Point world_pos,
+                               Chunk* owning_chunk,
+                               SDL_Point chunk_index) {
+    point.id          = parallax_key(point.grid_index.x, point.grid_index.y);
+    point.world       = world_pos;
+    point.chunk       = owning_chunk;
+    point.chunk_index = chunk_index;
+    if (a) {
+        if (std::find(point.occupants.begin(), point.occupants.end(), a) == point.occupants.end()) {
+            point.occupants.push_back(a);
+        }
+        asset_to_point_[a] = point.id;
+        a->set_grid_id(point.id);
+    }
+}
+
+void Grid::prune_empty_points() {
+    for (auto it = points_.begin(); it != points_.end(); ) {
+        if (it->second.occupants.empty()) {
+            it = points_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+namespace {
+SDL_Point world_point_for_asset(const Asset* asset) {
+    if (!asset) {
+        return SDL_Point{0, 0};
+    }
+    return SDL_Point{asset->pos.x, asset->pos.y};
+}
+} // namespace
+
+void Grid::register_asset(Asset* a) {
+    if (!a) {
+        return;
+    }
+    const int chunk_step = 1 << r_chunk_;
+    if (chunk_step <= 0) {
+        return;
+    }
+
+    const SDL_Point world_pos = world_point_for_asset(a);
+    const int i = grid_floor_div(world_pos.x - origin_.x, chunk_step);
+    const int j = grid_floor_div(world_pos.y - origin_.y, chunk_step);
+    Chunk& chunk = chunks_.ensure(i, j, r_chunk_, origin_);
+
+    auto ensure_asset_in_chunk = [&]() {
+        auto it = std::find(chunk.assets.begin(), chunk.assets.end(), a);
+        if (it == chunk.assets.end()) {
+            chunk.assets.push_back(a);
+        }
+    };
+
+    auto existing = residency_.find(a);
+    if (existing != residency_.end()) {
+        Chunk* previous = existing->second;
+        if (previous == &chunk) {
+            ensure_asset_in_chunk();
+            return;
+        }
+        remove_from_chunk(a, previous);
+        existing->second = &chunk;
+    } else {
+        residency_[a] = &chunk;
+    }
+    ensure_asset_in_chunk();
+}
+
+Chunk* Grid::ensure_chunk_from_world(SDL_Point world_px) {
+    const int chunk_step = 1 << r_chunk_;
+    if (chunk_step <= 0) {
+        return nullptr;
+    }
+    const int i = grid_floor_div(world_px.x - origin_.x, chunk_step);
+    const int j = grid_floor_div(world_px.y - origin_.y, chunk_step);
+    return get_or_create_chunk_ij(i, j);
+}
+
+Chunk* Grid::chunk_from_world(SDL_Point world_px) const {
+    const int chunk_step = 1 << r_chunk_;
+    if (chunk_step <= 0) {
+        return nullptr;
+    }
+    const int i = grid_floor_div(world_px.x - origin_.x, chunk_step);
+    const int j = grid_floor_div(world_px.y - origin_.y, chunk_step);
+    return chunks_.find(i, j);
+}
+
+Chunk* Grid::get_or_create_chunk_ij(int i, int j) {
+    return &chunks_.ensure(i, j, r_chunk_, origin_);
+}
+
+std::vector<Chunk*> Grid::all_chunks() const {
+    const auto& storage = chunks_.storage();
+    std::vector<Chunk*> result;
+    result.reserve(storage.size());
+    for (const auto& chunk : storage) {
+        if (chunk) {
+            result.push_back(chunk.get());
+        }
+    }
+    return result;
+}
+
+void Grid::remove_from_chunk(Asset* a, Chunk* c) {
+    if (!a || !c) {
+        return;
+    }
+    auto it = std::find(c->assets.begin(), c->assets.end(), a);
+    if (it != c->assets.end()) {
+        c->assets.erase(it);
+    }
+}
+
+void Grid::move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos) {
+    if (!a) {
+        return;
+    }
+    const int chunk_step = 1 << r_chunk_;
+    if (chunk_step <= 0) {
+        return;
+    }
+    const int old_i = grid_floor_div(old_pos.x - origin_.x, chunk_step);
+    const int old_j = grid_floor_div(old_pos.y - origin_.y, chunk_step);
+    const int new_i = grid_floor_div(new_pos.x - origin_.x, chunk_step);
+    const int new_j = grid_floor_div(new_pos.y - origin_.y, chunk_step);
+    if (old_i == new_i && old_j == new_j) {
+        return;
+    }
+
+    Chunk* previous = nullptr;
+    auto existing = residency_.find(a);
+    if (existing != residency_.end()) {
+        previous = existing->second;
+    } else {
+        previous = chunks_.find(old_i, old_j);
+    }
+    if (previous) {
+        remove_from_chunk(a, previous);
+    }
+
+    Chunk& target = chunks_.ensure(new_i, new_j, r_chunk_, origin_);
+    if (std::find(target.assets.begin(), target.assets.end(), a) == target.assets.end()) {
+        target.assets.push_back(a);
+    }
+    residency_[a] = &target;
+}
+
+void Grid::unregister_asset(Asset* a) {
+    if (!a) {
+        return;
+    }
+    auto it = residency_.find(a);
+    if (it == residency_.end()) {
+        return;
+    }
+    Chunk* chunk = it->second;
+    remove_from_chunk(a, chunk);
+    residency_.erase(it);
+}
+
+void Grid::rebuild_chunks() {
+    if (residency_.empty()) {
+        chunks_.reset();
+        invalidate_active_cache();
+        return;
+    }
+    std::vector<Asset*> assets;
+    assets.reserve(residency_.size());
+    for (const auto& entry : residency_) {
+        if (entry.first) {
+            assets.push_back(entry.first);
+        }
+    }
+    chunks_.reset();
+    residency_.clear();
+    invalidate_active_cache();
+
+    for (Asset* asset : assets) {
+        register_asset(asset);
+    }
+}
+
+const std::vector<Chunk*>& Grid::active_chunks() const {
+    return chunks_.active();
+}
+
+void Grid::update_active_chunks(const SDL_Rect& camera_world, int margin_px) {
+    const int margin = std::max(0, margin_px);
+    SDL_Rect expanded{
+        camera_world.x - margin,
+        camera_world.y - margin,
+        std::max(0, camera_world.w + margin * 2),
+        std::max(0, camera_world.h + margin * 2)
+    };
+
+    const bool needs_update = !has_cached_camera_rect_ ||
+        last_margin_px_ != margin_px ||
+        last_chunk_resolution_ != r_chunk_ ||
+        expanded.x != last_expanded_camera_.x ||
+        expanded.y != last_expanded_camera_.y ||
+        expanded.w != last_expanded_camera_.w ||
+        expanded.h != last_expanded_camera_.h;
+
+    if (!needs_update) {
+        return;
+    }
+
+    chunks_.clear_active();
+    auto& active = chunks_.active();
+    const auto& storage = chunks_.storage();
+    active.reserve(storage.size());
+    for (const auto& chunk : storage) {
+        if (!chunk) {
+            continue;
+        }
+        if (chunk->world_bounds.w <= 0 || chunk->world_bounds.h <= 0) {
+            continue;
+        }
+        if (SDL_HasIntersection(&chunk->world_bounds, &expanded) == SDL_TRUE) {
+            active.push_back(chunk.get());
+        }
+    }
+
+    last_expanded_camera_ = expanded;
+    last_margin_px_ = margin_px;
+    last_chunk_resolution_ = r_chunk_;
+    has_cached_camera_rect_ = true;
 }
 
 void Grid::set_parallax_resolution(int r) {
@@ -301,8 +579,8 @@ int Grid::parallax_step_size() const {
     return 1 << r;
 }
 
-Grid::ParallaxKey Grid::parallax_key(int cell_i, int cell_j) const {
-    return ParallaxKey{cell_i, cell_j};
+ParallaxKey Grid::parallax_key(int i, int j) const {
+    return (static_cast<std::uint64_t>(i) << 32) | static_cast<std::uint64_t>(j);
 }
 
 void Grid::clear_parallax_state() {
@@ -446,10 +724,10 @@ void Grid::update_parallax(const camera& cam, float dt) {
     world_min_y -= parallax_step;
     world_max_y += parallax_step;
 
-    const int cell_i_min = floor_div(world_min_x - origin_.x, parallax_step);
-    const int cell_i_max = floor_div((world_max_x - 1) - origin_.x, parallax_step);
-    const int cell_j_min = floor_div(world_min_y - origin_.y, parallax_step);
-    const int cell_j_max = floor_div((world_max_y - 1) - origin_.y, parallax_step);
+    const int cell_i_min = grid_floor_div(world_min_x - origin_.x, parallax_step);
+    const int cell_i_max = grid_floor_div((world_max_x - 1) - origin_.x, parallax_step);
+    const int cell_j_min = grid_floor_div(world_min_y - origin_.y, parallax_step);
+    const int cell_j_max = grid_floor_div((world_max_y - 1) - origin_.y, parallax_step);
     const int cells_x    = std::max(0, cell_i_max - cell_i_min + 1);
     const int cells_y    = std::max(0, cell_j_max - cell_j_min + 1);
     if (cells_x == 0 || cells_y == 0) {
@@ -571,8 +849,8 @@ float Grid::parallax_offset(SDL_Point world) const {
     if (step <= 0) {
         return 0.0f;
     }
-    const int i = floor_div(world.x - origin_.x, step);
-    const int j = floor_div(world.y - origin_.y, step);
+    const int i = grid_floor_div(world.x - origin_.x, step);
+    const int j = grid_floor_div(world.y - origin_.y, step);
     std::size_t cache_index = 0;
     if (parallax_cache_.try_index(i, j, step, cache_index)) {
         return parallax_cache_.values[cache_index];

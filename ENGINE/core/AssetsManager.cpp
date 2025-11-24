@@ -992,278 +992,40 @@ void Assets::update(const Input& input)
     // Clear last-cycle culled overlay info
     culled_debug_rects_.clear();
 
-    // Update the world grid using the current camera view before filling
-    // the visible candidate buffer so chunk queries are fresh, and parallax
-    // conversions are accurate for renderers/editors.
-    // Sweep horizontal grid lines from the horizon down to a fixed depth
-    // below the screen in screen space (converted back into world units).
-    constexpr int kGridCullingMarginPx = 100;
-    const double raw_horizon = camera_.horizon_screen_y_for_scale();
-    const double horizon_y = std::max(0.0, std::isfinite(raw_horizon) ? raw_horizon : 0.0);
-    const double bottom_target_screen = static_cast<double>(screen_height) + 4000.0;
-    auto [minx, miny, maxx, maxy] = camera_.get_camera_area().get_bounds();
-
-    auto warp_minus_target = [&](double world_y, double target) -> double {
-        const float wy = static_cast<float>(world_y);
-        const float linear = camera_.map_to_screen_f(SDL_FPoint{0.0f, wy}).y;
-        const float warped = camera_.warp_floor_screen_y(wy, linear);
-        return static_cast<double>(warped) - target;
-    };
-
-    auto inverse_warp = [&](double target_screen_y, bool prefer_upward) -> double {
-        // Direction-biased bracketing then binary search.
-        // If prefer_upward==true, expand upward from the anchor first
-        // (toward decreasing world Y) to find the horizon world Y.
-        const double anchor = camera_.current_anchor_world_y();
-        int tmp_minx = 0, tmp_miny = 0, tmp_maxx = 0, tmp_maxy = 0;
-        std::tie(tmp_minx, tmp_miny, tmp_maxx, tmp_maxy) = camera_.get_camera_area().get_bounds();
-        const double view_h = static_cast<double>(std::max(1, tmp_maxy - tmp_miny));
-
-        double f_anchor = warp_minus_target(anchor, target_screen_y);
-        if (!std::isfinite(f_anchor)) {
-            // fallback
-            return anchor;
-        }
-        if (std::fabs(f_anchor) < 0.5) return anchor;
-
-        // Setup bracketing variables
-        double low = anchor;
-        double high = anchor;
-        double f_low = f_anchor;
-        double f_high = f_anchor;
-
-        double delta = std::max(64.0, view_h * 0.5);
-        // Try expanding in preferred direction first
-        if (prefer_upward) {
-            for (int iter = 0; iter < 80; ++iter) {
-                double candidate = anchor - delta * (iter + 1);
-                double f_cand = warp_minus_target(candidate, target_screen_y);
-                if (!std::isfinite(f_cand)) { continue; }
-                // If sign changed between anchor and candidate, we have a bracket
-                if (f_anchor * f_cand <= 0.0) {
-                    low = std::min(anchor, candidate);
-                    high = std::max(anchor, candidate);
-                    f_low = warp_minus_target(low, target_screen_y);
-                    f_high = warp_minus_target(high, target_screen_y);
-                    break;
-                }
-            }
-        } else {
-            for (int iter = 0; iter < 80; ++iter) {
-                double candidate = anchor + delta * (iter + 1);
-                double f_cand = warp_minus_target(candidate, target_screen_y);
-                if (!std::isfinite(f_cand)) { continue; }
-                if (f_anchor * f_cand <= 0.0) {
-                    low = std::min(anchor, candidate);
-                    high = std::max(anchor, candidate);
-                    f_low = warp_minus_target(low, target_screen_y);
-                    f_high = warp_minus_target(high, target_screen_y);
-                    break;
-                }
-            }
-        }
-
-        // If still not bracketed, fall back to symmetric exponential expansion
-        if (!(f_low * f_high <= 0.0)) {
-            for (int iter = 0; iter < 80; ++iter) {
-                double hi = anchor + delta * (iter + 1);
-                double lo = anchor - delta * (iter + 1);
-                double f_hi = warp_minus_target(hi, target_screen_y);
-                double f_lo = warp_minus_target(lo, target_screen_y);
-                if (!std::isfinite(f_hi) || !std::isfinite(f_lo)) { delta *= 1.5; continue; }
-                if (f_lo * f_hi <= 0.0) {
-                    low = lo; high = hi; f_low = f_lo; f_high = f_hi; break;
-                }
-                delta *= 1.5;
-            }
-        }
-
-        // If still not bracketed, give up and return anchor
-        if (!std::isfinite(f_low) || !std::isfinite(f_high) || (f_low * f_high > 0.0)) {
-            return anchor;
-        }
-
-        // Binary search within bracket
-        for (int iter = 0; iter < 80; ++iter) {
-            double mid = 0.5 * (low + high);
-            double fmid = warp_minus_target(mid, target_screen_y);
-            if (!std::isfinite(fmid)) break;
-            if (std::fabs(fmid) < 0.05) return mid;
-            if (fmid * f_low <= 0.0) {
-                high = mid; f_high = fmid;
-            } else {
-                low = mid; f_low = fmid;
-            }
-        }
-        return 0.5 * (low + high);
-    };
-
-    double world_y_horizon = inverse_warp(horizon_y, true);
-    double world_y_bottom  = inverse_warp(bottom_target_screen, false);
-
-    // Apply a small buffer below the screen so tall assets anchored near the
-    // bottom edge are still considered.
-    int tmp_minx = 0, tmp_miny = 0, tmp_maxx = 0, tmp_maxy = 0;
-    std::tie(tmp_minx, tmp_miny, tmp_maxx, tmp_maxy) = camera_.get_camera_area().get_bounds();
-    const double view_h = static_cast<double>(std::max(1, tmp_maxy - tmp_miny));
-    const double downward_buffer = std::max(view_h * 0.05, 64.0);
-    world_y_bottom  = world_y_bottom + downward_buffer;
-    if (world_y_bottom <= world_y_horizon) {
-        world_y_bottom = world_y_horizon + std::max(1.0, downward_buffer);
-    }
-
-    // Expand horizontally a reasonable amount around the camera area
-    const double horiz_expand = std::max(512.0, static_cast<double>(screen_width));
-    const double min_world_x = static_cast<double>(minx) - horiz_expand;
-    const double max_world_x = static_cast<double>(maxx) + horiz_expand;
-
-    SDL_Rect expanded_world_rect{
-        static_cast<int>(std::floor(min_world_x)),
-        static_cast<int>(std::floor(world_y_horizon)),
-        static_cast<int>(std::ceil(max_world_x - min_world_x)),
-        static_cast<int>(std::ceil(world_y_bottom - world_y_horizon))
-    };
-    world_grid_.update_active_chunks(expanded_world_rect, kGridCullingMarginPx);
-    world_grid_.update_parallax(camera_, last_frame_dt_seconds_);
+    // Build the warped screen grid then derive visible assets directly from it.
+    screen_grid_.rebuild(world_grid_, camera_, last_frame_dt_seconds_);
 
     auto& new_active_assets = visible_candidate_buffer_;
     new_active_assets.clear();
-    new_active_assets.reserve(active_assets.size() + 32);
+    new_active_assets.reserve(screen_grid_.visible_assets().size() + 8);
 
-    if (++active_candidate_generation_ == 0) {
-        // Wrapped around; reset stamps so equality checks stay correct.
-        ++active_candidate_generation_;
-        for (Asset* asset : all) {
-            if (asset) {
-                asset->visibility_stamp = 0;
-            }
-        }
-    }
-    const std::uint64_t visibility_generation = active_candidate_generation_;
-
-    const int spacing = std::max(1, map_grid_settings_.spacing());
-    auto row_index = [&](int y) -> int {
-        const int q = y / spacing;
-        const int r = y % spacing;
-        if (r == 0) return q;
-        return (r < 0) ? q - 1 : q;
-    };
-
-    std::unordered_map<int, std::vector<Asset*>> row_buckets;
-    row_buckets.reserve(active_assets.size());
-    auto add_to_bucket = [&](Asset* asset) {
-        if (!asset) return;
-        const int row = row_index(asset->pos.y);
-        row_buckets[row].push_back(asset);
-    };
-
-    const auto& chunks = world_grid_.active_chunks();
-    if (chunks.empty()) {
-        for (Asset* asset : all) {
-            add_to_bucket(asset);
-        }
-    } else {
-        for (const world::Chunk* chunk : chunks) {
-            if (!chunk) {
-                continue;
-            }
-            for (Asset* asset : chunk->assets) {
-                add_to_bucket(asset);
-            }
+    for (Asset* asset : screen_grid_.visible_assets()) {
+        if (asset) {
+            new_active_assets.push_back(asset);
         }
     }
 
-    struct VisibleEntry {
-        Asset* asset = nullptr;
-        int row = 0;
-    };
-    std::vector<VisibleEntry> visible_entries;
-    visible_entries.reserve(row_buckets.size() * 2 + 32);
-
-    const float view_center_x = camera_.get_view_center_f().x;
-    auto warped_row_y = [&](double world_y) -> double {
-        const float wy = static_cast<float>(world_y);
-        SDL_FPoint linear = camera_.map_to_screen_f(SDL_FPoint{view_center_x, wy});
-        const float warped = camera_.warp_floor_screen_y(wy, linear.y);
-        return std::isfinite(warped) ? static_cast<double>(warped)
-                                     : static_cast<double>(linear.y);
-    };
-
-    auto push_visible = [&](Asset* asset, int row) {
-        if (!asset || !asset->info) {
-            return;
-        }
-        if (asset->visibility_stamp == visibility_generation) {
-            return;
-        }
-        asset->visibility_stamp = visibility_generation;
-        visible_entries.push_back(VisibleEntry{asset, row});
-    };
-
-    const int start_row = row_index(static_cast<int>(std::floor(world_y_horizon)));
-    const int end_row   = row_index(static_cast<int>(std::ceil(world_y_bottom)));
-    const double left_bound = -static_cast<double>(spacing);
-    const double right_bound = static_cast<double>(screen_width) + static_cast<double>(spacing);
-    const double bottom_limit = bottom_target_screen + spacing;
-
-    for (int row = start_row; row <= end_row; ++row) {
-        const double world_y_row = static_cast<double>(row * spacing);
-        const double row_screen_y = warped_row_y(world_y_row);
-        if (!std::isfinite(row_screen_y)) {
-            continue;
-        }
-        if (row_screen_y < horizon_y - 0.5) {
-            continue;
-        }
-        if (row_screen_y > bottom_limit) {
-            break;
-        }
-        auto bucket_it = row_buckets.find(row);
-        if (bucket_it == row_buckets.end()) {
-            continue;
-        }
-        for (Asset* asset : bucket_it->second) {
-            if (!asset || !asset->info) {
-                continue;
-            }
-            SDL_Point world_point{asset->pos.x, asset->pos.y};
-            SDL_FPoint screen_pos = world_grid_.floor_warped_screen_position(camera_, world_point);
-            if (!std::isfinite(screen_pos.x) || !std::isfinite(screen_pos.y)) {
-                continue;
-            }
-            if (screen_pos.y < horizon_y || screen_pos.y > bottom_limit) {
-                continue;
-            }
-            if (screen_pos.x < left_bound || screen_pos.x > right_bound) {
-                continue;
-            }
-            push_visible(asset, row);
-        }
-    }
-
-    std::sort(visible_entries.begin(),
-              visible_entries.end(),
-              [](const VisibleEntry& lhs, const VisibleEntry& rhs) {
-                  if (lhs.row == rhs.row) {
-                      if (lhs.asset == rhs.asset) {
-                          return false;
-                      }
-                      if (!lhs.asset || !rhs.asset) {
-                          return rhs.asset != nullptr;
-                      }
-                      if (lhs.asset->z_index == rhs.asset->z_index) {
-                          return lhs.asset < rhs.asset;
-                      }
-                      return lhs.asset->z_index < rhs.asset->z_index;
+    std::sort(new_active_assets.begin(),
+              new_active_assets.end(),
+              [this](Asset* lhs, Asset* rhs) {
+                  if (lhs == rhs) {
+                      return false;
                   }
-                  return lhs.row < rhs.row;
+                  if (!lhs || !rhs) {
+                      return rhs != nullptr;
+                  }
+                  world::GridPoint* lp = screen_grid_.point_for_asset(lhs);
+                  world::GridPoint* rp = screen_grid_.point_for_asset(rhs);
+                  const float ly = lp ? lp->screen.y : 0.0f;
+                  const float ry = rp ? rp->screen.y : 0.0f;
+                  if (std::fabs(ly - ry) > 0.5f) {
+                      return ly < ry;
+                  }
+                  if (lhs->z_index != rhs->z_index) {
+                      return lhs->z_index < rhs->z_index;
+                  }
+                  return lhs < rhs;
               });
-
-    for (const auto& entry : visible_entries) {
-        if (entry.asset) {
-            new_active_assets.push_back(entry.asset);
-        }
-    }
 
     std::vector<Asset*> new_light_assets;
     std::vector<Asset*> new_static_lights;
@@ -1758,47 +1520,75 @@ bool Assets::asset_bounds_in_screen_space(const Asset* asset, SDL_FRect& out_rec
     const float world_center_x = world_x + local_center_x * asset_scale;
     const float world_center_y = world_y + local_center_y * asset_scale;
 
-    const SDL_Point world_center_point{
-        static_cast<int>(std::lround(world_center_x)),
-        static_cast<int>(std::lround(world_center_y))
-    };
+    SDL_FRect sprite_rect{0.0f, 0.0f, 0.0f, 0.0f};
+    bool      have_sprite_rect = false;
 
-    const float left_world   = world_center_x - scaled_half;
-    const float right_world  = world_center_x + scaled_half;
-    const float top_world    = world_center_y - scaled_half;
-    const float bottom_world = world_center_y + scaled_half;
+    if (auto* gp = screen_grid_.point_for_asset(asset)) {
+        const float inv_scale = 1.0f / std::max(0.000001f, camera_.get_scale());
+        const float distance_scale = (asset->info->apply_distance_scaling) ? gp->distance_scale : 1.0f;
+        const float vertical_scale = (asset->info->apply_vertical_scaling) ? gp->vertical_scale : 1.0f;
 
-    SDL_FPoint top_left_screen = camera_.map_to_screen_f(SDL_FPoint{left_world, top_world});
-    SDL_FPoint bottom_right_screen = camera_.map_to_screen_f(SDL_FPoint{right_world, bottom_world});
+        const float center_x = gp->screen.x + (world_center_x - world_x) * inv_scale * distance_scale;
+        const float center_y = gp->screen.y + (world_center_y - world_y) * inv_scale;
 
-    // Apply the same warping/parallax used during rendering so culling respects the warped grid.
-    top_left_screen.y = camera_.warp_floor_screen_y(top_world, top_left_screen.y);
-    bottom_right_screen.y = camera_.warp_floor_screen_y(bottom_world, bottom_right_screen.y);
-    const float parallax_dx = world_grid_.parallax_offset(world_center_point);
-    top_left_screen.x += parallax_dx;
-    bottom_right_screen.x += parallax_dx;
+        float width  = (scaled_half * 2.0f) * inv_scale * distance_scale;
+        float height = width * vertical_scale;
 
-    const float left_screen   = std::min(top_left_screen.x, bottom_right_screen.x);
-    const float right_screen  = std::max(top_left_screen.x, bottom_right_screen.x);
-    const float top_screen    = std::min(top_left_screen.y, bottom_right_screen.y);
-    const float bottom_screen = std::max(top_left_screen.y, bottom_right_screen.y);
-    const float width  = right_screen - left_screen;
-    const float height = bottom_screen - top_screen;
-    if (!(width > 0.0f) || !(height > 0.0f)) {
-        return false;
-    }
-    if (!std::isfinite(left_screen) || !std::isfinite(top_screen) ||
-        !std::isfinite(width) || !std::isfinite(height)) {
-        return false;
+        if (std::isfinite(center_x) && std::isfinite(center_y) &&
+            std::isfinite(width) && std::isfinite(height) &&
+            width > 0.0f && height > 0.0f) {
+            sprite_rect = SDL_FRect{
+                center_x - width * 0.5f,
+                center_y - height * 0.5f,
+                width,
+                height
+            };
+            have_sprite_rect = true;
+        }
     }
 
-    // Base sprite bounds in screen space
-    SDL_FRect sprite_rect{
-        left_screen,
-        top_screen,
-        width,
-        height
-    };
+    if (!have_sprite_rect) {
+        const SDL_Point world_center_point{
+            static_cast<int>(std::lround(world_center_x)),
+            static_cast<int>(std::lround(world_center_y))
+        };
+
+        const float left_world   = world_center_x - scaled_half;
+        const float right_world  = world_center_x + scaled_half;
+        const float top_world    = world_center_y - scaled_half;
+        const float bottom_world = world_center_y + scaled_half;
+
+        SDL_FPoint top_left_screen = camera_.map_to_screen_f(SDL_FPoint{left_world, top_world});
+        SDL_FPoint bottom_right_screen = camera_.map_to_screen_f(SDL_FPoint{right_world, bottom_world});
+
+        // Apply the same warping/parallax used during rendering so culling respects the warped grid.
+        top_left_screen.y = camera_.warp_floor_screen_y(top_world, top_left_screen.y);
+        bottom_right_screen.y = camera_.warp_floor_screen_y(bottom_world, bottom_right_screen.y);
+        const float parallax_dx = world_grid_.parallax_offset(world_center_point);
+        top_left_screen.x += parallax_dx;
+        bottom_right_screen.x += parallax_dx;
+
+        const float left_screen   = std::min(top_left_screen.x, bottom_right_screen.x);
+        const float right_screen  = std::max(top_left_screen.x, bottom_right_screen.x);
+        const float top_screen    = std::min(top_left_screen.y, bottom_right_screen.y);
+        const float bottom_screen = std::max(top_left_screen.y, bottom_right_screen.y);
+        const float width  = right_screen - left_screen;
+        const float height = bottom_screen - top_screen;
+        if (!(width > 0.0f) || !(height > 0.0f)) {
+            return false;
+        }
+        if (!std::isfinite(left_screen) || !std::isfinite(top_screen) ||
+            !std::isfinite(width) || !std::isfinite(height)) {
+            return false;
+        }
+
+        sprite_rect = SDL_FRect{
+            left_screen,
+            top_screen,
+            width,
+            height
+        };
+    }
 
     // Expand to include owned light sources so visibility/culling accounts for
     // both the asset pixels and any emitted light textures.

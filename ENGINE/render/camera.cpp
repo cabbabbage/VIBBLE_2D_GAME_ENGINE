@@ -152,19 +152,7 @@ namespace {
         return sanitize_params(params);
     }
 
-    static inline int width_from_area(const Area& a) {
-        int minx, miny, maxx, maxy;
-        std::tie(minx, miny, maxx, maxy) = a.get_bounds();
-        (void)miny; (void)maxy;
-        return std::max(0, maxx - minx);
-    }
 
-    static inline int height_from_area(const Area& a) {
-        int minx, miny, maxx, maxy;
-        std::tie(minx, miny, maxx, maxy) = a.get_bounds();
-        (void)minx; (void)maxx;
-        return std::max(0, maxy - miny);
-    }
 
     static inline Area make_rect_area(const std::string& name, SDL_Point center, int w, int h, int resolution) {
         const int left   = center.x - (w / 2);

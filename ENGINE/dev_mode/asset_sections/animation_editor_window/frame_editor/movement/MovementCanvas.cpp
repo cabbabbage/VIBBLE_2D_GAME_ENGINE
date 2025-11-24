@@ -9,7 +9,7 @@
 #include "dm_styles.hpp"
 #include "draw_utils.hpp"
 #include "../../PreviewProvider.hpp"
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 
 namespace animation_editor {
 

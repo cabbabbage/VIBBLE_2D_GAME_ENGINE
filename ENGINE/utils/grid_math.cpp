@@ -1,4 +1,4 @@
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 
 #include <algorithm>
 #include <cmath>

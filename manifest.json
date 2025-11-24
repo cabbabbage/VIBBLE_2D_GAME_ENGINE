@@ -2090,16 +2090,16 @@
         "base_height_at_zoom_low": 4000.0,
         "base_height_px": 2157.5,
         "depth_offset_at_zoom_high": -845.0,
-        "depth_offset_at_zoom_low": -4000.0,
+        "depth_offset_at_zoom_low": -1040.0,
         "distance_scale_at_zoom_high": 1.0,
         "distance_scale_at_zoom_low": 1.0,
         "distance_scale_strength": 1.0,
         "foreground_plane_screen_y": 902.0,
         "foreground_texture_max_opacity": 0,
         "foreshorten_at_zoom_high": 0.0,
-        "foreshorten_at_zoom_low": 0.29999998211860657,
-        "foreshorten_strength": 0.14999999105930328,
-        "grid_depth_offset_px": -2422.5,
+        "foreshorten_at_zoom_low": 0.5799999833106995,
+        "foreshorten_strength": 0.28999999165534973,
+        "grid_depth_offset_px": -942.5,
         "min_visible_screen_ratio": 0.006000000052154064,
         "motion_smoothing_max_step": 300.0,
         "motion_smoothing_method": 1,
@@ -2116,7 +2116,7 @@
         "scale_hysteresis_margin": 0.029999999329447746,
         "smooth_motion_zoom": true,
         "texture_opacity_falloff_method": 3,
-        "tilt_zoom_in_degrees": 17.049030303955078,
+        "tilt_zoom_in_degrees": 30.629995346069336,
         "tilt_zoom_out_degrees": 50.194427490234375,
         "zoom_high": 3.999999761581421,
         "zoom_low": 0.19999998807907104
@@ -2419,9 +2419,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            170,
-            242,
             36,
+            242,
+            158,
             255
           ],
           "edge_smoothness": 43,
@@ -2472,9 +2472,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            32,
-            31,
-            204,
+            36,
+            242,
+            93,
             255
           ],
           "edge_smoothness": 101,
@@ -2548,6 +2548,62 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-1048b1d75926"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "Grass_1"
+                }
+              ],
+              "display_name": "Grass_1",
+              "dx": -2074,
+              "dy": -1355,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 6904,
+              "origional_width": 6904,
+              "position": "Exact",
+              "resolution": 7,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-85da9d60f33d"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "Candle"
+                }
+              ],
+              "display_name": "Candle",
+              "dx": -1982,
+              "dy": -1503,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 6904,
+              "origional_width": 6904,
+              "position": "Exact",
+              "resolution": 7,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-960cbc4c866e"
             }
           ]
         }

@@ -6,7 +6,7 @@
 #include <nlohmann/json.hpp>
 
 #include "utils/area.hpp"
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 
 namespace {
 constexpr int kMinResolution = 0;

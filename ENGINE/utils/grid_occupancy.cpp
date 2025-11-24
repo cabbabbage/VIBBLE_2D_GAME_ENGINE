@@ -1,4 +1,4 @@
-#include "util/grid_occupancy.hpp"
+#include "utils/grid_occupancy.hpp"
 
 #include <algorithm>
 #include <cmath>

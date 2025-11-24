@@ -6,7 +6,7 @@
 #include <optional>
 #include <SDL.h>
 
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 
 class Area {
 
@@ -78,3 +78,15 @@ class Area {
 
     bool apply_resolution_to_points();
 };
+
+inline int width_from_area(const Area& a) {
+    int minx, miny, maxx, maxy;
+    std::tie(minx, miny, maxx, maxy) = a.get_bounds();
+    return maxx - minx;
+}
+
+inline int height_from_area(const Area& a) {
+    int minx, miny, maxx, maxy;
+    std::tie(minx, miny, maxx, maxy) = a.get_bounds();
+    return maxy - miny;
+}

@@ -13,7 +13,7 @@
 #include "asset_spawn_planner.hpp"
 #include "asset/asset_info.hpp"
 #include "utils/area.hpp"
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 
 namespace {
 

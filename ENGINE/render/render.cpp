@@ -34,7 +34,7 @@
 #include "render/camera.hpp"
 #include "tiling/grid_tile.hpp"
 #include "utils/log.hpp"
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 #include "world/chunk.hpp"
 #include "world/grid.hpp"
 
@@ -1320,36 +1320,57 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
     const float base_sh   = scaled_fh * inv_scale;
 
     camera& cam = assets_->getView();
-    const camera::RenderSmoothingKey smoothing_key = a ?
-        reinterpret_cast<camera::RenderSmoothingKey>(a) : 0;
     const SDL_Point world_point{
         static_cast<int>(std::lround(world_x)),
         static_cast<int>(std::lround(world_y))
     };
-    camera::RenderEffects ef = cam.compute_render_effects(
-        world_point,
-        base_sh,
-        ref_sh,
-        smoothing_key);
-
     const float horizon_y = cam.horizon_screen_y_for_scale();
     const float bottom_limit = static_cast<float>(screen_height_) + 4000.0f;
-    if (!std::isfinite(ef.screen_position.y) ||
-        ef.screen_position.y < horizon_y - 0.5f ||
-        ef.screen_position.y > bottom_limit + 1.0f) {
-        return SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
+
+    float center_x = 0.0f;
+    float center_y = 0.0f;
+    float distance_scale = 1.0f;
+    float vertical_scale = 1.0f;
+
+    world::GridPoint* gp = (assets_ && a) ? assets_->screen_grid().point_for_asset(a) : nullptr;
+    if (gp) {
+        distance_scale = (a && a->info && a->info->apply_distance_scaling) ? gp->distance_scale : 1.0f;
+        vertical_scale = (a && a->info && a->info->apply_vertical_scaling) ? gp->vertical_scale : 1.0f;
+        center_x = gp->screen.x;
+        center_y = gp->screen.y;
+        if (assets_ && assets_->player == a) {
+            center_x -= gp->parallax_dx;
+        }
+    } else {
+        const camera::RenderSmoothingKey smoothing_key = a ?
+            reinterpret_cast<camera::RenderSmoothingKey>(a) : 0;
+        camera::RenderEffects ef = cam.compute_render_effects(
+            world_point,
+            base_sh,
+            ref_sh,
+            smoothing_key);
+        if (!std::isfinite(ef.screen_position.y) ||
+            ef.screen_position.y < horizon_y - 0.5f ||
+            ef.screen_position.y > bottom_limit + 1.0f) {
+            return SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
+        }
+        center_x = ef.screen_position.x;
+        center_y = ef.screen_position.y;
+        if (assets_) {
+            if (!(a && assets_->player == a)) {
+                world::Grid& grid = assets_->world_grid();
+                center_x = grid.parallax_adjusted_screen_x(world_point, center_x);
+            }
+        }
+        distance_scale  = (a && a->info && a->info->apply_distance_scaling) ? ef.distance_scale : 1.0f;
+        vertical_scale  = (a && a->info && a->info->apply_vertical_scaling) ? ef.vertical_scale : 1.0f;
     }
 
-    float center_x = ef.screen_position.x;
-    if (assets_) {
-        // Do not apply grid parallax to the player asset
-        if (!(a && assets_->player == a)) {
-            world::Grid& grid = assets_->world_grid();
-            center_x = grid.parallax_adjusted_screen_x(world_point, center_x);
-        }
+    if (!std::isfinite(center_y) ||
+        center_y < horizon_y - 0.5f ||
+        center_y > bottom_limit + 1.0f) {
+        return SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
     }
-    const float distance_scale  = (a && a->info && a->info->apply_distance_scaling) ? ef.distance_scale : 1.0f;
-    const float vertical_scale  = (a && a->info && a->info->apply_vertical_scaling) ? ef.vertical_scale : 1.0f;
 
     const float scaled_sw = base_sw * distance_scale;
     const float scaled_sh2 = base_sh * distance_scale;
@@ -1368,7 +1389,7 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
     height = std::max(height, 1.0f);
 
     const float left     = center_x - width * 0.5f;
-    const float top      = ef.screen_position.y - height;
+    const float top      = center_y - height;
 
     return SDL_FRect{ left, top, width, height };
 }
@@ -1394,32 +1415,57 @@ SDL_FRect SceneRenderer::get_child_position_rect(const Asset* parent,
     const float base_sh   = scaled_fh * inv_scale;
 
     camera& cam = assets_->getView();
-    const camera::RenderSmoothingKey smoothing_key =
-        reinterpret_cast<camera::RenderSmoothingKey>(parent);
-    camera::RenderEffects ef = cam.compute_render_effects(
-        world_point,
-        base_sh,
-        reference_screen_height,
-        smoothing_key);
-
     const float horizon_y = cam.horizon_screen_y_for_scale();
     const float bottom_limit = static_cast<float>(screen_height_) + 4000.0f;
-    if (!std::isfinite(ef.screen_position.y) ||
-        ef.screen_position.y < horizon_y - 0.5f ||
-        ef.screen_position.y > bottom_limit + 1.0f) {
-        return SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
-    }
 
-    float center_x = ef.screen_position.x;
-    if (assets_ && assets_->player != parent) {
-        world::Grid& grid = assets_->world_grid();
-        center_x = grid.parallax_adjusted_screen_x(world_point, center_x);
-    }
-
+    float center_x = 0.0f;
+    float center_y = 0.0f;
     const bool apply_distance = parent->info && parent->info->apply_distance_scaling;
     const bool apply_vertical = parent->info && parent->info->apply_vertical_scaling;
-    const float distance_scale = apply_distance ? ef.distance_scale : 1.0f;
-    const float vertical_scale = apply_vertical ? ef.vertical_scale : 1.0f;
+    float distance_scale = 1.0f;
+    float vertical_scale = 1.0f;
+
+    world::GridPoint* gp = assets_ ? assets_->screen_grid().point_for_asset(parent) : nullptr;
+    if (gp) {
+        distance_scale = apply_distance ? gp->distance_scale : 1.0f;
+        vertical_scale = apply_vertical ? gp->vertical_scale : 1.0f;
+        center_x = gp->screen.x;
+        center_y = gp->screen.y;
+        if (assets_ && assets_->player == parent) {
+            center_x -= gp->parallax_dx;
+        }
+        const float dx = static_cast<float>(world_point.x - parent->pos.x) * inv_scale * distance_scale;
+        const float dy = static_cast<float>(world_point.y - parent->pos.y) * inv_scale;
+        center_x += dx;
+        center_y += dy;
+    } else {
+        const camera::RenderSmoothingKey smoothing_key =
+            reinterpret_cast<camera::RenderSmoothingKey>(parent);
+        camera::RenderEffects ef = cam.compute_render_effects(
+            world_point,
+            base_sh,
+            reference_screen_height,
+            smoothing_key);
+        if (!std::isfinite(ef.screen_position.y) ||
+            ef.screen_position.y < horizon_y - 0.5f ||
+            ef.screen_position.y > bottom_limit + 1.0f) {
+            return SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
+        }
+        center_x = ef.screen_position.x;
+        center_y = ef.screen_position.y;
+        if (assets_ && assets_->player != parent) {
+            world::Grid& grid = assets_->world_grid();
+            center_x = grid.parallax_adjusted_screen_x(world_point, center_x);
+        }
+        distance_scale = apply_distance ? ef.distance_scale : 1.0f;
+        vertical_scale = apply_vertical ? ef.vertical_scale : 1.0f;
+    }
+
+    if (!std::isfinite(center_y) ||
+        center_y < horizon_y - 0.5f ||
+        center_y > bottom_limit + 1.0f) {
+        return SDL_FRect{0.0f, 0.0f, 0.0f, 0.0f};
+    }
 
     float width  = base_sw * distance_scale;
     float height = (base_sh * distance_scale) * vertical_scale;
@@ -1434,7 +1480,7 @@ SDL_FRect SceneRenderer::get_child_position_rect(const Asset* parent,
     height = std::max(height, 1.0f);
 
     const float left = center_x - width * 0.5f;
-    const float top  = ef.screen_position.y - height;
+    const float top  = center_y - height;
 
     return SDL_FRect{ left, top, width, height };
 }

@@ -8,7 +8,7 @@
 #include "animation_update/animation_runtime.hpp"
 #include "utils/area_helpers.hpp"
 #include "asset/asset_types.hpp"
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 #include "utils/transform_smoothing_settings.hpp"
 #include <iostream>
 #include <random>

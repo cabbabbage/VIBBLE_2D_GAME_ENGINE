@@ -18,7 +18,7 @@
 #include "animation_runtime.hpp"
 #include "core/AssetsManager.hpp"
 #include "map_generation/room.hpp"
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 #include "utils/area.hpp"
 
 namespace {

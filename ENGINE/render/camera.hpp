@@ -130,6 +130,8 @@ public:
 
     void set_scale(float s);
     float get_scale() const;
+    int screen_width() const { return screen_width_; }
+    int screen_height() const { return screen_height_; }
 
     void zoom_to_scale(double target_scale, int duration_steps);
     void zoom_to_area(const Area& target_area, int duration_steps);

@@ -16,6 +16,7 @@
 #include <nlohmann/json.hpp>
 #include "map_generation/room.hpp"
 #include "world/grid.hpp"
+#include "world/screen_grid.hpp"
 #include "asset/Asset.hpp"
 
 class Asset;
@@ -139,6 +140,8 @@ public:
     const std::string& map_id() const { return map_id_; }
     world::Grid& world_grid() { return world_grid_; }
     const world::Grid& world_grid() const { return world_grid_; }
+    world::ScreenGrid& screen_grid() { return screen_grid_; }
+    const world::ScreenGrid& screen_grid() const { return screen_grid_; }
 
     void persist_map_info_json();
 
@@ -261,6 +264,7 @@ private:
     bool depth_effects_enabled_ = false;
     bool asset_boundary_box_display_enabled_ = false;
     world::Grid world_grid_{};
+    world::ScreenGrid screen_grid_{};
     std::vector<Asset*> removal_queue;
     std::mutex removal_queue_mutex_;
     std::vector<Asset*> non_player_update_buffer_;

@@ -19,7 +19,7 @@
 #include "widgets/CandidateEditorPieGraphWidget.hpp"
 #include "utils/input.hpp"
 #include "utils/map_grid_settings.hpp"
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 
 class SpawnGroupLabelWidget : public Widget {
