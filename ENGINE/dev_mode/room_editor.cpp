@@ -796,7 +796,7 @@ void RoomEditor::set_enabled(bool enabled, bool preserve_camera_state) {
         blocking_panel_visible_.fill(false);
     }
 
-    camera* cam = assets_ ? &assets_->getView() : nullptr;
+    camera_grid* cam = assets_ ? &assets_->getView() : nullptr;
     if (enabled_) {
         if (cam && !preserve_camera_state) {
             cam->set_manual_zoom_override(false);
@@ -1289,7 +1289,7 @@ void RoomEditor::render_room_labels(SDL_Renderer* renderer) {
     SDL_FPoint screen_center{static_cast<float>(screen_w_) * 0.5f,
                              static_cast<float>(screen_h_) * 0.5f};
 
-    camera& view = assets_->getView();
+    camera_grid& view = assets_->getView();
 
     for (Room* room : rooms) {
         if (!room || !room->room_area) continue;
@@ -1707,7 +1707,7 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
             }
         }
         if (overlay && overlay->radius > 0.0) {
-            const camera& cam = assets_->getView();
+            const camera_grid& cam = assets_->getView();
             const double scale = std::max(0.0001, static_cast<double>(cam.get_scale()));
             const double inv_scale = 1.0 / scale;
             SDL_FPoint screen_center_f = cam.map_to_screen(overlay->center);
@@ -1733,7 +1733,7 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
         // Edge-path helper overlay (dashed) similar to perimeter overlay
         auto draw_dashed_polyline_world = [&](const std::vector<SDL_Point>& path, SDL_Color color) {
             if (path.size() < 2) return;
-            const camera& cam = assets_->getView();
+            const camera_grid& cam = assets_->getView();
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
             SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, 210);
             const int dash = 8;
@@ -2084,7 +2084,7 @@ void RoomEditor::focus_camera_on_asset(Asset* asset, double zoom_factor, int dur
         return;
     }
 
-    camera& cam = assets_->getView();
+    camera_grid& cam = assets_->getView();
     cam.set_manual_zoom_override(true);
     cam.pan_and_zoom_to_asset(asset, zoom_factor, duration_steps);
     mark_spatial_index_dirty();
@@ -2095,7 +2095,7 @@ void RoomEditor::focus_camera_on_room_center(bool reframe_zoom) {
     if (!enabled_ || !assets_) return;
     if (!current_room_ || !current_room_->room_area) return;
 
-    camera& cam = assets_->getView();
+    camera_grid& cam = assets_->getView();
     const SDL_Point center = current_room_->room_area->get_center();
     cam.set_manual_zoom_override(true);
     cam.set_focus_override(center);
@@ -2241,7 +2241,7 @@ bool RoomEditor::any_blocking_panel_visible() const {
 void RoomEditor::handle_mouse_input(const Input& input) {
     if (!input_) return;
 
-    camera& cam = assets_->getView();
+    camera_grid& cam = assets_->getView();
     const float prev_scale = cam.get_scale();
     const SDL_Point prev_center = cam.get_screen_center();
 
@@ -2446,7 +2446,7 @@ void RoomEditor::handle_mouse_input(const Input& input) {
 Asset* RoomEditor::hit_test_asset(SDL_Point screen_point, SDL_Renderer* /*renderer*/) const {
     if (!active_assets_ || !assets_) return nullptr;
 
-    const camera& cam = assets_->getView();
+    const camera_grid& cam = assets_->getView();
 
     if (!ensure_spatial_index(cam)) {
         // No spatial index: compute bounds and choose the asset highest on screen.
@@ -2522,7 +2522,7 @@ void RoomEditor::mark_spatial_index_dirty() const {
     spatial_grid_.clear();
 }
 
-bool RoomEditor::camera_state_changed(const camera& cam) const {
+bool RoomEditor::camera_state_changed(const camera_grid& cam) const {
     if (!cached_camera_state_valid_) {
         return false;
     }
@@ -2543,7 +2543,7 @@ bool RoomEditor::camera_state_changed(const camera& cam) const {
     return false;
 }
 
-bool RoomEditor::ensure_spatial_index(const camera& cam) const {
+bool RoomEditor::ensure_spatial_index(const camera_grid& cam) const {
     if (!active_assets_) {
         return false;
     }
@@ -2559,7 +2559,7 @@ bool RoomEditor::ensure_spatial_index(const camera& cam) const {
     return !spatial_index_dirty_;
 }
 
-float RoomEditor::compute_reference_screen_height(const camera& cam, float inv_scale) const {
+float RoomEditor::compute_reference_screen_height(const camera_grid& cam, float inv_scale) const {
     float reference_screen_height = 1.0f;
     Asset* player_asset = player_ ? player_ : (assets_ ? assets_->player : nullptr);
     if (!player_asset) {
@@ -2592,7 +2592,7 @@ float RoomEditor::compute_reference_screen_height(const camera& cam, float inv_s
     return reference_screen_height;
 }
 
-bool RoomEditor::compute_asset_screen_bounds(const camera& cam,
+bool RoomEditor::compute_asset_screen_bounds(const camera_grid& cam,
                                              float reference_height,
                                              float inv_scale,
                                              Asset* asset,
@@ -2661,7 +2661,7 @@ bool RoomEditor::compute_asset_screen_bounds(const camera& cam,
     return true;
 }
 
-void RoomEditor::rebuild_spatial_index(const camera& cam) const {
+void RoomEditor::rebuild_spatial_index(const camera_grid& cam) const {
     asset_bounds_cache_.clear();
     spatial_grid_.clear();
 
@@ -2744,7 +2744,7 @@ void RoomEditor::remove_asset_from_spatial_index(Asset* asset) const {
     asset_bounds_cache_.erase(it);
 }
 
-void RoomEditor::refresh_asset_spatial_entry(const camera& cam, Asset* asset) const {
+void RoomEditor::refresh_asset_spatial_entry(const camera_grid& cam, Asset* asset) const {
     if (!asset) return;
     if (spatial_index_dirty_ || !cached_camera_state_valid_ || !cached_reference_height_valid_) {
         return;
@@ -2807,7 +2807,7 @@ std::vector<Asset*> RoomEditor::gather_candidate_assets_for_point(SDL_Point scre
     return result;
 }
 
-Asset* RoomEditor::hit_test_asset_fallback(const camera& cam, SDL_Point screen_point) const {
+Asset* RoomEditor::hit_test_asset_fallback(const camera_grid& cam, SDL_Point screen_point) const {
     if (!active_assets_) {
         return nullptr;
     }

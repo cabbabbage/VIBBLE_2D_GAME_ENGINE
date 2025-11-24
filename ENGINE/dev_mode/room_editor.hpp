@@ -266,18 +266,18 @@ private:
 };
 
     void mark_spatial_index_dirty() const;
-    bool ensure_spatial_index(const camera& cam) const;
-    bool camera_state_changed(const camera& cam) const;
-    float compute_reference_screen_height(const camera& cam, float inv_scale) const;
-    bool compute_asset_screen_bounds(const camera& cam, float reference_height, float inv_scale, Asset* asset, SDL_Rect& out_rect, int& out_screen_y) const;
-    void rebuild_spatial_index(const camera& cam) const;
+    bool ensure_spatial_index(const camera_grid& cam) const;
+    bool camera_state_changed(const camera_grid& cam) const;
+    float compute_reference_screen_height(const camera_grid& cam, float inv_scale) const;
+    bool compute_asset_screen_bounds(const camera_grid& cam, float reference_height, float inv_scale, Asset* asset, SDL_Rect& out_rect, int& out_screen_y) const;
+    void rebuild_spatial_index(const camera_grid& cam) const;
     void insert_asset_entry(Asset* asset, const SDL_Rect& rect, int screen_y) const;
     void add_asset_to_cell(Asset* asset, int cell_x, int cell_y, std::vector<int64_t>& cell_keys) const;
     void remove_asset_from_spatial_index(Asset* asset) const;
-    void refresh_asset_spatial_entry(const camera& cam, Asset* asset) const;
+    void refresh_asset_spatial_entry(const camera_grid& cam, Asset* asset) const;
     void refresh_spatial_entries_for_dragged_assets();
     std::vector<Asset*> gather_candidate_assets_for_point(SDL_Point screen_point) const;
-    Asset* hit_test_asset_fallback(const camera& cam, SDL_Point screen_point) const;
+    Asset* hit_test_asset_fallback(const camera_grid& cam, SDL_Point screen_point) const;
 
 private:
     Assets* assets_ = nullptr;

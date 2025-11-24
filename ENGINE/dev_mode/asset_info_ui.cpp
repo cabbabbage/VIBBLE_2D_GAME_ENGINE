@@ -1139,7 +1139,7 @@ void AssetInfoUI::pulse_header() {
 
 void AssetInfoUI::apply_camera_override(bool enable) {
     if (!assets_) return;
-    camera& cam = assets_->getView();
+    camera_grid& cam = assets_->getView();
     if (enable) {
         if (camera_override_active_) return;
         prev_camera_realism_enabled_ = cam.realism_enabled();

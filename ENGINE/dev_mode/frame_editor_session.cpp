@@ -224,7 +224,7 @@ ChildPreviewContext build_child_preview_context(Assets* assets, SDL_Renderer* re
     if (!assets) {
         return ctx;
     }
-    camera& cam = assets->getView();
+    camera_grid& cam = assets->getView();
     float scale = cam.get_scale();
     if (!std::isfinite(scale) || scale <= 0.0f) {
         scale = 1.0f;
@@ -301,7 +301,7 @@ SDL_FRect child_preview_rect(Assets* assets,
     const float base_sw = scaled_fw * ctx.inv_scale;
     const float base_sh = scaled_fh * ctx.inv_scale;
 
-    camera& cam = assets->getView();
+    camera_grid& cam = assets->getView();
     SDL_Point world_point{
         static_cast<int>(std::lround(child_world.x)),
         static_cast<int>(std::lround(child_world.y))
@@ -427,7 +427,7 @@ void FrameEditorSession::begin(Assets* assets,
     }
 
     // Snapshot state
-    camera& cam = assets_->getView();
+    camera_grid& cam = assets_->getView();
     prev_realism_enabled_ = cam.realism_enabled();
     prev_parallax_enabled_ = cam.parallax_enabled();
     prev_asset_hidden_ = target_->is_hidden();
@@ -472,7 +472,7 @@ void FrameEditorSession::begin(Assets* assets,
         if (assets_ && assets_->renderer()) {
             SDL_GetRendererOutputSize(assets_->renderer(), &sw, &sh);
         }
-        const camera& cam = assets_->getView();
+        const camera_grid& cam = assets_->getView();
         SDL_Point anchor_world = animation_update::detail::bottom_middle_for(*target_, target_->pos);
         SDL_FPoint anchor_screen_f = cam.map_to_screen_f(SDL_FPoint{ static_cast<float>(anchor_world.x), static_cast<float>(anchor_world.y) });
         SDL_Point anchor_screen = round_point(anchor_screen_f);
@@ -606,7 +606,7 @@ void FrameEditorSession::end() {
     
     // Restore camera and overlay state
     if (has_assets) {
-        camera& cam = assets_->getView();
+        camera_grid& cam = assets_->getView();
         cam.set_realism_enabled(prev_realism_enabled_);
         cam.set_parallax_enabled(prev_parallax_enabled_);
         // Cancel any transient pan/zoom override
@@ -730,7 +730,7 @@ void FrameEditorSession::update(const Input& input) {
     refresh_child_assets_from_document();
     // Enable mouse wheel zoom; disable click-drag panning while editing
     if (assets_) {
-        camera& cam = assets_->getView();
+        camera_grid& cam = assets_->getView();
         // Make sure layout is up to date before computing any UI blocking logic (future use)
         ensure_widgets();
         rebuild_layout();
@@ -1531,7 +1531,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
             return true;
         }
         if (!assets_ || !target_) return false;
-        camera& cam = assets_->getView();
+        camera_grid& cam = assets_->getView();
         SDL_FPoint world_f = cam.screen_to_map(sp);
         // Anchor is bottom-middle of the asset
         SDL_Point anchor_world = animation_update::detail::bottom_middle_for(*target_, target_->pos);
@@ -1621,7 +1621,7 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
     if (!assets_->contains_asset(target_)) return;
 
     // Compute anchor
-    const camera& cam = assets_->getView();
+    const camera_grid& cam = assets_->getView();
     SDL_Point anchor_world = animation_update::detail::bottom_middle_for(*target_, target_->pos);
 
     // Draw path lines and points in world space
@@ -2023,7 +2023,7 @@ void FrameEditorSession::refresh_animation_dropdown() const {
 
 void FrameEditorSession::rebuild_layout() const {
     if (!assets_ || !target_) return;
-    const camera& cam = assets_->getView();
+    const camera_grid& cam = assets_->getView();
     const int screen_w = assets_->renderer() ? assets_->getView().get_camera_area().width() : 0; // not used for clamp heavily
     (void)screen_w;
     (void)cam; // anchor-based layout replaced by draggable screen-space positions
@@ -3036,7 +3036,7 @@ SDL_Point FrameEditorSession::asset_anchor_world() const {
 
 bool FrameEditorSession::screen_to_local(SDL_Point screen, SDL_FPoint& out_local) const {
     if (!assets_ || !target_) return false;
-    const camera& cam = assets_->getView();
+    const camera_grid& cam = assets_->getView();
     SDL_FPoint world = cam.screen_to_map(screen);
     SDL_Point anchor = asset_anchor_world();
     const float scale = asset_local_scale();
@@ -3049,7 +3049,7 @@ bool FrameEditorSession::screen_to_local(SDL_Point screen, SDL_FPoint& out_local
 bool FrameEditorSession::build_hitbox_visual(const animation_update::FrameHitGeometry::HitBox& box,
                                              HitBoxVisual& out) const {
     if (!assets_ || !target_) return false;
-    const camera& cam = assets_->getView();
+    const camera_grid& cam = assets_->getView();
     SDL_Point anchor = asset_anchor_world();
     const float scale = asset_local_scale();
     if (scale <= 0.0001f) return false;
@@ -3228,7 +3228,7 @@ void FrameEditorSession::render_attack_geometry(SDL_Renderer* renderer) const {
     const int frame_index = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
     const auto& frame = frames_[frame_index];
     if (frame.attack.vectors.empty()) return;
-    const camera& cam = assets_->getView();
+    const camera_grid& cam = assets_->getView();
     SDL_Point anchor = asset_anchor_world();
     const float scale = asset_local_scale();
     const std::string active_type = current_attack_type();
@@ -3489,7 +3489,7 @@ bool FrameEditorSession::begin_attack_drag(SDL_Point mouse) {
     if (!screen_to_local(mouse, mouse_local)) {
         return false;
     }
-    const camera& cam = assets_->getView();
+    const camera_grid& cam = assets_->getView();
     SDL_Point anchor = asset_anchor_world();
     const float scale = asset_local_scale();
     auto to_screen = [&](float lx, float ly) -> SDL_FPoint {

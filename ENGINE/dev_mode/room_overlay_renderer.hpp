@@ -14,7 +14,7 @@ struct RoomBoundsOverlayStyle {
 
 RoomBoundsOverlayStyle ResolveRoomBoundsOverlayStyle(SDL_Color base_color);
 
-void RenderRoomBoundsOverlay( SDL_Renderer* renderer, const camera& cam, const Area& area, const RoomBoundsOverlayStyle& style);
+void RenderRoomBoundsOverlay( SDL_Renderer* renderer, const camera_grid& cam, const Area& area, const RoomBoundsOverlayStyle& style);
 
 }
 

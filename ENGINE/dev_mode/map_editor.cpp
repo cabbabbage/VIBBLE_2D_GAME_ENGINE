@@ -177,7 +177,7 @@ void MapEditor::render(SDL_Renderer* renderer) {
     const float bounds_center_y = static_cast<float>(active_label_bounds_.y) + static_cast<float>(active_label_bounds_.h) * 0.5f;
     SDL_FPoint screen_center{bounds_center_x, bounds_center_y};
 
-    camera& view = assets_->getView();
+    camera_grid& view = assets_->getView();
 
     for (Room* room : *rooms_) {
         if (!room || !room->room_area) continue;
@@ -218,7 +218,7 @@ Room* MapEditor::consume_selected_room() {
 
 void MapEditor::focus_on_room(Room* room) {
     if (!room || !room->room_area) return;
-    camera* cam = active_camera();
+    camera_grid* cam = active_camera();
     if (!cam) return;
 
     Area adjusted = cam->convert_area_to_aspect(*room->room_area);
@@ -275,7 +275,7 @@ bool MapEditor::compute_bounds() {
 }
 
 void MapEditor::apply_camera_to_bounds() {
-    camera* cam = active_camera();
+    camera_grid* cam = active_camera();
     if (!cam) return;
     cam->set_manual_zoom_override(true);
 
@@ -341,7 +341,7 @@ Room* MapEditor::find_spawn_room() const {
 }
 
 void MapEditor::restore_camera_state(bool focus_player, bool restore_previous_state) {
-    camera* cam = active_camera();
+    camera_grid* cam = active_camera();
     if (!cam) return;
 
     if (focus_player) {
@@ -362,7 +362,7 @@ void MapEditor::restore_camera_state(bool focus_player, bool restore_previous_st
     }
 }
 
-camera* MapEditor::active_camera() const {
+camera_grid* MapEditor::active_camera() const {
     if (camera_override_for_testing_) {
         return camera_override_for_testing_;
     }

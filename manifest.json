@@ -2087,8 +2087,8 @@
         "background_plane_screen_y": 198.0,
         "background_texture_max_opacity": 0,
         "base_height_at_zoom_high": 315.0,
-        "base_height_at_zoom_low": 2170.0,
-        "base_height_px": 1242.5,
+        "base_height_at_zoom_low": 4000.0,
+        "base_height_px": 2157.5,
         "depth_offset_at_zoom_high": 4000.0,
         "depth_offset_at_zoom_low": 4000.0,
         "distance_scale_at_zoom_high": 1.0,
@@ -2116,7 +2116,7 @@
         "scale_hysteresis_margin": 0.029999999329447746,
         "smooth_motion_zoom": true,
         "texture_opacity_falloff_method": 3,
-        "tilt_zoom_in_degrees": 37.234832763671875,
+        "tilt_zoom_in_degrees": 48.01278305053711,
         "tilt_zoom_out_degrees": 25.1593017578125,
         "zoom_high": 3.999999761581421,
         "zoom_low": 0.25
@@ -2419,9 +2419,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
+            37,
             36,
             242,
-            178,
             255
           ],
           "edge_smoothness": 43,
@@ -2472,9 +2472,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            204,
-            31,
-            31,
+            85,
+            242,
+            241,
             255
           ],
           "edge_smoothness": 101,

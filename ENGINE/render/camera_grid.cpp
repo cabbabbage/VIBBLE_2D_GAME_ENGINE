@@ -6,6 +6,7 @@
 #include "core/find_current_room.hpp"
 #include "utils/transform_smoothing_settings.hpp"
 #include "utils/log.hpp"
+#include "world/grid.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -1539,4 +1540,95 @@ double camera_grid::horizon_screen_y_for_scale_value(double scale_value) const {
 
 double camera_grid::horizon_screen_y_for_scale() const {
     return horizon_screen_y_for_scale_value(static_cast<double>(smoothed_scale_));
+}
+
+// Minimal grid state management and lookup implementations.
+void camera_grid::clear_grid_state() {
+    warped_points_.clear();
+    visible_assets_.clear();
+    visible_points_.clear();
+    active_chunks_.clear();
+    id_to_index_.clear();
+    cached_world_rect_ = SDL_Rect{0, 0, 0, 0};
+    bounds_ = GridBounds{};
+}
+
+void camera_grid::rebuild_grid_bounds() {
+    if (warped_points_.empty()) {
+        cached_world_rect_ = SDL_Rect{0, 0, 0, 0};
+        bounds_ = GridBounds{};
+        return;
+    }
+
+    int minx = INT_MAX, miny = INT_MAX, maxx = INT_MIN, maxy = INT_MIN;
+    for (const world::GridPoint* gp : warped_points_) {
+        if (!gp) continue;
+        minx = std::min(minx, gp->world.x);
+        miny = std::min(miny, gp->world.y);
+        maxx = std::max(maxx, gp->world.x);
+        maxy = std::max(maxy, gp->world.y);
+    }
+    if (minx > maxx || miny > maxy) {
+        cached_world_rect_ = SDL_Rect{0, 0, 0, 0};
+        bounds_ = GridBounds{};
+        return;
+    }
+    cached_world_rect_.x = minx;
+    cached_world_rect_.y = miny;
+    cached_world_rect_.w = std::max(0, maxx - minx);
+    cached_world_rect_.h = std::max(0, maxy - miny);
+
+    // Populate a conservative screen-space bounds; callers may overwrite later.
+    bounds_.left = 0.0f;
+    bounds_.top = 0.0f;
+    bounds_.right = static_cast<float>(screen_width_);
+    bounds_.bottom = static_cast<float>(screen_height_);
+}
+
+void camera_grid::rebuild_grid(world::Grid& world_grid, float /*dt_seconds*/) {
+    clear_grid_state();
+
+    std::vector<Asset*> assets = world_grid.all_assets();
+    warped_points_.reserve(assets.size());
+    visible_assets_.reserve(assets.size());
+    visible_points_.reserve(assets.size());
+
+    for (Asset* a : assets) {
+        if (!a) continue;
+        world::GridPoint* gp = world_grid.point_for_asset(a);
+        if (!gp) continue;
+        id_to_index_[gp->id] = warped_points_.size();
+        warped_points_.push_back(gp);
+        visible_assets_.push_back(a);
+        visible_points_.push_back(gp);
+        if (gp->chunk) active_chunks_.push_back(gp->chunk);
+    }
+
+    // Deduplicate active chunks
+    if (!active_chunks_.empty()) {
+        std::sort(active_chunks_.begin(), active_chunks_.end());
+        active_chunks_.erase(std::unique(active_chunks_.begin(), active_chunks_.end()), active_chunks_.end());
+    }
+
+    rebuild_grid_bounds();
+}
+
+world::GridPoint* camera_grid::grid_point_for_asset(const Asset* asset) {
+    if (!asset) return nullptr;
+    const std::uint64_t id = asset->grid_id();
+    auto it = id_to_index_.find(id);
+    if (it == id_to_index_.end()) return nullptr;
+    std::size_t idx = it->second;
+    if (idx >= warped_points_.size()) return nullptr;
+    return warped_points_[idx];
+}
+
+const world::GridPoint* camera_grid::grid_point_for_asset(const Asset* asset) const {
+    if (!asset) return nullptr;
+    const std::uint64_t id = asset->grid_id();
+    auto it = id_to_index_.find(id);
+    if (it == id_to_index_.end()) return nullptr;
+    std::size_t idx = it->second;
+    if (idx >= warped_points_.size()) return nullptr;
+    return warped_points_[idx];
 }

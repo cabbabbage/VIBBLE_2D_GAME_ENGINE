@@ -10,7 +10,7 @@
 
 namespace {
 
-int compute_center_arm(const camera& cam) {
+int compute_center_arm(const camera_grid& cam) {
     double scale = cam.get_scale();
     if (!std::isfinite(scale) || scale <= 0.0) {
         scale = 1.0;
@@ -42,7 +42,7 @@ RoomBoundsOverlayStyle ResolveRoomBoundsOverlayStyle(SDL_Color base_color) {
 
 void RenderRoomBoundsOverlay(
     SDL_Renderer* renderer,
-    const camera& cam,
+    const camera_grid& cam,
     const Area& area,
     const RoomBoundsOverlayStyle& style) {
     if (!renderer) return;
