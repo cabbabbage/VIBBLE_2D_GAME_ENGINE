@@ -30,6 +30,12 @@ class PreviewProvider;
 class AnimationEditorWindow;
 }
 
+struct ChildPreviewContext {
+    SDL_FPoint child_pos{};
+    SDL_FPoint child_size{};
+    float child_rotation = 0.0f;
+};
+
 // Lightweight in-world Frame Editor session.
 // Non-modal; anchors panels near the target asset and draws gizmos in world space.
 class FrameEditorSession {
@@ -55,7 +61,7 @@ public:
 
     void update(const Input& input);
     bool handle_event(const SDL_Event& e);
-    void render(SDL_Renderer* renderer) const;
+    void render(SDL_Renderer* renderer);
 
     // External helpers
     void set_snap_resolution(int r);
@@ -394,6 +400,17 @@ private:
     bool begin_attack_drag(SDL_Point mouse);
     void update_attack_drag(SDL_Point mouse);
     void end_attack_drag(bool commit);
+
+private:
+    void render_directory_panel(SDL_Renderer* renderer);
+    void render_navigation_panel(SDL_Renderer* renderer);
+    void render_toolbox(SDL_Renderer* renderer);
+    void render_child_guides(SDL_Renderer* renderer, const camera_grid& cam);
+    void render_hitbox_guides(SDL_Renderer* renderer, const camera_grid& cam);
+    void render_attack_guides(SDL_Renderer* renderer, const camera_grid& cam);
+    ChildPreviewContext build_child_preview_context(const ChildFrame& frame, const Asset& child_asset) const;
+    SDL_FRect child_preview_rect(const ChildPreviewContext& ctx) const;
+    float mirrored_child_rotation(float degree, bool parent_is_flipped);
 };
 
 inline std::vector<FrameEditorSession::MovementFrame>
