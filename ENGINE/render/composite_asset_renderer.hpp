@@ -16,10 +16,16 @@ public:
     ~CompositeAssetRenderer();
 
     // Updates the composite render package for the given asset if needed.
-    void update(Asset* asset, const world::GridPoint* gp, float desired_scale = 1.0f);
+    void update(Asset* asset,
+                const world::GridPoint* gp,
+                float desired_scale = 1.0f,
+                float flicker_time_seconds = 0.0f);
 
 private:
-    void regenerate_package(Asset* asset, const world::GridPoint* gp, float desired_scale);
+    void regenerate_package(Asset* asset,
+                            const world::GridPoint* gp,
+                            float desired_scale,
+                            float flicker_time_seconds);
     void calculate_local_bounds(Asset* asset);
 
     SDL_Renderer* renderer_;

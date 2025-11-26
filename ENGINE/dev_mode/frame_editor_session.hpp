@@ -31,9 +31,8 @@ class AnimationEditorWindow;
 }
 
 struct ChildPreviewContext {
-    SDL_FPoint child_pos{};
-    SDL_FPoint child_size{};
-    float child_rotation = 0.0f;
+    SDL_FPoint anchor_world{};
+    float document_scale = 1.0f;
 };
 
 // Lightweight in-world Frame Editor session.
@@ -61,7 +60,7 @@ public:
 
     void update(const Input& input);
     bool handle_event(const SDL_Event& e);
-    void render(SDL_Renderer* renderer);
+    void render(SDL_Renderer* renderer) const;
 
     // External helpers
     void set_snap_resolution(int r);
@@ -408,9 +407,13 @@ private:
     void render_child_guides(SDL_Renderer* renderer, const camera_grid& cam);
     void render_hitbox_guides(SDL_Renderer* renderer, const camera_grid& cam);
     void render_attack_guides(SDL_Renderer* renderer, const camera_grid& cam);
-    ChildPreviewContext build_child_preview_context(const ChildFrame& frame, const Asset& child_asset) const;
-    SDL_FRect child_preview_rect(const ChildPreviewContext& ctx) const;
-    float mirrored_child_rotation(float degree, bool parent_is_flipped);
+    ChildPreviewContext build_child_preview_context() const;
+    SDL_FRect child_preview_rect(SDL_FPoint child_world,
+                                 int texture_w,
+                                 int texture_h,
+                                 const ChildPreviewContext& ctx,
+                                 float scale_override) const;
+    float mirrored_child_rotation(bool parent_is_flipped, float degree) const;
 };
 
 inline std::vector<FrameEditorSession::MovementFrame>

@@ -107,7 +107,6 @@ private:
     bool render_light_with_asset_mask(const LightSource& light,
                                       const ComputedLight& computed,
                                       const SDL_Color& base_color);
-    float compute_flicker_multiplier(const LightSource& light) const;
     SDL_Texture* ensure_mask_composite_texture(int width, int height, Uint32 format_hint);
     SDL_Rect     scale_mask_rect_to_asset(const SDL_Rect& rect, int mask_width, int mask_height) const;
 

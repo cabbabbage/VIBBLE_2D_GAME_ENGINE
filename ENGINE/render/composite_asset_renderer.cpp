@@ -3,16 +3,21 @@
 #include "core/AssetsManager.hpp"
 #include "world/grid.hpp"
 #include "world/grid_point.hpp"
+#include "render/light_flicker.hpp"
 #include "render/render.hpp"
 #include <algorithm>
 #include <cmath>
+#include <optional>
 
 CompositeAssetRenderer::CompositeAssetRenderer(SDL_Renderer* renderer, Assets* assets)
     : renderer_(renderer), assets_(assets) {}
 
 CompositeAssetRenderer::~CompositeAssetRenderer() {}
 
-void CompositeAssetRenderer::update(Asset* asset, const world::GridPoint* gp, float desired_scale) {
+void CompositeAssetRenderer::update(Asset* asset,
+                                    const world::GridPoint* gp,
+                                    float desired_scale,
+                                    float flicker_time_seconds) {
     if (!asset) return;
 
     // Recursively update children first
@@ -20,7 +25,7 @@ void CompositeAssetRenderer::update(Asset* asset, const world::GridPoint* gp, fl
     for (const auto& child_attachment : asset->animation_children()) {
         if (child_attachment.spawned_asset) {
             // Children don't have their own grid point, they are relative to the parent
-            update(child_attachment.spawned_asset, nullptr, desired_scale);
+            update(child_attachment.spawned_asset, nullptr, desired_scale, flicker_time_seconds);
             if (child_attachment.spawned_asset->is_composite_dirty()) {
                 children_dirty = true;
             }
@@ -34,11 +39,14 @@ void CompositeAssetRenderer::update(Asset* asset, const world::GridPoint* gp, fl
 
     // If asset is dirty or any child is dirty, regenerate
     if (asset->is_composite_dirty() || children_dirty) {
-        regenerate_package(asset, gp, desired_scale);
+        regenerate_package(asset, gp, desired_scale, flicker_time_seconds);
     }
 }
 
-void CompositeAssetRenderer::regenerate_package(Asset* asset, const world::GridPoint* gp, float desired_scale) {
+void CompositeAssetRenderer::regenerate_package(Asset* asset,
+                                                const world::GridPoint* gp,
+                                                float desired_scale,
+                                                float flicker_time_seconds) {
     if (!renderer_ || !asset) return;
 
     asset->render_package.clear();
@@ -48,24 +56,63 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset, const world::GridP
     asset->composite_scale_ = effective_scale;
 
     // Helper to add a render object
-    auto add_render_object = [&](SDL_Texture* tex, SDL_Rect rect, SDL_Color color = {255,255,255,255}, SDL_BlendMode blend = SDL_BLENDMODE_BLEND) {
+    auto add_render_object = [&](SDL_Texture* tex, SDL_Rect rect, SDL_Color color = {255,255,255,255}, SDL_BlendMode blend = SDL_BLENDMODE_BLEND, bool apply_scale = true) {
         if (!tex) return;
+        if (apply_scale) {
+            rect.w = static_cast<int>(rect.w * effective_scale);
+            rect.h = static_cast<int>(rect.h * effective_scale);
+        }
         asset->render_package.push_back({tex, rect, color, blend});
+    };
+
+    auto compute_light_color = [&](const LightSource& light) -> std::optional<SDL_Color> {
+        const int raw_intensity = std::clamp(light.intensity, 0, 255);
+        if (raw_intensity <= 0) {
+            return std::nullopt;
+        }
+
+        const float flicker_multiplier = LightFlickerCalculator::compute_multiplier(light, flicker_time_seconds);
+        int scaled_intensity = static_cast<int>(std::lround(static_cast<float>(raw_intensity) * flicker_multiplier));
+        scaled_intensity = std::clamp(scaled_intensity, 0, 255);
+        if (scaled_intensity <= 0) {
+            return std::nullopt;
+        }
+
+        const float scale = static_cast<float>(scaled_intensity) / 255.0f;
+        SDL_Color color = light.color;
+        auto scale_channel = [&](Uint8 channel) -> Uint8 {
+            const int scaled = static_cast<int>(std::lround(static_cast<float>(channel) * scale));
+            return static_cast<Uint8>(std::clamp(scaled, 0, 255));
+        };
+
+        color.r = scale_channel(color.r);
+        color.g = scale_channel(color.g);
+        color.b = scale_channel(color.b);
+        color.a = scale_channel(color.a);
+        if (color.a == 0) {
+            color.a = static_cast<Uint8>(scaled_intensity);
+        }
+
+        return color;
     };
 
     // 1. Behind Lights
     if (asset->info) {
         for (const auto& light_source : asset->info->light_sources) {
             if (light_source.behind && light_source.texture) {
+                const auto light_color = compute_light_color(light_source);
+                if (!light_color) {
+                    continue;
+                }
                 int w, h;
                 SDL_QueryTexture(light_source.texture, nullptr, nullptr, &w, &h);
                 SDL_Rect dest_rect = {
                     static_cast<int>(asset->pos.x + light_source.offset_x * effective_scale),
                     static_cast<int>(asset->pos.y + light_source.offset_y * effective_scale),
-                    static_cast<int>(w * effective_scale),
-                    static_cast<int>(h * effective_scale)
+                    w,
+                    h
                 };
-                add_render_object(light_source.texture, dest_rect, light_source.color);
+                add_render_object(light_source.texture, dest_rect, *light_color);
             }
         }
     }
@@ -78,7 +125,7 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset, const world::GridP
                 SDL_Rect child_rect = render_obj.screen_rect;
                 child_rect.x += (child->pos.x - asset->pos.x);
                 child_rect.y += (child->pos.y - asset->pos.y);
-                add_render_object(render_obj.texture, child_rect, render_obj.color_mod, render_obj.blend_mode);
+                add_render_object(render_obj.texture, child_rect, render_obj.color_mod, render_obj.blend_mode, false);
             }
         }
     }
@@ -111,8 +158,8 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset, const world::GridP
         SDL_Rect dest_rect = {
             asset->pos.x,
             asset->pos.y,
-            static_cast<int>(w * effective_scale),
-            static_cast<int>(h * effective_scale)
+            w,
+            h
         };
         add_render_object(base_tex, dest_rect);
     }
@@ -158,7 +205,7 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset, const world::GridP
                 SDL_Rect child_rect = render_obj.screen_rect;
                 child_rect.x += (child->pos.x - asset->pos.x);
                 child_rect.y += (child->pos.y - asset->pos.y);
-                add_render_object(render_obj.texture, child_rect, render_obj.color_mod, render_obj.blend_mode);
+                add_render_object(render_obj.texture, child_rect, render_obj.color_mod, render_obj.blend_mode, false);
             }
         }
     }
@@ -167,15 +214,19 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset, const world::GridP
     if (asset->info) {
         for (const auto& light_source : asset->info->light_sources) {
             if (light_source.in_front && light_source.texture) {
+                const auto light_color = compute_light_color(light_source);
+                if (!light_color) {
+                    continue;
+                }
                 int w, h;
                 SDL_QueryTexture(light_source.texture, nullptr, nullptr, &w, &h);
                 SDL_Rect dest_rect = {
                     static_cast<int>(asset->pos.x + light_source.offset_x * effective_scale),
                     static_cast<int>(asset->pos.y + light_source.offset_y * effective_scale),
-                    static_cast<int>(w * effective_scale),
-                    static_cast<int>(h * effective_scale)
+                    w,
+                    h
                 };
-                add_render_object(light_source.texture, dest_rect, light_source.color);
+                add_render_object(light_source.texture, dest_rect, *light_color);
             }
         }
     }

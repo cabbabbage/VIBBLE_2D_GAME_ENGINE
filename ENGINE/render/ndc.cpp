@@ -173,7 +173,7 @@ ndc::FloorDepthParams ndc::compute_floor_depth_params_for_geometry(
     }
 
     // Clamp the bottom ray so it always intersects the floor in front of the camera.
-    const double max_phi = (PI_D * 0.5) - 1e-3;
+    const double max_phi = (ndc_PI_D * 0.5) - 1e-3;
     double phi_bottom = geom.pitch_radians + HALF_FOV_Y;
     phi_bottom = std::clamp(phi_bottom, 1e-3, max_phi);
 

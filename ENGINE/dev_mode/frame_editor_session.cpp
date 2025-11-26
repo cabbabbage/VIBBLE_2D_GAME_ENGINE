@@ -11,12 +11,14 @@
 #include <utility>
 
 #include "animation_update/animation_update.hpp"
+#include "animation_update/child_attachment_math.hpp"
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
 #include "core/AssetsManager.hpp"
 #include "dev_mode/asset_sections/animation_editor_window/AnimationDocument.hpp"
 #include "dev_mode/asset_sections/animation_editor_window/AnimationEditorWindow.hpp"
 #include "dev_mode/asset_sections/animation_editor_window/PreviewProvider.hpp"
+#include "dev_mode/dev_mode_utils.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/rebuildAnimation.hpp"
@@ -26,6 +28,97 @@
 #include "utils/input.hpp"
 
 namespace {
+    constexpr int   kNavPreviewHeight = 96;
+    constexpr int   kNavSliderGap = 12;
+    constexpr int   kNavSpacing = 8;
+    constexpr int   kDirectoryPanelMinWidth = 360;
+    constexpr int   kMovementTotalsFieldWidth = 120;
+    constexpr int   kSmoothCheckboxMinWidth = 110;
+    constexpr int   kCurveCheckboxMinWidth = 110;
+    constexpr int   kShowAnimCheckboxMinWidth = 120;
+    constexpr int   kChildrenFieldWidth = 110;
+    constexpr int   kChildVisibilityCheckboxMinWidth = 120;
+    constexpr int   kShowChildCheckboxMinWidth = 140;
+    constexpr int   kChildDropdownMinWidth = 200;
+    constexpr float kDegToRad = static_cast<float>(M_PI) / 180.0f;
+    constexpr float kRadToDeg = 180.0f / static_cast<float>(M_PI);
+    constexpr float kHitboxRotateHandleRadius = 12.0f;
+    constexpr float kAttackNodeRadius = 12.0f;
+
+    int nav_header_height_px(bool has_dropdown) {
+        return has_dropdown ? DMDropdown::height() : DMButton::height();
+    }
+
+    bool animation_supports_frame_editing(animation_editor::AnimationDocument* document,
+                                          const std::string& animation_id) {
+        if (!document || animation_id.empty()) {
+            return false;
+        }
+        const auto ids = document->animation_ids();
+        if (std::find(ids.begin(), ids.end(), animation_id) == ids.end()) {
+            return false;
+        }
+        auto payload = document->animation_payload(animation_id);
+        if (!payload.has_value()) {
+            return true;
+        }
+        nlohmann::json parsed = nlohmann::json::parse(*payload, nullptr, false);
+        return !parsed.is_discarded();
+    }
+
+    const Animation* pick_preview_animation(const std::shared_ptr<AssetInfo>& info) {
+        if (!info) {
+            return nullptr;
+        }
+        if (!info->start_animation.empty()) {
+            auto it = info->animations.find(info->start_animation);
+            if (it != info->animations.end()) {
+                return &it->second;
+            }
+        }
+        if (!info->animations.empty()) {
+            return &info->animations.begin()->second;
+        }
+        return nullptr;
+    }
+
+    SDL_FPoint sample_quadratic_by_arclen(const SDL_FPoint& p0,
+                                          const SDL_FPoint& p1,
+                                          const SDL_FPoint& p2,
+                                          float ratio) {
+        const float t = std::clamp(ratio, 0.0f, 1.0f);
+        auto lerp = [](const SDL_FPoint& a, const SDL_FPoint& b, float t) {
+            return SDL_FPoint{
+                a.x + (b.x - a.x) * t,
+                a.y + (b.y - a.y) * t
+            };
+        };
+        SDL_FPoint a = lerp(p0, p1, t);
+        SDL_FPoint b = lerp(p1, p2, t);
+        return lerp(a, b, t);
+    }
+
+    struct LabelFontHandle {
+        TTF_Font* font = nullptr;
+        bool owns = false;
+        ~LabelFontHandle() {
+            if (owns && font) {
+                TTF_CloseFont(font);
+            }
+        }
+    };
+
+    LabelFontHandle acquire_label_font() {
+        LabelFontHandle handle;
+        const DMLabelStyle& label_style = DMStyles::Label();
+        handle.font = devmode::utils::load_font(label_style.font_size);
+        if (!handle.font) {
+            handle.font = label_style.open_font();
+            handle.owns = handle.font != nullptr;
+        }
+        return handle;
+    }
+
     float dist_sq(const SDL_FPoint& a, const SDL_FPoint& b) {
         const float dx = a.x - b.x;
         const float dy = a.y - b.y;
@@ -35,6 +128,43 @@ namespace {
     SDL_Point round_point(SDL_FPoint p) {
         return SDL_Point{static_cast<int>(std::lround(p.x)), static_cast<int>(std::lround(p.y))};
     }
+
+    SDL_Point measure_label_size(const std::string& text) {
+        SDL_Point size{0, 0};
+        if (text.empty()) {
+            return size;
+        }
+        auto font_handle = acquire_label_font();
+        if (!font_handle.font) {
+            return size;
+        }
+        if (TTF_SizeUTF8(font_handle.font, text.c_str(), &size.x, &size.y) != 0) {
+            size = SDL_Point{0, 0};
+        }
+        return size;
+    }
+
+    void render_label(SDL_Renderer* renderer, const std::string& text, int x, int y) {
+        if (!renderer || text.empty()) {
+            return;
+        }
+        const DMLabelStyle& label_style = DMStyles::Label();
+        auto font_handle = acquire_label_font();
+        if (!font_handle.font) {
+            return;
+        }
+        SDL_Surface* surface = TTF_RenderUTF8_Blended(font_handle.font, text.c_str(), label_style.color);
+        if (!surface) {
+            return;
+        }
+        SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+        if (texture) {
+            SDL_Rect dst{x, y, surface->w, surface->h};
+            SDL_RenderCopy(renderer, texture, nullptr, &dst);
+            SDL_DestroyTexture(texture);
+        }
+        SDL_FreeSurface(surface);
+    }
 }
 
 FrameEditorSession::FrameEditorSession() = default;
@@ -42,8 +172,8 @@ FrameEditorSession::~FrameEditorSession() = default;
 
 void FrameEditorSession::begin(Assets* assets,
                                Asset* asset,
-                               std::shared_ptr<AnimationDocument> document,
-                               std::shared_ptr<PreviewProvider> preview,
+                               std::shared_ptr<animation_editor::AnimationDocument> document,
+                               std::shared_ptr<animation_editor::PreviewProvider> preview,
                                const std::string& animation_id,
                                animation_editor::AnimationEditorWindow* host_to_toggle,
                                std::function<void()> on_end_callback) {
@@ -1293,7 +1423,7 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
     if (mode_ == Mode::Children && show_child_ && !child_assets_.empty() &&
         selected_index_ < static_cast<int>(frames_.size())) {
         const auto& frame = frames_[selected_index_];
-        const ChildPreviewContext preview_ctx = build_child_preview_context(assets_, renderer);
+        const ChildPreviewContext preview_ctx = build_child_preview_context();
         // Draw markers and names
         for (std::size_t i = 0; i < child_assets_.size() && i < frame.children.size(); ++i) {
             const auto& child = frame.children[i];
@@ -1339,7 +1469,7 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
                 static_cast<float>(target_->pos.y) + static_cast<float>(child.dy)
             };
 
-            SDL_FRect base_rect = child_preview_rect(assets_, target_, child_world, tw, th, preview_ctx, scale_override_base);
+            SDL_FRect base_rect = child_preview_rect(child_world, tw, th, preview_ctx, scale_override_base);
             if (base_rect.w <= 0.0f || base_rect.h <= 0.0f) continue;
 
             const int target_w = std::max(1, static_cast<int>(std::lround(base_rect.w)));
@@ -1362,7 +1492,7 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
             const int variant_th = std::max(1, static_cast<int>(std::lround(static_cast<double>(th) * variant_texture_scale)));
 
             const float scale_override_final = scale_override_base * remainder_scale;
-            SDL_FRect dst = child_preview_rect(assets_, target_, child_world, variant_tw, variant_th, preview_ctx, scale_override_final);
+            SDL_FRect dst = child_preview_rect(child_world, variant_tw, variant_th, preview_ctx, scale_override_final);
             if (dst.w <= 0.0f || dst.h <= 0.0f) continue;
             SDL_FPoint pivot{ dst.w * 0.5f, dst.h }; // bottom-middle pivot
             // Apply rotation around bottom-middle if any
@@ -1765,12 +1895,13 @@ void FrameEditorSession::rebuild_layout() const {
                 cb_smooth_->set_rect(SDL_Rect{ x, y, w, h });
                 register_toolbox_widget(cb_smooth_.get());
             }
-            if (smooth_enabled_ && cb_curve_ && cb_curve_->handle_event(e)) {
-                bool current = cb_curve_->value();
-                if (current != curve_enabled_) {
-                    curve_enabled_ = current;
-                }
-                return true;
+            if (smooth_enabled_ && cb_curve_) {
+                const int w = std::max(metrics.curve_checkbox_width, DMCheckbox::height());
+                const int h = DMCheckbox::height();
+                const int y = row_top + (metrics.row_height - h) / 2;
+                const int x = reserve(w);
+                cb_curve_->set_rect(SDL_Rect{ x, y, w, h });
+                register_toolbox_widget(cb_curve_.get());
             }
 
             if (cb_show_anim_) {
@@ -2222,7 +2353,7 @@ FrameEditorSession::MovementToolboxMetrics FrameEditorSession::build_movement_to
     };
     if (cb_smooth_ && metrics.smooth_checkbox_width > 0) append(metrics.smooth_checkbox_width);
     if (curve_visible && metrics.curve_checkbox_width > 0) append(metrics.curve_checkbox_width);
-    if (cb_show_anim_ && metrics.show_checkbox_width > 0) append(metrics.show_checkboxWidth);
+    if (cb_show_anim_ && metrics.show_checkbox_width > 0) append(metrics.show_checkbox_width);
     if (tb_total_dx_) append(metrics.totals_width);
     if (tb_total_dy_) append(metrics.totals_width);
     if (row_width == 0) {
@@ -2317,7 +2448,7 @@ FrameEditorSession::ChildrenToolboxMetrics FrameEditorSession::build_children_to
     if (tb_child_dy_) append_form(metrics.textbox_width);
     if (tb_child_deg_) append_form(metrics.textbox_width);
     if (cb_child_visible_ && metrics.child_visible_checkbox_width > 0) append_form(metrics.child_visible_checkbox_width);
-    if (cb_child_render_front_ && metrics.child_render_checkbox_width > 0) append_form(metrics.child_render_checkboxWidth);
+    if (cb_child_render_front_ && metrics.child_render_checkbox_width > 0) append_form(metrics.child_render_checkbox_width);
     if (form_row_width == 0) {
         metrics.form_row_height = 0;
     }
@@ -2865,6 +2996,7 @@ bool FrameEditorSession::begin_hitbox_drag(SDL_Point mouse) {
         return SDL_PointInRect(&mouse, &r) == SDL_TRUE;
     };
     SDL_FPoint mouse_f{ static_cast<float>(mouse.x), static_cast<float>(mouse.y) };
+    const float rotate_radius = kHitboxRotateHandleRadius;
     if (dist_sq(mouse_f, visual.rotate_handle) <= rotate_radius * rotate_radius) {
         active_hitbox_handle_ = HitHandle::Rotate;
     } else {
@@ -3032,6 +3164,7 @@ bool FrameEditorSession::begin_attack_drag(SDL_Point mp) {
         const float dy = static_cast<float>(mp.y) - p.y;
         return dx * dx + dy * dy <= radius * radius;
     };
+    const float node_radius = kAttackNodeRadius;
     hovered_start = point_hit(start_screen, node_radius);
     hovered_control = point_hit(control_screen, node_radius);
     hovered_end = point_hit(end_screen, node_radius);
@@ -3044,6 +3177,12 @@ bool FrameEditorSession::begin_attack_drag(SDL_Point mp) {
         active_attack_handle_ = AttackHandle::End;
     } else {
         active_attack_handle_ = AttackHandle::None;
+    }
+
+    SDL_FPoint mouse_local{};
+    if (!screen_to_local(mp, mouse_local)) {
+        active_attack_handle_ = AttackHandle::None;
+        return false;
     }
     attack_dragging_ = true;
     attack_drag_moved_ = false;
@@ -3648,2363 +3787,56 @@ void FrameEditorSession::persist_changes() {
     payload["movement"] = std::move(movement);
     payload["hit_geometry"] = std::move(hit_geometry);
     payload["attack_geometry"] = std::move(attack_geometry);
-    document_->set_animation_payload(animation_id_, payload.dump());
+    document_->replace_animation_payload(animation_id_, payload.dump());
 }
 
-namespace {
-    static float dist_sq(const SDL_FPoint& a, const SDL_FPoint& b) {
-        const float dx = a.x - b.x;
-        const float dy = a.y - b.y;
-        return dx * dx + dy * dy;
-    }
+ChildPreviewContext FrameEditorSession::build_child_preview_context() const {
+    ChildPreviewContext ctx;
+    ctx.document_scale = document_scale_factor();
+    SDL_Point anchor = asset_anchor_world();
+    ctx.anchor_world = SDL_FPoint{ static_cast<float>(anchor.x), static_cast<float>(anchor.y) };
+    return ctx;
 }
 
-FrameEditorSession::FrameEditorSession() = default;
-FrameEditorSession::~FrameEditorSession() = default;
-
-void FrameEditorSession::begin(Assets* assets,
-                               Asset* asset,
-                               std::shared_ptr<AnimationDocument> document,
-                               std::shared_ptr<PreviewProvider> preview,
-                               const std::string& animation_id,
-                               animation_editor::AnimationEditorWindow* host_to_toggle,
-                               std::function<void()> on_end_callback) {
-    if (!assets || !asset || !document || animation_id.empty()) {
-        return;
+SDL_FRect FrameEditorSession::child_preview_rect(SDL_FPoint child_world,
+                                                 int texture_w,
+                                                 int texture_h,
+                                                 const ChildPreviewContext& ctx,
+                                                 float scale_override) const {
+    SDL_FRect rect{0.0f, 0.0f, 0.0f, 0.0f};
+    if (!assets_ || !target_) {
+        return rect;
     }
-    // Only allow sessions for assets owned by the engine context to avoid dangling pointers.
-    if (!assets->contains_asset(asset)) {
-        return;
+    if (texture_w <= 0 || texture_h <= 0) {
+        return rect;
     }
-    assets_ = assets;
-    target_ = asset;
-    document_ = std::move(document);
-    preview_ = std::move(preview);
-    animation_id_ = animation_id;
-    host_ = host_to_toggle;
-    on_end_ = std::move(on_end_callback);
-    edited_animation_ids_.clear();
-    if (!snap_resolution_override_ && assets_) {
-        snap_resolution_r_ = vibble::grid::clamp_resolution(std::max(0, assets_->map_grid_settings().resolution));
+    float scale = scale_override;
+    if (!std::isfinite(scale) || scale <= 0.0f) {
+        scale = ctx.document_scale;
     }
-
-    // Snapshot state
-    camera_grid& cam = assets_->getView();
-    prev_realism_enabled_ = cam.realism_enabled();
-    prev_parallax_enabled_ = cam.parallax_enabled();
-    prev_asset_hidden_ = target_->is_hidden();
-
-    // Preserve current camera realism/parallax so preview matches in-scene rendering.
-    // Grid overlay preference is handled by DevControls when beginning the session.
-
-    load_animation_data(animation_id_);
-
-    // Focus camera on asset; start at frame 0 and set asset anim
-    assets_->focus_camera_on_asset(target_, 0.85, 18);
-
-    // Show animation/children initially; ensure asset visible
-    show_animation_ = true;
-    show_child_ = true;
-    smooth_enabled_ = false;
-    curve_enabled_ = false;
-    selected_hitbox_type_index_ = 1;
-    selected_attack_type_index_ = 1;
-    hitbox_dragging_ = false;
-    active_hitbox_handle_ = HitHandle::None;
-    hitbox_drag_moved_ = false;
-    attack_dragging_ = false;
-    active_attack_handle_ = AttackHandle::None;
-    attack_drag_moved_ = false;
-    target_->set_hidden(false);
-    scroll_offset_ = 0;
-    dragging_scrollbar_thumb_ = false;
-    child_dropdown_options_cache_.clear();
-    animation_dropdown_options_cache_.clear();
-    last_applied_show_asset_state_ = show_animation_;
-    child_hidden_cache_.clear();
-    cache_child_hidden_states();
-
-    ensure_widgets();
-    refresh_hitbox_form();
-    refresh_attack_form();
-    refresh_hitbox_form();
-    // Initialize panel positions relative to the asset for better UX
-    {
-        int sw = 0, sh = 0;
-        if (assets_ && assets_->renderer()) {
-            SDL_GetRendererOutputSize(assets_->renderer(), &sw, &sh);
-        }
-        const camera_grid& cam = assets_->getView();
-        SDL_Point anchor_world = animation_update::detail::bottom_middle_for(*target_, target_->pos);
-        SDL_FPoint anchor_screen_f = cam.map_to_screen_f(SDL_FPoint{ static_cast<float>(anchor_world.x), static_cast<float>(anchor_world.y) });
-        SDL_Point anchor_screen = round_point(anchor_screen_f);
-
-        DirectoryPanelMetrics dir_metrics = build_directory_panel_metrics();
-        const int dir_w = dir_metrics.width;
-        const int dir_h = dir_metrics.height;
-        const int nav_h = 90;
-        const int nav_w = 560;
-
-        int tool_w = 0;
-        int tool_h = 0;
-        if (mode_ == Mode::Movement) {
-            MovementToolboxMetrics metrics = build_movement_toolbox_metrics();
-            tool_w = metrics.width;
-            tool_h = metrics.height;
-        } else if (mode_ == Mode::Children) {
-            ChildrenToolboxMetrics metrics = build_children_toolbox_metrics();
-            tool_w = metrics.width;
-            tool_h = metrics.height;
-        } else if (mode_ == Mode::HitGeometry || mode_ == Mode::AttackGeometry) {
-            tool_w = 360;
-            tool_h = 230;
-        }
-        if (tool_w <= 0) {
-            tool_w = 320;
-        }
-        if (tool_h <= 0) {
-            tool_h = DMButton::height() + DMSpacing::small_gap() * 2;
-        }
-
-        // Position panels relative to asset
-        // Frame navigator: 400 pixels below asset, horizontally centered
-        nav_pos_.x = anchor_screen.x - nav_w / 2;
-        nav_pos_.y = anchor_screen.y + 400;
-
-        // Mode selector: 200 pixels above asset, horizontally centered
-        dir_pos_.x = anchor_screen.x - dir_w / 2;
-        dir_pos_.y = anchor_screen.y - 200 - dir_h;
-
-        // Tool panel: 400 pixels left of asset, vertically centered on screen
-        toolbox_pos_.x = anchor_screen.x - 400 - tool_w / 2;
-        toolbox_pos_.y = sh / 2 - tool_h / 2;
-
-        // Clamp to screen bounds
-        auto clamp_panel_pos = [&](int& x, int& y, int w, int h) {
-            if (sw > 0 && sh > 0) {
-                x = std::clamp(x, 0, std::max(0, sw - w));
-                y = std::clamp(y, 0, std::max(0, sh - h));
-            }
-        };
-        clamp_panel_pos(nav_pos_.x, nav_pos_.y, nav_w, nav_h);
-        clamp_panel_pos(dir_pos_.x, dir_pos_.y, dir_w, dir_h);
-        clamp_panel_pos(toolbox_pos_.x, toolbox_pos_.y, tool_w, tool_h);
+    if (!std::isfinite(scale) || scale <= 0.0f) {
+        scale = 1.0f;
     }
-    active_ = true;
-}
-
-void FrameEditorSession::load_animation_data(const std::string& animation_id) {
-    if (!document_ || !target_) {
-        return;
+    rect.w = static_cast<float>(texture_w) * scale;
+    rect.h = static_cast<float>(texture_h) * scale;
+    if (rect.w <= 0.0f || rect.h <= 0.0f) {
+        rect.w = rect.h = 0.0f;
+        return rect;
     }
-    animation_id_ = animation_id;
-    auto payload_dump = document_->animation_payload(animation_id_);
-    frames_ = parse_movement_frames_json(payload_dump.value_or(std::string{}));
-    child_assets_ = document_->animation_children();
-    child_preview_slots_.clear();
-    document_payload_cache_.clear();
-    document_children_signature_ = document_->animation_children_signature();
-    if (payload_dump) {
-        document_payload_cache_ = *payload_dump;
-    }
-    rebuild_child_preview_cache();
-    sync_child_frames();
-    selected_child_index_ = 0;
-    if (frames_.empty()) {
-        frames_.push_back(clamp_frame(MovementFrame{}));
-    }
-    // Ensure movement frames always match the visual preview frame count so navigation
-    // thumbnails reflect every frame regardless of animation source.
-    int desired_frames = static_cast<int>(frames_.size());
-    if (preview_) {
-        desired_frames = preview_->get_frame_count(animation_id_);
-    }
-    if (desired_frames <= 0) {
-        desired_frames = std::max(1, static_cast<int>(frames_.size()));
-    }
-    if (static_cast<int>(frames_.size()) < desired_frames) {
-        const int to_add = desired_frames - static_cast<int>(frames_.size());
-        for (int i = 0; i < to_add; ++i) {
-            frames_.push_back(clamp_frame(MovementFrame{}));
-        }
-    } else if (static_cast<int>(frames_.size()) > desired_frames) {
-        frames_.resize(desired_frames);
-    }
-    // After padding/resizing, ensure newly added frames receive child placeholders.
-    sync_child_frames();
-    // Always keep the first frame zeroed
-    frames_.front().dx = 0.0f;
-    frames_.front().dy = 0.0f;
-    rebuild_rel_positions();
-
-    selected_index_ = 0;
-    scroll_offset_ = 0;
-    dragging_scrollbar_thumb_ = false;
-    child_dropdown_options_cache_.clear();
-    animation_dropdown_options_cache_.clear();
-
-    target_->current_animation = animation_id_;
-    update_asset_preview_frame();
-    refresh_hitbox_form();
-    refresh_attack_form();
-    refresh_hitbox_form();
-}
-
-void FrameEditorSession::end() {
-    if (!active_) return;
-    
-    // Save local copies of critical data before clearing
-    const bool has_assets = (assets_ != nullptr);
-    const bool target_still_alive = has_assets && target_ && assets_->contains_asset(target_);
-    std::shared_ptr<AssetInfo> info_to_reload;
-    std::string asset_name_for_cache;
-    
-    if (target_still_alive && target_->info) {
-        info_to_reload = target_->info;
-        if (info_to_reload) {
-            asset_name_for_cache = info_to_reload->name;
-        }
-    }
-    
-    // Restore camera and overlay state
-    if (has_assets) {
-        camera_grid& cam = assets_->getView();
-        cam.set_realism_enabled(prev_realism_enabled_);
-        cam.set_parallax_enabled(prev_parallax_enabled_);
-        // Cancel any transient pan/zoom override
-        pan_zoom_.cancel(cam);
-    }
-    
-    // If the target asset has been deleted externally, do not dereference it.
-    if (target_ && target_still_alive) {
-        apply_child_hidden_state(true);
-        target_->set_hidden(prev_asset_hidden_);
-    }
-    
-    end_hitbox_drag(false);
-    end_attack_drag(false);
-    child_hidden_cache_.clear();
-    last_applied_show_asset_state_ = true;
-    
-    // Save document to disk if there are pending changes
-    if (pending_save_ && document_) {
-        pending_save_ = false;
-        document_->save_to_file();
-    }
-
-    // Save critical locals before clearing session data
-    auto saved_host = host_;
-    auto saved_animation_id = animation_id_;
-    std::vector<std::string> animations_to_reload = edited_animation_ids_;
-    if (!saved_animation_id.empty() &&
-        std::find(animations_to_reload.begin(), animations_to_reload.end(), saved_animation_id) == animations_to_reload.end()) {
-        animations_to_reload.push_back(saved_animation_id);
-    }
-
-    // Clear session data
-    active_ = false;
-    Assets* saved_assets = assets_;
-    assets_ = nullptr;
-    target_ = nullptr;
-    document_.reset();
-    preview_.reset();
-    host_ = nullptr;
-    animation_id_.clear();
-    frames_.clear();
-    rel_positions_.clear();
-    child_preview_slots_.clear();
-    document_payload_cache_.clear();
-    document_children_signature_.clear();
-    edited_animation_ids_.clear();
-
-    // Reload animations AFTER session is closed
-    if (info_to_reload && saved_assets) {
-        bool refreshed = false;
-        bool regen_failed = false;
-
-        if (!asset_name_for_cache.empty()) {
-            for (const auto& anim_id : animations_to_reload) {
-                if (anim_id.empty()) {
-                    continue;
-                }
-                try {
-                    auto result = devmode::AnimationRegenerator::regenerate_animation(
-                        saved_assets, info_to_reload, anim_id);
-                    refreshed = refreshed || result.refreshed_instances || result.reloaded;
-                    regen_failed = regen_failed || (result.python_launched && !result.python_success);
-                } catch (const std::exception& ex) {
-                    regen_failed = true;
-                    std::cerr << "[FrameEditorSession] regenerate_animation threw for '" << anim_id
-                              << "': " << ex.what() << "\n";
-                } catch (...) {
-                    regen_failed = true;
-                    std::cerr << "[FrameEditorSession] regenerate_animation threw for '" << anim_id
-                              << "' (unknown error)\n";
-                }
-            }
-        }
-
-        // Fallback reload when regeneration was not attempted or when reload failed
-        // unexpectedly (e.g., python error). Rebuild via AnimationRegenerator is preferred,
-        // but a straight reload keeps the editor stable when regeneration cannot run.
-        if (!refreshed) {
-            try {
-                const bool ok = info_to_reload->reload_animations_from_disk();
-                SDL_Renderer* renderer = saved_assets->renderer();
-                if (ok && renderer) {
-                    info_to_reload->loadAnimations(renderer);
-                    devmode::AnimationRegenerator::refresh_loaded_instances(saved_assets, info_to_reload);
-                    refreshed = true;
-                }
-            } catch (const std::exception& ex) {
-                std::cerr << "[FrameEditorSession] Safe animation reload failed for '" << asset_name_for_cache
-                          << "': " << ex.what() << "\n";
-            } catch (...) {
-                std::cerr << "[FrameEditorSession] Safe animation reload failed for '" << asset_name_for_cache
-                          << "' (unknown error)\n";
-            }
-            if (regen_failed) {
-                std::cerr << "[FrameEditorSession] Animation regeneration failed; applied fallback reload for '"
-                          << asset_name_for_cache << "'\n";
-            }
-        }
-    }
-
-    // Reopen animation editor window AFTER reloading animations
-    if (saved_host) {
-        saved_host->on_live_frame_editor_closed(saved_animation_id);
-    }
-
-    if (on_end_) {
-        auto cb = std::move(on_end_);
-        on_end_ = {};
-        cb();
-    }
-}
-
-void FrameEditorSession::update(const Input& input) {
-    if (!active_) return;
-    // Validate that the target asset is still alive; if not, end the session safely.
-    if (!assets_ || !target_ || !assets_->contains_asset(target_)) {
-        end();
-        return;
-    }
-    refresh_child_assets_from_document();
-    // Enable mouse wheel zoom; disable click-drag panning while editing
-    if (assets_) {
-        camera_grid& cam = assets_->getView();
-        // Make sure layout is up to date before computing any UI blocking logic (future use)
-        ensure_widgets();
-        rebuild_layout();
-        const bool pan_blocked = true; // block left-drag panning during frame edit session
-        pan_zoom_.handle_input(cam, input, pan_blocked);
-    }
-    // Ensure the asset frame reflects selection
-    update_asset_preview_frame();
-    // Sync checkbox state and totals text boxes
-    if (cb_show_anim_) {
-        cb_show_anim_->set_value(show_animation_);
-    }
-    if (cb_show_child_) {
-        cb_show_child_->set_value(show_child_);
-    }
-    if (dd_child_select_) {
-        int desired = child_assets_.empty() ? 0 : std::clamp(selected_child_index_, 0, static_cast<int>(child_assets_.size()) - 1);
-        if (dd_child_select_->selected() != desired) {
-            dd_child_select_->set_selected(desired);
-        }
-    }
-    if (dd_animation_select_) {
-        int desired = 0;
-        auto it = std::find(animation_dropdown_options_cache_.begin(),
-                            animation_dropdown_options_cache_.end(),
-                            animation_id_);
-        if (it != animation_dropdown_options_cache_.end()) {
-            desired = static_cast<int>(std::distance(animation_dropdown_options_cache_.begin(), it));
-        }
-        if (dd_animation_select_->selected() != desired) {
-            dd_animation_select_->set_selected(desired);
-        }
-    }
-    if (cb_smooth_) {
-        cb_smooth_->set_value(smooth_enabled_);
-    }
-    if (!smooth_enabled_) {
-        curve_enabled_ = false;
-    }
-    if (cb_curve_) {
-        cb_curve_->set_value(smooth_enabled_ ? curve_enabled_ : false);
-    }
-    int total_dx = 0, total_dy = 0;
-    for (size_t i = 1; i < frames_.size(); ++i) {
-        total_dx += static_cast<int>(std::lround(frames_[i].dx));
-        total_dy += static_cast<int>(std::lround(frames_[i].dy));
-    }
-    const std::string dxs = std::to_string(total_dx);
-    const std::string dys = std::to_string(total_dy);
-    if (tb_total_dx_ && !tb_total_dx_->is_editing()) {
-        if (tb_total_dx_->value() != dxs) tb_total_dx_->set_value(dxs);
-        last_totals_dx_text_ = tb_total_dx_->value();
-    }
-    if (tb_total_dy_ && !tb_total_dy_->is_editing()) {
-        if (tb_total_dy_->value() != dys) tb_total_dy_->set_value(dys);
-        last_totals_dy_text_ = tb_total_dy_->value();
-    }
-    if (mode_ == Mode::Children) {
-        const ChildFrame* child = current_child_frame();
-        auto sync_text_box = [&](DMTextBox* tb, std::string& cache, float value) {
-            if (!tb || tb->is_editing()) return;
-            std::ostringstream oss;
-            oss << static_cast<int>(std::lround(value));
-            const std::string text = oss.str();
-            if (tb->value() != text) {
-                tb->set_value(text);
-            }
-            cache = tb->value();
-        };
-        if (child) {
-            sync_text_box(tb_child_dx_.get(), last_child_dx_text_, child->dx);
-            sync_text_box(tb_child_dy_.get(), last_child_dy_text_, child->dy);
-            if (tb_child_deg_ && !tb_child_deg_->is_editing()) {
-                std::ostringstream oss;
-                oss << std::fixed << std::setprecision(1) << child->degree;
-                const std::string text = oss.str();
-                if (tb_child_deg_->value() != text) {
-                    tb_child_deg_->set_value(text);
-                }
-                last_child_deg_text_ = tb_child_deg_->value();
-            }
-            if (cb_child_visible_) {
-                cb_child_visible_->set_value(child->visible);
-                last_child_visible_value_ = child->visible;
-            }
-            if (cb_child_render_front_) {
-                cb_child_render_front_->set_value(child->render_in_front);
-                last_child_front_value_ = child->render_in_front;
-            }
-        } else {
-            if (tb_child_dx_ && !tb_child_dx_->is_editing()) tb_child_dx_->set_value("0");
-            if (tb_child_dy_ && !tb_child_dy_->is_editing()) tb_child_dy_->set_value("0");
-            if (tb_child_deg_ && !tb_child_deg_->is_editing()) tb_child_deg_->set_value("0");
-            if (cb_child_visible_) cb_child_visible_->set_value(false);
-            if (cb_child_render_front_) cb_child_render_front_->set_value(true);
-            last_child_front_value_ = cb_child_render_front_ ? cb_child_render_front_->value() : true;
-        }
-    }
-    if (mode_ == Mode::HitGeometry) {
-        if (dd_hitbox_type_ && !hitbox_type_labels_.empty()) {
-            int desired = std::clamp(selected_hitbox_type_index_, 0, static_cast<int>(hitbox_type_labels_.size()) - 1);
-            if (dd_hitbox_type_->selected() != desired) {
-                dd_hitbox_type_->set_selected(desired);
-            }
-        }
-        refresh_hitbox_form();
-    } else if (mode_ == Mode::AttackGeometry) {
-        if (dd_attack_type_ && !attack_type_labels_.empty()) {
-            int desired = std::clamp(selected_attack_type_index_, 0, static_cast<int>(attack_type_labels_.size()) - 1);
-            if (dd_attack_type_->selected() != desired) {
-                dd_attack_type_->set_selected(desired);
-            }
-        }
-        refresh_attack_form();
-    }
-    // Ensure asset hidden state follows checkbox
-    if (target_) {
-        target_->set_hidden(!show_animation_);
-    }
-    sync_child_asset_visibility();
-}
-
-
-bool FrameEditorSession::handle_event(const SDL_Event& e) {
-    if (!active_) return false;
-    // Bail out gracefully if the target asset was deleted while editing.
-    if (!assets_ || !target_ || !assets_->contains_asset(target_)) {
-        end();
-        return true; // consume to prevent other systems from touching stale state
-    }
-    ensure_widgets();
-    rebuild_layout();
-
-    auto clamp_panel_pos = [&](int& x, int& y, int w, int h) {
-        int sw = 0, sh = 0;
-        if (assets_ && assets_->renderer()) {
-            SDL_GetRendererOutputSize(assets_->renderer(), &sw, &sh);
-        }
-        if (sw > 0 && sh > 0) {
-            x = std::clamp(x, 0, std::max(0, sw - w));
-            y = std::clamp(y, 0, std::max(0, sh - h));
-        }
+    SDL_FPoint top_left_world{
+        child_world.x - rect.w * 0.5f,
+        child_world.y - rect.h
     };
-
-    auto point_in_any_thumb = [&](const SDL_Point& p) -> bool {
-        for (const auto& r : thumb_rects_) {
-            if (r.w > 0 && r.h > 0 && SDL_PointInRect(&p, &r)) return true;
-        }
-        return false;
-    };
-    auto point_in_scrollbar = [&](const SDL_Point& p) -> bool {
-        return scrollbar_visible_ && SDL_PointInRect(&p, &scrollbar_track_);
-    };
-    auto update_scrollbar_from_mouse = [&](int mouse_x) {
-        if (!scrollbar_visible_) return;
-        const int thumb_w = scrollbar_thumb_.w;
-        int track_min = scrollbar_track_.x;
-        int track_max = scrollbar_track_.x + scrollbar_track_.w - thumb_w;
-        if (track_max < track_min) track_max = track_min;
-        int new_thumb_x = mouse_x - scrollbar_drag_offset_x_;
-        new_thumb_x = std::clamp(new_thumb_x, track_min, track_max);
-        const float denom = static_cast<float>(track_max - track_min);
-        float ratio = 0.0f;
-        if (denom > 0.0f) {
-            ratio = static_cast<float>(new_thumb_x - track_min) / denom;
-        }
-        const int max_scroll = max_scroll_offset();
-        scroll_offset_ = std::clamp(static_cast<int>(std::round(ratio * static_cast<float>(max_scroll))), 0, max_scroll);
-    };
-    auto point_over_toolbox_widget = [&](const SDL_Point& p) -> bool {
-        for (const auto& r : toolbox_widget_rects_) {
-            if (r.w > 0 && r.h > 0 && SDL_PointInRect(&p, &r)) {
-                return true;
-            }
-        }
-        return false;
-    };
-
-    // Handle dragging (motion and release)
-    if (dragging_dir_ || dragging_toolbox_ || dragging_nav_ || dragging_scrollbar_thumb_) {
-        if (e.type == SDL_MOUSEMOTION) {
-            bool moved = false;
-            if (dragging_dir_) {
-                dir_pos_.x = e.motion.x - drag_offset_dir_.x;
-                dir_pos_.y = e.motion.y - drag_offset_dir_.y;
-                DirectoryPanelMetrics dir_metrics = build_directory_panel_metrics();
-                clamp_panel_pos(dir_pos_.x, dir_pos_.y, dir_metrics.width, dir_metrics.height);
-                moved = true;
-            } else if (dragging_toolbox_) {
-                toolbox_pos_.x = e.motion.x - drag_offset_toolbox_.x;
-                toolbox_pos_.y = e.motion.y - drag_offset_toolbox_.y;
-                const int tool_w = toolbox_rect_.w;
-                const int tool_h = toolbox_rect_.h;
-                clamp_panel_pos(toolbox_pos_.x, toolbox_pos_.y, tool_w, tool_h);
-                moved = true;
-            } else if (dragging_nav_) {
-                nav_pos_.x = e.motion.x - drag_offset_nav_.x;
-                nav_pos_.y = e.motion.y - drag_offset_nav_.y;
-                const int nav_w = nav_rect_.w;
-                const int nav_h = nav_rect_.h;
-                clamp_panel_pos(nav_pos_.x, nav_pos_.y, nav_w, nav_h);
-                moved = true;
-            } else if (dragging_scrollbar_thumb_) {
-                update_scrollbar_from_mouse(e.motion.x);
-                moved = true;
-            }
-            if (moved) {
-                rebuild_layout();
-            }
-            return true; // consume while dragging
-        } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            dragging_dir_ = false;
-            dragging_toolbox_ = false;
-            dragging_nav_ = false;
-            dragging_scrollbar_thumb_ = false;
-            return true; // consume mouse up at end of drag
-        }
-    }
-
-    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-        SDL_Point p{ e.button.x, e.button.y };
-        if (point_in_scrollbar(p)) {
-            dragging_scrollbar_thumb_ = true;
-            scrollbar_drag_offset_x_ = std::clamp(p.x - scrollbar_thumb_.x, 0, scrollbar_thumb_.w);
-            update_scrollbar_from_mouse(p.x);
-            rebuild_layout();
-            return true;
-        }
-    }
-
-    // Begin dragging on mouse down if inside panel backgrounds, avoiding interactive controls
-    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-        SDL_Point p{ e.button.x, e.button.y };
-        // Directory panel drag: avoid buttons inside
-        bool over_dir = SDL_PointInRect(&p, &directory_rect_);
-        if (over_dir) {
-            bool over_button = false;
-            const DMButton* buttons[] = {
-                btn_back_.get(),
-                btn_movement_.get(),
-                btn_children_.get(),
-                btn_attack_geometry_.get(),
-                btn_hit_geometry_.get()
-            };
-            for (const DMButton* b : buttons) {
-                if (!b) continue; const SDL_Rect& r = b->rect();
-                if (SDL_PointInRect(&p, &r)) { over_button = true; break; }
-            }
-            if (!over_button) {
-                dragging_dir_ = true;
-                drag_offset_dir_ = SDL_Point{ p.x - directory_rect_.x, p.y - directory_rect_.y };
-                return true;
-            }
-        }
-        // Toolbox panel drag: avoid interactive controls (buttons/checkbox/textboxes)
-        const bool has_toolbox = toolbox_rect_.w > 0 && toolbox_rect_.h > 0;
-        if (has_toolbox) {
-            const bool over_handle = toolbox_drag_rect_.w > 0 && SDL_PointInRect(&p, &toolbox_drag_rect_);
-            if (over_handle || (SDL_PointInRect(&p, &toolbox_rect_) && !point_over_toolbox_widget(p))) {
-                dragging_toolbox_ = true;
-                drag_offset_toolbox_ = SDL_Point{ p.x - toolbox_rect_.x, p.y - toolbox_rect_.y };
-                return true;
-            }
-        }
-        // Nav panel drag: avoid prev/next buttons and thumbnails
-        if (SDL_PointInRect(&p, &nav_rect_)) {
-            bool over_nav_ctrl = false;
-            if (btn_prev_) { const SDL_Rect& r = btn_prev_->rect(); if (SDL_PointInRect(&p, &r)) over_nav_ctrl = true; }
-            if (!over_nav_ctrl && btn_next_) { const SDL_Rect& r = btn_next_->rect(); if (SDL_PointInRect(&p, &r)) over_nav_ctrl = true; }
-            if (!over_nav_ctrl && dd_animation_select_) {
-                const SDL_Rect& r = dd_animation_select_->rect();
-                if (SDL_PointInRect(&p, &r)) over_nav_ctrl = true;
-            }
-            if (!over_nav_ctrl) over_nav_ctrl = point_in_any_thumb(p);
-            if (!over_nav_ctrl && point_in_scrollbar(p)) over_nav_ctrl = true;
-            const bool is_on_nav_handle = nav_drag_rect_.w > 0 && SDL_PointInRect(&p, &nav_drag_rect_);
-            if (is_on_nav_handle || !over_nav_ctrl) {
-                dragging_nav_ = true;
-                drag_offset_nav_ = SDL_Point{ p.x - nav_rect_.x, p.y - nav_rect_.y };
-                return true;
-            }
-        }
-    }
-
-    // Do not handle mouse wheel inside the navigator; allow global zoom/pan to use it
-
-    auto handle_button = [&](std::unique_ptr<DMButton>& btn, auto&& on_click) -> bool {
-        if (!btn) return false;
-        if (!btn->handle_event(e)) return false;
-        if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            on_click();
-        }
-        return true;
-    };
-
-    // Directory buttons
-    if (handle_button(btn_back_, [this]() {
-            // Capture any in-memory changes before exiting
-            this->persist_changes();
-            this->end();
-        })) return true;
-    if (handle_button(btn_movement_, [this]() {
-            // Save data relevant to current mode before switching
-            this->persist_mode_changes(this->mode_);
-            this->mode_ = Mode::Movement;
-            this->end_hitbox_drag(false);
-            this->end_attack_drag(false);
-        })) return true;
-    if (handle_button(btn_children_, [this]() {
-            this->persist_mode_changes(this->mode_);
-            this->mode_ = Mode::Children;
-            this->end_hitbox_drag(false);
-            this->end_attack_drag(false);
-        })) return true;
-    if (handle_button(btn_attack_geometry_, [this]() {
-            this->persist_mode_changes(this->mode_);
-            this->mode_ = Mode::AttackGeometry;
-            this->end_hitbox_drag(false);
-            this->end_attack_drag(false);
-        })) return true;
-    if (handle_button(btn_hit_geometry_, [this]() {
-            this->persist_mode_changes(this->mode_);
-            this->mode_ = Mode::HitGeometry;
-            this->end_hitbox_drag(false);
-            this->end_attack_drag(false);
-        })) return true;
-    if (mode_ == Mode::HitGeometry) {
-        if (handle_button(btn_hitbox_add_remove_, [this]() {
-                const std::string type = this->current_hitbox_type();
-                this->end_hitbox_drag(false);
-                this->end_attack_drag(false);
-                if (this->current_hit_box()) {
-                    this->delete_hit_box_for_type(type);
-                } else {
-                    this->ensure_hit_box_for_type(type);
-                }
-                this->refresh_hitbox_form();
-                this->persist_changes();
-            })) return true;
-        if (handle_button(btn_hitbox_copy_next_, [this]() {
-                this->copy_hit_box_to_next_frame();
-                this->refresh_hitbox_form();
-            })) return true;
-        if (handle_button(btn_apply_all_hit_, [this]() {
-                this->apply_current_mode_to_all_frames();
-                this->refresh_hitbox_form();
-            })) return true;
-    } else if (mode_ == Mode::AttackGeometry) {
-        if (handle_button(btn_attack_add_remove_, [this]() {
-                const std::string type = this->current_attack_type();
-                this->end_attack_drag(false);
-                if (this->current_attack_vector()) {
-                    this->delete_attack_vector_for_type(type);
-                } else {
-                    this->ensure_attack_vector_for_type(type);
-                }
-                this->refresh_attack_form();
-                this->persist_changes();
-            })) return true;
-        if (handle_button(btn_attack_copy_next_, [this]() {
-                this->end_attack_drag(false);
-                this->copy_attack_vector_to_next_frame();
-                this->refresh_attack_form();
-            })) return true;
-        if (handle_button(btn_apply_all_attack_, [this]() {
-                this->apply_current_mode_to_all_frames();
-                this->refresh_attack_form();
-            })) return true;
-    }
-
-    // Movement tool panel widgets
-    if (mode_ == Mode::Movement || mode_ == Mode::Children) {
-        if (cb_smooth_ && cb_smooth_->handle_event(e)) {
-            bool current = cb_smooth_->value();
-            if (current != smooth_enabled_) {
-                smooth_enabled_ = current;
-                if (!smooth_enabled_) {
-                    curve_enabled_ = false;
-                    if (cb_curve_) {
-                        cb_curve_->set_value(false);
-                    }
-                }
-            }
-            return true;
-        }
-
-        if (smooth_enabled_ && cb_curve_ && cb_curve_->handle_event(e)) {
-            bool current = cb_curve_->value();
-            if (current != curve_enabled_) {
-                curve_enabled_ = current;
-            }
-            return true;
-        }
-
-        // Handle totals edit boxes
-        auto parse_int = [](const std::string& s, int& out) -> bool {
-            try { size_t idx = 0; int v = std::stoi(s, &idx); if (idx == s.size()) { out = v; return true; } } catch (...) {}
-            return false;
-        };
-        bool consumed_tb = false;
-        if (tb_total_dx_) consumed_tb = tb_total_dx_->handle_event(e) || consumed_tb;
-        if (tb_total_dy_) consumed_tb = tb_total_dy_->handle_event(e) || consumed_tb;
-        if (tb_total_dx_ && tb_total_dy_) {
-            const std::string now_dx = tb_total_dx_->value();
-            const std::string now_dy = tb_total_dy_->value();
-            if (now_dx != last_totals_dx_text_ || now_dy != last_totals_dy_text_) {
-                int dx = 0, dy = 0;
-                bool okx = parse_int(now_dx, dx);
-                bool oky = parse_int(now_dy, dy);
-                last_totals_dx_text_ = now_dx;
-                last_totals_dy_text_ = now_dy;
-                if (okx && oky) {
-                    double cur_dx = 0.0, cur_dy = 0.0;
-                    for (size_t i = 1; i < frames_.size(); ++i) {
-                        cur_dx += std::isfinite(frames_[i].dx) ? frames_[i].dx : 0.0;
-                        cur_dy += std::isfinite(frames_[i].dy) ? frames_[i].dy : 0.0;
-                    }
-                    const double need_dx = static_cast<double>(dx) - cur_dx;
-                    const double need_dy = static_cast<double>(dy) - cur_dy;
-                    const size_t last = frames_.size() > 0 ? frames_.size() - 1 : 0;
-                    if (last >= 1) {
-                        frames_[last].dx = static_cast<float>(std::lround(frames_[last].dx + need_dx));
-                        frames_[last].dy = static_cast<float>(std::lround(frames_[last].dy + need_dy));
-                        rebuild_rel_positions();
-                        persist_changes();
-                    }
-                }
-            }
-        }
-        if (consumed_tb) return true;
-        // Apply current settings to all frames
-        if (mode_ == Mode::Movement) {
-            if (handle_button(btn_apply_all_movement_, [this]() { this->apply_current_mode_to_all_frames(); })) return true;
-        }
-        if (mode_ == Mode::Children) {
-            if (handle_button(btn_apply_all_children_, [this]() { this->apply_current_mode_to_all_frames(); })) return true;
-        }
-        // If we are in Children mode, do not fall-through; movement controls handled above
-        if (mode_ == Mode::Movement) {
-            // continue to other handlers below
-        }
-    }
-
-    if (cb_show_anim_ && cb_show_anim_->handle_event(e)) {
-        bool current = cb_show_anim_->value();
-        if (current != last_show_anim_value_) {
-            last_show_anim_value_ = current;
-            show_animation_ = current;
-            if (target_) target_->set_hidden(!show_animation_);
-            // Child visibility depends on both show_animation_ and show_child_
-            sync_child_asset_visibility();
-        }
-        return true;
-    }
-
-    if (mode_ == Mode::Children) {
-        if (dd_child_select_ && dd_child_select_->handle_event(e)) {
-            int current = dd_child_select_->selected();
-            if (child_assets_.empty()) {
-                current = 0;
-            } else {
-                current = std::clamp(current, 0, static_cast<int>(child_assets_.size()) - 1);
-            }
-            if (current != selected_child_index_) {
-                select_child(current);
-            }
-            return true;
-        }
-
-        if (cb_show_child_ && cb_show_child_->handle_event(e)) {
-            bool current = cb_show_child_->value();
-            if (current != last_show_child_value_) {
-                last_show_child_value_ = current;
-                show_child_ = current;
-                sync_child_asset_visibility();
-            }
-            return true;
-        }
-
-        bool consumed_child = false;
-        if (tb_child_dx_) consumed_child = tb_child_dx_->handle_event(e) || consumed_child;
-        if (tb_child_dy_) consumed_child = tb_child_dy_->handle_event(e) || consumed_child;
-        if (tb_child_deg_) consumed_child = tb_child_deg_->handle_event(e) || consumed_child;
-        if (cb_child_visible_) consumed_child = cb_child_visible_->handle_event(e) || consumed_child;
-        if (cb_child_render_front_) consumed_child = cb_child_render_front_->handle_event(e) || consumed_child;
-        if (consumed_child) {
-            auto* child = current_child_frame();
-            if (child) {
-                auto parse_float = [](const std::string& s, float fallback) -> float {
-                    try {
-                        size_t idx = 0;
-                        float v = std::stof(s, &idx);
-                        if (idx == s.size()) {
-                            return v;
-                        }
-                    } catch (...) {
-                    }
-                    return fallback;
-                };
-                bool changed = false;
-                bool child_offset_changed = false;
-                if (tb_child_dx_) {
-                    float new_dx = parse_float(tb_child_dx_->value(), child->dx);
-                    if (!std::isnan(new_dx) && child->dx != new_dx) {
-                        child->dx = new_dx;
-                        changed = true;
-                        child_offset_changed = true;
-                    }
-                }
-                if (tb_child_dy_) {
-                    float new_dy = parse_float(tb_child_dy_->value(), child->dy);
-                    if (!std::isnan(new_dy) && child->dy != new_dy) {
-                        child->dy = new_dy;
-                        changed = true;
-                        child_offset_changed = true;
-                    }
-                }
-                if (tb_child_deg_) {
-                    float new_deg = parse_float(tb_child_deg_->value(), child->degree);
-                    if (!std::isnan(new_deg) && child->degree != new_deg) {
-                        child->degree = new_deg;
-                        changed = true;
-                    }
-                }
-                if (cb_child_visible_) {
-                    bool vis = cb_child_visible_->value();
-                    if (child->visible != vis) {
-                        child->visible = vis;
-                        changed = true;
-                    }
-                }
-                if (cb_child_render_front_) {
-                    bool front = cb_child_render_front_->value();
-                    if (child->render_in_front != front) {
-                        child->render_in_front = front;
-                        changed = true;
-                    }
-                }
-                if (changed) {
-                    rebuild_rel_positions();
-                    const bool should_smooth_child = child_offset_changed &&
-                                                     smooth_enabled_ &&
-                                                     selected_index_ > 0;
-                    if (should_smooth_child) {
-                        smooth_child_offsets(selected_child_index_, selected_index_);
-                    } else {
-                        persist_changes();
-                    }
-                }
-            }
-            return true;
-        }
-    }
-    if (mode_ == Mode::HitGeometry) {
-        if (dd_hitbox_type_ && dd_hitbox_type_->handle_event(e)) {
-            if (!hitbox_type_labels_.empty()) {
-                int idx = std::clamp(dd_hitbox_type_->selected(), 0, static_cast<int>(hitbox_type_labels_.size()) - 1);
-                if (idx != selected_hitbox_type_index_) {
-                    selected_hitbox_type_index_ = idx;
-                    refresh_hitbox_form();
-                }
-            }
-            return true;
-        }
-        bool consumed_hit = false;
-        if (tb_hit_center_x_) consumed_hit = tb_hit_center_x_->handle_event(e) || consumed_hit;
-        if (tb_hit_center_y_) consumed_hit = tb_hit_center_y_->handle_event(e) || consumed_hit;
-        if (tb_hit_width_) consumed_hit = tb_hit_width_->handle_event(e) || consumed_hit;
-        if (tb_hit_height_) consumed_hit = tb_hit_height_->handle_event(e) || consumed_hit;
-        if (tb_hit_rotation_) consumed_hit = tb_hit_rotation_->handle_event(e) || consumed_hit;
-        if (consumed_hit) {
-            auto* box = current_hit_box();
-            if (!box) {
-                box = ensure_hit_box_for_type(current_hitbox_type());
-            }
-            if (box) {
-                auto parse_float = [](const std::string& text, float fallback) -> float {
-                    if (text.empty()) return fallback;
-                    try {
-                        return std::stof(text);
-                    } catch (...) {
-                        return fallback;
-                    }
-                };
-                bool changed = false;
-                if (tb_hit_center_x_) {
-                    float value = parse_float(tb_hit_center_x_->value(), box->center_x);
-                    if (std::isfinite(value) && box->center_x != value) {
-                        box->center_x = value;
-                        changed = true;
-                    }
-                }
-                if (tb_hit_center_y_) {
-                    float value = parse_float(tb_hit_center_y_->value(), box->center_y);
-                    if (std::isfinite(value) && box->center_y != value) {
-                        box->center_y = value;
-                        changed = true;
-                    }
-                }
-                if (tb_hit_width_) {
-                    float value = parse_float(tb_hit_width_->value(), box->half_width * 2.0f);
-                    if (std::isfinite(value)) {
-                        float hw = std::max(1.0f, value * 0.5f);
-                        if (std::fabs(hw - box->half_width) > 0.01f) {
-                            box->half_width = hw;
-                            changed = true;
-                        }
-                    }
-                }
-                if (tb_hit_height_) {
-                    float value = parse_float(tb_hit_height_->value(), box->half_height * 2.0f);
-                    if (std::isfinite(value)) {
-                        float hh = std::max(1.0f, value * 0.5f);
-                        if (std::fabs(hh - box->half_height) > 0.01f) {
-                            box->half_height = hh;
-                            changed = true;
-                        }
-                    }
-                }
-                if (tb_hit_rotation_) {
-                    float value = parse_float(tb_hit_rotation_->value(), box->rotation_degrees);
-                    if (std::isfinite(value) && std::fabs(value - box->rotation_degrees) > 0.01f) {
-                        box->rotation_degrees = value;
-                        changed = true;
-                    }
-                }
-                if (changed) {
-                    refresh_hitbox_form();
-                    persist_changes();
-                }
-            }
-            return true;
-        }
-    } else if (mode_ == Mode::AttackGeometry) {
-        if (dd_attack_type_ && dd_attack_type_->handle_event(e)) {
-            if (!attack_type_labels_.empty()) {
-                int idx = std::clamp(dd_attack_type_->selected(), 0, static_cast<int>(attack_type_labels_.size()) - 1);
-                if (idx != selected_attack_type_index_) {
-                    selected_attack_type_index_ = idx;
-                    refresh_attack_form();
-                }
-            }
-            return true;
-        }
-        bool consumed_attack = false;
-        if (tb_attack_start_x_) consumed_attack = tb_attack_start_x_->handle_event(e) || consumed_attack;
-        if (tb_attack_start_y_) consumed_attack = tb_attack_start_y_->handle_event(e) || consumed_attack;
-        if (tb_attack_control_x_) consumed_attack = tb_attack_control_x_->handle_event(e) || consumed_attack;
-        if (tb_attack_control_y_) consumed_attack = tb_attack_control_y_->handle_event(e) || consumed_attack;
-        if (tb_attack_end_x_) consumed_attack = tb_attack_end_x_->handle_event(e) || consumed_attack;
-        if (tb_attack_end_y_) consumed_attack = tb_attack_end_y_->handle_event(e) || consumed_attack;
-        if (tb_attack_damage_) consumed_attack = tb_attack_damage_->handle_event(e) || consumed_attack;
-        if (consumed_attack) {
-            auto* vec = current_attack_vector();
-            if (!vec) {
-                vec = ensure_attack_vector_for_type(current_attack_type());
-            }
-            if (vec) {
-                auto parse_float = [](const std::string& text, float fallback) -> float {
-                    if (text.empty()) return fallback;
-                    try {
-                        return std::stof(text);
-                    } catch (...) {
-                        return fallback;
-                    }
-                };
-                auto parse_int = [](const std::string& text, int fallback) -> int {
-                    if (text.empty()) return fallback;
-                    try {
-                        return std::stoi(text);
-                    } catch (...) {
-                        return fallback;
-                    }
-                };
-                bool changed = false;
-                if (tb_attack_start_x_) {
-                    float value = parse_float(tb_attack_start_x_->value(), vec->start_x);
-                    if (std::isfinite(value) && vec->start_x != value) {
-                        vec->start_x = value;
-                        changed = true;
-                    }
-                }
-                if (tb_attack_start_y_) {
-                    float value = parse_float(tb_attack_start_y_->value(), vec->start_y);
-                    if (std::isfinite(value) && vec->start_y != value) {
-                        vec->start_y = value;
-                        changed = true;
-                    }
-                }
-                if (tb_attack_control_x_) {
-                    float value = parse_float(tb_attack_control_x_->value(), vec->control_x);
-                    if (std::isfinite(value) && vec->control_x != value) {
-                        vec->control_x = value;
-                        changed = true;
-                    }
-                }
-                if (tb_attack_control_y_) {
-                    float value = parse_float(tb_attack_control_y_->value(), vec->control_y);
-                    if (std::isfinite(value) && vec->control_y != value) {
-                        vec->control_y = value;
-                        changed = true;
-                    }
-                }
-                if (tb_attack_end_x_) {
-                    float value = parse_float(tb_attack_end_x_->value(), vec->end_x);
-                    if (std::isfinite(value) && vec->end_x != value) {
-                        vec->end_x = value;
-                        changed = true;
-                    }
-                }
-                if (tb_attack_end_y_) {
-                    float value = parse_float(tb_attack_end_y_->value(), vec->end_y);
-                    if (std::isfinite(value) && vec->end_y != value) {
-                        vec->end_y = value;
-                        changed = true;
-                    }
-                }
-                if (tb_attack_damage_) {
-                    int dmg = parse_int(tb_attack_damage_->value(), vec->damage);
-                    dmg = std::max(0, dmg);
-                    if (vec->damage != dmg) {
-                        vec->damage = dmg;
-                        changed = true;
-                    }
-                }
-                if (changed) {
-                    refresh_attack_form();
-                    persist_changes();
-                }
-            }
-            return true;
-        }
-    }
-
-    if (mode_ == Mode::HitGeometry) {
-        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-            if (begin_hitbox_drag(SDL_Point{e.button.x, e.button.y})) {
-                return true;
-            }
-        } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            if (hitbox_dragging_) {
-                end_hitbox_drag(true);
-                return true;
-            }
-        } else if (e.type == SDL_MOUSEMOTION && hitbox_dragging_) {
-            update_hitbox_drag(SDL_Point{e.motion.x, e.motion.y});
-            return true;
-        }
-    } else if (mode_ == Mode::AttackGeometry) {
-        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
-            if (begin_attack_drag(SDL_Point{e.button.x, e.button.y})) {
-                return true;
-            }
-        } else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-            if (attack_dragging_) {
-                end_attack_drag(true);
-                return true;
-            }
-        } else if (e.type == SDL_MOUSEMOTION && attack_dragging_) {
-            update_attack_drag(SDL_Point{e.motion.x, e.motion.y});
-            return true;
-        }
-    }
-
-    if (dd_animation_select_ && dd_animation_select_->handle_event(e)) {
-        if (!animation_dropdown_options_cache_.empty()) {
-            int idx = std::clamp(dd_animation_select_->selected(), 0, static_cast<int>(animation_dropdown_options_cache_.size()) - 1);
-            const std::string& desired_id = animation_dropdown_options_cache_[idx];
-            if (!desired_id.empty() && desired_id != animation_id_) {
-                switch_animation(desired_id);
-            }
-        }
-        return true;
-    }
-
-    // Navigation
-    if (handle_button(btn_prev_, [this]() { this->select_frame(std::max(0, this->selected_index_ - 1)); })) return true;
-    if (handle_button(btn_next_, [this]() { this->select_frame(this->selected_index_ + 1); })) return true;
-
-    // Thumbnails (skip if we were dragging)
-    if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-        if (dragging_dir_ || dragging_nav_ || dragging_scrollbar_thumb_) return true;
-        SDL_Point p{e.button.x, e.button.y};
-        for (size_t i = 0; i < thumb_rects_.size() && i < thumb_indices_.size(); ++i) {
-            if (SDL_PointInRect(&p, &thumb_rects_[i])) {
-                select_frame(thumb_indices_[i]);
-                return true;
-            }
-        }
-    }
-
-    // Map interaction: left-click to edit current frame
-    if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
-        SDL_Point sp{e.button.x, e.button.y};
-        // If inside any of our panels, consume the event so it doesn't leak to dev controls/room editor
-        if (SDL_PointInRect(&sp, &directory_rect_) || SDL_PointInRect(&sp, &nav_rect_) || SDL_PointInRect(&sp, &toolbox_rect_)) {
-            return true;
-        }
-        if (!assets_ || !target_) return false;
-        camera_grid& cam = assets_->getView();
-        SDL_FPoint world_f = cam.screen_to_map(sp);
-        // Anchor is bottom-middle of the asset
-        SDL_Point anchor_world = animation_update::detail::bottom_middle_for(*target_, target_->pos);
-        // Snap absolute click to the configured overlay resolution before computing relative
-        SDL_Point world_px{ static_cast<int>(std::lround(world_f.x)), static_cast<int>(std::lround(world_f.y)) };
-        int snap_r = vibble::grid::clamp_resolution(std::max(0, snap_resolution_r_));
-        SDL_Point snapped = vibble::grid::snap_world_to_vertex(world_px, snap_r);
-        SDL_FPoint desired_rel{ static_cast<float>(snapped.x - anchor_world.x), static_cast<float>(snapped.y - anchor_world.y) };
-
-        if (mode_ == Mode::Children) {
-            // In Children mode, clicks set the selected child's per-frame offset.
-            if (auto* child = current_child_frame()) {
-                child->dx = static_cast<float>(std::round(desired_rel.x));
-                child->dy = static_cast<float>(std::round(desired_rel.y));
-                const bool should_smooth_child = smooth_enabled_ && selected_index_ > 0;
-                if (should_smooth_child) {
-                    smooth_child_offsets(selected_child_index_, selected_index_);
-                } else {
-                    persist_changes();
-                }
-            }
-        } else {
-            // In Movement mode, clicks adjust the movement path for this frame.
-            // Compute current base rel positions
-            std::vector<SDL_FPoint> base = rel_positions_;
-            apply_frame_move_from_base(selected_index_, desired_rel, base);
-            rebuild_rel_positions();
-            const bool should_smooth = (mode_ == Mode::Movement) &&
-                                       smooth_enabled_ &&
-                                       selected_index_ > 0;
-            if (should_smooth) {
-                // Smooth on every adjustment, including when the adjusted point is the final one
-                // (then we smooth all the points before).
-                redistribute_frames_after_adjustment(selected_index_);
-            } else {
-                persist_changes();
-            }
-        }
-        return true;
-    }
-
-    if (mode_ == Mode::Children &&
-        e.type == SDL_KEYDOWN &&
-        (e.key.keysym.sym == SDLK_LEFT || e.key.keysym.sym == SDLK_RIGHT)) {
-        if (dd_child_select_ && dd_child_select_->focused()) {
-            return true;
-        }
-        auto child_textbox_editing = [&]() {
-            return (tb_child_dx_ && tb_child_dx_->is_editing()) ||
-                   (tb_child_dy_ && tb_child_dy_->is_editing()) ||
-                   (tb_child_deg_ && tb_child_deg_->is_editing());
-        };
-        if (child_textbox_editing()) {
-            return true;
-        }
-        if (auto* child = current_child_frame()) {
-            float delta = (e.key.keysym.mod & KMOD_SHIFT) ? 5.0f : 1.0f;
-            if (e.key.keysym.sym == SDLK_LEFT) {
-                delta = -delta;
-            }
-            child->degree += delta;
-            persist_changes();
-            return true;
-        }
-    }
-
-    // Swallow pointer click/motion events inside our panels to prevent world/editor input from seeing them
-    // but do NOT swallow mouse wheel so PanAndZoom can handle zoom/pan regardless of hover location.
-    if (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
-        SDL_Point sp;
-        if (e.type == SDL_MOUSEMOTION) { sp = SDL_Point{ e.motion.x, e.motion.y }; }
-        else { sp = SDL_Point{ e.button.x, e.button.y }; }
-        if (SDL_PointInRect(&sp, &directory_rect_) || SDL_PointInRect(&sp, &nav_rect_) || SDL_PointInRect(&sp, &toolbox_rect_)) {
-            return true;
-        }
-    }
-
-    // Do not change selected frame based on mouse wheel; leave wheel for zoom/pan
-
-    // Do not consume events outside our panels by default
-    return false;
-}
-
-void FrameEditorSession::render(SDL_Renderer* renderer) const {
-    if (!active_ || !renderer || !assets_ || !target_) return;
-    // If the asset was destroyed since the session began, skip rendering.
-    if (!assets_->contains_asset(target_)) return;
-
-    // Compute anchor
     const camera_grid& cam = assets_->getView();
-    SDL_Point anchor_world = animation_update::detail::bottom_middle_for(*target_, target_->pos);
-
-    // Draw path lines and points in world space
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    const SDL_Color path_col = DMStyles::AccentButton().bg;
-    SDL_SetRenderDrawColor(renderer, path_col.r, path_col.g, path_col.b, 205);
-    for (size_t i = 1; i < rel_positions_.size(); ++i) {
-        SDL_FPoint a = cam.map_to_screen_f(SDL_FPoint{ rel_positions_[i-1].x + anchor_world.x,
-                                                       rel_positions_[i-1].y + anchor_world.y });
-        SDL_FPoint b = cam.map_to_screen_f(SDL_FPoint{ rel_positions_[i].x + anchor_world.x,
-                                                       rel_positions_[i].y + anchor_world.y });
-        SDL_RenderDrawLine(renderer, static_cast<int>(std::lround(a.x)), static_cast<int>(std::lround(a.y)),
-                                      static_cast<int>(std::lround(b.x)), static_cast<int>(std::lround(b.y)));
-    }
-    // Points
-    for (size_t i = 0; i < rel_positions_.size(); ++i) {
-        SDL_FPoint p = cam.map_to_screen_f(SDL_FPoint{ rel_positions_[i].x + anchor_world.x,
-                                                       rel_positions_[i].y + anchor_world.y });
-        const bool is_current = static_cast<int>(i) == selected_index_;
-        const int r = is_current ? 6 : 4;
-        SDL_Color c = is_current ? DMStyles::AccentButton().hover_bg : devmode::utils::with_alpha(DMStyles::AccentButton().bg, 128);
-        SDL_Point cp = round_point(p);
-        SDL_Rect dot{ cp.x - r, cp.y - r, r * 2, r * 2 };
-        SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
-        SDL_RenderFillRect(renderer, &dot);
-        SDL_SetRenderDrawColor(renderer, DMStyles::Border().r, DMStyles::Border().g, DMStyles::Border().b, DMStyles::Border().a);
-        SDL_RenderDrawRect(renderer, &dot);
-    }
-
-    if (mode_ == Mode::Children && show_child_ && !child_assets_.empty() &&
-        selected_index_ < static_cast<int>(frames_.size())) {
-        const auto& frame = frames_[selected_index_];
-        const ChildPreviewContext preview_ctx = build_child_preview_context(assets_, renderer);
-        // Draw markers and names
-        for (std::size_t i = 0; i < child_assets_.size() && i < frame.children.size(); ++i) {
-            const auto& child = frame.children[i];
-            const float dx_world = target_->flipped ? -static_cast<float>(child.dx) : static_cast<float>(child.dx);
-            SDL_FPoint screen = cam.map_to_screen_f(SDL_FPoint{
-                dx_world + static_cast<float>(target_->pos.x),
-                static_cast<float>(child.dy) + static_cast<float>(target_->pos.y)
-            });
-            SDL_Point cp = round_point(screen);
-            const int marker_r = (static_cast<int>(i) == selected_child_index_) ? 6 : 4;
-            SDL_Rect marker{ cp.x - marker_r, cp.y - marker_r, marker_r * 2, marker_r * 2 };
-            SDL_Color base = (static_cast<int>(i) == selected_child_index_) ? DMStyles::AccentButton().bg : DMStyles::HeaderButton().bg;
-            Uint8 alpha = child.visible ? 220 : 90;
-            SDL_SetRenderDrawColor(renderer, base.r, base.g, base.b, alpha);
-            SDL_RenderFillRect(renderer, &marker);
-            SDL_SetRenderDrawColor(renderer, DMStyles::Border().r, DMStyles::Border().g, DMStyles::Border().b, 255);
-            SDL_RenderDrawRect(renderer, &marker);
-            render_label(renderer, child_assets_[i], marker.x + marker.w + 4, marker.y - 4);
-        }
-        // Overlay actual child textures at edited positions
-        const float doc_scale_factor = document_scale_factor();
-        float parent_scale = target_->smoothed_scale();
-        if (!std::isfinite(parent_scale) || parent_scale <= 0.0f) {
-            parent_scale = 1.0f;
-        }
-        const float scale_override_base = parent_scale * doc_scale_factor;
-        const std::size_t preview_count = std::min({ child_assets_.size(), frame.children.size(), child_preview_slots_.size() });
-        for (std::size_t i = 0; i < preview_count; ++i) {
-            const auto& child = frame.children[i];
-            if (!child.visible) continue;
-            const auto& slot = child_preview_slots_[i];
-            SDL_Texture* tex = slot.texture;
-            if (!tex) continue;
-            const int tw = slot.width;
-            const int th = slot.height;
-            if (tw <= 0 || th <= 0) continue;
-
-            // Match in-scene attachment anchoring: offsets are relative to the asset's world pos,
-            // mirroring dx when the parent is flipped (see AnimationRuntime::apply_child_frame_data).
-            const float dx_world = target_->flipped ? -static_cast<float>(child.dx) : static_cast<float>(child.dx);
-            SDL_FPoint child_world{
-                static_cast<float>(target_->pos.x) + dx_world,
-                static_cast<float>(target_->pos.y) + static_cast<float>(child.dy)
-            };
-
-            SDL_FRect base_rect = child_preview_rect(assets_, target_, child_world, tw, th, preview_ctx, scale_override_base);
-            if (base_rect.w <= 0.0f || base_rect.h <= 0.0f) continue;
-
-            const int target_w = std::max(1, static_cast<int>(std::lround(base_rect.w)));
-            const int target_h = std::max(1, static_cast<int>(std::lround(base_rect.h)));
-            const auto& scale_steps = (slot.info && !slot.info->scale_variants.empty())
-                ? slot.info->scale_variants
-                : render_pipeline::ScalingLogic::DefaultScaleSteps();
-            const float desired_scale = render_pipeline::ScalingLogic::ComputeScale(tw, th, target_w, target_h);
-            const auto selection = render_pipeline::ScalingLogic::Choose(desired_scale, scale_steps);
-
-            float variant_texture_scale = selection.stored_scale;
-            if (!std::isfinite(variant_texture_scale) || variant_texture_scale <= 0.0f) {
-                variant_texture_scale = 1.0f;
-            }
-            float remainder_scale = selection.remainder_scale;
-            if (!std::isfinite(remainder_scale) || remainder_scale <= 0.0f) {
-                remainder_scale = desired_scale;
-            }
-            const int variant_tw = std::max(1, static_cast<int>(std::lround(static_cast<double>(tw) * variant_texture_scale)));
-            const int variant_th = std::max(1, static_cast<int>(std::lround(static_cast<double>(th) * variant_texture_scale)));
-
-            const float scale_override_final = scale_override_base * remainder_scale;
-            SDL_FRect dst = child_preview_rect(assets_, target_, child_world, variant_tw, variant_th, preview_ctx, scale_override_final);
-            if (dst.w <= 0.0f || dst.h <= 0.0f) continue;
-            SDL_FPoint pivot{ dst.w * 0.5f, dst.h }; // bottom-middle pivot
-            // Apply rotation around bottom-middle if any
-            const bool parent_flipped = target_ && target_->flipped;
-            const double angle = static_cast<double>(mirrored_child_rotation(parent_flipped, child.degree));
-            SDL_RenderCopyExF(renderer, tex, nullptr, &dst, angle, &pivot,
-                              parent_flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE);
-        }
-    }
-
-    if (mode_ == Mode::HitGeometry) {
-        render_hit_geometry(renderer);
-    } else if (mode_ == Mode::AttackGeometry) {
-        render_attack_geometry(renderer);
-    }
-
-    // Panels
-    ensure_widgets();
-    rebuild_layout();
-    // Directory panel background
-    dm_draw::DrawBeveledRect(renderer, directory_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelHeader(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
-    if (btn_back_) btn_back_->render(renderer);
-    if (btn_movement_) btn_movement_->render(renderer);
-    if (btn_children_) btn_children_->render(renderer);
-    if (btn_attack_geometry_) btn_attack_geometry_->render(renderer);
-    if (btn_hit_geometry_) btn_hit_geometry_->render(renderer);
-
-    // Toolbox panel
-    if (mode_ == Mode::Movement && toolbox_rect_.w > 0 && toolbox_rect_.h > 0) {
-        dm_draw::DrawBeveledRect(renderer, toolbox_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
-        if (cb_smooth_) cb_smooth_->render(renderer);
-        if (smooth_enabled_ && cb_curve_) cb_curve_->render(renderer);
-        if (cb_show_anim_) cb_show_anim_->render(renderer);
-        if (tb_total_dx_) tb_total_dx_->render(renderer);
-        if (tb_total_dy_) tb_total_dy_->render(renderer);
-        if (btn_apply_all_movement_) btn_apply_all_movement_->render(renderer);
-    } else if (mode_ == Mode::Children && toolbox_rect_.w > 0 && toolbox_rect_.h > 0) {
-        dm_draw::DrawBeveledRect(renderer, toolbox_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
-        // Movement controls row (shared)
-        if (cb_smooth_) cb_smooth_->render(renderer);
-        if (smooth_enabled_ && cb_curve_) cb_curve_->render(renderer);
-        if (tb_total_dx_) tb_total_dx_->render(renderer);
-        if (tb_total_dy_) tb_total_dy_->render(renderer);
-        if (dd_child_select_) dd_child_select_->render(renderer);
-        if (cb_show_anim_) cb_show_anim_->render(renderer);
-        if (cb_show_child_) cb_show_child_->render(renderer);
-        if (tb_child_dx_) tb_child_dx_->render(renderer);
-        if (tb_child_dy_) tb_child_dy_->render(renderer);
-        if (tb_child_deg_) tb_child_deg_->render(renderer);
-        if (cb_child_visible_) cb_child_visible_->render(renderer);
-        if (cb_child_render_front_) cb_child_render_front_->render(renderer);
-        if (btn_apply_all_children_) btn_apply_all_children_->render(renderer);
-    } else if (mode_ == Mode::HitGeometry && toolbox_rect_.w > 0 && toolbox_rect_.h > 0) {
-        dm_draw::DrawBeveledRect(renderer, toolbox_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
-        if (dd_hitbox_type_) dd_hitbox_type_->render(renderer);
-        if (btn_hitbox_add_remove_) btn_hitbox_add_remove_->render(renderer);
-        if (btn_hitbox_copy_next_) btn_hitbox_copy_next_->render(renderer);
-        if (tb_hit_center_x_) tb_hit_center_x_->render(renderer);
-        if (tb_hit_center_y_) tb_hit_center_y_->render(renderer);
-        if (tb_hit_width_) tb_hit_width_->render(renderer);
-        if (tb_hit_height_) tb_hit_height_->render(renderer);
-        if (tb_hit_rotation_) tb_hit_rotation_->render(renderer);
-        if (btn_apply_all_hit_) btn_apply_all_hit_->render(renderer);
-    } else if (mode_ == Mode::AttackGeometry && toolbox_rect_.w > 0 && toolbox_rect_.h > 0) {
-        dm_draw::DrawBeveledRect(renderer, toolbox_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
-        if (dd_attack_type_) dd_attack_type_->render(renderer);
-        if (btn_attack_add_remove_) btn_attack_add_remove_->render(renderer);
-        if (btn_attack_copy_next_) btn_attack_copy_next_->render(renderer);
-        if (tb_attack_start_x_) tb_attack_start_x_->render(renderer);
-        if (tb_attack_start_y_) tb_attack_start_y_->render(renderer);
-        if (tb_attack_control_x_) tb_attack_control_x_->render(renderer);
-        if (tb_attack_control_y_) tb_attack_control_y_->render(renderer);
-        if (tb_attack_end_x_) tb_attack_end_x_->render(renderer);
-        if (tb_attack_end_y_) tb_attack_end_y_->render(renderer);
-        if (tb_attack_damage_) tb_attack_damage_->render(renderer);
-        if (btn_apply_all_attack_) btn_apply_all_attack_->render(renderer);
-    }
-
-    // Navigation panel
-    dm_draw::DrawBeveledRect(renderer, nav_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
-    if (dd_animation_select_) {
-        dd_animation_select_->render(renderer);
-    }
-    if (btn_prev_) btn_prev_->render(renderer);
-    if (btn_next_) btn_next_->render(renderer);
-
-    // Thumbnails
-    for (size_t i = 0; i < thumb_rects_.size() && i < thumb_indices_.size(); ++i) {
-        const SDL_Rect& r = thumb_rects_[i];
-        const int frame_index = thumb_indices_[i];
-        SDL_Color border = DMStyles::Border();
-        const bool is_current = frame_index == selected_index_;
-        if (is_current) {
-            border = DMStyles::AccentButton().border;
-        }
-        SDL_Texture* tex = nullptr;
-        if (preview_) {
-            tex = preview_->get_frame_texture(renderer, animation_id_, frame_index);
-        }
-        if (tex) {
-            int tw = 0, th = 0; SDL_QueryTexture(tex, nullptr, nullptr, &tw, &th);
-            if (tw > 0 && th > 0) {
-                const float sx = std::min(1.0f, static_cast<float>(r.w - 8) / static_cast<float>(tw));
-                const float sy = std::min(1.0f, static_cast<float>(r.h - 8) / static_cast<float>(th));
-                const float s = std::min(sx, sy);
-                int dw = std::max(1, static_cast<int>(std::round(tw * s)));
-                int dh = std::max(1, static_cast<int>(std::round(th * s)));
-                SDL_Rect dst{ r.x + (r.w - dw)/2, r.y + (r.h - dh)/2, dw, dh };
-                SDL_RenderCopy(renderer, tex, nullptr, &dst);
-            }
-        }
-        dm_draw::DrawRoundedOutline(renderer, r, DMStyles::CornerRadius(), 1, border);
-
-        const std::string index_text = std::to_string(frame_index);
-        SDL_Point label_size = measure_label_size(index_text);
-        if (label_size.x > 0 && label_size.y > 0) {
-            const int badge_padding = 3;
-            SDL_Rect badge{
-                r.x + r.w - label_size.x - badge_padding * 2 - 2,
-                r.y + r.h - label_size.y - badge_padding * 2 - 2,
-                label_size.x + badge_padding * 2,
-                label_size.y + badge_padding * 2
-            };
-            const int min_badge_x = r.x + 2;
-            const int min_badge_y = r.y + 2;
-            const int max_badge_x = std::max(min_badge_x, r.x + r.w - badge.w - 2);
-            const int max_badge_y = std::max(min_badge_y, r.y + r.h - badge.h - 2);
-            badge.x = std::clamp(badge.x, min_badge_x, max_badge_x);
-            badge.y = std::clamp(badge.y, min_badge_y, max_badge_y);
-            SDL_Color bg{0, 0, 0, 180};
-            SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, bg.a);
-            SDL_RenderFillRect(renderer, &badge);
-            SDL_Color outline = DMStyles::Border();
-            SDL_RenderDrawRect(renderer, &badge);
-            render_label(renderer, index_text, badge.x + badge_padding, badge.y + badge_padding);
-        }
-    }
-
-    if (scrollbar_visible_) {
-        SDL_Color track_col = devmode::utils::with_alpha(DMStyles::PanelHeader(), 180);
-        SDL_SetRenderDrawColor(renderer, track_col.r, track_col.g, track_col.b, track_col.a);
-        SDL_RenderFillRect(renderer, &scrollbar_track_);
-        SDL_Color thumb_col = DMStyles::AccentButton().bg;
-        SDL_SetRenderDrawColor(renderer, thumb_col.r, thumb_col.g, thumb_col.b, 220);
-        SDL_RenderFillRect(renderer, &scrollbar_thumb_);
-        SDL_SetRenderDrawColor(renderer, DMStyles::Border().r, DMStyles::Border().g, DMStyles::Border().b, 255);
-        SDL_RenderDrawRect(renderer, &scrollbar_thumb_);
-    }
-
-    DMDropdown::render_active_options(renderer);
+    SDL_FPoint top_left_screen = cam.map_to_screen_f(top_left_world);
+    rect.x = top_left_screen.x;
+    rect.y = top_left_screen.y;
+    return rect;
 }
 
-void FrameEditorSession::set_grid_overlay_enabled_transient(bool enabled) {
-    (void)enabled; // DevControls handles drawing; we rely on caller to toggle
-}
-
-void FrameEditorSession::set_snap_resolution(int r) {
-    snap_resolution_r_ = vibble::grid::clamp_resolution(std::max(0, r));
-    snap_resolution_override_ = true;
-}
-
-void FrameEditorSession::ensure_widgets() const {
-    const DMButtonStyle& header = DMStyles::HeaderButton();
-    const DMButtonStyle& tab_active = DMStyles::AccentButton();
-    const int bw = 96;
-    const int bh = DMButton::height();
-    if (!btn_back_) btn_back_ = std::make_unique<DMButton>(u8"\u2190 Back", &DMStyles::DeleteButton(), 96, bh);
-    if (!btn_movement_) btn_movement_ = std::make_unique<DMButton>("Movement", mode_ == Mode::Movement ? &tab_active : &header, bw, bh);
-    if (!btn_children_) btn_children_ = std::make_unique<DMButton>("Children", mode_ == Mode::Children ? &tab_active : &header, bw, bh);
-    if (!btn_attack_geometry_) btn_attack_geometry_ = std::make_unique<DMButton>("Attack Geometry", mode_ == Mode::AttackGeometry ? &tab_active : &header, bw, bh);
-    if (!btn_hit_geometry_) btn_hit_geometry_ = std::make_unique<DMButton>("Hit Geometry", mode_ == Mode::HitGeometry ? &tab_active : &header, bw, bh);
-    if (!btn_prev_) btn_prev_ = std::make_unique<DMButton>("<", &header, 40, 40);
-    if (!btn_next_) btn_next_ = std::make_unique<DMButton>(">", &header, 40, 40);
-    refresh_animation_dropdown();
-    if (!btn_apply_all_movement_) btn_apply_all_movement_ = std::make_unique<DMButton>("Apply To All Frames", &header, 180, DMButton::height());
-    if (!btn_apply_all_children_) btn_apply_all_children_ = std::make_unique<DMButton>("Apply To All Frames", &header, 180, DMButton::height());
-    if (!btn_apply_all_hit_) btn_apply_all_hit_ = std::make_unique<DMButton>("Apply To All Frames", &header, 180, DMButton::height());
-    if (!btn_apply_all_attack_) btn_apply_all_attack_ = std::make_unique<DMButton>("Apply To All Frames", &header, 180, DMButton::height());
-    if (!cb_smooth_) cb_smooth_ = std::make_unique<DMCheckbox>("Smooth", smooth_enabled_);
-    if (!cb_curve_) cb_curve_ = std::make_unique<DMCheckbox>("Curve", curve_enabled_);
-    const bool want_parent_label = (mode_ == Mode::Children);
-    if (!cb_show_anim_ || cb_show_anim_targets_parent_label_ != want_parent_label) {
-        const bool current = cb_show_anim_ ? cb_show_anim_->value() : show_animation_;
-        cb_show_anim_ = std::make_unique<DMCheckbox>(want_parent_label ? "Show Parent" : "Show Animation", current);
-        cb_show_anim_targets_parent_label_ = want_parent_label;
-    }
-    if (!cb_show_child_) cb_show_child_ = std::make_unique<DMCheckbox>("Show Child", show_child_);
-    if (!tb_total_dx_) tb_total_dx_ = std::make_unique<DMTextBox>("Total dX", "0");
-    if (!tb_total_dy_) tb_total_dy_ = std::make_unique<DMTextBox>("Total dY", "0");
-    if (!tb_child_dx_) tb_child_dx_ = std::make_unique<DMTextBox>("Child dX", "0");
-    if (!tb_child_dy_) tb_child_dy_ = std::make_unique<DMTextBox>("Child dY", "0");
-    if (!tb_child_deg_) tb_child_deg_ = std::make_unique<DMTextBox>("Rotation", "0");
-    if (!cb_child_visible_) cb_child_visible_ = std::make_unique<DMCheckbox>("Visible", true);
-    if (!cb_child_render_front_) cb_child_render_front_ = std::make_unique<DMCheckbox>("Render In Front", true);
-    if (!dd_child_select_ || child_dropdown_options_cache_ != child_assets_) {
-        child_dropdown_options_cache_ = child_assets_;
-        int dropdown_index = selected_child_index_;
-        if (child_assets_.empty()) {
-            dropdown_index = 0;
-        } else {
-            dropdown_index = std::clamp(dropdown_index, 0, static_cast<int>(child_assets_.size()) - 1);
-        }
-        dd_child_select_ = std::make_unique<DMDropdown>("Child", child_dropdown_options_cache_, dropdown_index);
-    }
-    if (hitbox_type_labels_.size() != kDamageTypeNames.size()) {
-        hitbox_type_labels_.clear();
-        for (const char* type : kDamageTypeNames) {
-            std::string label = type;
-            if (!label.empty()) {
-                label[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(label[0])));
-            }
-            hitbox_type_labels_.push_back(label);
-        }
-    }
-    if (!dd_hitbox_type_ && !hitbox_type_labels_.empty()) {
-        dd_hitbox_type_ = std::make_unique<DMDropdown>("Hit Box Type", hitbox_type_labels_, std::clamp(selected_hitbox_type_index_, 0, static_cast<int>(hitbox_type_labels_.size()) - 1));
-    }
-    if (!btn_hitbox_add_remove_) {
-        btn_hitbox_add_remove_ = std::make_unique<DMButton>("Add Hit Box", &DMStyles::AccentButton(), 150, DMButton::height());
-    }
-    if (!btn_hitbox_copy_next_) {
-        btn_hitbox_copy_next_ = std::make_unique<DMButton>("Copy To Next", &header, 150, DMButton::height());
-    }
-    if (!tb_hit_center_x_) tb_hit_center_x_ = std::make_unique<DMTextBox>("Center X", "0");
-    if (!tb_hit_center_y_) tb_hit_center_y_ = std::make_unique<DMTextBox>("Center Y", "0");
-    if (!tb_hit_width_) tb_hit_width_ = std::make_unique<DMTextBox>("Width", "0");
-    if (!tb_hit_height_) tb_hit_height_ = std::make_unique<DMTextBox>("Height", "0");
-    if (!tb_hit_rotation_) tb_hit_rotation_ = std::make_unique<DMTextBox>("Rotation", "0");
-    if (attack_type_labels_.size() != kDamageTypeNames.size()) {
-        attack_type_labels_.clear();
-        for (const char* type : kDamageTypeNames) {
-            std::string label = type;
-            if (!label.empty()) {
-                label[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(label[0])));
-            }
-            attack_type_labels_.push_back(label);
-        }
-    }
-    if (!dd_attack_type_ && !attack_type_labels_.empty()) {
-        dd_attack_type_ = std::make_unique<DMDropdown>("Attack Type", attack_type_labels_, std::clamp(selected_attack_type_index_, 0, static_cast<int>(attack_type_labels_.size()) - 1));
-    }
-    if (!btn_attack_add_remove_) {
-        btn_attack_add_remove_ = std::make_unique<DMButton>("Add Attack", &DMStyles::AccentButton(), 150, DMButton::height());
-    }
-    if (!btn_attack_copy_next_) {
-        btn_attack_copy_next_ = std::make_unique<DMButton>("Copy To Next", &header, 150, DMButton::height());
-    }
-    if (!tb_attack_start_x_) tb_attack_start_x_ = std::make_unique<DMTextBox>("Start X", "0");
-    if (!tb_attack_start_y_) tb_attack_start_y_ = std::make_unique<DMTextBox>("Start Y", "0");
-    if (!tb_attack_control_x_) tb_attack_control_x_ = std::make_unique<DMTextBox>("Control X", "0");
-    if (!tb_attack_control_y_) tb_attack_control_y_ = std::make_unique<DMTextBox>("Control Y", "0");
-    if (!tb_attack_end_x_) tb_attack_end_x_ = std::make_unique<DMTextBox>("End X", "0");
-    if (!tb_attack_end_y_) tb_attack_end_y_ = std::make_unique<DMTextBox>("End Y", "0");
-    if (!tb_attack_damage_) tb_attack_damage_ = std::make_unique<DMTextBox>("Damage", "0");
-    last_show_anim_value_ = show_animation_;
-    last_show_child_value_ = show_child_;
-    last_totals_dx_text_ = tb_total_dx_->value();
-    last_totals_dy_text_ = tb_total_dy_->value();
-    last_child_front_value_ = cb_child_render_front_ ? cb_child_render_front_->value() : true;
-}
-
-void FrameEditorSession::refresh_animation_dropdown() const {
-    if (!document_) {
-        dd_animation_select_.reset();
-        animation_dropdown_options_cache_.clear();
-        return;
-    }
-    const auto ids = document_->animation_ids();
-    std::vector<std::string> eligible;
-    eligible.reserve(ids.size());
-    for (const auto& id : ids) {
-        if (animation_supports_frame_editing(document_.get(), id)) {
-            eligible.push_back(id);
-        }
-    }
-    if (!animation_id_.empty() &&
-        std::find(eligible.begin(), eligible.end(), animation_id_) == eligible.end()) {
-        eligible.insert(eligible.begin(), animation_id_);
-    }
-    if (eligible.empty()) {
-        dd_animation_select_.reset();
-        animation_dropdown_options_cache_.clear();
-        return;
-    }
-    if (!dd_animation_select_ || eligible != animation_dropdown_options_cache_) {
-        animation_dropdown_options_cache_ = eligible;
-        int selected_idx = 0;
-        auto it = std::find(animation_dropdown_options_cache_.begin(),
-                            animation_dropdown_options_cache_.end(),
-                            animation_id_);
-        if (it != animation_dropdown_options_cache_.end()) {
-            selected_idx = static_cast<int>(std::distance(animation_dropdown_options_cache_.begin(), it));
-        }
-        dd_animation_select_ = std::make_unique<DMDropdown>("Animation", animation_dropdown_options_cache_, selected_idx);
-    }
-}
-
-void FrameEditorSession::rebuild_layout() const {
-    if (!assets_ || !target_) return;
-    const camera_grid& cam = assets_->getView();
-    const int screen_w = assets_->renderer() ? assets_->getView().get_camera_area().width() : 0; // not used for clamp heavily
-    (void)screen_w;
-    (void)cam; // anchor-based layout replaced by draggable screen-space positions
-    DirectoryPanelMetrics dir_metrics = build_directory_panel_metrics();
-    directory_rect_ = SDL_Rect{ dir_pos_.x, dir_pos_.y, dir_metrics.width, dir_metrics.height };
-    toolbox_widget_rects_.clear();
-    const int dir_padding = DMSpacing::small_gap();
-    const int button_gap = DMSpacing::small_gap();
-    auto button_width = [](const std::unique_ptr<DMButton>& btn) -> int {
-        if (!btn) return 0;
-        int w = btn->rect().w;
-        if (w <= 0) {
-            w = btn->preferred_width();
-        }
-        return w;
-    };
-    auto register_toolbox_widget = [&](const auto* widget) {
-        if (!widget) return;
-        const SDL_Rect& r = widget->rect();
-        if (r.w > 0 && r.h > 0) {
-            toolbox_widget_rects_.push_back(r);
-        }
-    };
-    int total_button_width = 0;
-    auto accumulate_width = [&](const std::unique_ptr<DMButton>& btn) {
-        int w = button_width(btn);
-        if (w <= 0) return;
-        if (total_button_width > 0) {
-            total_button_width += button_gap;
-        }
-        total_button_width += w;
-    };
-    accumulate_width(btn_back_);
-    accumulate_width(btn_movement_);
-    accumulate_width(btn_children_);
-    accumulate_width(btn_attack_geometry_);
-    accumulate_width(btn_hit_geometry_);
-    int y = directory_rect_.y + dir_metrics.top_padding;
-    int x = directory_rect_.x + dir_padding;
-    if (total_button_width > 0) {
-        const int centered_offset = (directory_rect_.w - total_button_width) / 2;
-        x = directory_rect_.x + std::max(dir_padding, centered_offset);
-    }
-    bool first_button = true;
-    auto place_button = [&](std::unique_ptr<DMButton>& btn, auto&& prepare) {
-        if (!btn) return;
-        int w = button_width(btn);
-        if (w <= 0) return;
-        if (!first_button) {
-            x += button_gap;
-        }
-        first_button = false;
-        prepare(btn.get());
-        btn->set_rect(SDL_Rect{ x, y, w, DMButton::height() });
-        x += w;
-    };
-    place_button(btn_back_, [](DMButton*) {});
-    place_button(btn_movement_, [&](DMButton* btn) {
-        btn->set_style(mode_ == Mode::Movement ? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
-    });
-    place_button(btn_children_, [&](DMButton* btn) {
-        btn->set_style(mode_ == Mode::Children ? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
-    });
-    place_button(btn_attack_geometry_, [&](DMButton* btn) {
-        btn->set_style(mode_ == Mode::AttackGeometry ? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
-    });
-    place_button(btn_hit_geometry_, [&](DMButton* btn) {
-        btn->set_style(mode_ == Mode::HitGeometry ? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
-    });
-
-    // Toolbox panel placement
-    if (mode_ == Mode::Movement) {
-        MovementToolboxMetrics metrics = build_movement_toolbox_metrics();
-        if (metrics.width <= 0 || metrics.height <= 0) {
-            toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, 0, 0 };
-            toolbox_drag_rect_ = SDL_Rect{ 0, 0, 0, 0 };
-        } else {
-            toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, metrics.width, metrics.height };
-            const int handle_height = std::max(0, metrics.drag_handle_height);
-            const int drag_area_height = std::min(toolbox_rect_.h, handle_height + metrics.padding);
-            toolbox_drag_rect_ = SDL_Rect{ toolbox_rect_.x, toolbox_rect_.y, toolbox_rect_.w, drag_area_height };
-            int tx = toolbox_rect_.x + metrics.padding;
-            const int row_top = toolbox_rect_.y + metrics.padding + handle_height;
-            bool first = true;
-            auto reserve = [&](int w) -> int {
-                if (w <= 0) return tx;
-                if (!first) {
-                    tx += metrics.gap;
-                }
-                first = false;
-                int x = tx;
-                tx += w;
-                return x;
-            };
-            if (cb_smooth_) {
-                const int w = std::max(metrics.smooth_checkbox_width, DMCheckbox::height());
-                const int h = DMCheckbox::height();
-                const int y = row_top + (metrics.row_height - h) / 2;
-                const int x = reserve(w);
-                cb_smooth_->set_rect(SDL_Rect{ x, y, w, h });
-                register_toolbox_widget(cb_smooth_.get());
-            }
-            if (smooth_enabled_ && cb_curve_ && cb_curve_->handle_event(e)) {
-                bool current = cb_curve_->value();
-                if (current != curve_enabled_) {
-                    curve_enabled_ = current;
-                }
-                return true;
-            }
-
-            if (cb_show_anim_) {
-                const int w = std::max(metrics.show_checkbox_width, DMCheckbox::height());
-                const int h = DMCheckbox::height();
-                const int y = row_top + (metrics.row_height - h) / 2;
-                const int x = reserve(w);
-                cb_show_anim_->set_rect(SDL_Rect{ x, y, w, h });
-                register_toolbox_widget(cb_show_anim_.get());
-            }
-            if (tb_total_dx_) {
-                const int field_height = metrics.total_dx_height > 0 ? metrics.total_dx_height
-                                                                     : tb_total_dx_->height_for_width(metrics.totals_width);
-                const int y = row_top + (metrics.row_height - field_height) / 2;
-                const int x = reserve(metrics.totals_width);
-                tb_total_dx_->set_rect(SDL_Rect{ x, y, metrics.totals_width, field_height });
-                register_toolbox_widget(tb_total_dx_.get());
-            }
-            if (tb_total_dy_) {
-                const int field_height = metrics.total_dy_height > 0 ? metrics.total_dy_height
-                                                                     : tb_total_dy_->height_for_width(metrics.totals_width);
-                const int y = row_top + (metrics.row_height - field_height) / 2;
-                const int x = reserve(metrics.totals_width);
-                tb_total_dy_->set_rect(SDL_Rect{ x, y, metrics.totals_width, field_height });
-                register_toolbox_widget(tb_total_dy_.get());
-            }
-            // Bottom-row: Apply-to-all button spans full width
-            if (btn_apply_all_movement_) {
-                const int inner_w = std::max(0, toolbox_rect_.w - metrics.padding * 2);
-                const int y = row_top + metrics.row_height + metrics.gap;
-                btn_apply_all_movement_->set_rect(SDL_Rect{ toolbox_rect_.x + metrics.padding, y, inner_w, DMButton::height() });
-                register_toolbox_widget(btn_apply_all_movement_.get());
-            }
-        }
-    } else if (mode_ == Mode::Children) {
-        ChildrenToolboxMetrics metrics = build_children_toolbox_metrics();
-        if (metrics.width <= 0 || metrics.height <= 0) {
-            toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, 0, 0 };
-            toolbox_drag_rect_ = SDL_Rect{ 0, 0, 0, 0 };
-        } else {
-            toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, metrics.width, metrics.height };
-            const int handle_height = std::max(0, metrics.drag_handle_height);
-            const int drag_area_height = std::min(toolbox_rect_.h, handle_height + metrics.padding);
-            toolbox_drag_rect_ = SDL_Rect{ toolbox_rect_.x, toolbox_rect_.y, toolbox_rect_.w, drag_area_height };
-            const int content_width = std::max(0, toolbox_rect_.w - metrics.padding * 2);
-            int row_cursor = toolbox_rect_.y + metrics.padding + handle_height;
-            bool have_previous_row = false;
-            auto allocate_row = [&](int row_height) -> int {
-                if (row_height <= 0) return -1;
-                if (have_previous_row) {
-                    row_cursor += metrics.gap;
-                }
-                have_previous_row = true;
-                int top = row_cursor;
-                row_cursor += row_height;
-                return top;
-            };
-
-            const int row_left = toolbox_rect_.x + metrics.padding;
-
-            if (dd_child_select_ && metrics.dropdown_row_height > 0) {
-                const int row_top = allocate_row(metrics.dropdown_row_height);
-                if (row_top >= 0) {
-                    dd_child_select_->set_rect(SDL_Rect{
-                        row_left,
-                        row_top,
-                        content_width,
-                        metrics.dropdown_row_height
-                    });
-                    register_toolbox_widget(dd_child_select_.get());
-                }
-            }
-
-            // Movement controls row (Smooth/Curve + Totals)
-            if (metrics.movement_row_height > 0 && (cb_smooth_ || tb_total_dx_ || tb_total_dy_)) {
-                const int row_top = allocate_row(metrics.movement_row_height);
-                if (row_top >= 0) {
-                    int tx = row_left;
-                    auto reserve = [&](int w) -> int {
-                        if (w <= 0) return tx;
-                        int x = tx; tx += w + metrics.gap; return x;
-                    };
-                    if (cb_smooth_) {
-                        const int w = std::max(metrics.smooth_checkbox_width, DMCheckbox::height());
-                        const int h = DMCheckbox::height();
-                        const int y = row_top + (metrics.movement_row_height - h) / 2;
-                        const int x = reserve(w);
-                        cb_smooth_->set_rect(SDL_Rect{ x, y, w, h });
-                        register_toolbox_widget(cb_smooth_.get());
-                    }
-                    if (smooth_enabled_ && cb_curve_ && metrics.curve_checkbox_width > 0) {
-                        const int w = std::max(metrics.curve_checkbox_width, DMCheckbox::height());
-                        const int h = DMCheckbox::height();
-                        const int y = row_top + (metrics.movement_row_height - h) / 2;
-                        const int x = reserve(w);
-                        cb_curve_->set_rect(SDL_Rect{ x, y, w, h });
-                        register_toolbox_widget(cb_curve_.get());
-                    }
-                    if (tb_total_dx_) {
-                        const int field_height = metrics.total_dx_height > 0 ? metrics.total_dx_height : tb_total_dx_->height_for_width(metrics.totals_width);
-                        const int y = row_top + (metrics.movement_row_height - field_height) / 2;
-                        const int x = reserve(metrics.totals_width);
-                        tb_total_dx_->set_rect(SDL_Rect{ x, y, metrics.totals_width, field_height });
-                        register_toolbox_widget(tb_total_dx_.get());
-                    }
-                    if (tb_total_dy_) {
-                        const int field_height = metrics.total_dy_height > 0 ? metrics.total_dy_height : tb_total_dy_->height_for_width(metrics.totals_width);
-                        const int y = row_top + (metrics.movement_row_height - field_height) / 2;
-                        const int x = reserve(metrics.totals_width);
-                        tb_total_dy_->set_rect(SDL_Rect{ x, y, metrics.totals_width, field_height });
-                        register_toolbox_widget(tb_total_dy_.get());
-                    }
-                }
-            }
-
-            if (metrics.toggle_row_height > 0 && (cb_show_anim_ || cb_show_child_)) {
-                const int row_top = allocate_row(metrics.toggle_row_height);
-                if (row_top >= 0) {
-                    int tx = row_left;
-                    auto place_checkbox = [&](DMCheckbox* cb, int width) {
-                        if (!cb || width <= 0) return;
-                        const int h = DMCheckbox::height();
-                        const int y = row_top + (metrics.toggle_row_height - h) / 2;
-                        cb->set_rect(SDL_Rect{ tx, y, width, h });
-                        register_toolbox_widget(cb);
-                        tx += width + metrics.gap;
-                    };
-                    place_checkbox(cb_show_anim_.get(), metrics.show_parent_checkbox_width);
-                    place_checkbox(cb_show_child_.get(), metrics.show_child_checkbox_width);
-                }
-            }
-
-            if (metrics.form_row_height > 0 &&
-                (tb_child_dx_ || tb_child_dy_ || tb_child_deg_ || cb_child_visible_ || cb_child_render_front_)) {
-                const int row_top = allocate_row(metrics.form_row_height);
-                if (row_top >= 0) {
-                    int tx = row_left;
-                    auto reserve = [&](int w) -> int {
-                        int x = tx;
-                        tx += w + metrics.gap;
-                        return x;
-                    };
-                    auto place_textbox = [&](DMTextBox* tb, int height) {
-                        if (!tb) return;
-                        const int w = metrics.textbox_width;
-                        const int h = height > 0 ? height : tb->height_for_width(w);
-                        const int y = row_top + (metrics.form_row_height - h) / 2;
-                        const int x = reserve(w);
-                        tb->set_rect(SDL_Rect{ x, y, w, h });
-                        register_toolbox_widget(tb);
-                    };
-                    place_textbox(tb_child_dx_.get(), metrics.child_dx_height);
-                    place_textbox(tb_child_dy_.get(), metrics.child_dy_height);
-                    place_textbox(tb_child_deg_.get(), metrics.child_rotation_height);
-                    auto place_checkbox = [&](DMCheckbox* cb, int width) {
-                        if (!cb || width <= 0) return;
-                        const int w = std::max(width, DMCheckbox::height());
-                        const int h = DMCheckbox::height();
-                        const int y = row_top + (metrics.form_row_height - h) / 2;
-                        const int x = reserve(w);
-                        cb->set_rect(SDL_Rect{ x, y, w, h });
-                        register_toolbox_widget(cb);
-                    };
-                    place_checkbox(cb_child_visible_.get(), metrics.child_visible_checkbox_width);
-                    place_checkbox(cb_child_render_front_.get(), metrics.child_render_checkbox_width);
-                }
-            }
-
-            // Apply-to-all button at bottom
-            if (btn_apply_all_children_) {
-                const int apply_top = allocate_row(DMButton::height());
-                if (apply_top >= 0) {
-                    btn_apply_all_children_->set_rect(SDL_Rect{ row_left, apply_top, content_width, DMButton::height() });
-                    register_toolbox_widget(btn_apply_all_children_.get());
-                }
-            }
-        }
-    } else if (mode_ == Mode::HitGeometry) {
-        const int padding = DMSpacing::small_gap();
-        const int gap = DMSpacing::small_gap();
-        const int width = 360;
-        const int handle_height = DMSpacing::small_gap();
-        int content_y = padding + handle_height;
-        const int inner_width = width - padding * 2;
-        auto place_row = [&](int height) -> SDL_Rect {
-            SDL_Rect r{ toolbox_pos_.x + padding, toolbox_pos_.y + content_y, inner_width, height };
-            content_y += height + gap;
-            return r;
-        };
-        if (dd_hitbox_type_) {
-            const int h = DMDropdown::height();
-            dd_hitbox_type_->set_rect(place_row(h));
-            register_toolbox_widget(dd_hitbox_type_.get());
-        }
-        if (btn_hitbox_add_remove_ || btn_hitbox_copy_next_) {
-            const int row_h = DMButton::height();
-            SDL_Rect row = place_row(row_h);
-            const int button_width = (row.w - gap) / 2;
-            if (btn_hitbox_add_remove_) {
-                btn_hitbox_add_remove_->set_rect(SDL_Rect{ row.x, row.y, button_width, row_h });
-                register_toolbox_widget(btn_hitbox_add_remove_.get());
-            }
-            if (btn_hitbox_copy_next_) {
-                btn_hitbox_copy_next_->set_rect(SDL_Rect{ row.x + button_width + gap, row.y, button_width, row_h });
-                register_toolbox_widget(btn_hitbox_copy_next_.get());
-            }
-        }
-        auto place_pair = [&](DMTextBox* left, DMTextBox* right) {
-            if (!left && !right) return;
-            const int col_width = (inner_width - gap) / 2;
-            const int left_h = left ? left->height_for_width(col_width) : DMTextBox::height();
-            const int right_h = right ? right->height_for_width(col_width) : DMTextBox::height();
-            const int row_h = std::max(left_h, right_h);
-            SDL_Rect row = place_row(row_h);
-            if (left) {
-                left->set_rect(SDL_Rect{ row.x, row.y, col_width, row_h });
-                register_toolbox_widget(left);
-            }
-            if (right) {
-                right->set_rect(SDL_Rect{ row.x + col_width + gap, row.y, col_width, row_h });
-                register_toolbox_widget(right);
-            }
-        };
-        place_pair(tb_hit_center_x_.get(), tb_hit_center_y_.get());
-        place_pair(tb_hit_width_.get(), tb_hit_height_.get());
-        if (tb_hit_rotation_) {
-            const int rot_height = tb_hit_rotation_->height_for_width(inner_width);
-            tb_hit_rotation_->set_rect(place_row(rot_height));
-            register_toolbox_widget(tb_hit_rotation_.get());
-        }
-        if (btn_apply_all_hit_) {
-            btn_apply_all_hit_->set_rect(place_row(DMButton::height()));
-            register_toolbox_widget(btn_apply_all_hit_.get());
-        }
-        int total_height = content_y > padding ? content_y - gap + padding : padding * 2;
-        toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, width, total_height };
-        toolbox_drag_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, width, std::min(total_height, handle_height + padding) };
-    } else if (mode_ == Mode::AttackGeometry) {
-        const int padding = DMSpacing::small_gap();
-        const int gap = DMSpacing::small_gap();
-        const int width = 360;
-        const int handle_height = DMSpacing::small_gap();
-        int content_y = padding + handle_height;
-        const int inner_width = width - padding * 2;
-        auto place_row = [&](int height) -> SDL_Rect {
-            SDL_Rect r{ toolbox_pos_.x + padding, toolbox_pos_.y + content_y, inner_width, height };
-            content_y += height + gap;
-            return r;
-        };
-        if (dd_attack_type_) {
-            const int h = DMDropdown::height();
-            dd_attack_type_->set_rect(place_row(h));
-            register_toolbox_widget(dd_attack_type_.get());
-        }
-        if (btn_attack_add_remove_ || btn_attack_copy_next_) {
-            const int row_h = DMButton::height();
-            SDL_Rect row = place_row(row_h);
-            const int button_width = (row.w - gap) / 2;
-            if (btn_attack_add_remove_) {
-                btn_attack_add_remove_->set_rect(SDL_Rect{ row.x, row.y, button_width, row_h });
-                register_toolbox_widget(btn_attack_add_remove_.get());
-            }
-            if (btn_attack_copy_next_) {
-                btn_attack_copy_next_->set_rect(SDL_Rect{ row.x + button_width + gap, row.y, button_width, row_h });
-                register_toolbox_widget(btn_attack_copy_next_.get());
-            }
-        }
-        auto place_pair = [&](DMTextBox* left, DMTextBox* right) {
-            if (!left && !right) return;
-            const int col_width = (inner_width - gap) / 2;
-            const int left_h = left ? left->height_for_width(col_width) : DMTextBox::height();
-            const int right_h = right ? right->height_for_width(col_width) : DMTextBox::height();
-            const int row_h = std::max(left_h, right_h);
-            SDL_Rect row = place_row(row_h);
-            if (left) {
-                left->set_rect(SDL_Rect{ row.x, row.y, col_width, row_h });
-                register_toolbox_widget(left);
-            }
-            if (right) {
-                right->set_rect(SDL_Rect{ row.x + col_width + gap, row.y, col_width, row_h });
-                register_toolbox_widget(right);
-            }
-        };
-        place_pair(tb_attack_start_x_.get(), tb_attack_start_y_.get());
-        place_pair(tb_attack_control_x_.get(), tb_attack_control_y_.get());
-        place_pair(tb_attack_end_x_.get(), tb_attack_end_y_.get());
-        if (tb_attack_damage_) {
-            const int dmg_height = tb_attack_damage_->height_for_width(inner_width);
-            tb_attack_damage_->set_rect(place_row(dmg_height));
-            register_toolbox_widget(tb_attack_damage_.get());
-        }
-        if (btn_apply_all_attack_) {
-            btn_apply_all_attack_->set_rect(place_row(DMButton::height()));
-            register_toolbox_widget(btn_apply_all_attack_.get());
-        }
-        int total_height = content_y > padding ? content_y - gap + padding : padding * 2;
-        toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, width, total_height };
-        toolbox_drag_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, width, std::min(total_height, handle_height + padding) };
-    } else {
-        toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, 0, 0 };
-        toolbox_drag_rect_ = SDL_Rect{ 0, 0, 0, 0 };
-    }
-
-    // Navigation panel under tool strip
-    const int nav_w = 560;
-    const int title_h = nav_header_height_px(dd_animation_select_ != nullptr);
-    const int nav_vertical_padding = DMSpacing::small_gap() * 2;
-    const int nav_drag_handle_height = DMSpacing::small_gap() * 2;
-    const int nav_h = title_h + nav_vertical_padding + kNavPreviewHeight + kNavSliderGap + nav_drag_handle_height;
-    nav_rect_ = SDL_Rect{ nav_pos_.x, nav_pos_.y, nav_w, nav_h };
-    nav_drag_rect_ = SDL_Rect{ nav_rect_.x, nav_rect_.y, nav_rect_.w, std::min(nav_rect_.h, nav_drag_handle_height) };
-
-    const int thumb_h = std::max(1, nav_rect_.h - nav_drag_handle_height - nav_vertical_padding - title_h - kNavSliderGap);
-    const int thumb_w = thumb_h;
-    const int content_top = nav_rect_.y + nav_drag_handle_height + DMSpacing::small_gap();
-    const int thumb_top = content_top + title_h;
-    const int btn_size = thumb_h;
-    if (btn_prev_) {
-        btn_prev_->set_rect(SDL_Rect{ nav_rect_.x + DMSpacing::small_gap(), thumb_top, btn_size, btn_size });
-    }
-    if (btn_next_) {
-        btn_next_->set_rect(SDL_Rect{ nav_rect_.x + nav_rect_.w - DMSpacing::small_gap() - btn_size, thumb_top, btn_size, btn_size });
-    }
-
-    const int spacing = kNavSpacing;
-    const int viewport_left = (btn_prev_ ? btn_prev_->rect().x + btn_prev_->rect().w + spacing : nav_rect_.x + spacing);
-    const int viewport_right = (btn_next_ ? btn_next_->rect().x - spacing : nav_rect_.x + nav_rect_.w - spacing);
-    if (dd_animation_select_) {
-        const int dropdown_h = DMDropdown::height();
-        const int dropdown_w = std::max(120, viewport_right - viewport_left);
-        const int dropdown_y = content_top;
-        dd_animation_select_->set_rect(SDL_Rect{
-            viewport_left,
-            dropdown_y,
-            std::max(0, dropdown_w),
-            dropdown_h
-        });
-    }
-    thumb_viewport_width_ = std::max(0, viewport_right - viewport_left);
-    const int per = thumb_w + spacing;
-    const int count = static_cast<int>(frames_.size());
-    thumb_content_width_ = (per > 0 && count > 0) ? std::max(0, count * per - spacing) : 0;
-    clamp_scroll_offset();
-
-    thumb_rects_.clear();
-    thumb_indices_.clear();
-    const int viewport_right_px = viewport_left + thumb_viewport_width_;
-    int current_x = viewport_left - scroll_offset_;
-    for (int idx = 0; idx < count; ++idx) {
-        SDL_Rect r{ current_x, thumb_top, thumb_w, thumb_h };
-        if (thumb_viewport_width_ <= 0 ||
-            (r.x + r.w >= viewport_left && r.x <= viewport_right_px)) {
-            thumb_rects_.push_back(r);
-            thumb_indices_.push_back(idx);
-        }
-        current_x += per;
-    }
-
-    const int scrollbar_height = 8;
-    scrollbar_visible_ = thumb_content_width_ > thumb_viewport_width_ && thumb_viewport_width_ > 0;
-    if (scrollbar_visible_) {
-        scrollbar_track_ = SDL_Rect{
-            viewport_left,
-            nav_rect_.y + nav_rect_.h - scrollbar_height - spacing,
-            thumb_viewport_width_,
-            scrollbar_height
-        };
-        const float viewport_ratio = thumb_content_width_ > 0
-            ? static_cast<float>(thumb_viewport_width_) / static_cast<float>(thumb_content_width_)
-            : 1.0f;
-        int thumb_len = scrollbar_track_.w > 0
-            ? std::max(20, static_cast<int>(std::round(static_cast<float>(scrollbar_track_.w) * viewport_ratio)))
-            : scrollbar_track_.w;
-        thumb_len = std::min(thumb_len, scrollbar_track_.w);
-        const int max_scroll = max_scroll_offset();
-        int thumb_x = scrollbar_track_.x;
-        if (max_scroll > 0 && scrollbar_track_.w > thumb_len) {
-            const float scroll_ratio = static_cast<float>(scroll_offset_) / static_cast<float>(max_scroll);
-            thumb_x += static_cast<int>(std::round(scroll_ratio * static_cast<float>(scrollbar_track_.w - thumb_len)));
-        }
-        scrollbar_thumb_ = SDL_Rect{ thumb_x, scrollbar_track_.y, thumb_len, scrollbar_track_.h };
-    } else {
-        scrollbar_track_ = SDL_Rect{0, 0, 0, 0};
-        scrollbar_thumb_ = SDL_Rect{0, 0, 0, 0};
-        scroll_offset_ = 0;
-    }
-}
-
-FrameEditorSession::DirectoryPanelMetrics FrameEditorSession::build_directory_panel_metrics() const {
-    DirectoryPanelMetrics metrics;
-    const int padding = DMSpacing::small_gap();
-    const int drag_padding = DMSpacing::small_gap();
-    const int vertical_padding = DMSpacing::small_gap();
-    const int button_gap = DMSpacing::small_gap();
-    metrics.top_padding = padding + drag_padding + vertical_padding;
-    const int bottom_padding = padding + vertical_padding;
-    metrics.height = metrics.top_padding + DMButton::height() + bottom_padding;
-
-    int row_width = 0;
-    auto append_button = [&](const std::unique_ptr<DMButton>& btn) {
-        if (!btn) return;
-        int w = std::max(btn->rect().w, btn->preferred_width());
-        if (w <= 0) return;
-        if (row_width > 0) {
-            row_width += button_gap;
-        }
-        row_width += w;
-    };
-
-    append_button(btn_back_);
-    append_button(btn_movement_);
-    append_button(btn_children_);
-    append_button(btn_attack_geometry_);
-    append_button(btn_hit_geometry_);
-
-    const int content_width = row_width > 0 ? row_width : 0;
-    metrics.width = std::max(kDirectoryPanelMinWidth, content_width + padding * 2);
-    return metrics;
+float FrameEditorSession::mirrored_child_rotation(bool parent_is_flipped, float degree) const {
+    return ::mirrored_child_rotation(parent_is_flipped, degree);
 }
 
 
-FrameEditorSession::MovementToolboxMetrics FrameEditorSession::build_movement_toolbox_metrics() const {
-    MovementToolboxMetrics metrics;
-    metrics.padding = DMSpacing::small_gap();
-    metrics.gap = DMSpacing::small_gap();
-    metrics.drag_handle_height = DMSpacing::small_gap();
-    metrics.totals_width = kMovementTotalsFieldWidth;
-    metrics.smooth_checkbox_width = cb_smooth_ ? std::max(kSmoothCheckboxMinWidth, cb_smooth_->preferred_width()) : 0;
-    const bool curve_visible = smooth_enabled_ && cb_curve_;
-    metrics.curve_checkbox_width = curve_visible ? std::max(kCurveCheckboxMinWidth, cb_curve_->preferred_width()) : 0;
-    metrics.show_checkbox_width = cb_show_anim_ ? std::max(kShowAnimCheckboxMinWidth, cb_show_anim_->preferred_width()) : 0;
-    metrics.total_dx_height = tb_total_dx_ ? tb_total_dx_->height_for_width(metrics.totals_width) : 0;
-    metrics.total_dy_height = tb_total_dy_ ? tb_total_dy_->height_for_width(metrics.totals_width) : 0;
-    int max_row_height = 0;
-    if (cb_smooth_) max_row_height = std::max(max_row_height, DMCheckbox::height());
-    if (curve_visible) max_row_height = std::max(max_row_height, DMCheckbox::height());
-    if (cb_show_anim_) max_row_height = std::max(max_row_height, DMCheckbox::height());
-    if (tb_total_dx_) max_row_height = std::max(max_row_height, metrics.total_dx_height);
-    if (tb_total_dy_) max_row_height = std::max(max_row_height, metrics.total_dy_height);
-    metrics.row_height = max_row_height;
 
-    int row_width = 0;
-    auto append = [&](int w) {
-        if (w <= 0) return;
-        if (row_width > 0) {
-            row_width += metrics.gap;
-        }
-        row_width += w;
-    };
-    if (cb_smooth_ && metrics.smooth_checkbox_width > 0) append(metrics.smooth_checkbox_width);
-    if (curve_visible && metrics.curve_checkbox_width > 0) append(metrics.curve_checkbox_width);
-    if (cb_show_anim_ && metrics.show_checkbox_width > 0) append(metrics.show_checkboxWidth);
-    if (tb_total_dx_) append(metrics.totals_width);
-    if (tb_total_dy_) append(metrics.totals_width);
-    if (row_width == 0) {
-        metrics.row_height = 0;
-        return metrics;
-    }
-    metrics.width = row_width + metrics.padding * 2;
-    // Include bottom row for the Apply-to-all button
-    metrics.height = metrics.drag_handle_height + metrics.row_height + metrics.gap + DMButton::height() + metrics.padding * 2;
-    return metrics;
-}
-
-FrameEditorSession::ChildrenToolboxMetrics FrameEditorSession::build_children_toolbox_metrics() const {
-    ChildrenToolboxMetrics metrics;
-    metrics.padding = DMSpacing::small_gap();
-    metrics.gap = DMSpacing::small_gap();
-    metrics.drag_handle_height = DMSpacing::small_gap();
-    metrics.textbox_width = kChildrenFieldWidth;
-    // Movement controls row (Smooth/Curve + Totals) mirrors movement metrics except show_anim checkbox
-    metrics.totals_width = kMovementTotalsFieldWidth;
-    metrics.smooth_checkbox_width = cb_smooth_ ? std::max(kSmoothCheckboxMinWidth, cb_smooth_->preferred_width()) : 0;
-    const bool curve_visible = smooth_enabled_ && cb_curve_;
-    metrics.curve_checkbox_width = curve_visible ? std::max(kCurveCheckboxMinWidth, cb_curve_->preferred_width()) : 0;
-    metrics.total_dx_height = tb_total_dx_ ? tb_total_dx_->height_for_width(metrics.totals_width) : 0;
-    metrics.total_dy_height = tb_total_dy_ ? tb_total_dy_->height_for_width(metrics.totals_width) : 0;
-    int movement_row_height = 0;
-    if (cb_smooth_) movement_row_height = std::max(movement_row_height, DMCheckbox::height());
-    if (curve_visible) movement_row_height = std::max(movement_row_height, DMCheckbox::height());
-    if (tb_total_dx_) movement_row_height = std::max(movement_row_height, metrics.total_dx_height);
-    if (tb_total_dy_) movement_row_height = std::max(movement_row_height, metrics.total_dy_height);
-    metrics.movement_row_height = movement_row_height;
-    metrics.child_dx_height = tb_child_dx_ ? tb_child_dx_->height_for_width(metrics.textbox_width) : 0;
-    metrics.child_dy_height = tb_child_dy_ ? tb_child_dy_->height_for_width(metrics.textbox_width) : 0;
-    metrics.child_rotation_height = tb_child_deg_ ? tb_child_deg_->height_for_width(metrics.textbox_width) : 0;
-    const int max_textbox_height = std::max(
-        metrics.child_dx_height,
-        std::max(metrics.child_dy_height, metrics.child_rotation_height));
-    const int checkbox_height = DMCheckbox::height();
-    metrics.child_visible_checkbox_width = cb_child_visible_
-                                               ? std::max(kChildVisibilityCheckboxMinWidth, cb_child_visible_->preferred_width())
-                                               : 0;
-    metrics.child_render_checkbox_width = cb_child_render_front_
-                                              ? std::max(kChildVisibilityCheckboxMinWidth, cb_child_render_front_->preferred_width())
-                                              : 0;
-    metrics.show_parent_checkbox_width = cb_show_anim_
-                                             ? std::max(kShowAnimCheckboxMinWidth, cb_show_anim_->preferred_width())
-                                             : 0;
-    metrics.show_child_checkbox_width = cb_show_child_
-                                            ? std::max(kShowChildCheckboxMinWidth, cb_show_child_->preferred_width())
-                                            : 0;
-    int form_content_height = max_textbox_height;
-    if (cb_child_visible_) {
-        form_content_height = std::max(form_content_height, checkbox_height);
-    }
-    if (cb_child_render_front_) {
-        form_content_height = std::max(form_content_height, checkbox_height);
-    }
-    metrics.form_row_height = form_content_height > 0 ? form_content_height : checkbox_height;
-
-    int dropdown_row_width = dd_child_select_
-        ? std::max(kChildDropdownMinWidth, dd_child_select_->rect().w)
-        : 0;
-
-    int toggle_row_width = 0;
-    auto append_toggle = [&](int w) {
-        if (w <= 0) return;
-        if (toggle_row_width > 0) toggle_row_width += metrics.gap;
-        toggle_row_width += w;
-    };
-    append_toggle(metrics.show_parent_checkbox_width);
-    append_toggle(metrics.show_child_checkbox_width);
-
-    int form_row_width = 0;
-    auto append_form = [&](int w) {
-        if (w <= 0) return;
-        if (form_row_width > 0) form_row_width += metrics.gap;
-        form_row_width += w;
-    };
-    // Movement row width
-    int movement_row_width = 0;
-    auto append_movement = [&](int w) {
-        if (w <= 0) return;
-        if (movement_row_width > 0) movement_row_width += metrics.gap;
-        movement_row_width += w;
-    };
-    if (cb_smooth_ && metrics.smooth_checkbox_width > 0) append_movement(metrics.smooth_checkbox_width);
-    if (curve_visible && metrics.curve_checkbox_width > 0) append_movement(metrics.curve_checkboxWidth);
-    if (tb_total_dx_) append_movement(metrics.totals_width);
-    if (tb_total_dy_) append_movement(metrics.totals_width);
-
-    if (tb_child_dx_) append_form(metrics.textbox_width);
-    if (tb_child_dy_) append_form(metrics.textbox_width);
-    if (tb_child_deg_) append_form(metrics.textbox_width);
-    if (cb_child_visible_ && metrics.child_visible_checkbox_width > 0) append_form(metrics.child_visible_checkbox_width);
-    if (cb_child_render_front_ && metrics.child_render_checkbox_width > 0) append_form(metrics.child_render_checkboxWidth);
-    if (form_row_width == 0) {
-        metrics.form_row_height = 0;
-    }
-
-    metrics.toggle_row_height = toggle_row_width > 0 ? checkbox_height : 0;
-
-    int content_width = std::max({dropdown_row_width, movement_row_width, toggle_row_width, form_row_width});
-    if (dd_child_select_) {
-        const int dropdown_width = std::max(content_width, std::max(kChildDropdownMinWidth, dropdown_row_width));
-        metrics.dropdown_row_height = dd_child_select_->preferred_height(std::max(dropdown_width, kChildDropdownMinWidth));
-        content_width = std::max(content_width, dropdown_width);
-    } else {
-        metrics.dropdown_row_height = 0;
-    }
-
-    if (content_width <= 0) {
-        metrics.width = 0;
-        metrics.height = 0;
-        return metrics;
-    }
-
-    metrics.width = content_width + metrics.padding * 2;
-    metrics.height = metrics.padding * 2;
-    bool added_row = false;
-    auto add_row = [&](int row_height) {
-        if (row_height <= 0) return;
-        if (added_row) {
-            metrics.height += metrics.gap;
-        }
-        metrics.height += row_height;
-        added_row = true;
-    };
-    add_row(metrics.dropdown_row_height);
-    add_row(metrics.movement_row_height);
-    add_row(metrics.toggle_row_height);
-    add_row(metrics.form_row_height);
-    // Add bottom Apply-to-all button row
-    add_row(DMButton::height());
-    metrics.height += metrics.drag_handle_height;
-    return metrics;
-}
-
-animation_update::FrameHitGeometry::HitBox* FrameEditorSession::current_hit_box() {
-    if (frames_.empty()) return nullptr;
-    const int frame_index = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
-    auto& frame = frames_[frame_index];
-    const std::string type = current_hitbox_type();
-    return frame.hit.find_box(type);
-}
-
-const animation_update::FrameHitGeometry::HitBox* FrameEditorSession::current_hit_box() const {
-    if (frames_.empty()) return nullptr;
-    const int frame_index = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
-    const auto& frame = frames_[frame_index];
-    const std::string type = current_hitbox_type();
-    return frame.hit.find_box(type);
-}
-
-animation_update::FrameHitGeometry::HitBox* FrameEditorSession::ensure_hit_box_for_type(const std::string& type) {
-    if (frames_.empty()) return nullptr;
-    const int frame_index = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
-    auto& frame = frames_[frame_index];
-    if (auto* existing = frame.hit.find_box(type)) {
-        return existing;
-    }
-    animation_update::FrameHitGeometry::HitBox box;
-    box.type = type;
-    box.center_x = 0.0f;

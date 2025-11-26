@@ -1,6 +1,8 @@
 #include "camera_grid.hpp"
 #include "ndc.hpp"
 #include "render/camera_ndc_utils.hpp"
+#include "render/grid_camera.hpp"
+#include "render/parallax.hpp"
 
 #include "asset/Asset.hpp"
 #include "utils/area.hpp"

@@ -32,6 +32,7 @@
 #include "dev_mode/depth_cue_settings.hpp"
 #include "dev_mode/dev_ui_settings.hpp"
 #include "render/camera_grid.hpp"
+#include "render/light_flicker.hpp"
 #include "tiling/grid_tile.hpp"
 #include "utils/log.hpp"
 #include "utils/grid.hpp"
@@ -225,7 +226,7 @@ bool AssetLightRenderer::prepare_light(const LightSource& light, ComputedLight& 
         return false;
     }
 
-    const float flicker_multiplier = compute_flicker_multiplier(light);
+    const float flicker_multiplier = LightFlickerCalculator::compute_multiplier(light, flicker_time_seconds_);
     intensity = static_cast<int>(std::lround(static_cast<float>(intensity) * flicker_multiplier));
     intensity = std::clamp(intensity, 0, 255);
     if (intensity <= 0) {
@@ -333,98 +334,6 @@ void AssetLightRenderer::render_textured_light(const ComputedLight& info, const 
     SDL_SetTextureColorMod(tex, prev_r, prev_g, prev_b);
     SDL_SetTextureBlendMode(tex, prev_blend);
 }
-
-
-
-//TODO make this its own class to be shard by renderer and composite renderer
-float AssetLightRenderer::compute_flicker_multiplier(const LightSource& light) const {
-    const float speed_setting =
-        std::clamp(static_cast<float>(light.flicker_speed), 0.0f, 100.0f) / 100.0f;
-    const float smooth_setting =
-        std::clamp(static_cast<float>(light.flicker_smoothness), 0.0f, 100.0f) / 100.0f;
-
-    if (speed_setting <= 0.001f) {
-        return 1.0f;
-    }
-
-    // Lightweight hash combiner (deterministic per-light)
-    auto mix = [](std::uint32_t seed, std::uint32_t value) {
-        seed ^= value + 0x9e3779b9u + (seed << 6) + (seed >> 2);
-        return seed;
-    };
-
-    auto to_rand = [](std::uint32_t h) {
-        return static_cast<float>(h & 0xFFFFu) / 32767.5f - 1.0f; // [-1, 1]
-    };
-
-    // 1D value-noise with smootherstep interpolation
-    auto value_noise_1d = [&](float t, std::uint32_t seed) {
-        if (!(std::isfinite(t))) return 0.0f;
-        const int   i   = static_cast<int>(std::floor(t));
-        const float f   = t - static_cast<float>(i);
-        const float f2  = f * f;
-        const float f3  = f2 * f;
-        const float u   = f3 * (f * (f * 6.0f - 15.0f) + 10.0f); // smootherstep
-        const float a   = to_rand(mix(seed, static_cast<std::uint32_t>(i)));
-        const float b   = to_rand(mix(seed, static_cast<std::uint32_t>(i + 1)));
-        return a + (b - a) * u;
-    };
-
-    // Per-light seed
-    std::uint32_t base = 0x811C9DC5u;
-    base = mix(base, static_cast<std::uint32_t>(light.offset_x));
-    base = mix(base, static_cast<std::uint32_t>(light.offset_y));
-    base = mix(base, static_cast<std::uint32_t>(light.radius));
-    base = mix(base, static_cast<std::uint32_t>(light.intensity));
-    base = mix(base, static_cast<std::uint32_t>(light.fall_off));
-    base = mix(base, static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(light.texture) & 0xFFFFu));
-
-    // Base rate in samples/sec; increases with speed setting
-    const float base_rate = 0.4f + 6.0f * speed_setting;
-
-    // Octave frequencies (incommensurate multipliers) and per-octave seeds
-    const float f0 = base_rate * 1.00f;
-    const float f1 = base_rate * 2.17f;
-    const float f2 = base_rate * 3.73f;
-    const std::uint32_t s0 = mix(base, 0xA1B2C3D4u);
-    const std::uint32_t s1 = mix(base, 0xBEEF1234u);
-    const std::uint32_t s2 = mix(base, 0xDEADBEEFu);
-
-    // Smoothness reduces high-frequency contribution
-    float w0 = 0.6f + 0.3f * smooth_setting;          // 0.6 .. 0.9
-    float w1 = 0.3f * (1.0f - 0.5f * smooth_setting); // 0.15 .. 0.3
-    float w2 = 0.1f * (1.0f - smooth_setting);        // 0.0 .. 0.1
-    float wsum = std::max(1e-6f, w0 + w1 + w2);
-    w0 /= wsum; w1 /= wsum; w2 /= wsum;
-
-    const float t = flicker_time_seconds_;
-    float n0 = value_noise_1d(t * f0, s0);
-    float n1 = value_noise_1d(t * f1, s1);
-    float n2 = value_noise_1d(t * f2, s2);
-    float noise = w0 * n0 + w1 * n1 + w2 * n2;
-
-    // Optional micro-jitter when smoothness is low
-    if (smooth_setting < 0.5f) {
-        const float jitter_rate = 70.0f + 260.0f * speed_setting;
-        const float jt = t * jitter_rate + static_cast<float>((base >> 8) & 0xFFu) * 0.013f;
-        const int   ji = static_cast<int>(std::floor(jt));
-        const float jf = jt - static_cast<float>(ji);
-        const float u  = jf * jf * (3.0f - 2.0f * jf); // smoothstep
-        const float ja = to_rand(mix(base, static_cast<std::uint32_t>(ji)));
-        const float jb = to_rand(mix(base, static_cast<std::uint32_t>(ji + 1)));
-        const float j  = ja + (jb - ja) * u;
-        const float jitter_amp = (0.1f + 0.15f * speed_setting) * (1.0f - smooth_setting);
-        noise = std::clamp(noise * (1.0f - jitter_amp) + j * jitter_amp, -1.0f, 1.0f);
-    }
-
-    // Map noise to brightness multiplier
-    const float amplitude  = 0.12f + 0.45f * speed_setting;
-    const float multiplier = 1.0f + std::clamp(noise, -1.0f, 1.0f) * amplitude;
-    return std::clamp(multiplier, 0.2f, 1.0f + amplitude);
-}
-
-
-
 ////////////////////////////////////////////////////////////////////////////////
 // SceneRenderer core render loop
 ////////////////////////////////////////////////////////////////////////////////
@@ -502,98 +411,6 @@ SceneRenderer::SceneRenderer(PrevalidatedTag,
             depthcue_warmup_frames_ = static_cast<std::uint32_t>(v);
         }
     }
-    if (map_manifest.is_object()) {
-        auto it = map_manifest.find("map_light_data");
-        if (it != map_manifest.end() && it->is_object()) {
-            map_clear_color_ = utils::color::resolve_ranged_color(
-                it->value("map_color", nlohmann::json{}),
-                SDL_Color{0, 0, 0, 255});
-        }
-    }
-
-    tile_renderer_ = std::make_unique<GridTileRenderer>(assets_);
-}
-
-SceneRenderer::~SceneRenderer() {
-    destroy_darkness_overlay();
-    destroy_sky_texture();
-
-    if (scene_composite_tex_) { SDL_DestroyTexture(scene_composite_tex_); scene_composite_tex_ = nullptr; }
-    if (postprocess_tex_)     { SDL_DestroyTexture(postprocess_tex_);     postprocess_tex_     = nullptr; }
-    if (blur_tex_)            { SDL_DestroyTexture(blur_tex_);            blur_tex_            = nullptr; }
-}
-
-SDL_Renderer* SceneRenderer::get_renderer() const { return renderer_; }
-
-
-void SceneRenderer::set_dark_mask_enabled(bool enabled) {
-    if (dark_mask_enabled_ == enabled) {
-        return;
-    }
-    dark_mask_enabled_ = enabled;
-    if (!dark_mask_enabled_) {
-        destroy_darkness_overlay();
-    }
-}
-
-
-
-void SceneRenderer::render() {
-    ++frame_counter_;
-
-    // 1. Render Floor (Background, Sky, Chunks)
-    SDL_SetRenderTarget(renderer_, nullptr);
-    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-    const SDL_Color clear_color = map_clear_color_;
-    SDL_SetRenderDrawColor(renderer_, clear_color.r, clear_color.g, clear_color.b, clear_color.a);
-    SDL_RenderClear(renderer_);
-
-    const camera_grid* camera_state = assets_ ? &assets_->getView() : nullptr;
-    const bool depthcue_setting_enabled = assets_ ? assets_->depth_effects_enabled() : false;
-
-    if (camera_state) {
-        render_sky_layer(*camera_state, depthcue_setting_enabled);
-    }
-
-    if (tile_renderer_) {
-        tile_renderer_->render(renderer_, assets_->getView(), assets_->world_grid());
-    }
-
-    // Collect assets and lights
-    light_overlay_sources_.clear();
-    light_overlay_sources_have_dark_mask_cached_ = false;
-    light_overlay_sources_dark_mask_cache_dirty_ = false;
-    
-    struct Renderable {
-        Asset* asset;
-        world::GridPoint* gp;
-        float sort_y;
-        int z_index;
-    };
-    std::vector<Renderable> renderables;
-
-    if (assets_) {
-        const auto& active_points = assets_->active_points();
-        for (world::GridPoint* gp : active_points) {
-            if (!gp || !gp->on_screen) continue;
-            
-            for (const auto& asset_ptr : gp->occupants) {
-                Asset* asset = asset_ptr.get();
-                if (!asset || asset->is_hidden()) continue;
-
-                // Update composite texture
-                // Use the perspective scale calculated by the grid point
-                float desired_scale = gp->perspective_scale;
-                if (asset->info && asset->info->scale_factor > 0) {
-                    desired_scale *= asset->info->scale_factor;
-                }
-                
-                composite_renderer_.update(asset, gp, desired_scale);
-
-                renderables.push_back({asset, gp, gp->screen.y, asset->z_index});
-
-                // Collect lights for dark mask
-                if (asset->info && !asset->info->light_sources.empty()) {
                     bool has_dark_mask_lights = false;
                     for (const auto& light : asset->info->light_sources) {
                         if (light.render_to_dark_mask) {

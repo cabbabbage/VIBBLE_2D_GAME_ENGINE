@@ -1,6 +1,7 @@
 #include "parallax.hpp"
 
 #include "camera_grid.hpp"
+#include "asset/Asset.hpp"
 #include "world/grid.hpp"
 #include "utils/transform_smoothing_settings.hpp"
 
