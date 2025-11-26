@@ -2769,7 +2769,7 @@ void RoomEditor::refresh_spatial_entries_for_dragged_assets() {
     if (!assets_) {
         return;
     }
-    const camera& cam = assets_->getView();
+    const camera_grid& cam = assets_->getView();
     if (spatial_index_dirty_ || !cached_camera_state_valid_ || !cached_reference_height_valid_) {
         return;
     }

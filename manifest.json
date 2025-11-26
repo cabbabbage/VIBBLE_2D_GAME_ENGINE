@@ -2222,6 +2222,54 @@
       "tillable": false,
       "update_radius": 0
     },
+    "town_hall": {
+      "animations": {
+        "default": {
+          "flipped_source": false,
+          "fps": 24,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          },
+          "speed_factor": 1.0
+        }
+      },
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/town_hall",
+      "asset_name": "town_hall",
+      "asset_type": "object",
+      "can_invert": false,
+      "has_shading": false,
+      "lighting_info": [],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
+      "neighbor_search_distance": 500,
+      "render_radius": 0,
+      "size_settings": {
+        "scale_percentage": 100.0
+      },
+      "start": "default",
+      "tags": [],
+      "update_radius": 0
+    },
     "trail": {
       "animation_children": [],
       "animations": {
@@ -2338,8 +2386,11 @@
         "base_height_px": 1392.5,
         "depth_offset_at_zoom_high": 4000.0,
         "depth_offset_at_zoom_low": 4000.0,
+        "extra_cull_margin": 300.0,
         "foreground_plane_screen_y": 902.0,
         "foreground_texture_max_opacity": 0,
+        "foreshorten_at_zoom_high": 0.0,
+        "foreshorten_at_zoom_low": 0.0,
         "grid_depth_offset_px": 4000.0,
         "min_visible_screen_ratio": 0.006000000052154064,
         "parallax_smoothing_lerp_rate": 4.1666669845581055,
@@ -2354,7 +2405,7 @@
         "tilt_zoom_in_degrees": 30.0,
         "tilt_zoom_out_degrees": 78.02386474609375,
         "zoom_high": 3.999999761581421,
-        "zoom_low": 0.8500000238418579
+        "zoom_low": 0.6899999976158142
       },
       "content_root": "MAPS/FORREST",
       "map_assets_data": {
@@ -2702,9 +2753,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
+            85,
             242,
-            36,
-            46,
+            156,
             255
           ],
           "edge_smoothness": 43,
@@ -2755,9 +2806,9 @@
         "rnd": {
           "curvyness": 2,
           "display_color": [
-            85,
-            242,
-            153,
+            110,
+            31,
+            204,
             255
           ],
           "edge_smoothness": 2,
@@ -2775,9 +2826,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            120,
-            31,
-            204,
+            242,
+            36,
+            242,
             255
           ],
           "edge_smoothness": 101,
@@ -3028,6 +3079,34 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-ce00b29f02fd"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "town_hall"
+                }
+              ],
+              "display_name": "town_hall",
+              "dx": 78,
+              "dy": -463,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 6904,
+              "origional_width": 6904,
+              "position": "Exact",
+              "resolution": 7,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-e8920fc0e0a0"
             }
           ]
         }

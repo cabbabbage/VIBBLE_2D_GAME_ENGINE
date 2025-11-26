@@ -1881,13 +1881,14 @@ void AssetInfo::loadAnimations(SDL_Renderer* renderer) {
     int dummy_w = 0;
     int dummy_h = 0;
 
-    for (auto& [name, anim] : animations) {
-        if (anims_json_.contains(name)) {
-             const auto& json = anims_json_[name];
-             std::filesystem::path cache_root = std::filesystem::path("cache") / this->name / name;
+    for (auto it = anims_json_.begin(); it != anims_json_.end(); ++it) {
+        const std::string& name = it.key();
+        const auto& json = it.value();
+        
+        Animation& anim = animations[name];
+        std::filesystem::path cache_root = std::filesystem::path("cache") / this->name / name;
              
-             AnimationLoader::load(anim, name, json, *this, dir_path_, cache_root.string(), scale_factor, renderer, dummy_base_sprite, dummy_w, dummy_h, original_canvas_width, original_canvas_height, false);
-        }
+        AnimationLoader::load(anim, name, json, *this, dir_path_, cache_root.string(), scale_factor, renderer, dummy_base_sprite, dummy_w, dummy_h, original_canvas_width, original_canvas_height, false);
     }
 }
 

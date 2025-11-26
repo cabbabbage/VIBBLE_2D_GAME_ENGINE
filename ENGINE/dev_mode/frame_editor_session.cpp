@@ -3838,5 +3838,138 @@ float FrameEditorSession::mirrored_child_rotation(bool parent_is_flipped, float 
     return ::mirrored_child_rotation(parent_is_flipped, degree);
 }
 
+void FrameEditorSession::persist_mode_changes(Mode mode) {
+    // Mark document dirty and persist changes relevant to the given mode.
+    // For now, persist_changes() handles all modes uniformly.
+    (void)mode;
+    pending_save_ = true;
+    persist_changes();
+}
 
+void FrameEditorSession::select_frame(int index) {
+    if (frames_.empty()) return;
+    const int clamped = std::clamp(index, 0, static_cast<int>(frames_.size()) - 1);
+    if (clamped == selected_index_) return;
+    selected_index_ = clamped;
+    update_asset_preview_frame();
+    ensure_selected_thumb_visible();
+    refresh_hitbox_form();
+    refresh_attack_form();
+}
+
+void FrameEditorSession::update_asset_preview_frame() const {
+    if (!target_ || animation_id_.empty()) return;
+    target_->current_animation = animation_id_;
+    if (selected_index_ >= 0 && selected_index_ < static_cast<int>(frames_.size()) && target_->info) {
+        auto it = target_->info->animations.find(animation_id_);
+        if (it != target_->info->animations.end() &&
+            selected_index_ < static_cast<int>(it->second.frames.size())) {
+            target_->current_frame = it->second.frames[selected_index_];
+        }
+    }
+}
+
+int FrameEditorSession::max_scroll_offset() const {
+    if (thumb_content_width_ <= thumb_viewport_width_) return 0;
+    return std::max(0, thumb_content_width_ - thumb_viewport_width_);
+}
+
+void FrameEditorSession::clamp_scroll_offset() const {
+    const int max_scroll = max_scroll_offset();
+    scroll_offset_ = std::clamp(scroll_offset_, 0, max_scroll);
+}
+
+void FrameEditorSession::ensure_selected_thumb_visible() {
+    if (frames_.empty() || thumb_viewport_width_ <= 0) return;
+    const int thumb_w = std::max(1, thumb_viewport_width_ / std::max(1, static_cast<int>(frames_.size())));
+    const int spacing = 8;
+    const int per = thumb_w + spacing;
+    const int left_edge = selected_index_ * per;
+    const int right_edge = left_edge + thumb_w;
+    if (left_edge < scroll_offset_) {
+        scroll_offset_ = left_edge;
+    } else if (right_edge > scroll_offset_ + thumb_viewport_width_) {
+        scroll_offset_ = right_edge - thumb_viewport_width_;
+    }
+    clamp_scroll_offset();
+}
+
+void FrameEditorSession::render_attack_geometry(SDL_Renderer* renderer) const {
+    if (!renderer || frames_.empty() || mode_ != Mode::AttackGeometry) return;
+    const int frame_index = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
+    const auto& frame = frames_[frame_index];
+    if (frame.attack.vectors.empty()) return;
+
+    if (!assets_ || !target_) return;
+    const camera_grid& cam = assets_->getView();
+    SDL_Point anchor = asset_anchor_world();
+    const float scale = asset_local_scale();
+    if (scale <= 0.0001f) return;
+
+    auto to_screen = [&](float lx, float ly) -> SDL_FPoint {
+        SDL_FPoint world{
+            static_cast<float>(anchor.x) + lx * scale,
+            static_cast<float>(anchor.y) - ly * scale
+        };
+        return cam.map_to_screen_f(world);
+    };
+
+    const std::string current_type = current_attack_type();
+    for (const auto& vec : frame.attack.vectors) {
+        const bool selected = (vec.type == current_type);
+        SDL_FPoint start_screen = to_screen(vec.start_x, vec.start_y);
+        SDL_FPoint control_screen = to_screen(vec.control_x, vec.control_y);
+        SDL_FPoint end_screen = to_screen(vec.end_x, vec.end_y);
+
+        // Draw quadratic bezier curve
+        SDL_Color line_color = selected ? DMStyles::AccentButton().bg : DMStyles::HeaderButton().bg;
+        SDL_SetRenderDrawColor(renderer, line_color.r, line_color.g, line_color.b, 220);
+        constexpr int segments = 16;
+        SDL_FPoint prev = start_screen;
+        for (int i = 1; i <= segments; ++i) {
+            const float t = static_cast<float>(i) / static_cast<float>(segments);
+            const float u = 1.0f - t;
+            SDL_FPoint p{
+                u * u * start_screen.x + 2.0f * u * t * control_screen.x + t * t * end_screen.x,
+                u * u * start_screen.y + 2.0f * u * t * control_screen.y + t * t * end_screen.y
+            };
+            SDL_RenderDrawLineF(renderer, prev.x, prev.y, p.x, p.y);
+            prev = p;
+        }
+
+        // Draw control handles
+        if (selected) {
+            SDL_SetRenderDrawColor(renderer, 180, 180, 180, 180);
+            SDL_RenderDrawLineF(renderer, start_screen.x, start_screen.y, control_screen.x, control_screen.y);
+            SDL_RenderDrawLineF(renderer, control_screen.x, control_screen.y, end_screen.x, end_screen.y);
+        }
+
+        // Draw nodes
+        auto draw_node = [&](SDL_FPoint p, bool is_selected_node) {
+            const float radius = is_selected_node ? 10.0f : 8.0f;
+            SDL_Color node_col = is_selected_node ? DMStyles::AccentButton().hover_bg : line_color;
+            SDL_SetRenderDrawColor(renderer, node_col.r, node_col.g, node_col.b, 255);
+            SDL_FRect r{ p.x - radius, p.y - radius, radius * 2.0f, radius * 2.0f };
+            SDL_RenderFillRectF(renderer, &r);
+            SDL_SetRenderDrawColor(renderer, DMStyles::Border().r, DMStyles::Border().g, DMStyles::Border().b, 255);
+            SDL_RenderDrawRectF(renderer, &r);
+        };
+        draw_node(start_screen, selected);
+        draw_node(end_screen, selected);
+        if (selected) {
+            // Control point as a smaller circle
+            const float cr = 6.0f;
+            SDL_SetRenderDrawColor(renderer, 200, 200, 200, 255);
+            for (int i = 0; i < 16; ++i) {
+                const float a = (static_cast<float>(i) / 16.0f) * 2.0f * static_cast<float>(M_PI);
+                const float b = (static_cast<float>(i + 1) / 16.0f) * 2.0f * static_cast<float>(M_PI);
+                SDL_RenderDrawLineF(renderer,
+                    control_screen.x + std::cos(a) * cr,
+                    control_screen.y + std::sin(a) * cr,
+                    control_screen.x + std::cos(b) * cr,
+                    control_screen.y + std::sin(b) * cr);
+            }
+        }
+    }
+}
 

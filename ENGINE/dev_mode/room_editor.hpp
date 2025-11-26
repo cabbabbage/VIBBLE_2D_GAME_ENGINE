@@ -28,6 +28,7 @@ class RoomConfigurator;
 class SpawnGroupConfig;
 class AssetInfo;
 class Room;
+class camera_grid;
 namespace vibble::grid {
 class Occupancy;
 class Grid;

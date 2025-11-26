@@ -1,41 +1,25 @@
 #include "render/render.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
-#include <iostream>
-#include <limits>
 #include <memory>
 #include <optional>
-#include <random>
 #include <stdexcept>
 #include <string>
-#include <string_view>
-#include <tuple>
-#include <unordered_map>
 #include <utility>
 #include <vector>
+
 #include <SDL_image.h>
 
-#include "animation_update/animation_update.hpp"
-#include "animation_update/child_attachment_math.hpp"
 #include "asset/Asset.hpp"
-#include "asset/asset_info.hpp"
-#include "asset/animation.hpp"
-#include "asset/animation_frame.hpp"
-#include "asset/asset_types.hpp"
 #include "core/AssetsManager.hpp"
-#include "dev_mode/depth_cue_settings.hpp"
-#include "dev_mode/dev_ui_settings.hpp"
 #include "render/camera_grid.hpp"
-#include "render/light_flicker.hpp"
 #include "tiling/grid_tile.hpp"
 #include "utils/log.hpp"
-#include "utils/grid.hpp"
 #include "world/chunk.hpp"
 #include "world/grid.hpp"
 
@@ -118,247 +102,19 @@ void GridTileRenderer::render(SDL_Renderer* renderer, const camera_grid& cam, co
     }
 }
 
-
-// TODO for asset light renderer make sure actual textures are not drawn here we only add light textures to the dark mask thing in scene renderer if render to mask is true for a light source
-
-////////////////////////////////////////////////////////////////////////////////
-// AssetLightRenderer implementation
-////////////////////////////////////////////////////////////////////////////////
-
-
-
-
-namespace {
-constexpr float kTwoPi       = 6.28318530718f;
-constexpr int   kRadialSteps = 12;
-
-SDL_Rect clamp_rect_to_bounds(const SDL_Rect& rect, int width, int height) {
-    SDL_Rect clamped = rect;
-    const int min_x  = std::max(rect.x, 0);
-    const int min_y  = std::max(rect.y, 0);
-    const int max_x  = std::min(rect.x + rect.w, width);
-    const int max_y  = std::min(rect.y + rect.h, height);
-    clamped.x        = min_x;
-    clamped.y        = min_y;
-    clamped.w        = std::max(0, max_x - min_x);
-    clamped.h        = std::max(0, max_y - min_y);
-    return clamped;
-}
-
-SDL_BlendMode mask_alpha_multiply_blend() {
-    static SDL_BlendMode cached = SDL_ComposeCustomBlendMode(SDL_BLENDFACTOR_ZERO,
-                                                             SDL_BLENDFACTOR_SRC_ALPHA,
-                                                             SDL_BLENDOPERATION_ADD,
-                                                             SDL_BLENDFACTOR_ZERO,
-                                                             SDL_BLENDFACTOR_SRC_ALPHA,
-                                                             SDL_BLENDOPERATION_ADD);
-    return cached;
-}
-}
-
-AssetLightRenderer::AssetLightRenderer(SDL_Renderer* renderer,
-                                       const runtime_lighting::AssetLight& source,
-                                       std::vector<SDL_Vertex>& scratch_vertices,
-                                       std::vector<int>& scratch_indices,
-                                       float light_visibility,
-                                       float flicker_time_seconds)
-    : renderer_(renderer),
-      source_(source),
-      asset_(source.asset),
-      scratch_vertices_(scratch_vertices),
-      scratch_indices_(scratch_indices),
-      overlay_visibility_(std::clamp(light_visibility, 0.0f, 1.0f)),
-      flicker_time_seconds_(std::isfinite(flicker_time_seconds) ? flicker_time_seconds : 0.0f) {
-    if (!renderer_ || !asset_ || !asset_->info) {
-        return;
-    }
-
-    const auto& lights = asset_->info->light_sources;
-    if (lights.empty()) {
-        return;
-    }
-    lights_ = &lights;
-
-    const float base_width  = static_cast<float>(std::max(1, source.base_width));
-    const float base_height = static_cast<float>(std::max(1, source.base_height));
-    scale_x_                = std::isfinite(static_cast<float>(source.asset_rect.w) / base_width)
-                               ? static_cast<float>(source.asset_rect.w) / base_width
-                               : 1.0f;
-    const float scale_y_base = std::isfinite(static_cast<float>(source.asset_rect.h) / base_height)
-                                   ? static_cast<float>(source.asset_rect.h) / base_height
-                                   : scale_x_;
-    scale_y_                = (source.base_height > 0) ? scale_y_base : scale_x_;
-    if (!std::isfinite(scale_x_) || !std::isfinite(scale_y_)) {
-        lights_ = nullptr;
-        return;
-    }
-
-    const float safe_base_scale =
-        (std::isfinite(source.asset_base_scale) && source.asset_base_scale > 0.0f)
-            ? source.asset_base_scale
-            : 1.0f;
-    const float zoom_scale_x = scale_x_ / safe_base_scale;
-    const float zoom_scale_y = scale_y_ / safe_base_scale;
-    safe_zoom_scale_x_       = (std::isfinite(zoom_scale_x) && zoom_scale_x > 0.0f) ? zoom_scale_x : 1.0f;
-    safe_zoom_scale_y_       = (std::isfinite(zoom_scale_y) && zoom_scale_y > 0.0f) ? zoom_scale_y : 1.0f;
-
-    center_base_x_ = static_cast<float>(source.asset_rect.x) + static_cast<float>(source.asset_rect.w) * 0.5f;
-    center_base_y_ = static_cast<float>(source.asset_rect.y + source.asset_rect.h);
-
-    valid_ = true;
-}
-
-AssetLightRenderer::~AssetLightRenderer() {
-    if (mask_composite_texture_) {
-        SDL_DestroyTexture(mask_composite_texture_);
-        mask_composite_texture_ = nullptr;
-    }
-}
-
-bool AssetLightRenderer::prepare_light(const LightSource& light, ComputedLight& out) const {
-    const int raw_radius = light.radius;
-    if (raw_radius <= 0) {
-        return false;
-    }
-
-    int intensity = std::clamp(light.intensity, 0, 255);
-    if (intensity <= 0) {
-        return false;
-    }
-
-    const float flicker_multiplier = LightFlickerCalculator::compute_multiplier(light, flicker_time_seconds_);
-    intensity = static_cast<int>(std::lround(static_cast<float>(intensity) * flicker_multiplier));
-    intensity = std::clamp(intensity, 0, 255);
-    if (intensity <= 0) {
-        return false;
-    }
-
-    const float radius_base = static_cast<float>(std::max(1, raw_radius));
-    const float radius_x    = std::max(1.0f, radius_base * safe_zoom_scale_x_);
-    const float radius_y    = std::max(1.0f, radius_base * safe_zoom_scale_y_);
-    if (!std::isfinite(radius_x) || !std::isfinite(radius_y)) {
-        return false;
-    }
-
-    const float offset_x = static_cast<float>(source_.flipped ? -light.offset_x : light.offset_x);
-    const float offset_y = static_cast<float>(light.offset_y);
-    const float center_x = center_base_x_ + offset_x * scale_x_;
-    const float center_y = center_base_y_ + offset_y * scale_y_;
-
-    SDL_Rect dst{};
-    dst.w = std::max(1, static_cast<int>(std::lround(radius_x * 2.0f)));
-    dst.h = std::max(1, static_cast<int>(std::lround(radius_y * 2.0f)));
-    dst.x = static_cast<int>(std::lround(center_x - static_cast<float>(dst.w) * 0.5f));
-    dst.y = static_cast<int>(std::lround(center_y - static_cast<float>(dst.h) * 0.5f));
-
-    const float falloff_norm  = std::clamp(static_cast<float>(light.fall_off) / 100.0f, 0.0f, 1.0f);
-    const float fade_exponent = 0.6f + 3.4f * falloff_norm;
-
-    out.source        = &light;
-    out.intensity     = intensity;
-    out.center_x      = center_x;
-    out.center_y      = center_y;
-    out.radius_x      = radius_x;
-    out.radius_y      = radius_y;
-    out.bounds        = dst;
-    out.fade_exponent = fade_exponent;
-    out.textured      = false;
-    out.texture_dst   = SDL_Rect{0, 0, 0, 0};
-
-    const float width_f  = static_cast<float>(std::max(1, source_.asset_rect.w));
-    const float height_f = static_cast<float>(std::max(1, source_.asset_rect.h));
-    out.center_ratio_x   = (center_x - static_cast<float>(source_.asset_rect.x)) / width_f;
-    out.center_ratio_y   = (center_y - static_cast<float>(source_.asset_rect.y)) / height_f;
-    out.radius_ratio_x   = radius_x / width_f;
-    out.radius_ratio_y   = radius_y / height_f;
-
-    if (light.texture) {
-        int base_w = light.cached_w;
-        int base_h = light.cached_h;
-        if (base_w <= 0 || base_h <= 0) {
-            SDL_QueryTexture(light.texture, nullptr, nullptr, &base_w, &base_h);
-        }
-        if (base_w <= 0 || base_h <= 0) {
-            base_w = static_cast<int>(std::lround(radius_base * 2.0f));
-            base_h = static_cast<int>(std::lround(radius_base * 2.0f));
-        }
-
-        const int scaled_w = std::max(1, static_cast<int>(std::lround(static_cast<float>(base_w) * safe_zoom_scale_x_)));
-        const int scaled_h = std::max(1, static_cast<int>(std::lround(static_cast<float>(base_h) * safe_zoom_scale_y_)));
-
-        SDL_Rect tex_dst{};
-        tex_dst.w = scaled_w;
-        tex_dst.h = scaled_h;
-        tex_dst.x = static_cast<int>(std::lround(center_x - static_cast<float>(tex_dst.w) * 0.5f));
-        tex_dst.y = static_cast<int>(std::lround(center_y - static_cast<float>(tex_dst.h) * 0.5f));
-
-        out.textured        = true;
-        out.texture_dst     = tex_dst;
-        out.texture_ratio_x = (static_cast<float>(tex_dst.x) - static_cast<float>(source_.asset_rect.x)) / width_f;
-        out.texture_ratio_y = (static_cast<float>(tex_dst.y) - static_cast<float>(source_.asset_rect.y)) / height_f;
-        out.texture_ratio_w = static_cast<float>(tex_dst.w) / width_f;
-        out.texture_ratio_h = static_cast<float>(tex_dst.h) / height_f;
-    }
-
-    return true;
-}
-
-
-
-
-void AssetLightRenderer::render_textured_light(const ComputedLight& info, const SDL_Rect& dst) {
-    if (!info.source || !info.source->texture || dst.w <= 0 || dst.h <= 0) {
-        return;
-    }
-
-    SDL_Texture* tex = info.source->texture;
-    Uint8        prev_a = 255;
-    Uint8        prev_r = 255;
-    Uint8        prev_g = 255;
-    Uint8        prev_b = 255;
-    SDL_BlendMode prev_blend = SDL_BLENDMODE_BLEND;
-    SDL_GetTextureAlphaMod(tex, &prev_a);
-    SDL_GetTextureColorMod(tex, &prev_r, &prev_g, &prev_b);
-    SDL_GetTextureBlendMode(tex, &prev_blend);
-
-    SDL_Color draw_color{255, 255, 255, 255};
-    if (info.source) {
-        draw_color = info.source->color;
-    }
-
-    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
-    SDL_SetTextureColorMod(tex, draw_color.r, draw_color.g, draw_color.b);
-    SDL_SetTextureAlphaMod(tex, static_cast<Uint8>(info.intensity));
-    SDL_RenderCopy(renderer_, tex, nullptr, &dst);
-    SDL_SetTextureAlphaMod(tex, prev_a);
-    SDL_SetTextureColorMod(tex, prev_r, prev_g, prev_b);
-    SDL_SetTextureBlendMode(tex, prev_blend);
-}
 ////////////////////////////////////////////////////////////////////////////////
 // SceneRenderer core render loop
 ////////////////////////////////////////////////////////////////////////////////
 
-
-static constexpr float kDefaultMinVisibleScreenRatio = 0.015f;
-
 namespace {
 
+constexpr float kDefaultMapLightOpacity = 1.0f;
 
-
-
-
-
-
-
-SDL_BlendMode darkness_cutout_blend_mode() {
-    static SDL_BlendMode cached = SDL_ComposeCustomBlendMode(SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_ONE, SDL_BLENDOPERATION_ADD, SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, SDL_BLENDOPERATION_ADD);
-    return cached;
+inline float ticks_to_seconds(Uint64 ticks) {
+    return static_cast<float>(ticks) * 0.001f;
 }
 
-
-
-
-}
+} // namespace
 
 SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                              Assets* assets,
@@ -397,78 +153,151 @@ SceneRenderer::SceneRenderer(PrevalidatedTag,
   assets_(assets),
   screen_width_(screen_width),
   screen_height_(screen_height),
+  tile_renderer_(std::make_unique<GridTileRenderer>(assets)),
   sky_texture_path_(std::filesystem::path("SRC") / "misc_content" / "sky.png"),
   composite_renderer_(renderer, assets)
 {
+    (void)map_manifest;
+    (void)map_id;
+
     vibble::log::debug(std::string{"[SceneRenderer] Initializing for map '"} + map_id +
                        "' with screen " + std::to_string(screen_width_) + "x" + std::to_string(screen_height_) + ".");
 
-
-    // Allow override of warmup frames via env var (optional): VIBBLE_DEPTHCUE_WARMUP_FRAMES
     if (const char* override_frames = std::getenv("VIBBLE_DEPTHCUE_WARMUP_FRAMES")) {
         const int v = std::atoi(override_frames);
         if (v >= 0 && v <= 120) {
             depthcue_warmup_frames_ = static_cast<std::uint32_t>(v);
         }
     }
-                    bool has_dark_mask_lights = false;
-                    for (const auto& light : asset->info->light_sources) {
-                        if (light.render_to_dark_mask) {
-                            has_dark_mask_lights = true;
-                            break;
-                        }
-                    }
+}
 
-                    if (has_dark_mask_lights) {
-                        LightOverlaySource source;
-                        source.asset = asset;
-                        // asset_rect will be calculated based on gp->screen in the dark mask pass
-                        source.base_width = asset->cached_w;
-                        source.base_height = asset->cached_h;
-                        source.flipped = asset->flipped;
-                        source.asset_base_scale = (asset->info && asset->info->scale_factor > 0) ? asset->info->scale_factor : 1.0f;
-                        source.has_dark_mask_lights = true;
-                        
-                        light_overlay_sources_.push_back(source);
-                        light_overlay_sources_have_dark_mask_cached_ = true;
-                    }
-                }
+SceneRenderer::~SceneRenderer() {
+    destroy_darkness_overlay();
+    destroy_sky_texture();
+    if (scene_composite_tex_) { SDL_DestroyTexture(scene_composite_tex_); scene_composite_tex_ = nullptr; }
+    if (postprocess_tex_)     { SDL_DestroyTexture(postprocess_tex_);     postprocess_tex_     = nullptr; }
+    if (blur_tex_)            { SDL_DestroyTexture(blur_tex_);            blur_tex_            = nullptr; }
+}
+
+SDL_Renderer* SceneRenderer::get_renderer() const {
+    return renderer_;
+}
+
+void SceneRenderer::set_dark_mask_enabled(bool enabled) {
+    if (dark_mask_enabled_ == enabled) {
+        return;
+    }
+    dark_mask_enabled_ = enabled;
+    if (!dark_mask_enabled_) {
+        destroy_darkness_overlay();
+    }
+}
+
+void SceneRenderer::render() {
+    if (!renderer_ || !assets_ || screen_width_ <= 0 || screen_height_ <= 0) {
+        return;
+    }
+
+    ++frame_counter_;
+
+    camera_grid& cam = assets_->getView();
+    world::Grid& grid = assets_->world_grid();
+    cam.rebuild_grid(grid, assets_->frame_delta_seconds());
+
+    SDL_SetRenderTarget(renderer_, nullptr);
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer_, map_clear_color_.r, map_clear_color_.g, map_clear_color_.b, map_clear_color_.a);
+    SDL_RenderClear(renderer_);
+
+    const bool depth_effects_enabled = assets_->depth_effects_enabled();
+    render_sky_layer(cam, depth_effects_enabled);
+
+    if (tile_renderer_) {
+        tile_renderer_->render(renderer_, cam, grid);
+    }
+
+    const float flicker_time_seconds = ticks_to_seconds(SDL_GetTicks64());
+
+    const auto& active_assets = assets_->getActive();
+    for (Asset* asset : active_assets) {
+        if (!asset || asset->is_hidden() || !asset->info) {
+            continue;
+        }
+
+        world::GridPoint* gp = cam.grid_point_for_asset(asset);
+        composite_renderer_.update(asset, gp, flicker_time_seconds);
+
+        SDL_FPoint screen_base{};
+        bool       has_screen_base = false;
+        float      perspective_scale = 1.0f;
+        float      vertical_scale    = 1.0f;
+
+        if (gp) {
+            screen_base       = gp->screen;
+            has_screen_base   = std::isfinite(screen_base.x) && std::isfinite(screen_base.y);
+            perspective_scale = std::max(0.0001f, gp->perspective_scale);
+            vertical_scale    = std::max(0.0001f, gp->vertical_scale);
+        }
+
+        if (!has_screen_base) {
+            SDL_Point world_pos{ asset->pos.x, asset->pos.y };
+            screen_base     = cam.map_to_screen(world_pos);
+            has_screen_base = std::isfinite(screen_base.x) && std::isfinite(screen_base.y);
+            perspective_scale = std::max(0.0001f, cam.get_scale());
+            vertical_scale    = 1.0f;
+        }
+
+        if (!has_screen_base) {
+            continue;
+        }
+
+        const int asset_world_x = asset->pos.x;
+        const int asset_world_y = asset->pos.y;
+
+        for (const RenderObject& obj : asset->render_package) {
+            if (!obj.texture) {
+                continue;
             }
+
+            const int raw_width  = obj.screen_rect.w;
+            const int raw_height = obj.screen_rect.h;
+            if (raw_width <= 0 || raw_height <= 0) {
+                continue;
+            }
+
+            const int offset_x = obj.screen_rect.x - asset_world_x;
+            const int offset_y = obj.screen_rect.y - asset_world_y;
+
+            const double scaled_width  = static_cast<double>(raw_width)  * static_cast<double>(perspective_scale);
+            const double scaled_height = static_cast<double>(raw_height) * static_cast<double>(perspective_scale) * static_cast<double>(vertical_scale);
+            const int    screen_w      = std::max(1, static_cast<int>(std::lround(scaled_width)));
+            const int    screen_h      = std::max(1, static_cast<int>(std::lround(scaled_height)));
+
+            const double scaled_offset_x = static_cast<double>(offset_x) * static_cast<double>(perspective_scale);
+            const double scaled_offset_y = static_cast<double>(offset_y) * static_cast<double>(perspective_scale) * static_cast<double>(vertical_scale);
+
+            SDL_Rect screen_rect{
+                static_cast<int>(std::lround(screen_base.x + scaled_offset_x - static_cast<double>(screen_w) * 0.5)),
+                static_cast<int>(std::lround(screen_base.y + scaled_offset_y - static_cast<double>(screen_h))),
+                screen_w,
+                screen_h
+            };
+
+            SDL_SetTextureBlendMode(obj.texture, obj.blend_mode);
+            SDL_SetTextureColorMod(obj.texture, obj.color_mod.r, obj.color_mod.g, obj.color_mod.b);
+            SDL_SetTextureAlphaMod(obj.texture, obj.color_mod.a);
+
+            SDL_RenderCopy(renderer_, obj.texture, nullptr, &screen_rect);
         }
     }
 
-    // 2. Render Dark Mask
-    const float map_light_opacity = 1.0f; 
-    const float frame_flicker_time_seconds = static_cast<float>(SDL_GetTicks64() % 1000000ULL) * 0.001f;
-    
-    render_dynamic_darkness_overlay(map_light_opacity, frame_flicker_time_seconds);
-
-    // 3. Render Composite Packages
-    std::sort(renderables.begin(), renderables.end(), [](const Renderable& a, const Renderable& b) {
-        if (a.z_index != b.z_index) return a.z_index < b.z_index;
-        return a.sort_y < b.sort_y;
-    });
-
-    for (const auto& item : renderables) {
-        Asset* asset = item.asset;
-        world::GridPoint* gp = item.gp;
-
-        for (const auto& render_obj : asset->render_package) {
-            SDL_Rect screen_rect = render_obj.screen_rect;
-            screen_rect.x += gp->screen.x;
-            screen_rect.y += gp->screen.y;
-
-            SDL_SetTextureColorMod(render_obj.texture, render_obj.color_mod.r, render_obj.color_mod.g, render_obj.color_mod.b);
-            SDL_SetTextureAlphaMod(render_obj.texture, render_obj.color_mod.a);
-            SDL_SetTextureBlendMode(render_obj.texture, render_obj.blend_mode);
-            SDL_RenderCopy(renderer_, render_obj.texture, nullptr, &screen_rect);
-        }
-    }
+    // TEMP: darkness overlay disabled for debugging
+    // if (dark_mask_enabled_) {
+    //     render_dynamic_darkness_overlay(kDefaultMapLightOpacity, flicker_time_seconds);
+    // }
 
     SDL_RenderPresent(renderer_);
 }
-
-
 
 bool SceneRenderer::ensure_darkness_overlay() {
     if (!renderer_ || screen_width_ <= 0 || screen_height_ <= 0) {
@@ -597,119 +426,40 @@ void SceneRenderer::render_sky_layer(const camera_grid& cam, bool depth_effects_
     SDL_RenderCopyF(renderer_, sky_texture_, nullptr, &dst);
 }
 
-void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity, float flicker_time_seconds) {
+void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity, float /*flicker_time_seconds*/) {
     if (!renderer_) {
         return;
     }
 
-    if (!has_dark_mask_overlay_sources()) {
+    const float overlay_alpha = std::clamp(map_light_opacity, 0.0f, 1.0f);
+    if (overlay_alpha <= 0.0f) {
         ++darkness_overlay_skipped_frames_;
-        if (!darkness_overlay_skip_logged_) {
-            vibble::log::debug(std::string{"[SceneRenderer] Skipping dynamic darkness overlay; no dark-mask lights. skipped_frames="} +
-                               std::to_string(darkness_overlay_skipped_frames_));
-            darkness_overlay_skip_logged_ = true;
-        }
+        darkness_overlay_skip_logged_ = true;
+        return;
+    }
+
+    if (!ensure_darkness_overlay()) {
+        ++darkness_overlay_skipped_frames_;
+        darkness_overlay_skip_logged_ = true;
         return;
     }
 
     ++darkness_overlay_rendered_frames_;
-    if (darkness_overlay_skip_logged_) {
-        vibble::log::debug(std::string{"[SceneRenderer] Dynamic darkness overlay pass resumed. rendered_frames="} +
-                           std::to_string(darkness_overlay_rendered_frames_));
-        darkness_overlay_skip_logged_ = false;
-    }
-
-    const float overlay_alpha             = std::clamp(map_light_opacity, 0.0f, 1.0f);
-    const float light_overlay_visibility = overlay_alpha;
-    if (!ensure_darkness_overlay()) {
-        return;
-    }
+    darkness_overlay_skip_logged_ = false;
 
     SDL_Texture* previous_target = SDL_GetRenderTarget(renderer_);
     SDL_SetRenderTarget(renderer_, darkness_overlay_texture_);
-    SDL_SetTextureAlphaMod(darkness_overlay_texture_, 255);
-    SDL_SetTextureColorMod(darkness_overlay_texture_, 255, 255, 255);
-
-    SDL_BlendMode previous_draw_blend = SDL_BLENDMODE_BLEND;
-    if (SDL_GetRenderDrawBlendMode(renderer_, &previous_draw_blend) != 0) {
-        previous_draw_blend = SDL_BLENDMODE_BLEND;
-    }
-
-    const SDL_BlendMode cutout_blend = darkness_cutout_blend_mode();
-    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
-    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, static_cast<Uint8>(std::clamp(std::lround(overlay_alpha * 255.0f), 0L, 255L)));
     SDL_RenderClear(renderer_);
-    SDL_SetRenderDrawBlendMode(renderer_, cutout_blend);
-
-    if (darkness_overlay_vertex_capacity_hint_ > darkness_overlay_vertices_.capacity()) {
-        darkness_overlay_vertices_.reserve(darkness_overlay_vertex_capacity_hint_);
-    }
-    if (darkness_overlay_index_capacity_hint_ > darkness_overlay_indices_.capacity()) {
-        darkness_overlay_indices_.reserve(darkness_overlay_index_capacity_hint_);
-    }
-
-    std::size_t frame_max_vertices = 0;
-    std::size_t frame_max_indices  = 0;
-
-    for (const LightOverlaySource& source : light_overlay_sources_) {
-        if (!source.has_dark_mask_lights) {
-            continue;
-        }
-        // Asset rect for dark mask needs to be calculated relative to screen
-        world::GridPoint* gp = assets_->world_grid().point_for_asset(source.asset);
-        if (!gp) continue;
-
-        runtime_lighting::AssetLight current_source = source;
-        current_source.asset_rect.x = gp->screen.x;
-        current_source.asset_rect.y = gp->screen.y;
-        // The w/h from the original collection is probably fine, it was based on composite rect.
-        // Let's re-verify that. The original code did this:
-        // static_cast<int>(std::round(composite_rect.w * correction_factor))
-        // This is now part of the render package, so we don't have it here.
-        // Let's just use the asset's pos for now.
-        // The AssetLightRenderer will calculate offsets from this.
-        
-        AssetLightRenderer light_renderer(renderer_,
-                                          current_source,
-                                          darkness_overlay_vertices_,
-                                          darkness_overlay_indices_,
-                                          light_overlay_visibility,
-                                          flicker_time_seconds);
-        auto               result = light_renderer.accumulate_dark_mask();
-        frame_max_vertices        = std::max(frame_max_vertices, result.max_vertices);
-        frame_max_indices         = std::max(frame_max_indices, result.max_indices);
-    }
-
-    if (frame_max_vertices > darkness_overlay_vertex_capacity_hint_) {
-        darkness_overlay_vertex_capacity_hint_ = frame_max_vertices;
-    }
-    if (frame_max_indices > darkness_overlay_index_capacity_hint_) {
-        darkness_overlay_index_capacity_hint_ = frame_max_indices;
-    }
-
-    SDL_SetRenderDrawBlendMode(renderer_, previous_draw_blend);
     SDL_SetRenderTarget(renderer_, previous_target);
 
-    if (overlay_alpha <= 0.0f) {
-        return;
-    }
-
+    SDL_SetTextureBlendMode(darkness_overlay_texture_, SDL_BLENDMODE_BLEND);
     SDL_SetTextureAlphaMod(darkness_overlay_texture_, static_cast<Uint8>(std::clamp(std::lround(overlay_alpha * 255.0f), 0L, 255L)));
     SDL_SetTextureColorMod(darkness_overlay_texture_, 0, 0, 0);
 
     SDL_Rect screen_dst{0, 0, screen_width_, screen_height_};
     SDL_RenderCopy(renderer_, darkness_overlay_texture_, nullptr, &screen_dst);
-}
-
-bool SceneRenderer::has_dark_mask_overlay_sources() {
-    if (light_overlay_sources_dark_mask_cache_dirty_) {
-        light_overlay_sources_have_dark_mask_cached_ = std::any_of(
-            light_overlay_sources_.begin(),
-            light_overlay_sources_.end(),
-            [](const LightOverlaySource& source) { return source.has_dark_mask_lights; });
-        light_overlay_sources_dark_mask_cache_dirty_ = false;
-    }
-    return light_overlay_sources_have_dark_mask_cached_;
 }
 
 

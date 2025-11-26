@@ -55,6 +55,7 @@ class Asset {
 
         public:
     RenderCompositePackage render_package;
+    RenderCompositePackage scene_mask_lights;
     struct RenderTextureCache {
         SDL_Texture* texture = nullptr;
         int          width   = 0;

@@ -5,6 +5,8 @@
 #include "world/grid_point.hpp"
 #include "render/light_flicker.hpp"
 #include "render/render.hpp"
+
+#include <iostream>
 #include <algorithm>
 #include <cmath>
 #include <optional>
@@ -16,7 +18,6 @@ CompositeAssetRenderer::~CompositeAssetRenderer() {}
 
 void CompositeAssetRenderer::update(Asset* asset,
                                     const world::GridPoint* gp,
-                                    float desired_scale,
                                     float flicker_time_seconds) {
     if (!asset) return;
 
@@ -24,8 +25,8 @@ void CompositeAssetRenderer::update(Asset* asset,
     bool children_dirty = false;
     for (const auto& child_attachment : asset->animation_children()) {
         if (child_attachment.spawned_asset) {
-            // Children don't have their own grid point, they are relative to the parent
-            update(child_attachment.spawned_asset, nullptr, desired_scale, flicker_time_seconds);
+            // Children do not have their own grid point, they are relative to the parent
+            update(child_attachment.spawned_asset, nullptr, flicker_time_seconds);
             if (child_attachment.spawned_asset->is_composite_dirty()) {
                 children_dirty = true;
             }
@@ -39,24 +40,29 @@ void CompositeAssetRenderer::update(Asset* asset,
 
     // If asset is dirty or any child is dirty, regenerate
     if (asset->is_composite_dirty() || children_dirty) {
-        regenerate_package(asset, gp, desired_scale, flicker_time_seconds);
+        regenerate_package(asset, gp, flicker_time_seconds);
     }
 }
 
 void CompositeAssetRenderer::regenerate_package(Asset* asset,
                                                 const world::GridPoint* gp,
-                                                float desired_scale,
                                                 float flicker_time_seconds) {
     if (!renderer_ || !asset) return;
 
     asset->render_package.clear();
+    asset->scene_mask_lights.clear();
 
-    float effective_scale = asset->current_nearest_variant_scale * asset->current_remaining_scale_adjustment;
-    
+    float effective_scale =
+        asset->current_nearest_variant_scale * asset->current_remaining_scale_adjustment;
+
     asset->composite_scale_ = effective_scale;
 
     // Helper to add a render object
-    auto add_render_object = [&](SDL_Texture* tex, SDL_Rect rect, SDL_Color color = {255,255,255,255}, SDL_BlendMode blend = SDL_BLENDMODE_BLEND, bool apply_scale = true) {
+    auto add_render_object = [&](SDL_Texture* tex,
+                                 SDL_Rect rect,
+                                 SDL_Color color = {255, 255, 255, 255},
+                                 SDL_BlendMode blend = SDL_BLENDMODE_BLEND,
+                                 bool apply_scale = true) {
         if (!tex) return;
         if (apply_scale) {
             rect.w = static_cast<int>(rect.w * effective_scale);
@@ -65,14 +71,30 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
         asset->render_package.push_back({tex, rect, color, blend});
     };
 
+    auto add_scene_mask_light = [&](SDL_Texture* tex,
+                                    SDL_Rect rect,
+                                    SDL_Color color = {255, 255, 255, 255},
+                                    SDL_BlendMode blend = SDL_BLENDMODE_BLEND,
+                                    bool apply_scale = true) {
+        if (!tex) return;
+        if (apply_scale) {
+            rect.w = static_cast<int>(rect.w * effective_scale);
+            rect.h = static_cast<int>(rect.h * effective_scale);
+        }
+        asset->scene_mask_lights.push_back({tex, rect, color, blend});
+    };
+
     auto compute_light_color = [&](const LightSource& light) -> std::optional<SDL_Color> {
         const int raw_intensity = std::clamp(light.intensity, 0, 255);
         if (raw_intensity <= 0) {
             return std::nullopt;
         }
 
-        const float flicker_multiplier = LightFlickerCalculator::compute_multiplier(light, flicker_time_seconds);
-        int scaled_intensity = static_cast<int>(std::lround(static_cast<float>(raw_intensity) * flicker_multiplier));
+        const float flicker_multiplier =
+            LightFlickerCalculator::compute_multiplier(light, flicker_time_seconds);
+
+        int scaled_intensity = static_cast<int>(
+            std::lround(static_cast<float>(raw_intensity) * flicker_multiplier));
         scaled_intensity = std::clamp(scaled_intensity, 0, 255);
         if (scaled_intensity <= 0) {
             return std::nullopt;
@@ -80,6 +102,7 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
 
         const float scale = static_cast<float>(scaled_intensity) / 255.0f;
         SDL_Color color = light.color;
+
         auto scale_channel = [&](Uint8 channel) -> Uint8 {
             const int scaled = static_cast<int>(std::lround(static_cast<float>(channel) * scale));
             return static_cast<Uint8>(std::clamp(scaled, 0, 255));
@@ -96,7 +119,7 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
         return color;
     };
 
-    // 1. Behind Lights
+    // 1. Behind lights (and mask light bookkeeping)
     if (asset->info) {
         for (const auto& light_source : asset->info->light_sources) {
             if (light_source.behind && light_source.texture) {
@@ -104,6 +127,7 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                 if (!light_color) {
                     continue;
                 }
+
                 int w, h;
                 SDL_QueryTexture(light_source.texture, nullptr, nullptr, &w, &h);
                 SDL_Rect dest_rect = {
@@ -112,20 +136,36 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                     w,
                     h
                 };
+
                 add_render_object(light_source.texture, dest_rect, *light_color);
+
+                if (light_source.render_to_dark_mask) {
+                    add_scene_mask_light(light_source.texture,
+                                         dest_rect,
+                                         *light_color,
+                                         SDL_BLENDMODE_BLEND,
+                                         false);
+                }
             }
         }
     }
 
     // 2. Child animation assets behind
     for (const auto& child_attachment : asset->animation_children()) {
-        if (child_attachment.visible && !child_attachment.render_in_front && child_attachment.spawned_asset) {
+        if (child_attachment.visible &&
+            !child_attachment.render_in_front &&
+            child_attachment.spawned_asset) {
+
             Asset* child = child_attachment.spawned_asset;
             for (const auto& render_obj : child->render_package) {
                 SDL_Rect child_rect = render_obj.screen_rect;
                 child_rect.x += (child->pos.x - asset->pos.x);
                 child_rect.y += (child->pos.y - asset->pos.y);
-                add_render_object(render_obj.texture, child_rect, render_obj.color_mod, render_obj.blend_mode, false);
+                add_render_object(render_obj.texture,
+                                  child_rect,
+                                  render_obj.color_mod,
+                                  render_obj.blend_mode,
+                                  false);
             }
         }
     }
@@ -135,22 +175,45 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
     SDL_Texture* fg_tex = nullptr;
     SDL_Texture* bg_tex = nullptr;
 
+    static int debug_log_count = 0;
+    bool do_log = (debug_log_count < 50);
+
     const Animation* anim_ptr = nullptr;
     if (asset->info) {
         auto anim_it = asset->info->animations.find(asset->current_animation);
         if (anim_it != asset->info->animations.end()) {
-             anim_ptr = &anim_it->second;
-             if (asset->current_frame) {
-                 const FrameVariant* variant = anim_ptr->get_frame(asset->current_frame, asset->current_nearest_variant_scale);
-                 if (variant) {
-                     base_tex = variant->get_base_texture();
-                     fg_tex = variant->get_depthcue_foreground_texture();
-                     bg_tex = variant->get_depthcue_background_texture();
-                 }
-             }
+            anim_ptr = &anim_it->second;
+            if (asset->current_frame) {
+                const FrameVariant* variant =
+                    anim_ptr->get_frame(asset->current_frame,
+                                        asset->current_nearest_variant_scale);
+                if (variant) {
+                    base_tex = variant->get_base_texture();
+                    fg_tex = variant->get_depthcue_foreground_texture();
+                    bg_tex = variant->get_depthcue_background_texture();
+                    if (do_log) {
+                         std::cout << "[DEBUG] Asset: " << asset->info->name << " Got variant texture: " << base_tex << std::endl;
+                    }
+                } else {
+                    if (do_log) std::cout << "[DEBUG] Asset: " << asset->info->name << " Variant is NULL for scale " << asset->current_nearest_variant_scale << std::endl;
+                }
+            } else {
+                if (do_log) std::cout << "[DEBUG] Asset: " << asset->info->name << " current_frame is NULL" << std::endl;
+            }
+        } else {
+            if (do_log) std::cout << "[DEBUG] Asset: " << asset->info->name << " Animation not found: " << asset->current_animation << std::endl;
         }
+    } else {
+        if (do_log) std::cout << "[DEBUG] Asset: (no info) asset->info is NULL" << std::endl;
     }
-    if (!base_tex) base_tex = asset->get_current_frame();
+
+    if (!base_tex) {
+        base_tex = asset->get_current_frame();
+        if (do_log && base_tex) std::cout << "[DEBUG] Asset: " << (asset->info ? asset->info->name : "Unknown") << " Fallback to asset->get_current_frame() success: " << base_tex << std::endl;
+        if (do_log && !base_tex) std::cout << "[DEBUG] Asset: " << (asset->info ? asset->info->name : "Unknown") << " Fallback to asset->get_current_frame() FAILED (NULL)" << std::endl;
+    }
+
+    if (do_log) debug_log_count++;
 
     if (base_tex) {
         int w, h;
@@ -176,10 +239,12 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                 static_cast<int>(w * effective_scale),
                 static_cast<int>(h * effective_scale)
             };
-            SDL_Color color = {255, 255, 255, static_cast<Uint8>(gp->depth_cue_background_opacity * 255)};
+            SDL_Color color = {255, 255, 255,
+                               static_cast<Uint8>(gp->depth_cue_background_opacity * 255)};
             add_render_object(bg_tex, dest_rect, color);
         }
         */
+
         // Foreground
         /*
         if (fg_tex && gp->depth_cue_foreground_opacity > 0.0f) {
@@ -191,7 +256,8 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                 static_cast<int>(w * effective_scale),
                 static_cast<int>(h * effective_scale)
             };
-            SDL_Color color = {255, 255, 255, static_cast<Uint8>(gp->depth_cue_foreground_opacity * 255)};
+            SDL_Color color = {255, 255, 255,
+                               static_cast<Uint8>(gp->depth_cue_foreground_opacity * 255)};
             add_render_object(fg_tex, dest_rect, color);
         }
         */
@@ -199,13 +265,20 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
 
     // 5. Child animation assets in front
     for (const auto& child_attachment : asset->animation_children()) {
-        if (child_attachment.visible && child_attachment.render_in_front && child_attachment.spawned_asset) {
+        if (child_attachment.visible &&
+            child_attachment.render_in_front &&
+            child_attachment.spawned_asset) {
+
             Asset* child = child_attachment.spawned_asset;
             for (const auto& render_obj : child->render_package) {
                 SDL_Rect child_rect = render_obj.screen_rect;
                 child_rect.x += (child->pos.x - asset->pos.x);
                 child_rect.y += (child->pos.y - asset->pos.y);
-                add_render_object(render_obj.texture, child_rect, render_obj.color_mod, render_obj.blend_mode, false);
+                add_render_object(render_obj.texture,
+                                  child_rect,
+                                  render_obj.color_mod,
+                                  render_obj.blend_mode,
+                                  false);
             }
         }
     }
@@ -218,6 +291,7 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                 if (!light_color) {
                     continue;
                 }
+
                 int w, h;
                 SDL_QueryTexture(light_source.texture, nullptr, nullptr, &w, &h);
                 SDL_Rect dest_rect = {
@@ -226,7 +300,16 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                     w,
                     h
                 };
+
                 add_render_object(light_source.texture, dest_rect, *light_color);
+
+                if (light_source.render_to_dark_mask) {
+                    add_scene_mask_light(light_source.texture,
+                                         dest_rect,
+                                         *light_color,
+                                         SDL_BLENDMODE_BLEND,
+                                         false);
+                }
             }
         }
     }

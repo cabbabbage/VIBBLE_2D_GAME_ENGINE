@@ -166,6 +166,7 @@ Asset::Asset(const Asset& o)
 , distance_from_camera(o.distance_from_camera)
  , angle_from_camera(o.angle_from_camera)
 , asset_children(o.asset_children)
+, scene_mask_lights(o.scene_mask_lights)
 , depth(o.depth)
 , is_shaded(o.is_shaded)
 , dead(o.dead)
@@ -234,6 +235,7 @@ Asset& Asset::operator=(const Asset& o) {
         distance_from_camera = o.distance_from_camera;
         angle_from_camera = o.angle_from_camera;
         asset_children       = o.asset_children;
+        scene_mask_lights    = o.scene_mask_lights;
 	depth                = o.depth;
         is_shaded            = o.is_shaded;
 	dead                 = o.dead;
