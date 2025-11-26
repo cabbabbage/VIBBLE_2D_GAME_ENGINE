@@ -829,28 +829,18 @@ void AnimationLoader::load(Animation& animation,
                                 break;
                         }
 
-                        // Load depth cue foreground sequences if present
-                        std::vector<SDL_Surface*> dc_fg_loaded;
-                        if (CacheManager::load_surface_sequence(paths.depthcue_foreground_folder, frame_count, dc_fg_loaded) &&
-                            static_cast<int>(dc_fg_loaded.size()) == frame_count) {
-                                depthcue_foreground_surfaces[idx] = std::move(dc_fg_loaded);
-                        } else if (info.is_shaded) {
-                                all_surfaces_loaded = false;
-                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                          << " missing depth cue foregrounds for variant " << idx << " at " << paths.depthcue_foreground_folder << "\n";
-                                break;
+                        // Load depthcue foreground textures if available
+                        std::vector<SDL_Surface*> dfg_loaded;
+                        if (CacheManager::load_surface_sequence(paths.depthcue_foreground_folder, frame_count, dfg_loaded) && 
+                            static_cast<int>(dfg_loaded.size()) == frame_count) {
+                                depthcue_foreground_surfaces[idx] = std::move(dfg_loaded);
                         }
 
-                        // Load depth cue background sequences if present
-                        std::vector<SDL_Surface*> dc_bg_loaded;
-                        if (CacheManager::load_surface_sequence(paths.depthcue_background_folder, frame_count, dc_bg_loaded) &&
-                            static_cast<int>(dc_bg_loaded.size()) == frame_count) {
-                                depthcue_background_surfaces[idx] = std::move(dc_bg_loaded);
-                        } else if (info.is_shaded) {
-                                all_surfaces_loaded = false;
-                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                          << " missing depth cue backgrounds for variant " << idx << " at " << paths.depthcue_background_folder << "\n";
-                                break;
+                        // Load depthcue background textures if available
+                        std::vector<SDL_Surface*> dbg_loaded;
+                        if (CacheManager::load_surface_sequence(paths.depthcue_background_folder, frame_count, dbg_loaded) &&
+                            static_cast<int>(dbg_loaded.size()) == frame_count) {
+                                depthcue_background_surfaces[idx] = std::move(dbg_loaded);
                         }
                 }
 
@@ -956,6 +946,26 @@ void AnimationLoader::load(Animation& animation,
                                         cache_entry.mask_heights[variant_idx] = 0;
                                 }
                                 cache_entry.mask_textures[variant_idx] = mask_tex;
+
+                                // Load depthcue foreground overlay if available
+                                SDL_Texture* dfg_tex = nullptr;
+                                if (frame_idx < depthcue_foreground_surfaces[variant_idx].size() && depthcue_foreground_surfaces[variant_idx][frame_idx]) {
+                                        dfg_tex = CacheManager::surface_to_texture(renderer, depthcue_foreground_surfaces[variant_idx][frame_idx]);
+                                        if (dfg_tex) {
+                                                apply_scale_mode(dfg_tex, info);
+                                        }
+                                }
+                                cache_entry.depthcue_foreground_textures[variant_idx] = dfg_tex;
+
+                                // Load depthcue background overlay if available
+                                SDL_Texture* dbg_tex = nullptr;
+                                if (frame_idx < depthcue_background_surfaces[variant_idx].size() && depthcue_background_surfaces[variant_idx][frame_idx]) {
+                                        dbg_tex = CacheManager::surface_to_texture(renderer, depthcue_background_surfaces[variant_idx][frame_idx]);
+                                        if (dbg_tex) {
+                                                apply_scale_mode(dbg_tex, info);
+                                        }
+                                }
+                                cache_entry.depthcue_background_textures[variant_idx] = dbg_tex;
                         }
                         animation.frame_cache_.push_back(std::move(cache_entry));
                 }

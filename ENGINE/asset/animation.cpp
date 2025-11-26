@@ -54,6 +54,18 @@ void Animation::clear_texture_cache() {
                 tex = nullptr;
             }
         }
+        for (SDL_Texture*& tex : cache_entry.depthcue_foreground_textures) {
+            if (tex) {
+                SDL_DestroyTexture(tex);
+                tex = nullptr;
+            }
+        }
+        for (SDL_Texture*& tex : cache_entry.depthcue_background_textures) {
+            if (tex) {
+                SDL_DestroyTexture(tex);
+                tex = nullptr;
+            }
+        }
     }
     frame_cache_.clear();
     if (audio_clip.chunk) {
@@ -98,6 +110,8 @@ void Animation::adopt_prebuilt_frames(std::vector<FrameCache> caches,
                     if (v < cache.foreground_textures.size()) variant.foreground_texture = cache.foreground_textures[v];
                     if (v < cache.background_textures.size()) variant.background_texture = cache.background_textures[v];
                     if (v < cache.mask_textures.size()) variant.shadow_mask_texture = cache.mask_textures[v];
+                    if (v < cache.depthcue_foreground_textures.size()) variant.depthcue_foreground_texture = cache.depthcue_foreground_textures[v];
+                    if (v < cache.depthcue_background_textures.size()) variant.depthcue_background_texture = cache.depthcue_background_textures[v];
                     
                     frame.variants.push_back(variant);
                 }

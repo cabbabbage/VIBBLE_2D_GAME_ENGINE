@@ -97,66 +97,52 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset, const world::GridP
                  const FrameVariant* variant = anim_ptr->get_frame(asset->current_frame, asset->current_nearest_variant_scale);
                  if (variant) {
                      base_tex = variant->get_base_texture();
-                     fg_tex = variant->get_foreground_texture();
-                     bg_tex = variant->get_background_texture();
+                     fg_tex = variant->get_depthcue_foreground_texture();
+                     bg_tex = variant->get_depthcue_background_texture();
                  }
              }
         }
     }
     if (!base_tex) base_tex = asset->get_current_frame();
 
-    bool has_depth_cue = gp && ( (bg_tex && gp->depth_cue_background_opacity > 0.0f) || (fg_tex && gp->depth_cue_foreground_opacity > 0.0f) );
-
     if (base_tex) {
-        if (has_depth_cue) {
+        int w, h;
+        SDL_QueryTexture(base_tex, nullptr, nullptr, &w, &h);
+        SDL_Rect dest_rect = {
+            asset->pos.x,
+            asset->pos.y,
+            static_cast<int>(w * effective_scale),
+            static_cast<int>(h * effective_scale)
+        };
+        add_render_object(base_tex, dest_rect);
+    }
+
+    if (gp) {
+        // Background
+        if (bg_tex && gp->depth_cue_background_opacity > 0.0f) {
             int w, h;
-            SDL_QueryTexture(base_tex, nullptr, nullptr, &w, &h);
-            
-            if (asset->depth_cue_composite_texture_) {
-                SDL_DestroyTexture(asset->depth_cue_composite_texture_);
-            }
-            asset->depth_cue_composite_texture_ = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, w, h);
-            SDL_SetTextureBlendMode(asset->depth_cue_composite_texture_, SDL_BLENDMODE_BLEND);
-
-            SDL_SetRenderTarget(renderer_, asset->depth_cue_composite_texture_);
-            SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 0);
-            SDL_RenderClear(renderer_);
-
-            // Render base
-            SDL_RenderCopy(renderer_, base_tex, nullptr, nullptr);
-
-            // Render background cue
-            if (bg_tex && gp->depth_cue_background_opacity > 0.0f) {
-                SDL_SetTextureAlphaMod(bg_tex, static_cast<Uint8>(gp->depth_cue_background_opacity * 255));
-                SDL_RenderCopy(renderer_, bg_tex, nullptr, nullptr);
-            }
-
-            // Render foreground cue
-            if (fg_tex && gp->depth_cue_foreground_opacity > 0.0f) {
-                SDL_SetTextureAlphaMod(fg_tex, static_cast<Uint8>(gp->depth_cue_foreground_opacity * 255));
-                SDL_RenderCopy(renderer_, fg_tex, nullptr, nullptr);
-            }
-
-            SDL_SetRenderTarget(renderer_, nullptr);
-
+            SDL_QueryTexture(bg_tex, nullptr, nullptr, &w, &h);
             SDL_Rect dest_rect = {
                 asset->pos.x,
                 asset->pos.y,
                 static_cast<int>(w * effective_scale),
                 static_cast<int>(h * effective_scale)
             };
-            add_render_object(asset->depth_cue_composite_texture_, dest_rect);
-
-        } else {
+            SDL_Color color = {255, 255, 255, static_cast<Uint8>(gp->depth_cue_background_opacity * 255)};
+            add_render_object(bg_tex, dest_rect, color);
+        }
+        // Foreground
+        if (fg_tex && gp->depth_cue_foreground_opacity > 0.0f) {
             int w, h;
-            SDL_QueryTexture(base_tex, nullptr, nullptr, &w, &h);
+            SDL_QueryTexture(fg_tex, nullptr, nullptr, &w, &h);
             SDL_Rect dest_rect = {
                 asset->pos.x,
                 asset->pos.y,
                 static_cast<int>(w * effective_scale),
                 static_cast<int>(h * effective_scale)
             };
-            add_render_object(base_tex, dest_rect);
+            SDL_Color color = {255, 255, 255, static_cast<Uint8>(gp->depth_cue_foreground_opacity * 255)};
+            add_render_object(fg_tex, dest_rect, color);
         }
     }
 
