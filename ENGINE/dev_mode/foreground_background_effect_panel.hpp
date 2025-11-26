@@ -73,6 +73,8 @@ private:
     void apply_and_regenerate();
     void restore_defaults();
     void purge_mismatched_caches(std::uint64_t fg_hash, std::uint64_t bg_hash, bool force_purge = false);
+    void request_preview_rebuild();
+    bool can_render_preview() const;
 
     // Manifest-based loading/saving
     void save_depth_cue_settings_to_manifest();

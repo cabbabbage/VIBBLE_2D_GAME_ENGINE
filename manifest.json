@@ -101,6 +101,7 @@
       "tillable": false
     },
     "Grass_1": {
+      "animation_children": [],
       "animations": {
         "default": {
           "flipped_source": false,
@@ -163,7 +164,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 2.0
+        "scale_percentage": 18.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -2396,6 +2397,8 @@
         "parallax_smoothing_method": 1,
         "parallax_smoothing_snap_threshold": 0.5,
         "parallax_smoothing_spring_frequency": 0.0,
+        "perspective_distance_at_scale_hundred": 1726.0,
+        "perspective_distance_at_scale_zero": -4395.0,
         "realism_enabled": true,
         "render_quality_percent": 50,
         "scale_hysteresis_margin": 0.004999999888241291,
@@ -2732,8 +2735,8 @@
           "curvyness": 2,
           "display_color": [
             242,
+            213,
             36,
-            242,
             255
           ],
           "edge_smoothness": 19,
@@ -2751,9 +2754,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            85,
-            242,
-            156,
+            31,
+            204,
+            31,
             255
           ],
           "edge_smoothness": 43,
@@ -2804,9 +2807,9 @@
         "rnd": {
           "curvyness": 2,
           "display_color": [
-            110,
-            31,
-            204,
+            36,
+            143,
+            242,
             255
           ],
           "edge_smoothness": 2,
@@ -2825,8 +2828,8 @@
           "curvyness": 2,
           "display_color": [
             242,
+            130,
             36,
-            242,
             255
           ],
           "edge_smoothness": 101,
@@ -2855,8 +2858,8 @@
                 }
               ],
               "display_name": "trail",
-              "dx": -1308,
-              "dy": 612,
+              "dx": -1732,
+              "dy": -2080052420,
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
@@ -3101,6 +3104,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
+              "priority": 8,
               "resolution": 7,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,

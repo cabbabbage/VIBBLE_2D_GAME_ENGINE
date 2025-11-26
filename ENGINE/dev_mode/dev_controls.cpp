@@ -1025,7 +1025,6 @@ void DevControls::set_enabled(bool enabled) {
         if (room_editor_) room_editor_->set_enabled(true, true);
         if (map_editor_) map_editor_->set_enabled(false);
         if (camera_panel_) camera_panel_->set_assets(assets_);
-        if (image_effect_panel_) image_effect_panel_->set_assets(assets_);
         set_current_room(target);
         if (map_mode_ui_) {
             map_mode_ui_->set_map_mode_active(false);
@@ -2420,7 +2419,6 @@ void DevControls::configure_header_button_sets() {
                 return;
             }
             camera_panel_->set_assets(assets_);
-            if (image_effect_panel_) image_effect_panel_->set_assets(assets_);
             if (camera_panel_->is_visible() != active) {
                 toggle_camera_panel();
             } else {
@@ -3394,7 +3392,6 @@ void DevControls::toggle_camera_panel() {
         return;
     }
     camera_panel_->set_assets(assets_);
-    if (image_effect_panel_) image_effect_panel_->set_assets(assets_);
     if (camera_panel_->is_visible()) {
         camera_panel_->close();
     } else {
@@ -3419,7 +3416,6 @@ void DevControls::toggle_image_effect_panel() {
         image_effect_panel_ = std::make_unique<ForegroundBackgroundEffectPanel>(assets_, 96, 160);
         image_effect_panel_->close();
     }
-    image_effect_panel_->set_assets(assets_);
     if (image_effect_panel_->is_visible()) {
         image_effect_panel_->set_close_callback({});
         image_effect_panel_->close();
@@ -3433,6 +3429,7 @@ void DevControls::toggle_image_effect_panel() {
         if (camera_panel_ && camera_panel_->is_visible()) {
             camera_panel_->close();
         }
+        image_effect_panel_->set_assets(assets_);
         // Set close callback to reopen camera panel
         image_effect_panel_->set_close_callback([this]() {
             if (camera_panel_) {

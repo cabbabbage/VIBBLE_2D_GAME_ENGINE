@@ -243,6 +243,7 @@ void ForegroundBackgroundEffectPanel::set_assets(Assets* assets) {
 void ForegroundBackgroundEffectPanel::open() {
     set_visible(true);
     DockableCollapsible::open();
+    request_preview_rebuild();
 }
 
 void ForegroundBackgroundEffectPanel::close() {
@@ -258,6 +259,9 @@ bool ForegroundBackgroundEffectPanel::is_point_inside(int x, int y) const {
 
 void ForegroundBackgroundEffectPanel::update(const Input& input, int screen_w, int screen_h) {
     DockableCollapsible::update(input, screen_w, screen_h);
+    if (!can_render_preview()) {
+        return;
+    }
     if (preview_dirty_) {
         rebuild_previews();
     }
@@ -1015,7 +1019,7 @@ void ForegroundBackgroundEffectPanel::apply_and_regenerate() {
     saved_bg_ = bg_settings_;
     has_unsaved_changes_ = false;
     preview_dirty_ = true;
-    rebuild_previews();
+    request_preview_rebuild();
 }
 
 void ForegroundBackgroundEffectPanel::restore_defaults() {
@@ -1096,5 +1100,17 @@ void ForegroundBackgroundEffectPanel::purge_mismatched_caches(std::uint64_t fg_h
                 fs::remove_all(scale_entry.path() / "background", remove_ec);
             }
         }
+    }
+}
+
+bool ForegroundBackgroundEffectPanel::can_render_preview() const {
+    return is_visible() && is_expanded();
+}
+
+void ForegroundBackgroundEffectPanel::request_preview_rebuild() {
+    if (can_render_preview()) {
+        rebuild_previews();
+    } else {
+        preview_dirty_ = true;
     }
 }
