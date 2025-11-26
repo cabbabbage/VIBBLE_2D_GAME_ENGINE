@@ -1886,7 +1886,7 @@ void AssetInfo::loadAnimations(SDL_Renderer* renderer) {
         const auto& json = it.value();
         
         Animation& anim = animations[name];
-        std::filesystem::path cache_root = std::filesystem::path("cache") / this->name / name;
+        std::filesystem::path cache_root = std::filesystem::path("cache") / this->name / "animations";
              
         AnimationLoader::load(anim, name, json, *this, dir_path_, cache_root.string(), scale_factor, renderer, dummy_base_sprite, dummy_w, dummy_h, original_canvas_width, original_canvas_height, false);
     }

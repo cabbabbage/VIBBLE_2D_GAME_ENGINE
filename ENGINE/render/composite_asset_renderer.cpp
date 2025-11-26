@@ -6,7 +6,6 @@
 #include "render/light_flicker.hpp"
 #include "render/render.hpp"
 
-#include <iostream>
 #include <algorithm>
 #include <cmath>
 #include <optional>
@@ -175,9 +174,6 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
     SDL_Texture* fg_tex = nullptr;
     SDL_Texture* bg_tex = nullptr;
 
-    static int debug_log_count = 0;
-    bool do_log = (debug_log_count < 50);
-
     const Animation* anim_ptr = nullptr;
     if (asset->info) {
         auto anim_it = asset->info->animations.find(asset->current_animation);
@@ -191,29 +187,14 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                     base_tex = variant->get_base_texture();
                     fg_tex = variant->get_depthcue_foreground_texture();
                     bg_tex = variant->get_depthcue_background_texture();
-                    if (do_log) {
-                         std::cout << "[DEBUG] Asset: " << asset->info->name << " Got variant texture: " << base_tex << std::endl;
-                    }
-                } else {
-                    if (do_log) std::cout << "[DEBUG] Asset: " << asset->info->name << " Variant is NULL for scale " << asset->current_nearest_variant_scale << std::endl;
                 }
-            } else {
-                if (do_log) std::cout << "[DEBUG] Asset: " << asset->info->name << " current_frame is NULL" << std::endl;
             }
-        } else {
-            if (do_log) std::cout << "[DEBUG] Asset: " << asset->info->name << " Animation not found: " << asset->current_animation << std::endl;
         }
-    } else {
-        if (do_log) std::cout << "[DEBUG] Asset: (no info) asset->info is NULL" << std::endl;
     }
 
     if (!base_tex) {
         base_tex = asset->get_current_frame();
-        if (do_log && base_tex) std::cout << "[DEBUG] Asset: " << (asset->info ? asset->info->name : "Unknown") << " Fallback to asset->get_current_frame() success: " << base_tex << std::endl;
-        if (do_log && !base_tex) std::cout << "[DEBUG] Asset: " << (asset->info ? asset->info->name : "Unknown") << " Fallback to asset->get_current_frame() FAILED (NULL)" << std::endl;
     }
-
-    if (do_log) debug_log_count++;
 
     if (base_tex) {
         int w, h;
