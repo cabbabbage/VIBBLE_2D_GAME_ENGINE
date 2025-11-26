@@ -199,11 +199,18 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
     if (base_tex) {
         int w, h;
         SDL_QueryTexture(base_tex, nullptr, nullptr, &w, &h);
+        
+        // Apply the remaining scale adjustment (current_scale / variant_scale)
+        // to ensure the asset is rendered at the exact desired size, not just the variant's size.
+        float scale = asset->current_remaining_scale_adjustment;
+        int final_w = static_cast<int>(w * scale);
+        int final_h = static_cast<int>(h * scale);
+
         SDL_Rect dest_rect = {
             asset->pos.x,
             asset->pos.y,
-            w,
-            h
+            final_w,
+            final_h
         };
         add_render_object(base_tex, dest_rect);
     }

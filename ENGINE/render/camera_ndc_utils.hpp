@@ -15,7 +15,6 @@ constexpr double PI_D       = 3.14159265358979323846;
 constexpr double HALF_FOV_Y = PI_D / 4.0; // 45 deg half FOV (90 total)
 constexpr double RAD_TO_DEG = 180.0 / PI_D;
 constexpr float  kDefaultPitchDegrees   = 60.0f;
-constexpr float  kMaxForeshortenSliderStrength = 2.0f;
 constexpr float  kFixedDepthOffsetPx    = 4000.0f;
 constexpr double kMinZoomRange = 1e-4;
 
@@ -58,11 +57,6 @@ inline double shortest_delta_degrees(double from_deg, double to_deg) {
 inline double lerp_angle(double from_deg, double to_deg, double t) {
     const double delta = shortest_delta_degrees(from_deg, to_deg);
     return wrap_degrees_0_360(from_deg + delta * t);
-}
-
-inline float clamp_slider(float raw_value, float max_value) {
-    const float safe = std::isfinite(raw_value) ? std::max(0.0f, raw_value) : 0.0f;
-    return std::clamp(safe, 0.0f, max_value);
 }
 
 inline double signed_radians_from_degrees(double degrees) {

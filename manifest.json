@@ -2389,8 +2389,6 @@
         "extra_cull_margin": 300.0,
         "foreground_plane_screen_y": 902.0,
         "foreground_texture_max_opacity": 0,
-        "foreshorten_at_zoom_high": 0.0,
-        "foreshorten_at_zoom_low": 0.0,
         "grid_depth_offset_px": 4000.0,
         "min_visible_screen_ratio": 0.006000000052154064,
         "parallax_smoothing_lerp_rate": 4.1666669845581055,
@@ -3220,7 +3218,6 @@
         }
       },
       "camera_settings": {
-        "foreshorten_strength": 0.5,
         "min_visible_screen_ratio": 0.009999999776482582,
         "motion_smoothing_max_step": 8000.0,
         "motion_smoothing_method": 1,
@@ -3587,7 +3584,6 @@
         },
         "foreground_plane_screen_y": 1080.0,
         "foreground_texture_max_opacity": 0,
-        "foreshorten_strength": 0.5,
         "min_visible_screen_ratio": 0.009999999776482582,
         "motion_smoothing_max_step": 8000.0,
         "motion_smoothing_method": 1,

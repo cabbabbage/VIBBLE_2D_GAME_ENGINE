@@ -86,10 +86,10 @@ public:
         float base_height_at_zoom_low  = 720.0f;
         float base_height_at_zoom_high = 720.0f;
 
-        // Foreshortening strength
-        float foreshorten_at_zoom_low = 0.0f;
-        float foreshorten_at_zoom_high = 0.0f;
-        float foreshorten_strength = 0.0f;
+        // Distance-based perspective mapping controls (world-space distances
+        // that map to perspective scales 0 and 100).
+        float perspective_distance_at_scale_zero   = 1.0f;   // far
+        float perspective_distance_at_scale_hundred = 0.5f;  // near
 
         // Image effects for foreground and background
         camera_effects::ImageEffectSettings foreground_effects{};
@@ -218,7 +218,6 @@ public:
     double view_height_world() const;
     double anchor_world_y() const;
     double zoom_lerp_t_for_scale(double scale_value) const;
-    float foreshorten_for_scale(double scale_value) const;
     float depth_offset_for_scale(double scale_value) const;
     double horizon_screen_y_for_scale() const;
     double horizon_screen_y_for_scale_value(double scale_value) const;
@@ -318,6 +317,13 @@ private:
     float runtime_depth_offset_px_ = 0.0f;
     FloorDepthParams runtime_floor_params_{};
     bool geometry_valid_ = false;
+
+    // Runtime distance-based perspective mapping parameters.
+    // World-space distances (from the camera along the floor) that
+    // linearly map to perspective scales 0 and 100 respectively.
+    // These are derived from current zoom, pitch, and floor params.
+    double perspective_distance_at_scale_zero_    = 1.0;  // far
+    double perspective_distance_at_scale_hundred_ = 0.5;  // near
 
     // Calculators
     std::unique_ptr<ndc> ndc_calculator_;

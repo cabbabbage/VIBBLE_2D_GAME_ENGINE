@@ -1400,7 +1400,10 @@ bool Assets::asset_bounds_in_screen_space(const Asset* asset, SDL_FRect& out_rec
     if (auto* gp = camera_.grid_point_for_asset(asset)) {
         const float zoom = std::max(0.000001f, camera_.get_scale());
         const float inv_scale = 1.0f / zoom;
-        const float distance_scale = (asset->info->apply_distance_scaling) ? (gp->perspective_scale / zoom) : 1.0f;
+        // gp->perspective_scale already encodes distance/zoom; assets
+        // and renderers should use it directly when distance scaling
+        // is enabled.
+        const float distance_scale = (asset->info->apply_distance_scaling) ? gp->perspective_scale : 1.0f;
         const float vertical_scale = (asset->info->apply_vertical_scaling) ? gp->vertical_scale : 1.0f;
 
         const float center_x = gp->screen.x + (world_center_x - world_x) * inv_scale * distance_scale;

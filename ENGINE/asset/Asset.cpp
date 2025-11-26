@@ -336,29 +336,24 @@ void Asset::finalize_setup() {
 
 void Asset::update_scale_values() {
     float base_scale = (info && std::isfinite(info->scale_factor) && info->scale_factor > 0.0f) ? info->scale_factor : 1.0f;
-    float zoom = window ? window->get_scale() : 1.0f;
-    
-    if (window) {
-        if (auto* gp = window->grid_point_for_asset(this)) {
-            if (info && !info->apply_distance_scaling) {
-                current_scale = base_scale * zoom;
-            } else {
-                current_scale = base_scale * gp->perspective_scale;
-            }
+        // Assets do not know about zoom explicitly; they rely solely on
+        // their base percentage scale and the precomputed perspective_scale
+        // from the grid point when distance scaling is enabled.
+
+        if (window) {
+                if (auto* gp = window->grid_point_for_asset(this)) {
+                        if (info && info->apply_distance_scaling) {
+                                current_scale = base_scale * gp->perspective_scale;
+                        } else {
+                                current_scale = base_scale;
+                        }
+                } else {
+                        // No grid point: fall back to base scale only.
+                        current_scale = base_scale;
+                }
         } else {
-            float asset_sh = (cached_h > 0) ? (cached_h * zoom) : 0.0f;
-            float ref_sh = window->get_settings().base_height_px * zoom;
-            
-            auto effects = window->compute_render_effects(pos, asset_sh, ref_sh, camera_grid::RenderSmoothingKey(this));
-            float distance_scale = effects.distance_scale;
-            if (info && !info->apply_distance_scaling) {
-                distance_scale = 1.0f;
-            }
-            current_scale = base_scale * zoom * distance_scale;
+                current_scale = base_scale;
         }
-    } else {
-        current_scale = base_scale * zoom;
-    }
 
     const auto& steps = (info && !info->scale_variants.empty()) 
                         ? static_cast<const std::vector<float>&>(info->scale_variants) 

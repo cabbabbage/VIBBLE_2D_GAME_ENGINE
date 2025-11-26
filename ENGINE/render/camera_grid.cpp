@@ -36,9 +36,10 @@ namespace {
     constexpr double BASE_RATIO = 1.1;
     constexpr double PI_D       = 3.14159265358979323846;
     constexpr float  kDefaultPitchDegrees   = 60.0f;
-    constexpr float  kMaxForeshortenSliderStrength = 2.0f;
     constexpr float  kFixedDepthOffsetPx    = 4000.0f;
     constexpr double kMinZoomRange = 1e-4;
+    constexpr double kMinPerspectiveScale   = 0.35;
+    constexpr double kMaxPerspectiveScale   = 1.65;
 
     struct ZoomInterpolator {
         double t = 0.0;
@@ -79,11 +80,6 @@ namespace {
     double lerp_angle(double from_deg, double to_deg, double t) {
         const double delta = shortest_delta_degrees(from_deg, to_deg);
         return wrap_degrees_0_360(from_deg + delta * t);
-    }
-
-    float clamp_slider(float raw_value, float max_value) {
-        const float safe = std::isfinite(raw_value) ? std::max(0.0f, raw_value) : 0.0f;
-        return std::clamp(safe, 0.0f, max_value);
     }
 
     double signed_radians_from_degrees(double degrees) {
@@ -236,6 +232,48 @@ namespace {
         out.strength         = src.strength;
         out.enabled          = src.enabled;
         return out;
+    }
+
+    struct PerspectiveRange {
+        double near_distance = 0.0;
+        double far_distance  = 1.0;
+    };
+
+    PerspectiveRange sanitize_perspective_range(const camera_grid::RealismSettings& settings) {
+        double near_distance = static_cast<double>(settings.perspective_distance_at_scale_hundred);
+        double far_distance  = static_cast<double>(settings.perspective_distance_at_scale_zero);
+        if (!std::isfinite(near_distance)) near_distance = 0.0;
+        if (!std::isfinite(far_distance))  far_distance  = near_distance + 1.0;
+        if (std::fabs(far_distance - near_distance) < 1e-4) {
+            far_distance = near_distance + 1.0;
+        }
+        if (near_distance > far_distance) {
+            std::swap(near_distance, far_distance);
+        }
+        return PerspectiveRange{ near_distance, far_distance };
+    }
+
+    double compute_floor_distance_measure(double screen_y, const camera_grid::FloorDepthParams& params) {
+        if (!params.enabled) {
+            return 0.0;
+        }
+
+        const double min_bound = std::min(params.horizon_screen_y, params.bottom_screen_y);
+        const double max_bound = std::max(params.horizon_screen_y, params.bottom_screen_y);
+        const double clamped_y = std::clamp(static_cast<double>(screen_y), min_bound, max_bound);
+
+        const double denom_screen = std::max(1e-4, std::abs(params.bottom_screen_y - params.horizon_screen_y));
+        const double t_screen = std::clamp((clamped_y - params.horizon_screen_y) / denom_screen, 0.0, 1.0);
+        const double ndc_y = params.horizon_ndc + (params.near_ndc - params.horizon_ndc) * t_screen;
+        const double ndc_span = std::max(1e-4, std::abs(params.near_ndc - params.horizon_ndc));
+        return (params.near_ndc - ndc_y) / ndc_span;
+    }
+
+    double perspective_scale_from_measure(double measure, const PerspectiveRange& range) {
+        const double denom = std::max(std::abs(range.far_distance - range.near_distance), 1e-4);
+        const double t = std::clamp((measure - range.near_distance) / denom, 0.0, 1.0);
+        const double scale = kMaxPerspectiveScale + (kMinPerspectiveScale - kMaxPerspectiveScale) * t;
+        return std::clamp(scale, 0.05, 4.0);
     }
 
 }
@@ -857,40 +895,23 @@ camera_grid::RenderEffects camera_grid::compute_render_effects(
         return result;
     }
 
-    const double y = static_cast<double>(warped_screen.y);
-    const double range = bottom - horizon;
-
-    // Normalized depth along the floor from horizon (0) to bottom (1).
-    double t = (y - horizon) / range;
-    // t = std::clamp(t, 0.0, 1.0);
-
-    // How strong the perspective foreshortening should be, based on zoom.
-    const double foreshorten = static_cast<double>(foreshorten_for_scale(smoothed_scale_)); // 0..kMaxForeshortenSliderStrength
-    const double strength = std::clamp(foreshorten, 0.0, static_cast<double>(kMaxForeshortenSliderStrength));
-
-    // Define near and far scales:
-    //  - At the horizon (t = 0) scale is smaller (far).
-    //  - At the bottom (t = 1) scale is larger (near).
-    const double min_scale_far  = 1.0 / (1.0 + 0.5 * strength);          // ~1.0 down to ~0.5
-    const double max_scale_near = 1.0 + strength;                         // ~1.0 up to ~3.0
-
-    // Smoothly interpolate between far and near based on t.
-    double depth_scale = min_scale_far + (max_scale_near - min_scale_far) * t;
+    const PerspectiveRange range = sanitize_perspective_range(settings_);
+    const double distance_measure = compute_floor_distance_measure(warped_screen.y, p);
+    double depth_scale = perspective_scale_from_measure(distance_measure, range);
 
     // Optional blend with any screen-height hint if you ever pass a real asset_screen_height.
-    double screen_based_scale = 1.0;
+    double final_scale = depth_scale;
     if (reference_screen_height > EPS && asset_screen_height > EPS) {
-        screen_based_scale = std::clamp(
+        double screen_based_scale = std::clamp(
             static_cast<double>(reference_screen_height) /
             std::max(static_cast<double>(asset_screen_height), EPS),
             0.35,
             1.5);
+        final_scale = 0.5 * depth_scale + 0.5 * screen_based_scale;
     }
 
-    const double blended_scale = 0.5 * depth_scale + 0.5 * screen_based_scale;
-
     // Final clamp to keep sprites reasonable.
-    const double distance_scale = std::clamp(blended_scale, 0.01, 3.0);
+    const double distance_scale = std::clamp(final_scale, 0.01, 4.0);
     result.distance_scale = static_cast<float>(distance_scale);
 
     // ---------------------------------------------------------------------
@@ -967,8 +988,6 @@ void camera_grid::apply_camera_settings(const nlohmann::json& data) {
     const std::array<std::pair<const char*, float*>, 21> float_fields{ {
         { "base_height_at_zoom_low", &settings_.base_height_at_zoom_low },
         { "base_height_at_zoom_high", &settings_.base_height_at_zoom_high },
-        { "foreshorten_at_zoom_low", &settings_.foreshorten_at_zoom_low },
-        { "foreshorten_at_zoom_high", &settings_.foreshorten_at_zoom_high },
         { "extra_cull_margin", &settings_.extra_cull_margin },
         { "zoom_low", &settings_.zoom_low },
         { "zoom_high", &settings_.zoom_high },
@@ -985,7 +1004,9 @@ void camera_grid::apply_camera_settings(const nlohmann::json& data) {
         { "parallax_smoothing_snap_threshold", &settings_.parallax_smoothing.snap_threshold },
         { "scale_hysteresis_margin", &settings_.scale_variant_hysteresis_margin },
         { "foreground_plane_screen_y", &settings_.foreground_plane_screen_y },
-        { "background_plane_screen_y", &settings_.background_plane_screen_y }
+        { "background_plane_screen_y", &settings_.background_plane_screen_y },
+        { "perspective_distance_at_scale_zero", &settings_.perspective_distance_at_scale_zero },
+        { "perspective_distance_at_scale_hundred", &settings_.perspective_distance_at_scale_hundred }
     } };
     for (const auto& [key, field] : float_fields) {
         try_read_number(key, *field);
@@ -1023,11 +1044,6 @@ void camera_grid::apply_camera_settings(const nlohmann::json& data) {
         settings_.background_plane_screen_y =
             std::clamp(settings_.background_plane_screen_y, 0.0f, 4000.0f);
     }
-
-    settings_.foreshorten_at_zoom_low = clamp_slider(settings_.foreshorten_at_zoom_low, kMaxForeshortenSliderStrength);
-    settings_.foreshorten_at_zoom_high = clamp_slider(settings_.foreshorten_at_zoom_high, kMaxForeshortenSliderStrength);
-    settings_.foreshorten_strength =
-        0.5f * (settings_.foreshorten_at_zoom_low + settings_.foreshorten_at_zoom_high);
 
     // Force depth offset to the fixed value after loading.
     settings_.grid_depth_offset_px   = kFixedDepthOffsetPx;
@@ -1096,7 +1112,20 @@ void camera_grid::apply_camera_settings(const nlohmann::json& data) {
         settings_.scale_variant_hysteresis_margin < 0.0f) {
         settings_.scale_variant_hysteresis_margin = 0.05f;
     }
-    update_geometry_cache(compute_geometry());
+
+    if (ndc_calculator_) {
+        ndc::Settings ndc_settings;
+        ndc_settings.zoom_low = settings_.zoom_low;
+        ndc_settings.zoom_high = settings_.zoom_high;
+        ndc_settings.base_height_px = settings_.base_height_px;
+        ndc_settings.tilt_zoom_in_degrees = settings_.tilt_zoom_in_degrees;
+        ndc_settings.tilt_zoom_out_degrees = settings_.tilt_zoom_out_degrees;
+        ndc_settings.base_height_at_zoom_low = settings_.base_height_at_zoom_low;
+        ndc_settings.base_height_at_zoom_high = settings_.base_height_at_zoom_high;
+        ndc_calculator_->set_settings(ndc_settings);
+    }
+
+    recompute_current_view();
 }
 
 nlohmann::json camera_grid::camera_settings_to_json() const {
@@ -1104,8 +1133,6 @@ nlohmann::json camera_grid::camera_settings_to_json() const {
     j["realism_enabled"] = realism_enabled_;
 
     const std::pair<const char*, float> float_fields[] = {
-        { "foreshorten_at_zoom_low", settings_.foreshorten_at_zoom_low },
-        { "foreshorten_at_zoom_high", settings_.foreshorten_at_zoom_high },
         { "extra_cull_margin", settings_.extra_cull_margin },
         { "depth_offset_at_zoom_low", settings_.depth_offset_at_zoom_low },
         { "depth_offset_at_zoom_high", settings_.depth_offset_at_zoom_high },
@@ -1113,6 +1140,8 @@ nlohmann::json camera_grid::camera_settings_to_json() const {
         { "base_height_at_zoom_high", settings_.base_height_at_zoom_high },
         { "zoom_low", settings_.zoom_low },
         { "zoom_high", settings_.zoom_high },
+        { "perspective_distance_at_scale_zero", settings_.perspective_distance_at_scale_zero },
+        { "perspective_distance_at_scale_hundred", settings_.perspective_distance_at_scale_hundred },
         { "base_height_px", settings_.base_height_px },
         { "tilt_zoom_in_degrees", settings_.tilt_zoom_in_degrees },
         { "tilt_zoom_out_degrees", settings_.tilt_zoom_out_degrees },
@@ -1204,14 +1233,6 @@ double camera_grid::anchor_world_y() const {
 
 double camera_grid::zoom_lerp_t_for_scale(double scale_value) const {
     return ZoomInterpolator(settings_, scale_value).t;
-}
-
-float camera_grid::foreshorten_for_scale(double scale_value) const {
-    const ZoomInterpolator zoom(settings_, scale_value);
-    const float value = static_cast<float>(zoom.lerp(
-        settings_.foreshorten_at_zoom_low,
-        settings_.foreshorten_at_zoom_high));
-    return clamp_slider(value, kMaxForeshortenSliderStrength);
 }
 
 float camera_grid::depth_offset_for_scale(double scale_value) const {
@@ -1315,6 +1336,23 @@ void camera_grid::rebuild_grid(world::Grid& world_grid, float dt_seconds) {
     const float min_visible_px =
         screen_h * std::clamp(settings_.min_visible_screen_ratio, 0.0f, 0.5f);
 
+    // ------------------------------------------------------------------
+    // Distance-based perspective context
+    // ------------------------------------------------------------------
+    // Use current floor depth params to derive two reference distances
+    // (far and near) that map to perspective scales 0 and 100.
+    // We approximate distance along the floor using NDC depth.
+    FloorDepthParams depth_params = runtime_floor_params_;
+    if (!depth_params.enabled) {
+        depth_params = compute_floor_depth_params();
+    }
+
+    const PerspectiveRange perspective_range = sanitize_perspective_range(settings_);
+
+    // Cache the current mapping distances for debugging/inspection.
+    perspective_distance_at_scale_zero_    = perspective_range.far_distance;
+    perspective_distance_at_scale_hundred_ = perspective_range.near_distance;
+
     auto rects_intersect = [](const SDL_FRect& a, const SDL_FRect& b) -> bool {
         const float ax1 = a.x + a.w;
         const float ay1 = a.y + a.h;
@@ -1369,8 +1407,16 @@ void camera_grid::rebuild_grid(world::Grid& world_grid, float dt_seconds) {
         gp->screen             = screen_pos;
         gp->parallax_dx        = parallax_dx;
         gp->vertical_scale     = effects.vertical_scale;
-        gp->perspective_scale  = smoothed_scale_ * effects.distance_scale;
-        gp->distance_to_camera = 0.0f;
+
+        // Distance-based perspective scale: assets rely solely on this
+        // value (and their base scale). We estimate the floor distance
+        // by projecting the warped screen Y back into NDC, then mapping
+        // to a [near_distance, far_distance] interval.
+        const double distance_measure = compute_floor_distance_measure(screen_pos.y, depth_params);
+        const double perspective_scale_value = perspective_scale_from_measure(distance_measure, perspective_range);
+
+        gp->perspective_scale  = static_cast<float>(perspective_scale_value);
+        gp->distance_to_camera = static_cast<float>(distance_measure);
         gp->tilt_radians       = runtime_pitch_rad_;
         gp->on_screen          = on_screen;
 

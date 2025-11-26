@@ -157,8 +157,32 @@ SceneRenderer::SceneRenderer(PrevalidatedTag,
   sky_texture_path_(std::filesystem::path("SRC") / "misc_content" / "sky.png"),
   composite_renderer_(renderer, assets)
 {
-    (void)map_manifest;
-    (void)map_id;
+    // Extract map clear color from manifest
+    bool color_set = false;
+    if (map_manifest.contains("maps") && map_manifest["maps"].contains(map_id)) {
+        const auto& map_data = map_manifest["maps"][map_id];
+        if (map_data.contains("map_light_data") && map_data["map_light_data"].contains("map_color")) {
+            const auto& mc = map_data["map_light_data"]["map_color"];
+            if (mc.contains("r") && mc["r"].contains("max") && mc["r"]["max"].is_number_integer() &&
+                mc.contains("g") && mc["g"].contains("max") && mc["g"]["max"].is_number_integer() &&
+                mc.contains("b") && mc["b"].contains("max") && mc["b"]["max"].is_number_integer() &&
+                mc.contains("a") && mc["a"].contains("max") && mc["a"]["max"].is_number_integer()) {
+                int r_max = mc["r"]["max"];
+                int g_max = mc["g"]["max"];
+                int b_max = mc["b"]["max"];
+                int a_max = mc["a"]["max"];
+                if (r_max >= 0 && r_max <= 255 && g_max >= 0 && g_max <= 255 &&
+                    b_max >= 0 && b_max <= 255 && a_max >= 0 && a_max <= 255) {
+                    map_clear_color_ = SDL_Color{static_cast<Uint8>(r_max), static_cast<Uint8>(g_max), static_cast<Uint8>(b_max), static_cast<Uint8>(a_max)};
+                    color_set = true;
+                }
+            }
+        }
+    }
+    if (!color_set) {
+        // Default background color
+        map_clear_color_ = SDL_Color{69, 101, 74, 255};
+    }
 
     vibble::log::debug(std::string{"[SceneRenderer] Initializing for map '"} + map_id +
                        "' with screen " + std::to_string(screen_width_) + "x" + std::to_string(screen_height_) + ".");
@@ -461,11 +485,3 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity, flo
     SDL_Rect screen_dst{0, 0, screen_width_, screen_height_};
     SDL_RenderCopy(renderer_, darkness_overlay_texture_, nullptr, &screen_dst);
 }
-
-
-
-
-
-
-
-
