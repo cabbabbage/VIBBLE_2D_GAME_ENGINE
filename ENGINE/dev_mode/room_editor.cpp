@@ -2262,13 +2262,8 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     const bool shift_down =
         input.isScancodeDown(SDL_SCANCODE_LSHIFT) || input.isScancodeDown(SDL_SCANCODE_RSHIFT);
 
-    if (shift_asset_modifier_active_ && !shift_down && !left_down && !dragging_) {
-        clear_selection();
-    }
-    shift_asset_modifier_active_ = shift_down;
-
     // Block camera panning if the pointer is pressed over a spawn-group gizmo so dragging can edit it.
-    Asset* hit_before_pan = shift_down ? hit_test_asset(screen_pt, nullptr) : nullptr;
+    Asset* hit_before_pan = hit_test_asset(screen_pt, nullptr);
     const bool pointer_blocks_pan = dragging_ ||
                                     (shift_down && hit_before_pan && !hit_before_pan->spawn_id.empty() &&
                                      (left_down || left_pressed_this_frame));
@@ -2284,7 +2279,7 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     }
 
     // --- Hit-test for hover (screen-space rects) ---
-    Asset* hit = shift_down ? hit_test_asset(screen_pt, nullptr) : nullptr;
+    Asset* hit = hit_test_asset(screen_pt, nullptr);
 
     // --- Highlight rebuild helper ---
     auto rebuild_highlight = [this]() {

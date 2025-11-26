@@ -319,8 +319,7 @@ void SceneRenderer::render() {
     // if (dark_mask_enabled_) {
     //     render_dynamic_darkness_overlay(kDefaultMapLightOpacity, flicker_time_seconds);
     // }
-
-    SDL_RenderPresent(renderer_);
+    // Presentation is handled by the outer frame loop (e.g., MenuUI::game_loop).
 }
 
 bool SceneRenderer::ensure_darkness_overlay() {

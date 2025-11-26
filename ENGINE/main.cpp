@@ -975,7 +975,7 @@ int main(int argc, char* argv[]) {
         }
 
         SDL_Renderer* renderer =
-                SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+                SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
         if (!renderer) {
                 vibble::log::error(std::string("SDL_CreateRenderer failed: ") +
                                    SDL_GetError());

@@ -318,7 +318,6 @@ private:
     std::vector<Asset*> selected_assets_;
     std::vector<Asset*> highlighted_assets_;
     bool highlight_dirty_ = true;
-    bool shift_asset_modifier_active_ = false;
 
     bool dragging_ = false;
     Asset* drag_anchor_asset_ = nullptr;

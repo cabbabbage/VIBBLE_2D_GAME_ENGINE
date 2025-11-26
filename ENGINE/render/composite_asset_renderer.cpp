@@ -32,29 +32,45 @@ void CompositeAssetRenderer::update(Asset* asset,
         }
     }
 
+    float combined_scale = asset->current_nearest_variant_scale * asset->current_remaining_scale_adjustment;
+    if (!std::isfinite(combined_scale) || combined_scale <= 0.0f) {
+        combined_scale = 1.0f;
+    }
+
+    float perspective_scale = 1.0f;
+    if (asset->info && asset->info->apply_distance_scaling && gp) {
+        perspective_scale = std::max(0.0001f, gp->perspective_scale);
+    }
+
+    float package_scale = combined_scale / perspective_scale;
+    if (!std::isfinite(package_scale) || package_scale <= 0.0f) {
+        package_scale = 1.0f;
+    }
+
     // Check if scale changed significantly
-    if (std::abs(asset->composite_scale_ - asset->current_nearest_variant_scale) > 0.001f) {
+    if (std::abs(asset->composite_scale_ - package_scale) > 0.001f) {
         asset->mark_composite_dirty();
     }
 
     // If asset is dirty or any child is dirty, regenerate
     if (asset->is_composite_dirty() || children_dirty) {
-        regenerate_package(asset, gp, flicker_time_seconds);
+        regenerate_package(asset, gp, flicker_time_seconds, package_scale, perspective_scale);
+    } else {
+        asset->composite_scale_ = package_scale;
     }
 }
 
 void CompositeAssetRenderer::regenerate_package(Asset* asset,
                                                 const world::GridPoint* gp,
-                                                float flicker_time_seconds) {
+                                                float flicker_time_seconds,
+                                                float package_scale,
+                                                float perspective_scale) {
     if (!renderer_ || !asset) return;
 
     asset->render_package.clear();
     asset->scene_mask_lights.clear();
 
-    float effective_scale =
-        asset->current_nearest_variant_scale * asset->current_remaining_scale_adjustment;
-
-    asset->composite_scale_ = effective_scale;
+    asset->composite_scale_ = package_scale;
 
     // Helper to add a render object
     auto add_render_object = [&](SDL_Texture* tex,
@@ -64,8 +80,10 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                                  bool apply_scale = true) {
         if (!tex) return;
         if (apply_scale) {
-            rect.w = static_cast<int>(rect.w * effective_scale);
-            rect.h = static_cast<int>(rect.h * effective_scale);
+            rect.w = static_cast<int>(std::lround(static_cast<float>(rect.w) * package_scale));
+            rect.h = static_cast<int>(std::lround(static_cast<float>(rect.h) * package_scale));
+            rect.w = std::max(1, rect.w);
+            rect.h = std::max(1, rect.h);
         }
         asset->render_package.push_back({tex, rect, color, blend});
     };
@@ -77,8 +95,10 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                                     bool apply_scale = true) {
         if (!tex) return;
         if (apply_scale) {
-            rect.w = static_cast<int>(rect.w * effective_scale);
-            rect.h = static_cast<int>(rect.h * effective_scale);
+            rect.w = static_cast<int>(std::lround(static_cast<float>(rect.w) * package_scale));
+            rect.h = static_cast<int>(std::lround(static_cast<float>(rect.h) * package_scale));
+            rect.w = std::max(1, rect.w);
+            rect.h = std::max(1, rect.h);
         }
         asset->scene_mask_lights.push_back({tex, rect, color, blend});
     };
@@ -130,8 +150,8 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                 int w, h;
                 SDL_QueryTexture(light_source.texture, nullptr, nullptr, &w, &h);
                 SDL_Rect dest_rect = {
-                    static_cast<int>(asset->pos.x + light_source.offset_x * effective_scale),
-                    static_cast<int>(asset->pos.y + light_source.offset_y * effective_scale),
+                    static_cast<int>(asset->pos.x + light_source.offset_x * package_scale),
+                    static_cast<int>(asset->pos.y + light_source.offset_y * package_scale),
                     w,
                     h
                 };
@@ -200,11 +220,16 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
         int w, h;
         SDL_QueryTexture(base_tex, nullptr, nullptr, &w, &h);
         
-        // Apply the remaining scale adjustment (current_scale / variant_scale)
-        // to ensure the asset is rendered at the exact desired size, not just the variant's size.
-        float scale = asset->current_remaining_scale_adjustment;
-        int final_w = static_cast<int>(w * scale);
-        int final_h = static_cast<int>(h * scale);
+        float remainder = asset->current_remaining_scale_adjustment;
+        if (!std::isfinite(remainder) || remainder <= 0.0f) {
+            remainder = 1.0f;
+        }
+        const float perspective_denominator = std::max(0.0001f, perspective_scale);
+        const float base_adjustment = remainder / perspective_denominator;
+        int final_w = static_cast<int>(std::lround(static_cast<float>(w) * base_adjustment));
+        int final_h = static_cast<int>(std::lround(static_cast<float>(h) * base_adjustment));
+        final_w = std::max(1, final_w);
+        final_h = std::max(1, final_h);
 
         SDL_Rect dest_rect = {
             asset->pos.x,
@@ -212,7 +237,7 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
             final_w,
             final_h
         };
-        add_render_object(base_tex, dest_rect);
+        add_render_object(base_tex, dest_rect, SDL_Color{255, 255, 255, 255}, SDL_BLENDMODE_BLEND, false);
     }
 
     if (gp) {
@@ -283,8 +308,8 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                 int w, h;
                 SDL_QueryTexture(light_source.texture, nullptr, nullptr, &w, &h);
                 SDL_Rect dest_rect = {
-                    static_cast<int>(asset->pos.x + light_source.offset_x * effective_scale),
-                    static_cast<int>(asset->pos.y + light_source.offset_y * effective_scale),
+                    static_cast<int>(asset->pos.x + light_source.offset_x * package_scale),
+                    static_cast<int>(asset->pos.y + light_source.offset_y * package_scale),
                     w,
                     h
                 };

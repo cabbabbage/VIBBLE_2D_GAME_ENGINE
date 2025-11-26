@@ -914,6 +914,7 @@ void Asset::on_scale_factor_changed() {
                 scale_target = info->scale_factor;
         }
         scale_smoothing_.reset(scale_target);
+        mark_composite_dirty();
 
         if (!asset_children.empty() && info) {
                 for (Asset* asset_child : asset_children) {

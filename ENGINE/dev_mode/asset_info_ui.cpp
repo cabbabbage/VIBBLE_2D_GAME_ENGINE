@@ -1309,9 +1309,16 @@ void AssetInfoUI::refresh_target_asset_scale() {
     Asset* validated_target = target_asset_;
 
     const auto refresh_asset = [&](Asset* asset) {
-        if (!asset || asset->info.get() != info_.get()) {
+        if (!asset || !asset->info) {
             return false;
         }
+        // Refresh if this asset references the same info instance OR matches by asset name.
+        const bool is_same_info_ptr = (asset->info.get() == info_.get());
+        const bool is_same_name = (!info_->name.empty() && asset->info->name == info_->name);
+        if (!(is_same_info_ptr || is_same_name)) {
+            return false;
+        }
+        asset->info->set_scale_factor(info_->scale_factor);
         asset->on_scale_factor_changed();
         return true;
 };
