@@ -18,6 +18,7 @@
 #include "FloatingPanelLayoutManager.hpp"
 #include "dev_mode/dev_footer_bar.hpp"
 #include "dev_mode/camera_ui.hpp"
+#include "dev_mode/depth_cue_settings.hpp"
 #include "dev_mode/foreground_background_effect_panel.hpp"
 #include "dev_mode/font_cache.hpp"
 #include "dev_mode/sdl_pointer_utils.hpp"

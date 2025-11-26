@@ -5,12 +5,35 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <utility>
+
+#include "animation_update/animation_update.hpp"
+#include "asset/Asset.hpp"
+#include "asset/asset_info.hpp"
+#include "core/AssetsManager.hpp"
+#include "dev_mode/asset_sections/animation_editor_window/AnimationDocument.hpp"
+#include "dev_mode/asset_sections/animation_editor_window/AnimationEditorWindow.hpp"
+#include "dev_mode/asset_sections/animation_editor_window/PreviewProvider.hpp"
+#include "dev_mode/dm_styles.hpp"
+#include "dev_mode/draw_utils.hpp"
+#include "dev_mode/rebuildAnimation.hpp"
+#include "dev_mode/widgets.hpp"
+#include "render/camera_grid.hpp"
+#include "utils/grid.hpp"
+#include "utils/input.hpp"
 
 namespace {
-    static float dist_sq(const SDL_FPoint& a, const SDL_FPoint& b) {
+    float dist_sq(const SDL_FPoint& a, const SDL_FPoint& b) {
         const float dx = a.x - b.x;
         const float dy = a.y - b.y;
         return dx * dx + dy * dy;
+    }
+
+    SDL_Point round_point(SDL_FPoint p) {
+        return SDL_Point{static_cast<int>(std::lround(p.x)), static_cast<int>(std::lround(p.y))};
     }
 }
 
