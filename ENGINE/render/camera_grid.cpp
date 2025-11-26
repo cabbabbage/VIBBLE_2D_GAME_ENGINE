@@ -271,7 +271,13 @@ namespace {
 
     double perspective_scale_from_measure(double measure, const PerspectiveRange& range) {
         const double denom = std::max(std::abs(range.far_distance - range.near_distance), 1e-4);
-        const double t = std::clamp((measure - range.near_distance) / denom, 0.0, 1.0);
+        double t = std::clamp((measure - range.near_distance) / denom, 0.0, 1.0);
+        
+        // Apply gamma curve for more pronounced shrinking near horizon
+        // Higher gamma (e.g., 1.8) makes objects shrink faster as they approach horizon
+        constexpr double kGamma = 1.8;
+        t = std::pow(t, kGamma);
+        
         const double scale = kMaxPerspectiveScale + (kMinPerspectiveScale - kMaxPerspectiveScale) * t;
         return std::clamp(scale, 0.05, 4.0);
     }
@@ -814,7 +820,7 @@ SDL_FPoint camera_grid::map_to_screen_f(SDL_FPoint world) const {
             ? (1.0 / static_cast<double>(smoothed_scale_))
             : 1e6;
     const double sx = (static_cast<double>(world.x) - static_cast<double>(left)) * inv_scale;
-    const double sy = (static_cast<double>(world.y) - static_cast<double>(top)) * inv_scale;
+    const double sy = (static_cast<double>(world.y) - static_cast<double>(top)) * inv_scale + static_cast<double>(player_center_offset_y_);
     const double safe_sx = std::isfinite(sx) ? sx : static_cast<double>(left);
     const double safe_sy = std::isfinite(sy) ? sy : static_cast<double>(top);
     const float out_x = static_cast<float>(std::clamp(safe_sx, -1e8, 1e8));
@@ -828,8 +834,10 @@ SDL_FPoint camera_grid::screen_to_map(SDL_Point screen) const {
     int left, top, right, bottom;
     std::tie(left, top, right, bottom) = current_view_.get_bounds();
     const double s = static_cast<double>(std::max(0.000001f, smoothed_scale_));
+    // Apply inverse of player centering offset to screen Y before converting to world coordinates
+    const double adjusted_screen_y = static_cast<double>(screen.y) - static_cast<double>(player_center_offset_y_);
     double wx = static_cast<double>(left) + static_cast<double>(screen.x) * s;
-    double wy = static_cast<double>(top)  + static_cast<double>(screen.y) * s;
+    double wy = static_cast<double>(top)  + adjusted_screen_y * s;
     const double safe_wx = std::isfinite(wx) ? wx : static_cast<double>(left);
     const double safe_wy = std::isfinite(wy) ? wy : static_cast<double>(top);
     const float out_wx = static_cast<float>(std::clamp(safe_wx, -1e8, 1e8));
@@ -915,6 +923,38 @@ camera_grid::RenderEffects camera_grid::compute_render_effects(
     result.distance_scale = static_cast<float>(distance_scale);
 
     // ---------------------------------------------------------------------
+    // Horizon fade: gradually fade out sprites as they approach the horizon
+    // Also reduce scale so they shrink to nothing
+    // ---------------------------------------------------------------------
+    result.horizon_fade_alpha = 1.0f;
+    float horizon_scale_multiplier = 1.0f;
+    
+    const float fade_band_px = std::max(1.0f, settings_.horizon_fade_band_px);
+    const float horizon_y = static_cast<float>(horizon);
+    const float screen_y = warped_screen.y;
+    
+    // Distance from horizon (negative = above horizon, positive = below)
+    const float dist_from_horizon = screen_y - horizon_y;
+    
+    if (dist_from_horizon <= 0.0f) {
+        // At or above horizon: completely invisible and zero scale
+        result.horizon_fade_alpha = 0.0f;
+        horizon_scale_multiplier = 0.0f;
+    } else if (dist_from_horizon < fade_band_px) {
+        // Within fade band: smooth fadeout using smoothstep
+        const float t = dist_from_horizon / fade_band_px;
+        const float fade = t * t * (3.0f - 2.0f * t);
+        result.horizon_fade_alpha = std::clamp(fade, 0.0f, 1.0f);
+        
+        // Also shrink the scale so objects become tiny near the horizon
+        // Use a sharper curve so they shrink faster
+        horizon_scale_multiplier = std::pow(t, 1.5f);
+    }
+    
+    // Apply horizon scale multiplier to distance scale
+    result.distance_scale *= horizon_scale_multiplier;
+    result.distance_scale = std::clamp(result.distance_scale, 0.001f, 4.0f);
+    // ---------------------------------------------------------------------
 
     if (!std::isfinite(result.vertical_scale) || result.vertical_scale <= 0.0f) {
         result.vertical_scale = 1.0f;
@@ -985,7 +1025,7 @@ void camera_grid::apply_camera_settings(const nlohmann::json& data) {
 
     try_read_bool("realism_enabled", realism_enabled_);
 
-    const std::array<std::pair<const char*, float*>, 21> float_fields{ {
+    const std::array<std::pair<const char*, float*>, 23> float_fields{ {
         { "base_height_at_zoom_low", &settings_.base_height_at_zoom_low },
         { "base_height_at_zoom_high", &settings_.base_height_at_zoom_high },
         { "extra_cull_margin", &settings_.extra_cull_margin },
@@ -1006,7 +1046,9 @@ void camera_grid::apply_camera_settings(const nlohmann::json& data) {
         { "foreground_plane_screen_y", &settings_.foreground_plane_screen_y },
         { "background_plane_screen_y", &settings_.background_plane_screen_y },
         { "perspective_distance_at_scale_zero", &settings_.perspective_distance_at_scale_zero },
-        { "perspective_distance_at_scale_hundred", &settings_.perspective_distance_at_scale_hundred }
+        { "perspective_distance_at_scale_hundred", &settings_.perspective_distance_at_scale_hundred },
+        { "horizon_fade_band_px", &settings_.horizon_fade_band_px },
+        { "perspective_scale_gamma", &settings_.perspective_scale_gamma }
     } };
     for (const auto& [key, field] : float_fields) {
         try_read_number(key, *field);
@@ -1153,7 +1195,9 @@ nlohmann::json camera_grid::camera_settings_to_json() const {
         { "parallax_smoothing_snap_threshold", settings_.parallax_smoothing.snap_threshold },
         { "foreground_plane_screen_y", settings_.foreground_plane_screen_y },
         { "background_plane_screen_y", settings_.background_plane_screen_y },
-        { "grid_depth_offset_px", settings_.grid_depth_offset_px }
+        { "grid_depth_offset_px", settings_.grid_depth_offset_px },
+        { "horizon_fade_band_px", settings_.horizon_fade_band_px },
+        { "perspective_scale_gamma", settings_.perspective_scale_gamma }
     };
     for (const auto& [key, value] : float_fields) {
         j[key] = value;
@@ -1323,6 +1367,35 @@ void camera_grid::rebuild_grid(world::Grid& world_grid, float dt_seconds) {
     const float inv_scale   = 1.0f / std::max(0.000001f, smoothed_scale_);
     const float screen_w    = static_cast<float>(screen_width_);
     const float screen_h    = static_cast<float>(screen_height_);
+    
+    // Compute player centering offset: find player and calculate Y offset needed to center them
+    player_center_offset_y_ = 0.0f;
+    Asset* player_asset = nullptr;
+    for (Asset* a : assets) {
+        if (a && a->info && a->info->type == "player") {
+            player_asset = a;
+            break;
+        }
+    }
+    
+    if (player_asset) {
+        // Temporarily compute player's screen Y without offset to determine what offset is needed
+        const float old_offset = player_center_offset_y_;
+        player_center_offset_y_ = 0.0f;
+        
+        SDL_Point player_world{ player_asset->pos.x, player_asset->pos.y };
+        SDL_FPoint player_screen_base = map_to_screen(player_world);
+        
+        // Apply warping to get the final Y position
+        const float player_world_y_f = static_cast<float>(player_world.y);
+        const float player_warped_y = warp_floor_screen_y(player_world_y_f, player_screen_base.y);
+        const float player_final_y = std::isfinite(player_warped_y) ? player_warped_y : player_screen_base.y;
+        
+        // Calculate offset to center player vertically at screen center
+        const float screen_center_y = screen_h * 0.5f;
+        player_center_offset_y_ = screen_center_y - player_final_y;
+    }
+    
     const float horizon_y   = static_cast<float>(horizon_screen_y_for_scale());
     const float margin_px   = std::max(0.0f, settings_.extra_cull_margin);
     const float bottom_pad  = std::max(settings_.grid_depth_offset_px, margin_px);

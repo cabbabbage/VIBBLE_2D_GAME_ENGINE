@@ -102,6 +102,7 @@ void grid_camera::rebuild_grid(camera_grid& camera, world::Grid& world_grid, flo
         gp->parallax_dx        = parallax_dx;
         gp->vertical_scale     = effects.vertical_scale;
         gp->perspective_scale  = effects.distance_scale;
+        gp->horizon_fade_alpha = effects.horizon_fade_alpha;
         gp->distance_to_camera = 0.0f;
         gp->tilt_radians       = camera.current_pitch_degrees() * static_cast<float>(M_PI) / 180.0f;
         gp->on_screen          = on_screen;

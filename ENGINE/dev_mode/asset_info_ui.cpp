@@ -1312,10 +1312,7 @@ void AssetInfoUI::refresh_target_asset_scale() {
         if (!asset || !asset->info) {
             return false;
         }
-        // Refresh if this asset references the same info instance OR matches by asset name.
-        const bool is_same_info_ptr = (asset->info.get() == info_.get());
-        const bool is_same_name = (!info_->name.empty() && asset->info->name == info_->name);
-        if (!(is_same_info_ptr || is_same_name)) {
+        if (!asset_matches_current_info(asset)) {
             return false;
         }
         asset->info->set_scale_factor(info_->scale_factor);
@@ -1352,28 +1349,16 @@ void AssetInfoUI::refresh_target_asset_scale() {
 void AssetInfoUI::sync_target_z_threshold() {
     if (!info_) return;
 
-    Asset* current_target = target_asset_;
-    const bool target_valid = validate_target_asset();
-
-    const auto sync_asset = [&](Asset* asset) {
-        if (!asset || asset->info.get() != info_.get()) {
-            return false;
+    bool updated_any = apply_to_assets_with_info([&](Asset* asset) {
+        if (!asset->info) {
+            return;
         }
+        asset->info->set_z_threshold(info_->z_threshold);
         asset->set_z_index();
-        return true;
-};
+    });
 
-    bool updated_any = false;
-    if (assets_) {
-        for (Asset* asset : assets_->all) {
-            if (sync_asset(asset)) {
-                updated_any = true;
-            }
-        }
-    }
-
-    if (!updated_any && target_valid && current_target) {
-        (void)sync_asset(current_target);
+    if (updated_any && assets_) {
+        assets_->mark_active_assets_dirty();
     }
 }
 
@@ -1519,8 +1504,10 @@ void AssetInfoUI::sync_target_tiling_state() {
     };
 
     auto apply_for_asset = [&](Asset* asset) {
-        if (!asset) return false;
-        if (asset->info.get() != info_.get()) return false;
+        if (!asset_matches_current_info(asset)) return false;
+        if (asset->info) {
+            asset->info->set_tillable(info_->tillable);
+        }
         if (info_->tillable) {
             auto t = compute_tiling(asset);
             if (t && t->is_valid()) {
@@ -1542,6 +1529,9 @@ void AssetInfoUI::sync_target_tiling_state() {
     }
     if (!updated_any && target_valid && current_target) {
         (void)apply_for_asset(current_target);
+    }
+    if (updated_any && assets_) {
+        assets_->mark_active_assets_dirty();
     }
 }
 
@@ -1696,6 +1686,11 @@ void AssetInfoUI::notify_light_sources_modified(bool purge_light_cache) {
     }
 
     bool updated_any = apply_to_assets_with_info([&](Asset* asset) {
+        if (asset->info) {
+            asset->info->light_sources = info_->light_sources;
+            asset->info->is_light_source = info_->is_light_source;
+            asset->info->moving_asset = info_->moving_asset;
+        }
         asset->is_shaded = info_->is_shaded;
         asset->clear_render_caches();
         if (assets_) {
@@ -1716,6 +1711,92 @@ void AssetInfoUI::notify_light_sources_modified(bool purge_light_cache) {
     std::error_code ec;
     std::filesystem::path cache_dir = std::filesystem::path("cache") / info_->name / "lights";
     std::filesystem::remove_all(cache_dir, ec);
+}
+
+void AssetInfoUI::sync_target_shading_settings() {
+    if (!info_) {
+        return;
+    }
+
+    bool updated_any = apply_to_assets_with_info([&](Asset* asset) {
+        if (!asset->info) {
+            return;
+        }
+        asset->info->set_shading_enabled(info_->is_shaded);
+        asset->info->set_shadow_mask_settings(info_->shadow_mask_settings);
+        asset->info->set_shading_parallax_amount(info_->shading_parallax_amount);
+        asset->info->set_shading_screen_brightness_multiplier(info_->shading_screen_brightness_multiplier);
+        asset->info->set_shading_opacity_multiplier(info_->shading_opacity_multiplier);
+        asset->is_shaded = info_->is_shaded;
+        asset->clear_render_caches();
+    });
+
+    if (updated_any && assets_) {
+        assets_->force_shaded_assets_rerender();
+        assets_->mark_active_assets_dirty();
+    }
+}
+
+void AssetInfoUI::sync_target_spacing_settings() {
+    if (!info_) {
+        return;
+    }
+
+    bool updated_any = apply_to_assets_with_info([&](Asset* asset) {
+        if (!asset->info) {
+            return;
+        }
+        asset->info->set_min_same_type_distance(info_->min_same_type_distance);
+        asset->info->set_min_distance_all(info_->min_distance_all);
+        asset->info->set_neighbor_search_radius(info_->NeighborSearchRadius);
+        asset->NeighborSearchRadius = info_->NeighborSearchRadius;
+        asset->clear_grid_residency_cache();
+    });
+
+    if (updated_any && assets_) {
+        assets_->mark_active_assets_dirty();
+    }
+}
+
+void AssetInfoUI::sync_target_tags() {
+    if (!info_) {
+        return;
+    }
+
+    bool updated_any = apply_to_assets_with_info([&](Asset* asset) {
+        if (!asset->info) {
+            return;
+        }
+        asset->info->set_tags(info_->tags);
+        asset->info->set_anti_tags(info_->anti_tags);
+    });
+
+    if (updated_any && assets_) {
+        assets_->mark_active_assets_dirty();
+    }
+}
+
+void AssetInfoUI::sync_target_basic_render_settings(bool type_changed) {
+    if (!info_) {
+        return;
+    }
+
+    bool updated_any = apply_to_assets_with_info([&](Asset* asset) {
+        if (!asset->info) {
+            return;
+        }
+        asset->info->set_asset_type(info_->type);
+        asset->info->set_flipable(info_->flipable);
+        asset->info->set_apply_distance_scaling(info_->apply_distance_scaling);
+        asset->info->set_apply_vertical_scaling(info_->apply_vertical_scaling);
+    });
+
+    if (updated_any && assets_) {
+        assets_->mark_active_assets_dirty();
+        if (type_changed) {
+            assets_->refresh_active_asset_lists();
+        }
+    }
 }
 
 void AssetInfoUI::notify_spawn_group_entry_changed(const nlohmann::json& entry) {
@@ -2071,7 +2152,7 @@ bool AssetInfoUI::apply_to_assets_with_info(const std::function<void(Asset*)>& f
 
     std::unordered_set<Asset*> visited;
     auto visit = [&](Asset* asset) {
-        if (!asset || asset->info.get() != info_.get()) {
+        if (!asset_matches_current_info(asset)) {
             return;
         }
         if (!visited.insert(asset).second) {
@@ -2087,6 +2168,22 @@ bool AssetInfoUI::apply_to_assets_with_info(const std::function<void(Asset*)>& f
     }
     visit(target_asset_);
     return !visited.empty();
+}
+
+bool AssetInfoUI::asset_matches_current_info(const Asset* asset) const {
+    if (!info_ || !asset || !asset->info) {
+        return false;
+    }
+    if (asset->info.get() == info_.get()) {
+        return true;
+    }
+    if (!info_->name.empty() && asset->info->name == info_->name) {
+        return true;
+    }
+    if (!info_->asset_dir_path().empty() && asset->info->asset_dir_path() == info_->asset_dir_path()) {
+        return true;
+    }
+    return false;
 }
 
 void AssetInfoUI::refresh_loaded_asset_instances() {

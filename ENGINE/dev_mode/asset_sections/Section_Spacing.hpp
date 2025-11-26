@@ -90,7 +90,12 @@ class Section_Spacing : public DockableCollapsible {
         info_->set_neighbor_search_radius(v);
         changed = true;
       }
-      if (changed) (void)info_->commit_manifest();
+      if (changed) {
+        (void)info_->commit_manifest();
+        if (ui_) {
+          ui_->sync_target_spacing_settings();
+        }
+      }
       return used || changed;
     }
 

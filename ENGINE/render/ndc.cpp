@@ -42,7 +42,7 @@ namespace {
 
     float ndc_sanitize_pitch_degrees(float raw_value) {
         const float kMinPitchDegrees = 0.0f;
-        const float kMaxPitchDegrees = 89.0f;
+        const float kMaxPitchDegrees = 150.0f;
         const float wrapped = static_cast<float>(ndc_wrap_degrees_0_360(
             std::isfinite(raw_value) ? raw_value : ndc_kDefaultPitchDegrees));
         return std::clamp(wrapped, kMinPitchDegrees, kMaxPitchDegrees);
@@ -208,7 +208,7 @@ ndc::FloorDepthParams ndc::compute_floor_depth_params_for_geometry(
     p.horizon_ndc      = horizon_ndc;
     p.near_ndc         = near_ndc;
     p.ndc_scale        = ndc_scale;
-    p.strength         = 1.0;
+    p.strength         = 4.0; // Increased from 1.0 for far more extreme perspective scaling
     p.enabled          = true;
 
     return p;
@@ -249,38 +249,32 @@ float ndc::warp_floor_screen_y(
     // Normalized linear position between horizon and bottom, in screen space.
     const double range = bottom - horizon;
     double t_linear = (safe_linear_y - horizon) / range;
-    // t_linear = std::clamp(t_linear, 0.0, 1.0);
-
-    // How far along the floor in world space this point is, relative to some base.
-    const double depth_world = static_cast<double>(world_y) - p.base_world_y;
-    double depth_norm = 0.0;
-    if (std::isfinite(depth_world) && depth_world > 0.0) {
-        // Map depth to [0,1) with a simple saturating curve
-        const double h = std::max(1.0, p.camera_height);
-        depth_norm = depth_world / (depth_world + h);
-        depth_norm = std::clamp(depth_norm, 0.0, 1.0);
-    }
 
     // Shape factor based on pitch and an optional strength
     const double pitch = std::clamp(p.pitch_radians, 0.0, HALF_FOV_Y * 2.0);
     const double base_strength = 0.5 + 0.5 * (pitch / (HALF_FOV_Y * 2.0)); // 0.5 to 1.0
-    const double strength = std::clamp(p.strength, 0.0, 2.0);
+    const double strength = std::clamp(p.strength, 0.0, 8.0);
     const double k = 1.0 + strength * base_strength;
 
-    // Warp top and stretch bottom:
-    // t_linear near 0 stays close to 0, near 1 pushes closer to 1 faster as k increases.
+    // Warp with asymptotic approach to horizon
     double t_warp;
     if (t_linear >= 0.0) {
+        // Below horizon: standard power warp for compression
         t_warp = std::pow(t_linear, k);
     } else {
-        t_warp = t_linear;
+        // Above horizon (negative t): use asymptotic decay so objects approach but never cross horizon
+        // Map negative t_linear to approach 0 asymptotically: -1 -> tiny negative, -infinity -> 0
+        // Use exponential decay: as t_linear becomes more negative, t_warp approaches 0 from below
+        const double decay_rate = 0.1;  // Controls how quickly objects compress near horizon
+        t_warp = -std::exp(t_linear * decay_rate);  // Always negative, approaches 0 as t_linear -> -infinity
+        
+        // Clamp to prevent any crossing
+        t_warp = std::min(t_warp, -0.0001);  // Always stays slightly below horizon
     }
 
-    // Blend in some depth based weighting so extremely far points do not over warp.
-    const double blend = 0.5 * depth_norm; // 0 for near, 0.5 for very far
-    t_warp = (1.0 - blend) * t_warp + blend * t_linear;
-
-    const double screen_y = horizon + t_warp * range;
+    // Final screen position - clamp to ensure nothing goes above horizon
+    double screen_y = horizon + t_warp * range;
+    screen_y = std::max(screen_y, horizon);  // Hard clamp: nothing can be above the horizon line
     if (!std::isfinite(screen_y)) {
         return static_cast<float>(safe_linear_y);
     }

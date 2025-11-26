@@ -308,8 +308,15 @@ void SceneRenderer::render() {
             };
 
             SDL_SetTextureBlendMode(obj.texture, obj.blend_mode);
+            // Apply horizon fade to alpha
+            Uint8 final_alpha = obj.color_mod.a;
+            if (gp && gp->horizon_fade_alpha < 1.0f) {
+                final_alpha = static_cast<Uint8>(std::lround(
+                    static_cast<float>(final_alpha) * gp->horizon_fade_alpha));
+            }
+            
             SDL_SetTextureColorMod(obj.texture, obj.color_mod.r, obj.color_mod.g, obj.color_mod.b);
-            SDL_SetTextureAlphaMod(obj.texture, obj.color_mod.a);
+            SDL_SetTextureAlphaMod(obj.texture, final_alpha);
 
             SDL_RenderCopy(renderer_, obj.texture, nullptr, &screen_rect);
         }

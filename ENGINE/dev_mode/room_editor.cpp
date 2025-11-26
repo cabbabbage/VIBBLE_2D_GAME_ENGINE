@@ -1685,6 +1685,27 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
         }
         render_room_labels(renderer);
     }
+    // Render snapped crosshair at the world point under cursor (warped to screen)
+    if (renderer && assets_ && enabled_) {
+        // Skip crosshair when input is blocked by UI
+        int mx = input_ ? input_->getX() : 0;
+        int my = input_ ? input_->getY() : 0;
+        if (!is_ui_blocking_input(mx, my)) {
+            const camera_grid& cam = assets_->getView();
+            SDL_FPoint screen_f = cam.map_to_screen(snapped_cursor_world_);
+            SDL_Point screen{ static_cast<int>(std::lround(screen_f.x)), static_cast<int>(std::lround(screen_f.y)) };
+            // Adjust X for parallax relative to warped floor
+            if (assets_) {
+                screen.x = assets_->world_grid().parallax_adjusted_screen_x(snapped_cursor_world_, screen.x);
+            }
+            SDL_Color color = DMStyles::HighlightColor();
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, 220);
+            const int cross = 8;
+            SDL_RenderDrawLine(renderer, screen.x - cross, screen.y, screen.x + cross, screen.y);
+            SDL_RenderDrawLine(renderer, screen.x, screen.y - cross, screen.x, screen.y + cross);
+        }
+    }
     // Now render dev-mode UI panels
     if (library_ui_ && library_ui_->is_visible()) {
         library_ui_->render(renderer, screen_w_, screen_h_);
@@ -2255,7 +2276,11 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     // --- Frame snapshot ---
     const SDL_Point screen_pt{ input_->getX(), input_->getY() };
     const SDL_FPoint world_f = cam.screen_to_map(screen_pt);
-    const SDL_Point world_pt{ (int)std::lround(world_f.x), (int)std::lround(world_f.y) };
+    SDL_Point world_pt{ (int)std::lround(world_f.x), (int)std::lround(world_f.y) };
+    // Compute snapped cursor using live footer resolution when available; always enabled
+    cursor_snap_resolution_ = current_grid_resolution();
+    vibble::grid::Grid& grid_service = vibble::grid::global_grid();
+    snapped_cursor_world_ = grid_service.snap_to_vertex(world_pt, cursor_snap_resolution_);
     const bool left_down                = input_->isDown(Input::LEFT);
     const bool left_pressed_this_frame  = input_->wasPressed(Input::LEFT);
     const bool left_released_this_frame = input_->wasReleased(Input::LEFT);
@@ -2368,13 +2393,13 @@ void RoomEditor::handle_mouse_input(const Input& input) {
         if (!was_dragged && shift_down && dist2 > kDragPx*kDragPx) {
             was_dragged = true;
             dragging_ = true;
-            drag_last_world_ = world_pt;
+            drag_last_world_ = snapped_cursor_world_;
             const bool ctrl_modifier = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
-            begin_drag_session(world_pt, ctrl_modifier);
+            begin_drag_session(snapped_cursor_world_, ctrl_modifier);
         }
 
         if (was_dragged && dragging_) {
-            update_drag_session(world_pt);
+            update_drag_session(snapped_cursor_world_);
             // Pin hover to dragged asset to keep highlight stable
             if (hovered_asset_ != pressed_asset) {
                 hovered_asset_ = pressed_asset;
@@ -3009,13 +3034,8 @@ std::optional<std::string> RoomEditor::find_room_area_at_point(SDL_Point world_p
 void RoomEditor::handle_click(const Input& input) {
     if (!input_) return;
 
-    SDL_Point world_mouse{input_->getX(), input_->getY()};
-    if (auto mapped = input_->mouse_world_position()) {
-        world_mouse = *mapped;
-    } else if (assets_) {
-        SDL_FPoint mapped = assets_->getView().screen_to_map(world_mouse);
-        world_mouse = SDL_Point{static_cast<int>(std::lround(mapped.x)), static_cast<int>(std::lround(mapped.y))};
-    }
+    // Use snapped cursor world position for all click logic
+    SDL_Point world_mouse = snapped_cursor_world_;
 
     bool selection_changed = false;
     bool highlight_changed = false;
@@ -3725,7 +3745,6 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
     drag_anchor_asset_ = primary;
     drag_spawn_id_ = primary->spawn_id;
     overlay_resolution_before_drag_.reset();
-    drag_snap_enabled_ = false;
 
     MapGridSettings map_settings = current_room_ ? current_room_->map_grid_settings() : MapGridSettings::defaults();
     map_settings.clamp();
@@ -3757,30 +3776,18 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
 
     // Handle snap-to-grid + footer overlay resolution interactions on drag start
     const bool editing_spawn_config = is_spawn_group_panel_visible() && active_spawn_group_id_.has_value();
-    const int overlay_resolution = (editing_spawn_config && shared_footer_bar_)
-        ? shared_footer_bar_->grid_resolution()
-        : vibble::grid::clamp_resolution(map_settings.resolution);
-    const bool snap_enabled = editing_spawn_config && shared_footer_bar_ && shared_footer_bar_->snap_to_grid_enabled();
-    drag_snap_enabled_ = snap_enabled;
-
-    if (editing_spawn_config) {
-        if (snap_enabled) {
-            // Snap ON: set group resolution to overlay immediately on drag start
-            const int clamped_overlay_r = vibble::grid::clamp_resolution(overlay_resolution);
-            drag_resolution_ = clamped_overlay_r;
-            // Do not change overlay resolution
+    // Always snap: choose a working resolution sourced from spawn entry/room or footer when editing spawn config
+    if (shared_footer_bar_) {
+        if (editing_spawn_config) {
+            // While editing spawn group config, respect the footer stepper value for snapping,
+            // but never change the overlay via dragging.
+            drag_resolution_ = vibble::grid::clamp_resolution(shared_footer_bar_->grid_resolution());
             overlay_resolution_before_drag_.reset();
-        } else if (spawn_entry) {
-            // Snap OFF: snap to the group's set resolution, and temporarily sync overlay to it
-            const int group_r = vibble::grid::clamp_resolution(spawn_entry->value("resolution", drag_resolution_));
-            drag_resolution_ = group_r;
-            if (shared_footer_bar_) {
-                const int current_overlay = shared_footer_bar_->grid_resolution();
-                if (group_r != current_overlay) {
-                    overlay_resolution_before_drag_ = current_overlay;
-                    shared_footer_bar_->set_grid_resolution(group_r);
-                }
-            }
+        } else {
+            // While dragging in the room editor, temporarily override the footer grid resolution
+            // to match the active drag resolution, and restore on finalize.
+            overlay_resolution_before_drag_ = shared_footer_bar_->grid_resolution();
+            shared_footer_bar_->set_grid_resolution(vibble::grid::clamp_resolution(drag_resolution_));
         }
     } else {
         overlay_resolution_before_drag_.reset();
@@ -4267,7 +4274,6 @@ void RoomEditor::update_spawn_json_during_drag() {
 
 bool RoomEditor::snap_dragged_assets_to_grid() {
     if (drag_states_.empty()) return false;
-    if (!drag_snap_enabled_) return false;
     const int resolution = vibble::grid::clamp_resolution(drag_resolution_);
     vibble::grid::Grid& grid_service = vibble::grid::global_grid();
     bool changed = false;
@@ -4389,13 +4395,7 @@ void RoomEditor::finalize_drag_session() {
                     break;
             }
 
-            if (drag_moved_ && drag_snap_enabled_) {
-                const int current_resolution = current_grid_resolution();
-                if (entry->value("resolution", current_resolution) != current_resolution) {
-                    (*entry)["resolution"] = current_resolution;
-                    json_modified = true;
-                }
-            }
+            // Do not change spawn group resolution on finalize via dragging
 
             if (json_modified) {
                 if (resolved.source == SpawnEntryResolution::Source::Room) {
@@ -4447,7 +4447,7 @@ void RoomEditor::reset_drag_state() {
     drag_edge_inset_percent_ = 100.0;
     drag_moved_ = false;
     drag_spawn_id_.clear();
-    drag_snap_enabled_ = false;
+    // Snap state managed implicitly
     overlay_resolution_before_drag_.reset();
 }
 

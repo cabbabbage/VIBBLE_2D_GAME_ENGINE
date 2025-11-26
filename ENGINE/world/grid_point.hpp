@@ -30,6 +30,7 @@ struct GridPoint {
     SDL_FPoint screen       = SDL_FPoint{0.0f, 0.0f};
     float      parallax_dx  = 0.0f;
     float      vertical_scale  = 1.0f;
+    float      horizon_fade_alpha = 1.0f;
     float      perspective_scale = 1.0f;
     float      distance_to_camera = 0.0f;
     float      tilt_radians      = 0.0f;

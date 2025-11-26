@@ -66,6 +66,10 @@ class AssetInfoUI {
     void notify_spawn_group_entry_changed(const nlohmann::json& entry);
     void notify_spawn_group_removed(const std::string& spawn_id);
     void regenerate_shadow_masks();
+    void sync_target_shading_settings();
+    void sync_target_spacing_settings();
+    void sync_target_tags();
+    void sync_target_basic_render_settings(bool type_changed);
     SDL_Texture* mask_preview_texture() const { return mask_preview_texture_; }
     int mask_preview_width() const { return mask_preview_w_; }
     int mask_preview_height() const { return mask_preview_h_; }
@@ -86,6 +90,7 @@ class AssetInfoUI {
     void sync_map_light_panel_visibility(bool want_visible);
     bool validate_target_asset() const;
     bool apply_to_assets_with_info(const std::function<void(Asset*)>& fn);
+    bool asset_matches_current_info(const Asset* asset) const;
     void on_animation_document_saved();
     void refresh_loaded_asset_instances();
     void complete_color_sampling(SDL_Color color);

@@ -676,7 +676,6 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
             }
             footer->set_grid_overlay_enabled(grid_overlay_enabled_);
             footer->set_grid_resolution(grid_overlay_resolution_r_);
-            footer->set_snap_to_grid_enabled(snap_to_grid_enabled_);
             footer->set_grid_controls_callbacks(
                 [this](bool enabled) {
                     grid_overlay_enabled_ = enabled;
@@ -688,10 +687,6 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
                         return;
                     }
                     apply_overlay_grid_resolution(clamped, /*user_override=*/from_user, /*update_stepper=*/true, /*update_footer=*/false);
-                },
-                [this](bool enabled) {
-                    snap_to_grid_enabled_ = enabled;
-                    devmode::ui_settings::save_bool(kGridSnapEnabledKey, enabled);
                 }
             );
         }

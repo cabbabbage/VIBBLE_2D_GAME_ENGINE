@@ -777,7 +777,7 @@ public:
         }
 
         base_height_slider_ = std::make_unique<FloatSliderWidget>(
-            "Base Height (px)", 80.0f, 4000.0f, 5.0f, values.base_height, 0);
+            "Base Height (px)", -8000.0f, 8000.0f, 5.0f, values.base_height, 0);
         if (base_height_slider_) {
             base_height_slider_->set_tooltip("Reference camera height for parallax depth at this zoom level.");
             base_height_slider_->set_on_value_changed([this](float) { notify_change(); });
@@ -1456,11 +1456,11 @@ camera_grid::RealismSettings CameraUIPanel::read_settings_from_ui() const {
 
     if (zoom_in_keypoint_) {
         settings.depth_offset_at_zoom_low = std::clamp(min_values.depth_offset_px, -4000.0f, 4000.0f);
-        settings.base_height_at_zoom_low = std::max(1.0f, min_values.base_height);
+        settings.base_height_at_zoom_low = min_values.base_height;
     }
     if (zoom_out_keypoint_) {
         settings.depth_offset_at_zoom_high = std::clamp(max_values.depth_offset_px, -4000.0f, 4000.0f);
-        settings.base_height_at_zoom_high = std::max(1.0f, max_values.base_height);
+        settings.base_height_at_zoom_high = max_values.base_height;
     }
     if (perspective_zero_distance_slider_) {
         settings.perspective_distance_at_scale_zero = std::clamp(

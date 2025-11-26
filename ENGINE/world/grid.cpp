@@ -21,7 +21,8 @@ constexpr float kDefaultParallaxDt = 1.0f / 60.0f;
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kHalfFovY = 3.14159265358979323846 / 3.0; // 60 degrees
 constexpr double kParallaxEpsilon = 1e-3;
-constexpr double kParallaxMaxScreenRatio = 0.35;
+// Allow a much stronger on-screen parallax range
+constexpr double kParallaxMaxScreenRatio = 0.70;
 
 int grid_floor_div(int a, int b) {
     if (b == 0) {
@@ -753,6 +754,9 @@ void Grid::update_parallax(const camera_grid& cam, float dt) {
     const auto& settings = cam.realism_settings();
 
     const double pitch_rad  = floor.pitch_radians;
+    // Parallax-only pitch: flip by 180° to change convergence direction
+    const double kPi = 3.14159265358979323846;
+    const double parallax_pitch_rad = pitch_rad + kPi;
 
     const SDL_FPoint center_px = cam.get_view_center_f();
     const double base_x = static_cast<double>(center_px.x);
@@ -865,8 +869,8 @@ void Grid::update_parallax(const camera_grid& cam, float dt) {
     const double step_d     = static_cast<double>(parallax_step);
     const double origin_x_d = static_cast<double>(origin_.x);
     const double origin_y_d = static_cast<double>(origin_.y);
-    const double cos_p       = std::cos(pitch_rad);
-    const double sin_p       = std::sin(pitch_rad);
+    const double cos_p       = std::cos(parallax_pitch_rad);
+    const double sin_p       = std::sin(parallax_pitch_rad);
 
     for (int cell_j = cell_j_min; cell_j <= cell_j_max; ++cell_j) {
         const double cell_cy = origin_y_d + (static_cast<double>(cell_j) + 0.5) * step_d;
@@ -878,20 +882,22 @@ void Grid::update_parallax(const camera_grid& cam, float dt) {
 
             const double dx_world = cell_cx - base_x;
 
-            const double depth_world = cell_cy - anchor_y;
-            const double y_cam = depth_world * cos_p + camera_height * sin_p;
-            const double z_cam = depth_world * sin_p - camera_height * cos_p;
-            const double forward = -z_cam;
-            if (forward <= kParallaxEpsilon || !std::isfinite(forward)) {
-                continue;
-            }
-
+            // Screen-space driven "realistic" parallax: converge at horizon.
+            // 1) Compute warped screen Y for this world Y.
+            const double warped_y = warped_screen_y(cell_cy);
+            // 2) Map to [0..1] depth factor from horizon (0) to bottom (1).
+            const double denom_screen = std::max(1e-4, std::abs(floor.bottom_screen_y - floor.horizon_screen_y));
+            const double t_screen = std::clamp((warped_y - floor.horizon_screen_y) / denom_screen, 0.0, 1.0);
+            // 3) Build a strong growth factor that blows up near the horizon.
+            //    Using 1/(t+eps)-1 ensures zero at bottom and large near horizon.
+            const double eps_t = 1e-3;
+            const double growth = (1.0 / std::max(eps_t, t_screen)) - 1.0;
+            // 4) Horizontal parallax offset pulls columns toward the center as they rise.
+            //    Using -dx_world makes left side shift right and right side shift left.
             const double ortho_x_px = dx_world * inv_scale;
-            const double projected_x_px = (dx_world / forward) * focal_px;
-
-            double parallax_px = projected_x_px - ortho_x_px;
-            // Apply a strength multiplier to make parallax more visible (increase from 1.0 to make stronger)
-            parallax_px *= 3.0;
+            double parallax_px = -ortho_x_px * growth;
+            // Additional intensity shaping to feel stronger but bounded by clamp below.
+            parallax_px *= 2.0;
             if (!std::isfinite(parallax_px)) {
                 parallax_px = 0.0;
             }

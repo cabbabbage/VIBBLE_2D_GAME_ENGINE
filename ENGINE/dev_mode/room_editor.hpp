@@ -318,6 +318,9 @@ private:
     std::vector<Asset*> selected_assets_;
     std::vector<Asset*> highlighted_assets_;
     bool highlight_dirty_ = true;
+    // Snapped cursor (world coordinates), always aligned to current grid resolution
+    SDL_Point snapped_cursor_world_{0, 0};
+    int cursor_snap_resolution_ = 0;
 
     bool dragging_ = false;
     Asset* drag_anchor_asset_ = nullptr;
@@ -332,7 +335,7 @@ private:
     int drag_perimeter_orig_h_ = 0;
     int drag_perimeter_curr_w_ = 0;
     int drag_resolution_ = 0;
-    bool drag_snap_enabled_ = false;
+    // Snap is always enabled during drags; resolution managed by Room/Spawn settings
 
     const Area* drag_edge_area_ = nullptr;
     SDL_Point drag_edge_center_{0, 0};

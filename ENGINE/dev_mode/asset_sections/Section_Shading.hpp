@@ -128,7 +128,7 @@ public:
                 (void)info_->commit_manifest();
                 shading_changed = true;
                 if (ui_) {
-                    ui_->notify_light_sources_modified(true);
+                    ui_->sync_target_shading_settings();
                     ui_->regenerate_shadow_masks();
                 }
             }
@@ -170,6 +170,7 @@ public:
             info_->set_shadow_mask_settings(updated);
             (void)info_->commit_manifest();
             if (ui_) {
+                ui_->sync_target_shading_settings();
                 ui_->regenerate_shadow_masks();
             }
         }

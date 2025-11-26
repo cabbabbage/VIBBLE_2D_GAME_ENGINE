@@ -29,8 +29,8 @@ public:
     // Public constants
     static constexpr float kMinZoomAnchors = 0.5f;
     static constexpr float kMaxZoomAnchors = 4.0f;
-    static constexpr float kMinPitchDegrees = 30.0f;
-    static constexpr float kMaxPitchDegrees = 89.0f;
+    static constexpr float kMinPitchDegrees = 0.0f;
+    static constexpr float kMaxPitchDegrees = 150.0f;
 
     // Nested enums
     enum class BlurFalloffMethod {
@@ -91,6 +91,12 @@ public:
         float perspective_distance_at_scale_zero   = 1.0f;   // far
         float perspective_distance_at_scale_hundred = 0.5f;  // near
 
+        // Horizon fade band: distance in pixels from horizon where sprites fade out
+        float horizon_fade_band_px = 80.0f;
+
+        // Perspective scale gamma: >1.0 makes objects shrink faster near horizon
+        float perspective_scale_gamma = 1.8f;
+
         // Image effects for foreground and background
         camera_effects::ImageEffectSettings foreground_effects{};
         camera_effects::ImageEffectSettings background_effects{};
@@ -129,6 +135,7 @@ public:
         SDL_FPoint screen_position{0.0f, 0.0f};
         float vertical_scale = 1.0f;
         float distance_scale = 1.0f;
+        float horizon_fade_alpha = 1.0f;  // Fade-out near horizon (1.0 = visible, 0.0 = transparent)
     };
 
     struct GridBounds {
@@ -324,6 +331,9 @@ private:
     // These are derived from current zoom, pitch, and floor params.
     double perspective_distance_at_scale_zero_    = 1.0;  // far
     double perspective_distance_at_scale_hundred_ = 0.5;  // near
+
+    // Player centering offset (applied in game mode to keep player at screen center)
+    float player_center_offset_y_ = 0.0f;
 
     // Calculators
     std::unique_ptr<ndc> ndc_calculator_;

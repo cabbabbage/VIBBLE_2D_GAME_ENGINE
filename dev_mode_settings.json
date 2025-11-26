@@ -27,10 +27,10 @@
             }
         },
         "grid": {
-            "cell_size_px": 32.0,
+            "cell_size_px": 8.0,
             "overlay": {
                 "enabled": true,
-                "r": 5.0
+                "r": 3.0
             },
             "snap": {
                 "enabled": true
@@ -39,9 +39,9 @@
     },
     "dev_ui": {
         "camera": {
-            "background_texture_max_opacity": 0.0,
+            "background_texture_max_opacity": 173.0,
             "depthcue_enabled": true,
-            "foreground_texture_max_opacity": 0.0
+            "foreground_texture_max_opacity": 148.0
         },
         "lighting": {
             "map_panel": {

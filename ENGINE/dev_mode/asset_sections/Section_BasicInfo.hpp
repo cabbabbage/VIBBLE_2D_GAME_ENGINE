@@ -170,6 +170,8 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
     bool scale_changed = false;
     bool z_changed = false;
     bool tile_changed = false;
+    bool render_settings_changed = false;
+    bool type_changed = false;
     if (dd_type_ && !type_options_.empty()) {
         int idx = std::clamp(dd_type_->selected(), 0, static_cast<int>(type_options_.size()) - 1);
         std::string selected = asset_types::canonicalize(type_options_[idx]);
@@ -180,6 +182,8 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
         if (!(is_area_asset && !selecting_area) && !(!is_area_asset && selecting_area) && current != selected) {
             info_->set_asset_type(selected);
             changed = true;
+            render_settings_changed = true;
+            type_changed = true;
         }
     }
 
@@ -199,16 +203,19 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
     if (c_flipable_ && info_->flipable != c_flipable_->value()) {
         info_->set_flipable(c_flipable_->value());
         changed = true;
+        render_settings_changed = true;
     }
 
     if (c_apply_distance_scaling_ && info_->apply_distance_scaling != c_apply_distance_scaling_->value()) {
         info_->set_apply_distance_scaling(c_apply_distance_scaling_->value());
         changed = true;
+        render_settings_changed = true;
     }
 
     if (c_apply_vertical_scaling_ && info_->apply_vertical_scaling != c_apply_vertical_scaling_->value()) {
         info_->set_apply_vertical_scaling(c_apply_vertical_scaling_->value());
         changed = true;
+        render_settings_changed = true;
     }
 
     if (c_tillable_ && info_->tillable != c_tillable_->value()) {
@@ -224,6 +231,7 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
             if (scale_changed) ui_->refresh_target_asset_scale();
             if (z_changed) ui_->sync_target_z_threshold();
             if (tile_changed) ui_->sync_target_tiling_state();
+            if (render_settings_changed) ui_->sync_target_basic_render_settings(type_changed);
         }
     }
     if (rebuild_needed) {
