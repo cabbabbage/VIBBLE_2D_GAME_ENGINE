@@ -785,6 +785,8 @@ void AnimationLoader::load(Animation& animation,
                 std::vector<std::vector<SDL_Surface*>> foreground_surfaces(variant_count);
                 std::vector<std::vector<SDL_Surface*>> background_surfaces(variant_count);
                 std::vector<std::vector<SDL_Surface*>> mask_surfaces(variant_count);
+                std::vector<std::vector<SDL_Surface*>> depthcue_foreground_surfaces(variant_count);
+                std::vector<std::vector<SDL_Surface*>> depthcue_background_surfaces(variant_count);
 
                 bool all_surfaces_loaded = true;
                 const bool needs_masks = info.is_shaded;
@@ -826,6 +828,30 @@ void AnimationLoader::load(Animation& animation,
                                           << " missing masks for variant " << idx << " at " << paths.mask_folder << "\n";
                                 break;
                         }
+
+                        // Load depth cue foreground sequences if present
+                        std::vector<SDL_Surface*> dc_fg_loaded;
+                        if (CacheManager::load_surface_sequence(paths.depthcue_foreground_folder, frame_count, dc_fg_loaded) &&
+                            static_cast<int>(dc_fg_loaded.size()) == frame_count) {
+                                depthcue_foreground_surfaces[idx] = std::move(dc_fg_loaded);
+                        } else if (info.is_shaded) {
+                                all_surfaces_loaded = false;
+                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                          << " missing depth cue foregrounds for variant " << idx << " at " << paths.depthcue_foreground_folder << "\n";
+                                break;
+                        }
+
+                        // Load depth cue background sequences if present
+                        std::vector<SDL_Surface*> dc_bg_loaded;
+                        if (CacheManager::load_surface_sequence(paths.depthcue_background_folder, frame_count, dc_bg_loaded) &&
+                            static_cast<int>(dc_bg_loaded.size()) == frame_count) {
+                                depthcue_background_surfaces[idx] = std::move(dc_bg_loaded);
+                        } else if (info.is_shaded) {
+                                all_surfaces_loaded = false;
+                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                          << " missing depth cue backgrounds for variant " << idx << " at " << paths.depthcue_background_folder << "\n";
+                                break;
+                        }
                 }
 
                 if (!all_surfaces_loaded || variant_surfaces[0].empty() || !variant_surfaces[0][0]) {
@@ -835,6 +861,8 @@ void AnimationLoader::load(Animation& animation,
                         free_surface_lists(foreground_surfaces);
                         free_surface_lists(background_surfaces);
                         free_surface_lists(mask_surfaces);
+                        free_surface_lists(depthcue_foreground_surfaces);
+                        free_surface_lists(depthcue_background_surfaces);
                         cache_invalid_detected = true;
                         flush_diagnostics();
                         return;
@@ -936,6 +964,8 @@ void AnimationLoader::load(Animation& animation,
                 free_surface_lists(foreground_surfaces);
                 free_surface_lists(background_surfaces);
                 free_surface_lists(mask_surfaces);
+                free_surface_lists(depthcue_foreground_surfaces);
+                free_surface_lists(depthcue_background_surfaces);
 
                 // Flip processing disabled for cached loading
                 if (animation.reverse_source && !animation.frame_cache_.empty()) {
