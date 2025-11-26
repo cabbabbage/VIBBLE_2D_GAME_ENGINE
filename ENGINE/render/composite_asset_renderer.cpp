@@ -42,7 +42,7 @@ void CompositeAssetRenderer::update(Asset* asset,
         perspective_scale = std::max(0.0001f, gp->perspective_scale);
     }
 
-    float package_scale = combined_scale / perspective_scale;
+    float package_scale = combined_scale * perspective_scale;
     if (!std::isfinite(package_scale) || package_scale <= 0.0f) {
         package_scale = 1.0f;
     }

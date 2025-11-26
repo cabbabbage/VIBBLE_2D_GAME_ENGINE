@@ -10,10 +10,10 @@
 #include <cmath>
 #include <limits>
 #include <string>
+#include <vector>
 
 BombController::BombController(Assets* assets, Asset* self)
     : assets_(assets), self_(self) {
-    // No idle on construct; movement is only planned when following player
 }
 
 bool BombController::target_active(Asset* asset) {
@@ -60,78 +60,39 @@ Asset* BombController::resolve_player_target() const {
     return closest;
 }
 
-void BombController::enter_idle(int rest_ratio) {
-    if (!self_ || !self_->anim_) {
-        return;
-    }
-    if (state_ == State::Detonating) {
-        return;
-    }
-
-    idle_ratio_ = std::clamp(rest_ratio, 0, 100);
-    state_       = State::Idle;
-    current_target_  = nullptr;
-    pursuit_locked_  = false;
-
-    const auto path = controller_paths::idle_path(self_, idle_ratio_);
-    self_->anim_->auto_move(path, controller_utils::controller_visit_threshold(self_, path));
-}
-
 void BombController::enter_pursue(Asset* target) {
     if (!self_ || !self_->anim_) {
         return;
     }
-    if (!target || state_ == State::Detonating) {
-        enter_idle(idle_ratio_);
+    if (!target) {
+        self_->anim_->clear_movement_plan();
+        state_ = State::Idle;
+        current_target_ = nullptr;
         return;
     }
 
-    state_          = State::Pursuing;
+    state_ = State::Pursuing;
     current_target_ = target;
-    pursuit_locked_ = true;
 
     const auto path = controller_paths::pursue_path(self_, target);
     self_->anim_->auto_move(path, controller_utils::controller_visit_threshold(self_, path));
 }
 
-void BombController::trigger_explosion() {
-    if (!self_ || !self_->anim_) {
-        return;
-    }
-    if (state_ == State::Detonating) {
-        return;
-    }
+void BombController::update(const Input&) {
+    if (!self_ || !self_->anim_) return;
 
-    state_           = State::Detonating;
-    current_target_  = nullptr;
-    pursuit_locked_  = false;
-
-    bool animation_started = false;
-    if (!self_->info) {
-        self_->anim_->move(SDL_Point{ 0, 0 }, "explosion");
-        animation_started = true;
-    } else {
-        const auto it = self_->info->animations.find("explosion");
-        if (it != self_->info->animations.end()) {
-            self_->anim_->move(SDL_Point{ 0, 0 }, "explosion");
-            animation_started = true;
+    // Re-plan current behavior if path execution completed or failed
+    if (self_->anim_->path_requested) {
+        if (state_ == State::Pursuing && target_active(current_target_)) {
+            enter_pursue(current_target_);  // Continue pursuit
+        } else {
+            self_->anim_->clear_movement_plan();
+            state_ = State::Idle;
+            current_target_ = nullptr;
         }
     }
 
-    explosion_started_ = animation_started;
-    if (!animation_started) {
-        self_->Delete();
-        return;
-    }
-    self_->anim_->auto_move({}, controller_utils::controller_visit_threshold(self_));
-}
-
-void BombController::update(const Input&) {
-    if (!self_ || !self_->anim_) {
-        return;
-    }
-
-    // Always try to follow the player when within neighbor radius.
+    // Evaluate pursuit conditions
     Asset* player = nullptr;
     try {
         player = resolve_player_target();
@@ -140,45 +101,29 @@ void BombController::update(const Input&) {
     }
 
     if (!target_active(player) || player == self_) {
-        // No valid target; stop any planned movement (no idle/explosion)
-        self_->anim_->clear_movement_plan();
+        if (state_ != State::Idle) {
+            self_->anim_->clear_movement_plan();
+            state_ = State::Idle;
+            current_target_ = nullptr;
+        }
         return;
     }
 
-    int neighbor_radius = 0;
-    try {
-        neighbor_radius = self_->info ? self_->info->NeighborSearchRadius : self_->NeighborSearchRadius;
-    } catch (...) {
-        neighbor_radius = 0;
-    }
-
+    // Check if target is within neighbor radius
+    const int neighbor_radius = controller_paths::neighbor_radius(self_);
     const double distance = Range::get_distance(self_, player);
-    if (!std::isfinite(distance) || neighbor_radius <= 0) {
-        self_->anim_->clear_movement_plan();
-        current_target_ = nullptr;
-        pursuit_locked_ = false;
-        return;
-    }
-
-    const bool target_changed = current_target_ != player;
-    current_target_           = player;
-    if (target_changed) {
-        pursuit_locked_              = false;
-        self_->anim_->path_requested = true;
-    }
 
     if (distance <= static_cast<double>(neighbor_radius)) {
-        // Only plan a new path when requested by the runtime
-        if (self_->anim_->path_requested || target_changed || !pursuit_locked_) {
-            const auto path = controller_paths::pursue_path(self_, player);
-            self_->anim_->auto_move(path, controller_utils::controller_visit_threshold(self_, path));
-            pursuit_locked_ = true;
+        // Target changed or not yet pursuing - initiate/update pursuit
+        if (current_target_ != player || state_ != State::Pursuing) {
+            enter_pursue(player);
         }
     } else {
-        // Outside neighbor radius: cancel any pending movement plan
-        self_->anim_->clear_movement_plan();
-        current_target_ = nullptr;
-        pursuit_locked_ = false;
+        // Out of range - stop pursuit
+        if (state_ != State::Idle) {
+            self_->anim_->clear_movement_plan();
+            state_ = State::Idle;
+            current_target_ = nullptr;
+        }
     }
 }
-

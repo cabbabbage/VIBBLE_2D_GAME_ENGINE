@@ -15,23 +15,16 @@ public:
     void update(const Input& in) override;
 
 private:
+    enum class State { Idle, Pursuing };
+
+    void enter_pursue(Asset* target);
     static bool target_active(Asset* asset);
     Asset*      resolve_player_target() const;
 
-    enum class State { Idle, Pursuing, Detonating };
-
-    void enter_idle(int rest_ratio);
-    void enter_pursue(Asset* target);
-    void trigger_explosion();
-
     Assets* assets_ = nullptr;
     Asset*  self_   = nullptr;
-    State state_ = State::Idle;
-    int idle_ratio_ = 5;
-    Asset* current_target_ = nullptr;
-    bool pursuit_locked_ = false;
-    bool explosion_started_ = false;
+    State   state_  = State::Idle;
+    Asset*  current_target_ = nullptr;
 };
 
 #endif
-

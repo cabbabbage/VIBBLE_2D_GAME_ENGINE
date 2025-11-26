@@ -208,7 +208,7 @@ ndc::FloorDepthParams ndc::compute_floor_depth_params_for_geometry(
     p.horizon_ndc      = horizon_ndc;
     p.near_ndc         = near_ndc;
     p.ndc_scale        = ndc_scale;
-    p.strength         = 4.0; // Increased from 1.0 for far more extreme perspective scaling
+    p.strength         = 6.0; // Higher = more extreme compression near horizon
     p.enabled          = true;
 
     return p;
@@ -253,7 +253,7 @@ float ndc::warp_floor_screen_y(
     // Shape factor based on pitch and an optional strength
     const double pitch = std::clamp(p.pitch_radians, 0.0, HALF_FOV_Y * 2.0);
     const double base_strength = 0.5 + 0.5 * (pitch / (HALF_FOV_Y * 2.0)); // 0.5 to 1.0
-    const double strength = std::clamp(p.strength, 0.0, 8.0);
+    const double strength = std::clamp(p.strength, 0.0, 10.0);
     const double k = 1.0 + strength * base_strength;
 
     // Warp with asymptotic approach to horizon
@@ -262,14 +262,18 @@ float ndc::warp_floor_screen_y(
         // Below horizon: standard power warp for compression
         t_warp = std::pow(t_linear, k);
     } else {
-        // Above horizon (negative t): use asymptotic decay so objects approach but never cross horizon
-        // Map negative t_linear to approach 0 asymptotically: -1 -> tiny negative, -infinity -> 0
-        // Use exponential decay: as t_linear becomes more negative, t_warp approaches 0 from below
-        const double decay_rate = 0.1;  // Controls how quickly objects compress near horizon
-        t_warp = -std::exp(t_linear * decay_rate);  // Always negative, approaches 0 as t_linear -> -infinity
+        // Above horizon (negative t): use asymptotic decay tied to pitch
+        // Higher pitch = steeper angle = more compression needed
+        const double pitch_factor = std::clamp(pitch / (HALF_FOV_Y * 2.0), 0.1, 1.0);
+        const double decay_rate = 0.03 + 0.15 * pitch_factor;  // Range: 0.03 to 0.18
+        const double exp_decay = std::exp(t_linear * decay_rate);
+        
+        // Scale down based on pitch - steeper angles need tighter compression
+        const double scale_factor = 0.005 + 0.015 * pitch_factor;  // Range: 0.005 to 0.02
+        t_warp = -exp_decay * scale_factor;
         
         // Clamp to prevent any crossing
-        t_warp = std::min(t_warp, -0.0001);  // Always stays slightly below horizon
+        t_warp = std::min(t_warp, -0.00001);  // Always stays below horizon
     }
 
     // Final screen position - clamp to ensure nothing goes above horizon

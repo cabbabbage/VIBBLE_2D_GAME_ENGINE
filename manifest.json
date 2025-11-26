@@ -520,9 +520,9 @@
                 [
                   0,
                   0,
-                  -64,
+                  0,
                   0.0,
-                  true,
+                  false,
                   true
                 ]
               ]
@@ -534,9 +534,9 @@
                 [
                   0,
                   0,
-                  -64,
+                  0,
                   0.0,
-                  true,
+                  false,
                   true
                 ]
               ]
@@ -548,9 +548,9 @@
                 [
                   0,
                   0,
-                  -64,
+                  0,
                   0.0,
-                  true,
+                  false,
                   true
                 ]
               ]
@@ -562,9 +562,9 @@
                 [
                   0,
                   0,
-                  -64,
+                  0,
                   0.0,
-                  true,
+                  false,
                   true
                 ]
               ]
@@ -576,9 +576,9 @@
                 [
                   0,
                   0,
-                  -64,
+                  0,
                   0.0,
-                  true,
+                  false,
                   true
                 ]
               ]
@@ -590,9 +590,9 @@
                 [
                   0,
                   0,
-                  -64,
+                  0,
                   0.0,
-                  true,
+                  false,
                   true
                 ]
               ]
@@ -604,9 +604,9 @@
                 [
                   0,
                   0,
-                  -64,
+                  0,
                   0.0,
-                  true,
+                  false,
                   true
                 ]
               ]
@@ -2488,8 +2488,8 @@
         "background_plane_screen_y": 443.0,
         "background_texture_max_opacity": 173,
         "base_height_at_zoom_high": 2530.0,
-        "base_height_at_zoom_low": 7105.0,
-        "base_height_px": 4817.5,
+        "base_height_at_zoom_low": 6280.0,
+        "base_height_px": 4405.0,
         "depth_offset_at_zoom_high": 4000.0,
         "depth_offset_at_zoom_low": 4000.0,
         "extra_cull_margin": 300.0,
@@ -2503,17 +2503,17 @@
         "parallax_smoothing_method": 1,
         "parallax_smoothing_snap_threshold": 0.5,
         "parallax_smoothing_spring_frequency": 0.0,
-        "perspective_distance_at_scale_hundred": 5000.0,
-        "perspective_distance_at_scale_zero": 45.0,
+        "perspective_distance_at_scale_hundred": 5.0,
+        "perspective_distance_at_scale_zero": 22.0,
         "perspective_scale_gamma": 1.7999999523162842,
         "realism_enabled": true,
         "render_quality_percent": 50,
         "scale_hysteresis_margin": 0.004999999888241291,
         "texture_opacity_falloff_method": 3,
-        "tilt_zoom_in_degrees": 0.0,
+        "tilt_zoom_in_degrees": 35.34816360473633,
         "tilt_zoom_out_degrees": 67.69378662109375,
         "zoom_high": 3.999999761581421,
-        "zoom_low": 0.6899999976158142
+        "zoom_low": 2.009999990463257
       },
       "content_root": "MAPS/FORREST",
       "map_assets_data": {
@@ -2813,9 +2813,9 @@
         "bar": {
           "curvyness": 2,
           "display_color": [
+            242,
+            242,
             85,
-            242,
-            242,
             255
           ],
           "edge_smoothness": 19,
@@ -2833,9 +2833,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            204,
-            63,
+            32,
             31,
+            204,
             255
           ],
           "edge_smoothness": 43,
@@ -2886,9 +2886,9 @@
         "rnd": {
           "curvyness": 2,
           "display_color": [
-            31,
-            204,
-            114,
+            36,
+            242,
+            141,
             255
           ],
           "edge_smoothness": 2,
@@ -2906,8 +2906,8 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            141,
-            85,
+            159,
+            36,
             242,
             255
           ],

@@ -92,10 +92,10 @@ public:
         float perspective_distance_at_scale_hundred = 0.5f;  // near
 
         // Horizon fade band: distance in pixels from horizon where sprites fade out
-        float horizon_fade_band_px = 80.0f;
+        float horizon_fade_band_px = 150.0f;
 
         // Perspective scale gamma: >1.0 makes objects shrink faster near horizon
-        float perspective_scale_gamma = 1.8f;
+        float perspective_scale_gamma = 2.5f;
 
         // Image effects for foreground and background
         camera_effects::ImageEffectSettings foreground_effects{};

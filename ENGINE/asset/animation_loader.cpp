@@ -212,7 +212,8 @@ void AnimationLoader::load(Animation& animation,
         render_pipeline::ScalingLogic::NormalizeVariantSteps(animation.variant_steps_);
         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                   << " normalized profile steps: " << format_steps(animation.variant_steps_) << "\n";
-        const std::size_t initial_variant_count = animation.variant_steps_.size();
+        
+        // Parse source information first to determine if we need to inherit scale from source animation
         if (anim_json.contains("source")) {
                 const auto& s = anim_json["source"];
                 try {
@@ -234,6 +235,24 @@ void AnimationLoader::load(Animation& animation,
 			animation.source.name.clear();
 		} catch (...) { animation.source.name.clear(); }
 	}
+        
+        // If sourcing from another animation, inherit its variant_steps to ensure same scale
+        if (animation.source.kind == "animation" && !animation.source.name.empty()) {
+                auto it = info.animations.find(animation.source.name);
+                if (it != info.animations.end()) {
+                        const Animation& src_anim = it->second;
+                        if (!src_anim.variant_steps_.empty()) {
+                                animation.variant_steps_ = src_anim.variant_steps_;
+                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                          << " inherited variant_steps from source animation '" << animation.source.name 
+                                          << "': " << format_steps(animation.variant_steps_) << "\n";
+                        }
+                }
+        }
+        
+        // Calculate variant count after potential inheritance
+        const std::size_t initial_variant_count = animation.variant_steps_.size();
+        
         animation.flipped_source = anim_json.value("flipped_source", false);
         animation.flip_vertical_source = anim_json.value("flip_vertical_source", false);
         animation.flip_movement_horizontal = anim_json.value("flip_movement_horizontal", false);

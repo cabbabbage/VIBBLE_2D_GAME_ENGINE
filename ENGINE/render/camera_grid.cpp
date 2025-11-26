@@ -273,13 +273,13 @@ namespace {
         const double denom = std::max(std::abs(range.far_distance - range.near_distance), 1e-4);
         double t = std::clamp((measure - range.near_distance) / denom, 0.0, 1.0);
         
-        // Apply gamma curve for more pronounced shrinking near horizon
-        // Higher gamma (e.g., 1.8) makes objects shrink faster as they approach horizon
-        constexpr double kGamma = 1.8;
+        // Apply strong gamma curve for aggressive shrinking near horizon
+        // Higher gamma makes objects shrink much faster as they approach horizon
+        constexpr double kGamma = 2.5;
         t = std::pow(t, kGamma);
         
         const double scale = kMaxPerspectiveScale + (kMinPerspectiveScale - kMaxPerspectiveScale) * t;
-        return std::clamp(scale, 0.05, 4.0);
+        return std::clamp(scale, 0.01, 4.0);
     }
 
 }
@@ -904,8 +904,17 @@ camera_grid::RenderEffects camera_grid::compute_render_effects(
     }
 
     const PerspectiveRange range = sanitize_perspective_range(settings_);
+    
+    // Use warped screen Y for consistent distance measurement
     const double distance_measure = compute_floor_distance_measure(warped_screen.y, p);
     double depth_scale = perspective_scale_from_measure(distance_measure, range);
+    
+    // Additional scale factor based on distance from horizon for extra shrinking
+    const double horizon_dist = std::max(0.0, static_cast<double>(warped_screen.y) - p.horizon_screen_y);
+    const double horizon_range = std::max(1.0, p.bottom_screen_y - p.horizon_screen_y);
+    const double horizon_factor = std::clamp(horizon_dist / horizon_range, 0.0, 1.0);
+    const double horizon_scale = 0.1 + 0.9 * std::pow(horizon_factor, 1.5);
+    depth_scale *= horizon_scale;
 
     // Optional blend with any screen-height hint if you ever pass a real asset_screen_height.
     double final_scale = depth_scale;
@@ -923,8 +932,7 @@ camera_grid::RenderEffects camera_grid::compute_render_effects(
     result.distance_scale = static_cast<float>(distance_scale);
 
     // ---------------------------------------------------------------------
-    // Horizon fade: gradually fade out sprites as they approach the horizon
-    // Also reduce scale so they shrink to nothing
+    // Horizon fade: aggressively fade and shrink sprites as they approach horizon
     // ---------------------------------------------------------------------
     result.horizon_fade_alpha = 1.0f;
     float horizon_scale_multiplier = 1.0f;
@@ -936,19 +944,21 @@ camera_grid::RenderEffects camera_grid::compute_render_effects(
     // Distance from horizon (negative = above horizon, positive = below)
     const float dist_from_horizon = screen_y - horizon_y;
     
-    if (dist_from_horizon <= 0.0f) {
+    if (dist_from_horizon <= 0.5f) {
         // At or above horizon: completely invisible and zero scale
         result.horizon_fade_alpha = 0.0f;
         horizon_scale_multiplier = 0.0f;
     } else if (dist_from_horizon < fade_band_px) {
-        // Within fade band: smooth fadeout using smoothstep
+        // Within fade band: aggressive fadeout with cubic easing
         const float t = dist_from_horizon / fade_band_px;
-        const float fade = t * t * (3.0f - 2.0f * t);
-        result.horizon_fade_alpha = std::clamp(fade, 0.0f, 1.0f);
         
-        // Also shrink the scale so objects become tiny near the horizon
-        // Use a sharper curve so they shrink faster
-        horizon_scale_multiplier = std::pow(t, 1.5f);
+        // Cubic easing for more dramatic fade
+        const float fade_alpha = t * t * t;
+        result.horizon_fade_alpha = std::clamp(fade_alpha, 0.0f, 1.0f);
+        
+        // Even stronger scale reduction - quadratic so objects shrink to nearly nothing
+        const float scale_factor = t * t;
+        horizon_scale_multiplier = std::clamp(scale_factor, 0.01f, 1.0f);
     }
     
     // Apply horizon scale multiplier to distance scale
@@ -1483,9 +1493,14 @@ void camera_grid::rebuild_grid(world::Grid& world_grid, float dt_seconds) {
 
         // Distance-based perspective scale: assets rely solely on this
         // value (and their base scale). We estimate the floor distance
-        // by projecting the warped screen Y back into NDC, then mapping
-        // to a [near_distance, far_distance] interval.
-        const double distance_measure = compute_floor_distance_measure(screen_pos.y, depth_params);
+        // by using world Y position relative to horizon in world space.
+        double camera_world_y = depth_params.camera_world_y;
+        double base_world_y = depth_params.base_world_y;
+        double asset_world_y = static_cast<double>(world_pos.y);
+        double distance_measure = 0.0;
+        if (std::isfinite(camera_world_y) && std::isfinite(base_world_y) && base_world_y != camera_world_y) {
+            distance_measure = std::clamp((asset_world_y - camera_world_y) / (base_world_y - camera_world_y), 0.0, 1.0);
+        }
         const double perspective_scale_value = perspective_scale_from_measure(distance_measure, perspective_range);
 
         gp->perspective_scale  = static_cast<float>(perspective_scale_value);
