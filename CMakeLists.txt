@@ -1,4 +1,6 @@
-cmake_minimum_required(VERSION 3.16)
+# VIBBLE 2D GAME ENGINE
+ 
+cmake_minimum_required(VERSION 3.20)
 project(VIBBLEEngine)
 
 # ------------------------------------------

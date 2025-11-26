@@ -35,9 +35,26 @@ namespace devmode {
 class AnimationRegenerator;
 }
 
+struct RenderObject {
+    SDL_Texture* texture = nullptr;
+    SDL_Rect screen_rect{};
+    SDL_Color color_mod{255, 255, 255, 255};
+    SDL_BlendMode blend_mode = SDL_BLENDMODE_BLEND;
+};
+
+using RenderCompositePackage = std::vector<RenderObject>;
+
+struct DepthCueRenderData {
+    SDL_Texture* base_texture = nullptr;
+    SDL_Texture* foreground_texture = nullptr;
+    SDL_Texture* background_texture = nullptr;
+    bool has_depth_cue = false;
+};
+
 class Asset {
 
         public:
+    RenderCompositePackage render_package;
     struct RenderTextureCache {
         SDL_Texture* texture = nullptr;
         int          width   = 0;
@@ -126,7 +143,6 @@ class Asset {
 
     void update();
     SDL_Texture* get_current_frame() const;
-    SDL_Texture* get_current_mask_texture(std::size_t variant_index = 0) const;
     std::string get_current_animation() const;
     bool is_current_animation_locked_in_progress() const;
     bool is_current_animation_last_frame() const;
@@ -196,6 +212,17 @@ class Asset {
     void set_grid_id(std::uint64_t id);
     std::uint64_t grid_id() const { return grid_id_; }
     void clear_grid_id();
+
+    // Composite Rendering Support
+    SDL_Texture* composite_texture() const { return composite_texture_; }
+    void set_composite_texture(SDL_Texture* tex);
+    bool is_composite_dirty() const { return composite_dirty_; }
+    void mark_composite_dirty() { composite_dirty_ = true; }
+    void clear_composite_dirty() { composite_dirty_ = false; }
+    const SDL_Rect& composite_rect() const { return composite_rect_; }
+    void set_composite_rect(const SDL_Rect& r) { composite_rect_ = r; }
+    float        composite_scale() const { return composite_scale_; }
+
     RenderTextureCache& shadow_mask_cache();
     RenderTextureCache& shadow_mask_cache() const;
     RenderTextureCache& cast_shadow_cache();
@@ -235,6 +262,13 @@ class Asset {
     std::string owning_room_name_;
     std::unique_ptr<AnimationUpdate> anim_;
     std::unique_ptr<class AnimationRuntime> anim_runtime_;
+    float current_scale = 1.00f;
+    float current_nearest_variant_scale = 1.00f;
+    float current_remaining_scale_adjustment = 1.00f;
+    int   current_variant_index = 0;
+
+    void update_scale_values();
+    SDL_Texture* get_current_variant_texture() const;
     // Per-spawn-group flip override (set by planner/UI); thread-safe accessors
 public:
     static void SetFlipOverrideForSpawnId(const std::string& spawn_id, bool enabled, bool flipped);
@@ -250,6 +284,7 @@ private:
     friend class FrameEditorSession;
     friend class Assets;
     friend class devmode::AnimationRegenerator;
+    friend class CompositeAssetRenderer;
     camera_grid* window = nullptr;
     bool highlighted = false;
     bool hidden = false;
@@ -276,23 +311,17 @@ private:
     SDL_Point cached_grid_residency_{ std::numeric_limits<int>::min(), std::numeric_limits<int>::min() };
     bool      has_cached_grid_residency_ = false;
 
-    struct DownscaleCacheEntry {
-        float          scale    = 1.0f;
-        int            width    = 0;
-        int            height   = 0;
-        SDL_Texture*   texture  = nullptr;
-        std::uint64_t  revision = 0;
-};
+
 
     void clear_downscale_cache();
     void invalidate_downscale_cache();
     void refresh_cached_dimensions();
     void recompute_local_bounds_square();
 
-    std::vector<DownscaleCacheEntry> downscale_cache_{};
     std::uint64_t downscale_cache_ready_revision_ = 0;
 
     BoundsSquare base_bounds_local_{};
+    SDL_Rect     composite_bounds_local_{0, 0, 0, 0};
 
     SDL_Texture* last_scaled_texture_      = nullptr;
     SDL_Texture* last_scaled_source_       = nullptr;
@@ -303,15 +332,8 @@ private:
     ScaleUsageStats last_scale_usage_{};
     ScaleVariantState scale_variant_state_{};
 
-    void update_scale_usage(float requested,
-                            float texture_scale,
-                            float remainder,
-                            int   variant_index,
-                            float hysteresis_min,
-                            float hysteresis_max);
-    void set_smoothing_params(const TransformSmoothingParams& translation,
-                              const TransformSmoothingParams& scale,
-                              const TransformSmoothingParams& alpha);
+
+
     void clear_render_caches();
     void reset_mask_render_metadata();
     static void destroy_render_cache(RenderTextureCache& cache);
@@ -334,6 +356,10 @@ private:
     bool finalized_ = false;
     std::uint64_t grid_id_ = 0;
 
+    SDL_Texture* composite_texture_ = nullptr;
+    bool         composite_dirty_   = true;
+    SDL_Rect     composite_rect_    = {0, 0, 0, 0};
+    float        composite_scale_   = 1.0f;
 };
 
 #endif

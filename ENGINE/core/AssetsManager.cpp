@@ -887,7 +887,7 @@ void Assets::update(const Input& input)
 
     const bool zoom_animation_active = camera_.is_zooming();
     const bool camera_refresh_needed = room_changed || player_moved || zoom_animation_active;
-    camera_.update_zoom(current_room_, finder_, player, camera_refresh_needed, last_frame_dt_seconds_);
+    camera_.update_zoom(current_room_, finder_, player, camera_refresh_needed, last_frame_dt_seconds_, dev_mode);
 
     update_max_asset_dimensions();
 
@@ -1398,8 +1398,9 @@ bool Assets::asset_bounds_in_screen_space(const Asset* asset, SDL_FRect& out_rec
     bool      have_sprite_rect = false;
 
     if (auto* gp = camera_.grid_point_for_asset(asset)) {
-        const float inv_scale = 1.0f / std::max(0.000001f, camera_.get_scale());
-        const float distance_scale = (asset->info->apply_distance_scaling) ? gp->distance_scale : 1.0f;
+        const float zoom = std::max(0.000001f, camera_.get_scale());
+        const float inv_scale = 1.0f / zoom;
+        const float distance_scale = (asset->info->apply_distance_scaling) ? (gp->perspective_scale / zoom) : 1.0f;
         const float vertical_scale = (asset->info->apply_vertical_scaling) ? gp->vertical_scale : 1.0f;
 
         const float center_x = gp->screen.x + (world_center_x - world_x) * inv_scale * distance_scale;

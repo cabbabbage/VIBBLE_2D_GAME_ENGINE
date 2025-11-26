@@ -118,7 +118,7 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
         alpha_smoothing_.reset(hidden ? 0.0f : 1.0f);
 
         clear_downscale_cache();
-        recompute_local_bounds_square();
+
 }
 
 Asset::~Asset() {
@@ -135,6 +135,10 @@ Asset::~Asset() {
         if (final_texture) {
                 SDL_DestroyTexture(final_texture);
                 final_texture = nullptr;
+        }
+        if (composite_texture_) {
+                SDL_DestroyTexture(composite_texture_);
+                composite_texture_ = nullptr;
         }
         visibility_stamp = 0;
 }
@@ -186,6 +190,9 @@ Asset::Asset(const Asset& o)
 , scale_variant_state_(o.scale_variant_state_)
 , base_bounds_local_(o.base_bounds_local_)
 , grid_id_(o.grid_id_)
+, composite_texture_(nullptr)
+, composite_dirty_(true)
+, composite_rect_({0, 0, 0, 0})
 {
         clear_downscale_cache();
         clear_render_caches();
@@ -315,69 +322,56 @@ void Asset::finalize_setup() {
         finalized_ = true;
 }
 
-SDL_Texture* Asset::get_current_frame() const {
-        if (!info) return nullptr;
-        auto iti = info->animations.find(current_animation);
-        if (iti == info->animations.end()) return nullptr;
-
-        Animation& anim = const_cast<Animation&>(iti->second);
-
-        int idx_anim = anim.index_of(current_frame);
-        if (idx_anim < 0) {
-            std::size_t path_index = 0;
-            if (anim_) {
-                path_index = anim_->path_index_for(current_animation);
+void Asset::update_scale_values() {
+    float base_scale = (info && std::isfinite(info->scale_factor) && info->scale_factor > 0.0f) ? info->scale_factor : 1.0f;
+    float zoom = window ? window->get_scale() : 1.0f;
+    
+    if (window) {
+        if (auto* gp = window->grid_point_for_asset(this)) {
+            if (info && !info->apply_distance_scaling) {
+                current_scale = base_scale * zoom;
+            } else {
+                current_scale = base_scale * gp->perspective_scale;
             }
-            const_cast<Asset*>(this)->current_frame = anim.get_first_frame(path_index);
-            const_cast<Asset*>(this)->frame_progress = 0.0f;
+        } else {
+            float asset_sh = (cached_h > 0) ? (cached_h * zoom) : 0.0f;
+            float ref_sh = window->get_settings().base_height_px * zoom;
+            
+            auto effects = window->compute_render_effects(pos, asset_sh, ref_sh, camera_grid::RenderSmoothingKey(this));
+            float distance_scale = effects.distance_scale;
+            if (info && !info->apply_distance_scaling) {
+                distance_scale = 1.0f;
+            }
+            current_scale = base_scale * zoom * distance_scale;
         }
+    } else {
+        current_scale = base_scale * zoom;
+    }
 
-        return anim.get_frame(current_frame);
+    const auto& steps = (info && !info->scale_variants.empty()) 
+                        ? static_cast<const std::vector<float>&>(info->scale_variants) 
+                        : render_pipeline::ScalingLogic::DefaultScaleSteps();
+
+    auto selection = render_pipeline::ScalingLogic::Choose(current_scale, steps);
+    current_nearest_variant_scale = selection.stored_scale;
+    current_variant_index = selection.index;
+    
+    if (current_nearest_variant_scale > 0.0f) {
+        current_remaining_scale_adjustment = current_scale / current_nearest_variant_scale;
+    } else {
+        current_remaining_scale_adjustment = 1.0f;
+    }
 }
 
-SDL_Texture* Asset::get_current_mask_texture(std::size_t variant_index) const {
-        if (!info) {
-                return nullptr;
-        }
-
-        auto anim_it = info->animations.find(current_animation);
-        if (anim_it == info->animations.end()) {
-                return nullptr;
-        }
-
-        Animation& anim = const_cast<Animation&>(anim_it->second);
-
-        AnimationFrame* frame = current_frame;
-        if (!frame) {
-                std::size_t path_index = anim_ ? anim_->path_index_for(current_animation) : 0;
-                frame = anim.get_first_frame(path_index);
-                if (!frame) {
-                        return nullptr;
-                }
-                const_cast<Asset*>(this)->current_frame = frame;
-                const_cast<Asset*>(this)->frame_progress = 0.0f;
-        }
-
-        int frame_index = anim.index_of(frame);
-        if (frame_index < 0) {
-                std::size_t path_index = anim_ ? anim_->path_index_for(current_animation) : 0;
-                frame = anim.get_first_frame(path_index);
-                if (!frame) {
-                        return nullptr;
-                }
-                const_cast<Asset*>(this)->current_frame = frame;
-                const_cast<Asset*>(this)->frame_progress = 0.0f;
-                frame_index = anim.index_of(frame);
-                if (frame_index < 0) {
-                        return nullptr;
-                }
-        }
-
-        return anim.mask_variant(static_cast<std::size_t>(frame_index), variant_index);
+SDL_Texture* Asset::get_current_variant_texture() const {
+    if (!current_frame) return nullptr;
+    return current_frame->get_base_texture(current_variant_index);
 }
 
 void Asset::update() {
     if (!info) return;
+
+    update_scale_values();
 
     SDL_Point previous_pos = pos;
 
@@ -830,42 +824,9 @@ void Asset::invalidate_downscale_cache() {
         downscale_cache_ready_revision_ = 0;
 }
 
-void Asset::clear_downscale_cache() {
-        const auto& steps = (info && !info->scale_variants.empty()) ? static_cast<const std::vector<float>&>(info->scale_variants) : render_pipeline::ScalingLogic::DefaultScaleSteps();
 
-        for (std::size_t idx = 0; idx < downscale_cache_.size(); ++idx) {
-                auto& entry = downscale_cache_[idx];
-                if (idx != 0 && entry.texture) {
-                        SDL_DestroyTexture(entry.texture);
-                }
-        }
 
-        downscale_cache_.clear();
-        downscale_cache_.resize(steps.size());
-        for (std::size_t idx = 0; idx < downscale_cache_.size(); ++idx) {
-                auto& entry = downscale_cache_[idx];
-                entry.texture = nullptr;
-                entry.width   = 0;
-                entry.height  = 0;
-                entry.scale   = (idx < steps.size()) ? steps[idx] : 1.0f;
-                entry.revision = 0;
-        }
 
-        last_scaled_texture_      = nullptr;
-        last_scaled_source_       = nullptr;
-        last_scaled_w_            = 0;
-        last_scaled_h_            = 0;
-        last_scaled_camera_scale_ = -1.0f;
-        last_scale_usage_         = {};
-        reset_scale_variant_state();
-        downscale_cache_ready_revision_ = 0;
-}
-
-void Asset::reset_scale_variant_state() {
-        scale_variant_state_.last_variant_index = 0;
-        scale_variant_state_.hysteresis_min     = 0.0f;
-        scale_variant_state_.hysteresis_max     = std::numeric_limits<float>::max();
-}
 
 void Asset::refresh_cached_dimensions() {
         int width = 0;
@@ -879,7 +840,7 @@ void Asset::refresh_cached_dimensions() {
         }
 
         if ((width <= 0 || height <= 0)) {
-                SDL_Texture* frame = get_current_frame();
+                SDL_Texture* frame = get_current_variant_texture();
                 if (frame) {
                         if (SDL_QueryTexture(frame, nullptr, nullptr, &width, &height) != 0) {
                                 width = 0;
@@ -895,153 +856,6 @@ void Asset::refresh_cached_dimensions() {
 
         cached_w = (width > 0) ? width : 0;
         cached_h = (height > 0) ? height : 0;
-}
-
-void Asset::recompute_local_bounds_square() {
-        auto expand_rect = [&](float left, float top, float right, float bottom, bool& initialized, float& min_x, float& max_x, float& min_y, float& max_y) {
-                if (!std::isfinite(left) || !std::isfinite(right) || !std::isfinite(top) || !std::isfinite(bottom)) {
-                        return;
-                }
-                if (!initialized) {
-                        min_x = left;
-                        max_x = right;
-                        min_y = top;
-                        max_y = bottom;
-                        initialized = true;
-                        return;
-                }
-                min_x = std::min(min_x, left);
-                max_x = std::max(max_x, right);
-                min_y = std::min(min_y, top);
-                max_y = std::max(max_y, bottom);
-        };
-
-        float min_x = 0.0f;
-        float max_x = 0.0f;
-        float min_y = 0.0f;
-        float max_y = 0.0f;
-        bool has_rect = false;
-
-        auto include_frame = [&](int frame_w, int frame_h) {
-                if (frame_w <= 0 || frame_h <= 0) {
-                        return;
-                }
-                const float half_w = 0.5f * static_cast<float>(frame_w);
-                const float height = static_cast<float>(frame_h);
-                expand_rect(-half_w, -height, half_w, 0.0f, has_rect, min_x, max_x, min_y, max_y);
-        };
-
-        auto include_centered_rect = [&](float center_x, float center_y, float width, float height) {
-                if (!std::isfinite(center_x) || !std::isfinite(center_y) || !std::isfinite(width) || !std::isfinite(height)) {
-                        return false;
-                }
-                if (width <= 0.0f || height <= 0.0f) {
-                        return false;
-                }
-                const float half_w = 0.5f * width;
-                const float half_h = 0.5f * height;
-                expand_rect(center_x - half_w,
-                            center_y - half_h,
-                            center_x + half_w,
-                            center_y + half_h,
-                            has_rect,
-                            min_x,
-                            max_x,
-                            min_y,
-                            max_y);
-                return true;
-        };
-
-        if (info) {
-                for (const auto& entry : info->animations) {
-                        const Animation& animation = entry.second;
-                        if (animation.frames.empty()) {
-                                continue;
-                        }
-                        for (SDL_Texture* tex : animation.frames) {
-                                if (!tex) {
-                                        continue;
-                                }
-                                int frame_w = 0;
-                                int frame_h = 0;
-                                if (SDL_QueryTexture(tex, nullptr, nullptr, &frame_w, &frame_h) != 0) {
-                                        continue;
-                                }
-                                include_frame(frame_w, frame_h);
-                        }
-                }
-
-                for (const auto& light : info->light_sources) {
-                        const float offset_x = static_cast<float>(light.offset_x);
-                        const float offset_y = static_cast<float>(light.offset_y);
-
-                        auto include_light_texture = [&](int tex_w, int tex_h) {
-                                if (tex_w <= 0 || tex_h <= 0) {
-                                        return false;
-                                }
-                                const float width_f  = static_cast<float>(tex_w);
-                                const float height_f = static_cast<float>(tex_h);
-                                return include_centered_rect(offset_x, offset_y, width_f, height_f);
-                        };
-
-                        bool texture_accounted_for = false;
-                        int tex_w = light.cached_w;
-                        int tex_h = light.cached_h;
-                        if (tex_w <= 0 || tex_h <= 0) {
-                                if (light.texture) {
-                                        int queried_w = 0;
-                                        int queried_h = 0;
-                                        if (SDL_QueryTexture(light.texture, nullptr, nullptr, &queried_w, &queried_h) == 0) {
-                                                tex_w = queried_w;
-                                                tex_h = queried_h;
-                                        }
-                                }
-                        }
-                        if (tex_w > 0 && tex_h > 0) {
-                                texture_accounted_for = include_light_texture(tex_w, tex_h);
-                        }
-
-                        const float radius = static_cast<float>(light.radius);
-                        if (radius > 0.0f && std::isfinite(radius)) {
-                                expand_rect(offset_x - radius,
-                                            offset_y - radius,
-                                            offset_x + radius,
-                                            offset_y + radius,
-                                            has_rect,
-                                            min_x,
-                                            max_x,
-                                            min_y,
-                                            max_y);
-                        } else if (!texture_accounted_for) {
-                                // No usable radius or texture to expand from; skip.
-                                continue;
-                        }
-                }
-        }
-
-        if (!has_rect && info) {
-                include_frame(std::max(0, info->original_canvas_width),
-                              std::max(0, info->original_canvas_height));
-        }
-
-        if (!has_rect) {
-                expand_rect(-0.5f, -0.5f, 0.5f, 0.5f, has_rect, min_x, max_x, min_y, max_y);
-        }
-
-        if (!has_rect) {
-                base_bounds_local_ = BoundsSquare{};
-                return;
-        }
-
-        const float width  = std::max(0.0f, max_x - min_x);
-        const float height = std::max(0.0f, max_y - min_y);
-        const float size   = std::max(width, height);
-
-        BoundsSquare computed{};
-        computed.center_x = min_x + width * 0.5f;
-        computed.center_y = min_y + height * 0.5f;
-        computed.half_size = (size > 0.0f && std::isfinite(size)) ? size * 0.5f : 0.5f;
-        base_bounds_local_ = computed;
 }
 
 void Asset::on_scale_factor_changed() {
@@ -1075,77 +889,6 @@ void Asset::on_scale_factor_changed() {
         if (assets_) {
                 assets_->invalidate_max_asset_dimensions();
         }
-}
-
-void Asset::update_scale_usage(float requested,
-                               float texture_scale,
-                               float remainder,
-                               int   variant_index,
-                               float hysteresis_min,
-                               float hysteresis_max) {
-        if (!std::isfinite(requested) || requested <= 0.0f) {
-                requested = 1.0f;
-        }
-        if (!std::isfinite(texture_scale) || texture_scale <= 0.0f) {
-                texture_scale = 1.0f;
-        }
-        if (!std::isfinite(remainder) || remainder <= 0.0f) {
-                remainder = 1.0f;
-        }
-        last_scale_usage_.requested_scale = requested;
-        last_scale_usage_.texture_scale   = texture_scale;
-        last_scale_usage_.remainder_scale = remainder;
-        const int max_index = downscale_cache_.empty() ? 0 : static_cast<int>(downscale_cache_.size() - 1);
-        last_scale_usage_.variant_index   = std::clamp(variant_index, 0, max_index);
-        scale_variant_state_.last_variant_index = last_scale_usage_.variant_index;
-        if (!std::isfinite(hysteresis_min) || hysteresis_min < 0.0f) {
-                hysteresis_min = 0.0f;
-        }
-        if (!std::isfinite(hysteresis_max) || hysteresis_max <= hysteresis_min) {
-                hysteresis_max = std::numeric_limits<float>::max();
-        }
-        scale_variant_state_.hysteresis_min = hysteresis_min;
-        scale_variant_state_.hysteresis_max = std::max(hysteresis_max, hysteresis_min);
-}
-
-void Asset::set_smoothing_params(const TransformSmoothingParams& translation,
-                                 const TransformSmoothingParams& scale,
-                                 const TransformSmoothingParams& alpha) {
-        auto sanitize = [](const TransformSmoothingParams& params) {
-                TransformSmoothingParams result = params;
-                if (!std::isfinite(result.lerp_rate) || result.lerp_rate < 0.0f) {
-                        result.lerp_rate = 0.0f;
-                }
-                if (!std::isfinite(result.spring_frequency) || result.spring_frequency < 0.0f) {
-                        result.spring_frequency = 0.0f;
-                }
-                if (!std::isfinite(result.max_step) || result.max_step < 0.0f) {
-                        result.max_step = 0.0f;
-                }
-                if (!std::isfinite(result.snap_threshold) || result.snap_threshold < 0.0f) {
-                        result.snap_threshold = 0.0f;
-                }
-                switch (result.method) {
-                case TransformSmoothingMethod::None:
-                case TransformSmoothingMethod::Lerp:
-                case TransformSmoothingMethod::CriticallyDampedSpring:
-                        break;
-                default:
-                        result.method = TransformSmoothingMethod::None;
-                        break;
-                }
-                return result;
-        };
-
-        TransformSmoothingParams translation_params = sanitize(translation);
-        translation_smoothing_x_.set_params(translation_params);
-        translation_smoothing_y_.set_params(translation_params);
-
-        TransformSmoothingParams scale_params = sanitize(scale);
-        scale_smoothing_.set_params(scale_params);
-
-        TransformSmoothingParams alpha_params = sanitize(alpha);
-        alpha_smoothing_.set_params(alpha_params);
 }
 
 void Asset::set_hidden(bool state){ hidden = state; }
@@ -1189,6 +932,13 @@ void Asset::set_grid_id(std::uint64_t id) {
 
 void Asset::clear_grid_id() {
         grid_id_ = 0;
+}
+
+void Asset::set_composite_texture(SDL_Texture* tex) {
+    if (composite_texture_ && composite_texture_ != tex) {
+        SDL_DestroyTexture(composite_texture_);
+    }
+    composite_texture_ = tex;
 }
 
 float Asset::smoothed_translation_x() const { return translation_smoothing_x_.value_for_render(); }

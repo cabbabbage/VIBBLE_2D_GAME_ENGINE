@@ -1,4 +1,3 @@
-
 #include "asset_library_ui.hpp"
 #include <algorithm>
 #include <unordered_map>
@@ -538,7 +537,7 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
                 auto it = in->animations.find("default");
                 if (it == in->animations.end()) it = in->animations.find("start");
                 if (it == in->animations.end() && !in->animations.empty()) it = in->animations.begin();
-                if (it != in->animations.end() && !it->second.frames.empty()) tex = it->second.frames.front();
+                if (it != in->animations.end() && !it->second.frames.empty() && !it->second.frames.front()->variants.empty()) tex = it->second.frames.front()->variants[0].base_texture;
             }
             if (tex) {
                 int tw = 0;
@@ -696,6 +695,7 @@ struct AssetLibraryUI::HashtagTileWidget : public Widget {
         const int cross_inset = std::max(bevel_depth + 1, button_rect.w / 4);
         SDL_RenderDrawLine(r, button_rect.x + cross_inset, button_rect.y + cross_inset, button_rect.x + button_rect.w - cross_inset, button_rect.y + button_rect.h - cross_inset);
         SDL_RenderDrawLine(r, button_rect.x + button_rect.w - cross_inset, button_rect.y + cross_inset, button_rect.x + cross_inset, button_rect.y + button_rect.h - cross_inset);
+        SDL_RenderDrawLine(r, button_rect.x + cross_inset, button_rect.y + button_rect.h - cross_inset, button_rect.x + button_rect.w - cross_inset, button_rect.y + cross_inset);
 
         int label_left = button_rect.x + button_rect.w + pad;
         int label_right = rect_.x + rect_.w - pad;
@@ -2045,7 +2045,7 @@ SDL_Texture* AssetLibraryUI::get_default_frame_texture(const AssetInfo& info) co
         if (key.empty()) return nullptr;
         auto it = inf.animations.find(key);
         if (it != inf.animations.end() && !it->second.frames.empty()) {
-            return it->second.frames.front();
+            return (!it->second.frames.empty() && !it->second.frames.front()->variants.empty()) ? it->second.frames.front()->variants[0].base_texture : nullptr;
         }
         return nullptr;
 };
@@ -2060,42 +2060,8 @@ SDL_Texture* AssetLibraryUI::get_default_frame_texture(const AssetInfo& info) co
         return tex;
     }
     for (const auto& kv : info.animations) {
-        if (!kv.second.frames.empty()) {
-            return kv.second.frames.front();
-        }
-    }
-
-    if (!assets_owner_) {
-        return nullptr;
-    }
-    SDL_Renderer* renderer = assets_owner_->renderer();
-    if (!renderer) {
-        return nullptr;
-    }
-
-    std::string cache_key = info.name;
-    if (cache_key.empty()) {
-        auto addr = reinterpret_cast<std::uintptr_t>(&info);
-        cache_key = "<unnamed@" + std::to_string(addr) + ">";
-    }
-
-    if (preview_attempted_.insert(cache_key).second) {
-        auto& mutable_info = const_cast<AssetInfo&>(info);
-        mutable_info.loadAnimations(renderer);
-    }
-
-    if (SDL_Texture* tex = find_frame(info, "default")) {
-        return tex;
-    }
-    if (SDL_Texture* tex = find_frame(info, info.start_animation)) {
-        return tex;
-    }
-    if (SDL_Texture* tex = find_frame(info, "start")) {
-        return tex;
-    }
-    for (const auto& kv : info.animations) {
-        if (!kv.second.frames.empty()) {
-            return kv.second.frames.front();
+        if (!kv.second.frames.empty() && !kv.second.frames.front()->variants.empty()) {
+            return kv.second.frames.front()->variants[0].base_texture;
         }
     }
     return nullptr;

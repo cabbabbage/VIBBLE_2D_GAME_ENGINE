@@ -165,7 +165,7 @@ public:
 
     // Update methods
     void update(float dt);
-    void update_zoom(Room* cur, CurrentRoomFinder* finder, Asset* player, bool refresh_requested, float dt);
+    void update_zoom(Room* cur, CurrentRoomFinder* finder, Asset* player, bool refresh_requested, float dt, bool dev_mode = false);
 
     // Focus and zoom overrides
     void set_focus_override(SDL_Point focus);

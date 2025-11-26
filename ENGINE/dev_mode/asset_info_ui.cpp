@@ -57,7 +57,7 @@
 #include "dev_mode/manifest_spawn_group_utils.hpp"
 #include "dev_mode/manifest_asset_utils.hpp"
 #include "dev_mode/asset_paths.hpp"
-#include "asset_info_methods/animation_loader.hpp"
+
 #include "dev_mode/rebuildAnimation.hpp"
 
 namespace asset_paths = devmode::asset_paths;

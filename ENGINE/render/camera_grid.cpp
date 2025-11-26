@@ -519,13 +519,17 @@ void camera_grid::update_zoom(Room* cur,
                          CurrentRoomFinder* finder,
                          Asset* player,
                          bool refresh_requested,
-                         float dt)
+                         float dt,
+                         bool dev_mode)
 {
     pan_offset_x_ = 0.0;
     pan_offset_y_ = 0.0;
 
     if (!pan_override_) {
-        if (player) {
+        // In normal mode, lock camera center to player when present.
+        // In dev mode we intentionally avoid forcing the camera to follow
+        // the player so panning/zooming can be used to inspect the scene.
+        if (player && !dev_mode) {
             set_screen_center(SDL_Point{ player->pos.x, player->pos.y });
         } else if (focus_override_) {
             set_screen_center(focus_point_);
@@ -756,6 +760,12 @@ void camera_grid::animate_zoom_towards_point(double factor, SDL_Point screen_poi
     manual_zoom_override_ = true;
 }
 
+
+SDL_FPoint camera_grid::map_to_screen(SDL_Point world) const {
+    SDL_FPoint world_f{ static_cast<float>(world.x), static_cast<float>(world.y) };
+    return map_to_screen_f(world_f);
+}
+
 SDL_FPoint camera_grid::map_to_screen_f(SDL_FPoint world) const {
     int left, top, right, bottom;
     std::tie(left, top, right, bottom) = current_view_.get_bounds();
@@ -772,10 +782,7 @@ SDL_FPoint camera_grid::map_to_screen_f(SDL_FPoint world) const {
     return SDL_FPoint{ out_x, out_y };
 }
 
-SDL_FPoint camera_grid::map_to_screen(SDL_Point world) const {
-    SDL_FPoint world_f{ static_cast<float>(world.x), static_cast<float>(world.y) };
-    return map_to_screen_f(world_f);
-}
+
 
 SDL_FPoint camera_grid::screen_to_map(SDL_Point screen) const {
     int left, top, right, bottom;
@@ -789,7 +796,6 @@ SDL_FPoint camera_grid::screen_to_map(SDL_Point screen) const {
     const float out_wy = static_cast<float>(std::clamp(safe_wy, -1e8, 1e8));
     return SDL_FPoint{ out_wx, out_wy };
 }
-
 camera_grid::RenderEffects camera_grid::compute_render_effects(
     SDL_Point world,
     float asset_screen_height,
@@ -801,18 +807,21 @@ camera_grid::RenderEffects camera_grid::compute_render_effects(
     SDL_FPoint world_f{ static_cast<float>(world.x), static_cast<float>(world.y) };
     SDL_FPoint linear_screen = map_to_screen_f(world_f);
     SDL_FPoint warped_screen = linear_screen;
+
     if (realism_enabled_) {
         warped_screen.y = warp_floor_screen_y(world_f.y, linear_screen.y);
         if (!std::isfinite(warped_screen.y)) {
             warped_screen.y = linear_screen.y;
         }
     }
+
     if (!std::isfinite(warped_screen.x) || !std::isfinite(warped_screen.y)) {
         warped_screen = linear_screen;
     }
-    result.screen_position  = warped_screen;
-    result.vertical_scale   = 1.0f;
-    result.distance_scale   = 1.0f;
+
+    result.screen_position = warped_screen;
+    result.vertical_scale  = 1.0f;
+    result.distance_scale  = 1.0f;
 
     if (!realism_enabled_) {
         return result;
@@ -825,22 +834,48 @@ camera_grid::RenderEffects camera_grid::compute_render_effects(
         return result;
     }
 
-    const double camera_height = geom.camera_height;
     result.vertical_scale = 1.0f;
 
-    // Compute distance scale based on actual world space depth from camera
-    // This accounts for the perspective warping that happens in NDC space
-    const double world_y_double = static_cast<double>(world.y);
-    const double depth_world = world_y_double - geom.camera_world_y;
-    const double focus_depth = geom.anchor_world_y - geom.camera_world_y;
-    
-    // Compute distance scale as ratio of depths (farther = smaller)
-    // Blend between linear screen-space and world-space depth for gradual transition
-    double depth_based_scale = 1.0;
-    if (focus_depth > EPS && depth_world > EPS) {
-        depth_based_scale = focus_depth / depth_world;
+    // ---------------------------------------------------------------------
+    // Distance scaling: use screen-space position relative to horizon.
+    // Assets near the horizon (top) should be smaller.
+    // Assets near the bottom should be larger.
+    // ---------------------------------------------------------------------
+
+    FloorDepthParams p = runtime_floor_params_;
+    if (!p.enabled) {
+        // Fallback to fresh params if cache is empty (early frames).
+        p = compute_floor_depth_params();
     }
 
+    const double horizon = p.horizon_screen_y;
+    const double bottom  = p.bottom_screen_y;
+    if (!std::isfinite(horizon) || !std::isfinite(bottom) || bottom <= horizon + EPS) {
+        // Bad or degenerate range: bail out to neutral scaling.
+        return result;
+    }
+
+    const double y = static_cast<double>(warped_screen.y);
+    const double range = bottom - horizon;
+
+    // Normalized depth along the floor from horizon (0) to bottom (1).
+    double t = (y - horizon) / range;
+    // t = std::clamp(t, 0.0, 1.0);
+
+    // How strong the perspective foreshortening should be, based on zoom.
+    const double foreshorten = static_cast<double>(foreshorten_for_scale(smoothed_scale_)); // 0..kMaxForeshortenSliderStrength
+    const double strength = std::clamp(foreshorten, 0.0, static_cast<double>(kMaxForeshortenSliderStrength));
+
+    // Define near and far scales:
+    //  - At the horizon (t = 0) scale is smaller (far).
+    //  - At the bottom (t = 1) scale is larger (near).
+    const double min_scale_far  = 1.0 / (1.0 + 0.5 * strength);          // ~1.0 down to ~0.5
+    const double max_scale_near = 1.0 + strength;                         // ~1.0 up to ~3.0
+
+    // Smoothly interpolate between far and near based on t.
+    double depth_scale = min_scale_far + (max_scale_near - min_scale_far) * t;
+
+    // Optional blend with any screen-height hint if you ever pass a real asset_screen_height.
     double screen_based_scale = 1.0;
     if (reference_screen_height > EPS && asset_screen_height > EPS) {
         screen_based_scale = std::clamp(
@@ -850,26 +885,33 @@ camera_grid::RenderEffects camera_grid::compute_render_effects(
             1.5);
     }
 
-    const double blended_scale = 0.5 * depth_based_scale + 0.5 * screen_based_scale;
-    const double distance_scale = std::clamp(blended_scale, 0.35, 1.5);
+    const double blended_scale = 0.5 * depth_scale + 0.5 * screen_based_scale;
+
+    // Final clamp to keep sprites reasonable.
+    const double distance_scale = std::clamp(blended_scale, 0.01, 3.0);
     result.distance_scale = static_cast<float>(distance_scale);
+
+    // ---------------------------------------------------------------------
 
     if (!std::isfinite(result.vertical_scale) || result.vertical_scale <= 0.0f) {
         result.vertical_scale = 1.0f;
     } else {
         result.vertical_scale = std::clamp(result.vertical_scale, 0.1f, 2.0f);
     }
+
     if (!std::isfinite(result.distance_scale) || result.distance_scale <= 0.0f) {
         result.distance_scale = 1.0f;
     } else {
         result.distance_scale = std::clamp(result.distance_scale, 0.1f, 4.0f);
     }
+
     if (!std::isfinite(result.screen_position.x) || !std::isfinite(result.screen_position.y)) {
         result.screen_position = linear_screen;
     }
 
     return result;
 }
+
 
 void camera_grid::apply_camera_settings(const nlohmann::json& data) {
     if (!data.is_object()) {
@@ -920,9 +962,12 @@ void camera_grid::apply_camera_settings(const nlohmann::json& data) {
 
     try_read_bool("realism_enabled", realism_enabled_);
 
-    const std::array<std::pair<const char*, float*>, 18> float_fields{ {
+    const std::array<std::pair<const char*, float*>, 21> float_fields{ {
         { "base_height_at_zoom_low", &settings_.base_height_at_zoom_low },
         { "base_height_at_zoom_high", &settings_.base_height_at_zoom_high },
+        { "foreshorten_at_zoom_low", &settings_.foreshorten_at_zoom_low },
+        { "foreshorten_at_zoom_high", &settings_.foreshorten_at_zoom_high },
+        { "extra_cull_margin", &settings_.extra_cull_margin },
         { "zoom_low", &settings_.zoom_low },
         { "zoom_high", &settings_.zoom_high },
         { "base_height_px", &settings_.base_height_px },
@@ -1057,6 +1102,9 @@ nlohmann::json camera_grid::camera_settings_to_json() const {
     j["realism_enabled"] = realism_enabled_;
 
     const std::pair<const char*, float> float_fields[] = {
+        { "foreshorten_at_zoom_low", settings_.foreshorten_at_zoom_low },
+        { "foreshorten_at_zoom_high", settings_.foreshorten_at_zoom_high },
+        { "extra_cull_margin", settings_.extra_cull_margin },
         { "depth_offset_at_zoom_low", settings_.depth_offset_at_zoom_low },
         { "depth_offset_at_zoom_high", settings_.depth_offset_at_zoom_high },
         { "base_height_at_zoom_low", settings_.base_height_at_zoom_low },
@@ -1170,6 +1218,9 @@ float camera_grid::depth_offset_for_scale(double scale_value) const {
 }
 
 double camera_grid::horizon_screen_y_for_scale_value(double scale_value) const {
+    if (!realism_enabled_) {
+        return 0.0;
+    }
     if (!ndc_calculator_) {
         return screen_height_ > 0 ? static_cast<double>(screen_height_) * 0.5 : 0.0;
     }
@@ -1316,10 +1367,42 @@ void camera_grid::rebuild_grid(world::Grid& world_grid, float dt_seconds) {
         gp->screen             = screen_pos;
         gp->parallax_dx        = parallax_dx;
         gp->vertical_scale     = effects.vertical_scale;
-        gp->distance_scale     = effects.distance_scale;
+        gp->perspective_scale  = smoothed_scale_ * effects.distance_scale;
         gp->distance_to_camera = 0.0f;
         gp->tilt_radians       = runtime_pitch_rad_;
         gp->on_screen          = on_screen;
+
+        // Calculate depth cue opacities
+        float fg_opacity = 0.0f;
+        float bg_opacity = 1.0f;
+        
+        if (on_screen && !gp->occupants.empty()) {
+            // Only calculate if on screen and has assets
+            float screen_y = screen_pos.y;
+            float fg_y = settings_.foreground_plane_screen_y;
+            float bg_y = settings_.background_plane_screen_y;
+            
+            // Simple linear falloff for now, can be expanded based on texture_opacity_falloff_method
+            if (screen_y > fg_y) {
+                fg_opacity = 1.0f;
+            } else if (screen_y < bg_y) {
+                fg_opacity = 0.0f;
+            } else {
+                float range = fg_y - bg_y;
+                if (range > 0.001f) {
+                    fg_opacity = (screen_y - bg_y) / range;
+                }
+            }
+            fg_opacity = std::clamp(fg_opacity, 0.0f, 1.0f);
+            bg_opacity = 1.0f - fg_opacity;
+            
+            // Apply max opacity settings
+            fg_opacity *= (static_cast<float>(settings_.foreground_texture_max_opacity) / 255.0f);
+            bg_opacity *= (static_cast<float>(settings_.background_texture_max_opacity) / 255.0f);
+        }
+        
+        gp->depth_cue_foreground_opacity = fg_opacity;
+        gp->depth_cue_background_opacity = bg_opacity;
 
         id_to_index_[gp->id] = warped_points_.size();
         warped_points_.push_back(gp);

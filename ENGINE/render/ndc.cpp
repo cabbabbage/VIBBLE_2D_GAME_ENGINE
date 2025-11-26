@@ -222,53 +222,72 @@ ndc::FloorDepthParams ndc::compute_floor_depth_params_for_scale(
     const CameraGeometry geom = compute_geometry_for_scale(scale_value, anchor_world_y, realism_enabled);
     return compute_floor_depth_params_for_geometry(geom, scale_value, realism_enabled);
 }
-
 float ndc::warp_floor_screen_y(
     float world_y,
     float linear_screen_y,
     const FloorDepthParams& p) const
 {
+    // Bail out if depth is disabled or params are garbage
     if (!p.enabled ||
         !std::isfinite(p.horizon_screen_y) ||
         !std::isfinite(p.bottom_screen_y) ||
-        !std::isfinite(p.base_world_y) ||
-        !std::isfinite(p.camera_world_y) ||
         !std::isfinite(p.camera_height) ||
-        !std::isfinite(p.pitch_radians) ||
-        !std::isfinite(p.ndc_scale)) {
-        // No pitch or realism disabled, keep the original linear mapping.
+        !std::isfinite(p.pitch_radians)) {
         return std::isfinite(linear_screen_y) ? linear_screen_y : 0.0f;
     }
 
-    const double screen_h = static_cast<double>(screen_height_);
-    const double safe_linear_y = std::isfinite(linear_screen_y) ? linear_screen_y : 0.0;
-    const double tan_fov = std::tan(HALF_FOV_Y);
-    if (!std::isfinite(tan_fov) || std::abs(tan_fov) < 1e-6) {
+    const double safe_linear_y = std::isfinite(linear_screen_y)
+        ? static_cast<double>(linear_screen_y)
+        : 0.0;
+
+    const double horizon = p.horizon_screen_y;
+    const double bottom  = p.bottom_screen_y;
+    if (!std::isfinite(horizon) || !std::isfinite(bottom) || bottom <= horizon + 1e-3) {
         return static_cast<float>(safe_linear_y);
     }
 
-    const double depth_world = static_cast<double>(world_y) - p.camera_world_y;
-    if (!std::isfinite(depth_world) || depth_world <= 1e-4) {
-        return static_cast<float>(p.horizon_screen_y);
+    // Normalized linear position between horizon and bottom, in screen space.
+    const double range = bottom - horizon;
+    double t_linear = (safe_linear_y - horizon) / range;
+    // t_linear = std::clamp(t_linear, 0.0, 1.0);
+
+    // How far along the floor in world space this point is, relative to some base.
+    const double depth_world = static_cast<double>(world_y) - p.base_world_y;
+    double depth_norm = 0.0;
+    if (std::isfinite(depth_world) && depth_world > 0.0) {
+        // Map depth to [0,1) with a simple saturating curve
+        const double h = std::max(1.0, p.camera_height);
+        depth_norm = depth_world / (depth_world + h);
+        depth_norm = std::clamp(depth_norm, 0.0, 1.0);
     }
 
-    const double phi       = std::atan2(p.camera_height, depth_world);
-    double       alpha     = p.pitch_radians - phi;
-    const double max_alpha = HALF_FOV_Y - 1e-3;
-    alpha = std::clamp(alpha, -max_alpha, max_alpha);
+    // Shape factor based on pitch and an optional strength
+    const double pitch = std::clamp(p.pitch_radians, 0.0, HALF_FOV_Y * 2.0);
+    const double base_strength = 0.5 + 0.5 * (pitch / (HALF_FOV_Y * 2.0)); // 0.5 to 1.0
+    const double strength = std::clamp(p.strength, 0.0, 2.0);
+    const double k = 1.0 + strength * base_strength;
 
-    double y_ndc = std::tan(alpha) / tan_fov;
-    y_ndc -= p.focus_ndc_offset;
-    y_ndc *= p.ndc_scale;
+    // Warp top and stretch bottom:
+    // t_linear near 0 stays close to 0, near 1 pushes closer to 1 faster as k increases.
+    double t_warp;
+    if (t_linear >= 0.0) {
+        t_warp = std::pow(t_linear, k);
+    } else {
+        t_warp = t_linear;
+    }
 
-    const double screen_y = screen_h * (0.5 - 0.5 * y_ndc);
+    // Blend in some depth based weighting so extremely far points do not over warp.
+    const double blend = 0.5 * depth_norm; // 0 for near, 0.5 for very far
+    t_warp = (1.0 - blend) * t_warp + blend * t_linear;
+
+    const double screen_y = horizon + t_warp * range;
     if (!std::isfinite(screen_y)) {
         return static_cast<float>(safe_linear_y);
     }
 
-    const double clamped_y = std::clamp(screen_y, p.horizon_screen_y, p.bottom_screen_y);
-    return static_cast<float>(clamped_y);
+    return static_cast<float>(screen_y);
 }
+
 
 double ndc::horizon_screen_y_for_scale_value(
     double scale_value,

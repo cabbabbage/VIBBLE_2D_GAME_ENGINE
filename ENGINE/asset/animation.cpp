@@ -23,1432 +23,165 @@
 #include <unordered_set>
 #include <iterator>
 #include <system_error>
+
 namespace fs = std::filesystem;
-
-namespace {
-using asset::surface_utils::kSignatureOffset;
-using asset::surface_utils::mix_signature;
-
-
-
-bool has_depthcue_effects(const std::string& /*settings*/) {
-        // Image effects are now handled by Python, so we always assume no depth cues
-        return false;
-}
-
-// Count PNG files (0.png, 1.png, 2.png, etc.) in a folder
-int count_png_files(const std::string& folder) {
-        int count = 0;
-        const fs::path folder_path(folder);
-        
-        std::error_code ec;
-        if (!fs::exists(folder_path, ec) || ec) {
-                std::cout << "[Animation] count_png_files: folder does not exist: " << folder << "\n";
-                return 0;
-        }
-        
-        while (true) {
-                fs::path frame_path = folder_path / (std::to_string(count) + ".png");
-                if (!fs::exists(frame_path, ec) || ec) {
-                        break;
-                }
-                ++count;
-        }
-        
-        std::cout << "[Animation] count_png_files: folder=" << folder << ", count=" << count << "\n";
-        return count;
-}
-
-// load_surface_sequence_from_folder removed - logic now in CacheManager::load_surface_sequence for consistency
-
-
-
-void destroy_texture(SDL_Texture*& texture) {
-        if (texture) {
-                SDL_DestroyTexture(texture);
-                texture = nullptr;
-        }
-}
-
-void rebuild_depthcue_textures(SDL_Renderer*,
-                               SDL_Texture*,
-                               int,
-                               int,
-                               SDL_Texture*& /*fg_texture*/,
-                               SDL_Texture*& /*bg_texture*/,
-                               const std::string& /*fg_settings*/,
-                               const std::string& /*bg_settings*/,
-                               const AssetInfo& /*info*/) {
-        // Runtime generation of depth-cue overlays is disabled.
-        return;
-}
-
-fs::path project_root_path() {
-#ifdef PROJECT_ROOT
-        return fs::path(PROJECT_ROOT);
-#else
-        return fs::current_path();
-#endif
-}
-
-bool path_exists_safely(const fs::path& path) {
-        std::error_code ec;
-        return fs::exists(path, ec);
-}
-
-fs::path resolve_source_folder(const std::string& dir_path, const std::string& source_path) {
-        const fs::path base = fs::path(dir_path).lexically_normal();
-        if (source_path.empty()) {
-                return base;
-        }
-
-        fs::path source = fs::path(source_path).lexically_normal();
-        if (source.is_absolute()) {
-                return source;
-        }
-
-        const auto starts_with = [](const std::string& value, const std::string& prefix) {
-                return value.rfind(prefix, 0) == 0;
-};
-
-        const std::string source_string = source.generic_string();
-        if (starts_with(source_string, "SRC/") || starts_with(source_string, "SRC\\")) {
-                fs::path resolved = (project_root_path() / source).lexically_normal();
-                if (path_exists_safely(resolved)) {
-                        return resolved;
-                }
-        }
-
-        if (!base.empty()) {
-                fs::path resolved = (base / source).lexically_normal();
-                if (path_exists_safely(resolved)) {
-                        return resolved;
-                }
-        }
-
-        {
-                fs::path resolved = (project_root_path() / source).lexically_normal();
-                if (path_exists_safely(resolved)) {
-                        return resolved;
-                }
-        }
-
-        if (!base.empty()) {
-                return (base / source).lexically_normal();
-        }
-
-        return (project_root_path() / source).lexically_normal();
-}
-
-std::string format_steps(const std::vector<float>& steps) {
-        std::ostringstream oss;
-        oss << '[';
-        for (std::size_t i = 0; i < steps.size(); ++i) {
-                if (i != 0) {
-                        oss << ", ";
-                }
-                oss << std::fixed << std::setprecision(2) << steps[i];
-        }
-        oss << ']';
-        return oss.str();
-}
-
-std::string format_percent_steps(const std::vector<int>& steps) {
-        std::ostringstream oss;
-        oss << '[';
-        for (std::size_t i = 0; i < steps.size(); ++i) {
-                if (i != 0) {
-                        oss << ", ";
-                }
-                oss << steps[i];
-        }
-        oss << ']';
-        return oss.str();
-}
-
-// SourceSignatureResult removed - signature validation no longer used
-
-struct VariantLayerPaths {
-        std::string scale_folder;
-        std::string normal_folder;
-        std::string foreground_folder;
-        std::string background_folder;
-        std::string mask_folder;
-};
-
-VariantLayerPaths build_variant_layer_paths(const std::string& cache_folder,
-                                            const std::vector<float>& steps,
-                                            std::size_t index) {
-        VariantLayerPaths paths;
-        paths.scale_folder     = render_pipeline::ScalingLogic::VariantFolder(cache_folder, steps, index);
-        const fs::path scale_root(paths.scale_folder);
-        paths.normal_folder     = (scale_root / "normal").string();
-        paths.foreground_folder = (scale_root / "foreground").string();
-        paths.background_folder = (scale_root / "background").string();
-        paths.mask_folder       = (scale_root / "mask").string();
-        
-        // Log constructed paths for debugging
-        std::cout << "[Animation] build_variant_layer_paths idx=" << index 
-                  << " scale=" << (index < steps.size() ? steps[index] : 0.0f)
-                  << " normal_folder=" << paths.normal_folder << "\n";
-        
-        return paths;
-}
-}
-
-void clear_overlay_directories(const std::vector<VariantLayerPaths>& variant_paths) {
-        for (const auto& paths : variant_paths) {
-                std::error_code ec;
-                fs::remove_all(paths.foreground_folder, ec);
-                ec.clear();
-                fs::remove_all(paths.background_folder, ec);
-        }
-}
-
-bool overlay_hashes_match_and_cleanup(const nlohmann::json& metadata,
-                                      const std::vector<VariantLayerPaths>& variant_paths,
-                                      std::uint64_t expected_fg_hash,
-                                      std::uint64_t expected_bg_hash,
-                                      const std::string& asset_name,
-                                      const std::string& trigger) {
-        // Overlay validation removed - overlays handled by Python
-        return true;
-}
-
-using AudioCache = std::unordered_map<std::string, std::weak_ptr<Mix_Chunk>>;
-
-constexpr int kAnimationCacheVersion = 3;
-
-inline double sanitize_scale_factor(float value) {
-        if (!std::isfinite(value) || value < 0.0f) {
-                return 1.0;
-        }
-        return static_cast<double>(value);
-}
-
-inline int scaled_dimension(int base, double scale) {
-        if (base <= 0) {
-                return 0;
-        }
-        if (scale <= 0.0) {
-                return 0;
-        }
-        const long long rounded = std::llround(static_cast<double>(base) * scale);
-        if (rounded < 1) {
-                return 1;
-        }
-        if (rounded > static_cast<long long>(std::numeric_limits<int>::max())) {
-                return std::numeric_limits<int>::max();
-        }
-        return static_cast<int>(rounded);
-}
-
-AudioCache& get_audio_cache() {
-        static AudioCache cache;
-        return cache;
-}
-
-std::shared_ptr<Mix_Chunk> load_audio_clip(const std::string& path) {
-        if (path.empty()) return {};
-        auto& cache = get_audio_cache();
-        auto it = cache.find(path);
-        if (it != cache.end()) {
-                if (auto existing = it->second.lock()) {
-                        return existing;
-                }
-        }
-        if (!std::filesystem::exists(path)) {
-                std::cerr << "[Animation] Audio file not found: " << path << "\n";
-                return {};
-        }
-        Mix_Chunk* raw = Mix_LoadWAV(path.c_str());
-        if (!raw) {
-                std::cerr << "[Animation] Failed to load audio '" << path << "': " << Mix_GetError() << "\n";
-                return {};
-        }
-        std::shared_ptr<Mix_Chunk> chunk(raw, Mix_FreeChunk);
-        cache[path] = chunk;
-        return chunk;
-}
-
-#if SDL_VERSION_ATLEAST(2,0,12)
-void apply_scale_mode(SDL_Texture* tex, const AssetInfo& info) {
-        if (tex) {
-                SDL_SetTextureScaleMode(tex, info.smooth_scaling ? SDL_ScaleModeBest : SDL_ScaleModeNearest);
-        }
-}
-#else
-void apply_scale_mode(SDL_Texture*, const AssetInfo&) {}
-#endif
 
 Animation::Animation() = default;
 
 void Animation::clear_texture_cache() {
-        for (auto& cache_entry : frame_cache_) {
-                for (SDL_Texture*& tex : cache_entry.textures) {
-                        if (tex) {
-                                SDL_DestroyTexture(tex);
-                                tex = nullptr;
-                        }
-                }
-                for (SDL_Texture*& mask_tex : cache_entry.mask_textures) {
-                        if (mask_tex) {
-                                SDL_DestroyTexture(mask_tex);
-                                mask_tex = nullptr;
-                        }
-                }
-                for (SDL_Texture*& tex : cache_entry.foreground_textures) {
-                        if (tex) {
-                                SDL_DestroyTexture(tex);
-                                tex = nullptr;
-                        }
-                }
-                for (SDL_Texture*& tex : cache_entry.background_textures) {
-                        if (tex) {
-                                SDL_DestroyTexture(tex);
-                                tex = nullptr;
-                        }
-                }
+    for (auto& cache_entry : frame_cache_) {
+        for (SDL_Texture*& tex : cache_entry.textures) {
+            if (tex) {
+                SDL_DestroyTexture(tex);
+                tex = nullptr;
+            }
         }
-        frame_cache_.clear();
-        frames.clear();
-        mask_frames.clear();
-        refresh_frame_texture_bindings();
-}
-
-SDL_Texture* Animation::frame_variant(std::size_t frame_index, std::size_t variant_index) const {
-        if (frame_index >= frame_cache_.size()) {
-                return nullptr;
+        for (SDL_Texture*& mask_tex : cache_entry.mask_textures) {
+            if (mask_tex) {
+                SDL_DestroyTexture(mask_tex);
+                mask_tex = nullptr;
+            }
         }
-        const FrameCache& cache_entry = frame_cache_[frame_index];
-        if (cache_entry.textures.empty()) {
-                return nullptr;
+        for (SDL_Texture*& tex : cache_entry.foreground_textures) {
+            if (tex) {
+                SDL_DestroyTexture(tex);
+                tex = nullptr;
+            }
         }
-        if (variant_index >= cache_entry.textures.size() || !cache_entry.textures[variant_index]) {
-                return cache_entry.textures[0];
+        for (SDL_Texture*& tex : cache_entry.background_textures) {
+            if (tex) {
+                SDL_DestroyTexture(tex);
+                tex = nullptr;
+            }
         }
-        return cache_entry.textures[variant_index];
-}
-
-SDL_Texture* Animation::mask_variant(std::size_t frame_index, std::size_t variant_index) const {
-        if (frame_index >= frame_cache_.size()) {
-                return nullptr;
-        }
-        const FrameCache& cache_entry = frame_cache_[frame_index];
-        if (cache_entry.mask_textures.empty()) {
-                return nullptr;
-        }
-        if (variant_index >= cache_entry.mask_textures.size() || !cache_entry.mask_textures[variant_index]) {
-                return cache_entry.mask_textures[0];
-        }
-        return cache_entry.mask_textures[variant_index];
-}
-
-SDL_Texture* Animation::depthcue_foreground_variant(std::size_t frame_index,
-                                                    std::size_t variant_index) const {
-        if (frame_index >= frame_cache_.size()) {
-                return nullptr;
-        }
-        const FrameCache& cache_entry = frame_cache_[frame_index];
-        if (cache_entry.foreground_textures.empty()) {
-                return nullptr;
-        }
-        if (variant_index >= cache_entry.foreground_textures.size() ||
-            !cache_entry.foreground_textures[variant_index]) {
-                return cache_entry.foreground_textures[0];
-        }
-        return cache_entry.foreground_textures[variant_index];
-}
-
-SDL_Texture* Animation::foreground_variant(std::size_t frame_index, std::size_t variant_index) const {
-        return depthcue_foreground_variant(frame_index, variant_index);
-}
-
-SDL_Texture* Animation::depthcue_background_variant(std::size_t frame_index,
-                                                    std::size_t variant_index) const {
-        if (frame_index >= frame_cache_.size()) {
-                return nullptr;
-        }
-        const FrameCache& cache_entry = frame_cache_[frame_index];
-        if (cache_entry.background_textures.empty()) {
-                return nullptr;
-        }
-        if (variant_index >= cache_entry.background_textures.size() ||
-            !cache_entry.background_textures[variant_index]) {
-                return cache_entry.background_textures[0];
-        }
-        return cache_entry.background_textures[variant_index];
-}
-
-SDL_Texture* Animation::background_variant(std::size_t frame_index, std::size_t variant_index) const {
-        return depthcue_background_variant(frame_index, variant_index);
-}
-void Animation::bind_textures_to_frame(AnimationFrame& frame) const {
-        SDL_Texture* base = nullptr;
-        SDL_Texture* fg   = nullptr;
-        SDL_Texture* bg   = nullptr;
-        if (frame.frame_index >= 0 && frame.frame_index < static_cast<int>(frames.size())) {
-                base = frames[frame.frame_index];
-        }
-        if (frame.frame_index >= 0) {
-                const std::size_t idx = static_cast<std::size_t>(frame.frame_index);
-                fg = depthcue_foreground_variant(idx, 0);
-                bg = depthcue_background_variant(idx, 0);
-        }
-        frame.base_texture                 = base;
-        frame.foreground_texture           = fg;
-        frame.background_texture           = bg;
-}
-
-void Animation::refresh_frame_texture_bindings() {
-        for (auto& path : movement_paths_) {
-                for (auto& frame : path) {
-                        bind_textures_to_frame(frame);
-                }
-        }
+    }
+    frame_cache_.clear();
+    if (audio_clip.chunk) {
+        audio_clip.chunk.reset();
+    }
 }
 
 void Animation::adopt_prebuilt_frames(std::vector<FrameCache> caches,
                                       std::vector<SDL_Texture*> base_frames,
                                       std::vector<SDL_Texture*> base_masks,
                                       std::vector<float> variant_steps) {
-        clear_texture_cache();
-        frame_cache_   = std::move(caches);
-        frames         = std::move(base_frames);
-        mask_frames    = std::move(base_masks);
-        variant_steps_ = std::move(variant_steps);
-        number_of_frames = static_cast<int>(frames.size());
+    clear_texture_cache();
+    frame_cache_   = std::move(caches);
+    variant_steps_ = std::move(variant_steps);
+    number_of_frames = static_cast<int>(frame_cache_.size());
 
-        movement_paths_.clear();
-        if (number_of_frames <= 0) {
-                movement_paths_.emplace_back();
-                return;
-        }
+    movement_paths_.clear();
+    if (number_of_frames <= 0) {
+            movement_paths_.emplace_back();
+            return;
+    }
 
-        movement_paths_.emplace_back();
-        auto& path = movement_paths_.back();
-        path.resize(frames.size());
-        for (std::size_t idx = 0; idx < path.size(); ++idx) {
-                auto& frame = path[idx];
-                frame.frame_index = static_cast<int>(idx);
-                frame.is_first   = (idx == 0);
-                frame.is_last    = (idx + 1 == path.size());
-                frame.next       = (idx + 1 < path.size()) ? &path[idx + 1] : nullptr;
-                frame.prev       = (idx > 0) ? &path[idx - 1] : nullptr;
-        }
-        refresh_frame_texture_bindings();
+    movement_paths_.emplace_back();
+    auto& path = movement_paths_.back();
+    path.resize(number_of_frames);
+    frames.reserve(number_of_frames);
+
+    for (std::size_t idx = 0; idx < path.size(); ++idx) {
+            auto& frame = path[idx];
+            frame.frame_index = static_cast<int>(idx);
+            frame.is_first   = (idx == 0);
+            frame.is_last    = (idx + 1 == path.size());
+            frame.next       = (idx + 1 < path.size()) ? &path[idx + 1] : nullptr;
+            frame.prev       = (idx > 0) ? &path[idx - 1] : nullptr;
+            
+            if (idx < frame_cache_.size()) {
+                const auto& cache = frame_cache_[idx];
+                for (size_t v = 0; v < cache.textures.size(); ++v) {
+                    FrameVariant variant;
+                    variant.varient = static_cast<int>(v);
+                    variant.base_texture = cache.textures[v];
+                    if (v < cache.foreground_textures.size()) variant.foreground_texture = cache.foreground_textures[v];
+                    if (v < cache.background_textures.size()) variant.background_texture = cache.background_textures[v];
+                    if (v < cache.mask_textures.size()) variant.shadow_mask_texture = cache.mask_textures[v];
+                    
+                    frame.variants.push_back(variant);
+                }
+            }
+            frames.push_back(&frame);
+    }
 }
 
-void Animation::load(const std::string& trigger,
-                     const nlohmann::json& anim_json,
-                     AssetInfo& info,
-                     const std::string& dir_path,
-                     const std::string& root_cache,
-                     float scale_factor,
-                     SDL_Renderer* renderer,
-                     SDL_Texture*& base_sprite,
-                     int& scaled_sprite_w,
-                     int& scaled_sprite_h,
-                     int& original_canvas_width,
-                     int& original_canvas_height,
-                     bool scaling_refresh_pending,
-                     LoadDiagnostics* diagnostics)
-{
-
-        const auto load_start = std::chrono::steady_clock::now();
-        bool       loaded_from_cache = false;
-        bool       reused_animation  = false;
-        bool       cache_invalid_detected = false;
-        const auto flush_diagnostics = [&]() {
-                if (diagnostics) {
-                        diagnostics->cache_invalid = diagnostics->cache_invalid || cache_invalid_detected;
-                }
-        };
-        const double safe_scale = sanitize_scale_factor(scale_factor);
-        clear_texture_cache();
-        const bool prefer_cached = !scaling_refresh_pending;
-        // Image effects are now handled by Python, so depth cues are not supported at runtime
-        const bool supports_depthcue_cache = false;
-        bool effect_hash_mismatch = false;
-        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                  << " profile steps (pre-normalize): " << format_steps(variant_steps_) << ", prefer_cached=" << (prefer_cached ? "true" : "false") << ", scaling_refresh_pending=" << (scaling_refresh_pending ? "true" : "false") << "\n";
-        variant_steps_ = info.scale_variants;
-        render_pipeline::ScalingLogic::NormalizeVariantSteps(variant_steps_);
-        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                  << " normalized profile steps: " << format_steps(variant_steps_) << "\n";
-        const std::size_t initial_variant_count = variant_steps_.size();
-        if (anim_json.contains("source")) {
-                const auto& s = anim_json["source"];
-                try {
-                        if (s.contains("kind") && s["kind"].is_string())
-                        source.kind = s["kind"].get<std::string>();
-			else
-			source.kind = "folder";
-		} catch (...) { source.kind = "folder"; }
-		try {
-			if (s.contains("path") && s["path"].is_string())
-			source.path = s["path"].get<std::string>();
-			else
-			source.path.clear();
-		} catch (...) { source.path.clear(); }
-		try {
-			if (s.contains("name") && s["name"].is_string())
-			source.name = s["name"].get<std::string>();
-			else
-			source.name.clear();
-		} catch (...) { source.name.clear(); }
-	}
-        flipped_source = anim_json.value("flipped_source", false);
-        flip_vertical_source = anim_json.value("flip_vertical_source", false);
-        flip_movement_horizontal = anim_json.value("flip_movement_horizontal", false);
-        flip_movement_vertical = anim_json.value("flip_movement_vertical", false);
-        reverse_source = anim_json.value("reverse_source", false);
-        const bool inherit_source_movement = anim_json.value("inherit_source_movement", (source.kind == "animation"));
-        if (source.kind == "animation" && anim_json.contains("derived_modifiers") &&
-            anim_json["derived_modifiers"].is_object()) {
-                const auto& modifiers = anim_json["derived_modifiers"];
-                reverse_source = modifiers.value("reverse", reverse_source);
-                flipped_source = modifiers.value("flipX", flipped_source);
-                flip_vertical_source = modifiers.value("flipY", flip_vertical_source);
-                flip_movement_horizontal = modifiers.value("flipMovementX", flip_movement_horizontal);
-                flip_movement_vertical = modifiers.value("flipMovementY", flip_movement_vertical);
-        } else if (source.kind != "animation") {
-                flip_vertical_source = false;
-                flip_movement_horizontal = false;
-                flip_movement_vertical = false;
-        }
-
-        locked         = anim_json.value("locked", false);
-	// Legacy speed control: speed_factor (multiplier of base 24fps)
-	speed_factor   = anim_json.value("speed_factor", 1.0f);
-	// New explicit playback FPS; prefer this when present
-	int parsed_fps = 0;
-	try {
-		if (anim_json.contains("fps")) {
-			if (anim_json["fps"].is_number_integer()) parsed_fps = anim_json["fps"].get<int>();
-			else if (anim_json["fps"].is_number()) parsed_fps = static_cast<int>(anim_json["fps"].get<double>());
-		}
-	} catch (...) { parsed_fps = 0; }
-	if (parsed_fps <= 0) {
-		// Fallback to legacy speed_factor if defined; otherwise default 24
-		if (std::isfinite(speed_factor) && speed_factor > 0.0f) {
-			parsed_fps = std::max(1, static_cast<int>(std::lround(24.0f * std::fabs(speed_factor))));
-		} else {
-			parsed_fps = 24;
-		}
-	}
-	playback_fps = parsed_fps;
-	loop      = anim_json.value("loop", true);
-	randomize = anim_json.value("randomize", false);
-	rnd_start = anim_json.value("rnd_start", false);
-	on_end_animation = anim_json.value("on_end", std::string{"default"});
-        child_asset_names_.clear();
-        if (!info.animation_children.empty()) {
-                child_asset_names_ = info.animation_children;
-        } else if (anim_json.contains("children") && anim_json["children"].is_array()) {
-                for (const auto& child_entry : anim_json["children"]) {
-                        if (!child_entry.is_string()) continue;
-                        std::string name = child_entry.get<std::string>();
-                        if (!name.empty()) {
-                                child_asset_names_.push_back(std::move(name));
-                        }
-                }
-        }
-        if (child_asset_names_.empty() && source.kind == "animation" && !source.name.empty()) {
-                auto src_child_it = info.animations.find(source.name);
-                if (src_child_it != info.animations.end()) {
-                        child_asset_names_ = src_child_it->second.child_assets();
-                }
-        }
-        // Deduplicate child asset list while preserving order
-        if (!child_asset_names_.empty()) {
-                std::unordered_set<std::string> seen;
-                std::vector<std::string> unique;
-                unique.reserve(child_asset_names_.size());
-                for (const auto& n : child_asset_names_) {
-                        if (n.empty()) continue;
-                        if (seen.insert(n).second) {
-                                unique.push_back(n);
-                        }
-                }
-                child_asset_names_.swap(unique);
-        }
-        total_dx = 0;
-        total_dy = 0;
-        movement_paths_.clear();
-        audio_clip = AudioClip{};
-        bool movement_specified = false;
-
-        auto parse_movement_sequence = [this](const nlohmann::json& seq, std::vector<AnimationFrame>& dest) {
-                bool specified = false;
-                if (!seq.is_array()) return specified;
-                auto clamp = [](int v) { return (v < 0) ? 0 : (v > 255 ? 255 : v); };
-                for (const auto& mv : seq) {
-                        if (!mv.is_array() || mv.size() < 2) continue;
-                        AnimationFrame fm;
-                        try { fm.dx = mv[0].get<int>(); } catch (...) { fm.dx = 0; }
-                        try { fm.dy = mv[1].get<int>(); } catch (...) { fm.dy = 0; }
-                        if (mv.size() >= 3 && mv[2].is_boolean()) {
-                                fm.z_resort = mv[2].get<bool>();
-                        }
-                        if (mv.size() >= 4 && mv[3].is_array() && mv[3].size() >= 3) {
-                                int r = 255, g = 255, b = 255;
-                                try { r = clamp(mv[3][0].get<int>()); } catch (...) { r = 255; }
-                                try { g = clamp(mv[3][1].get<int>()); } catch (...) { g = 255; }
-                                try { b = clamp(mv[3][2].get<int>()); } catch (...) { b = 255; }
-                                fm.rgb = SDL_Color{ static_cast<Uint8>(r), static_cast<Uint8>(g), static_cast<Uint8>(b), 255 };
-                        }
-                        fm.children.clear();
-                        if (mv.size() >= 5 && mv[4].is_array()) {
-                                for (const auto& child_entry : mv[4]) {
-                                        if (!child_entry.is_array() || child_entry.empty()) {
-                                                continue;
-                                        }
-                                        AnimationChildFrameData child_data;
-                                        try {
-                                                child_data.child_index = child_entry[0].get<int>();
-                                        } catch (...) {
-                                                child_data.child_index = -1;
-                                        }
-                                        if (child_entry.size() >= 2 && child_entry[1].is_number()) {
-                                                try { child_data.dx = child_entry[1].get<int>(); } catch (...) { child_data.dx = 0; }
-                                        }
-                                        if (child_entry.size() >= 3 && child_entry[2].is_number()) {
-                                                try { child_data.dy = child_entry[2].get<int>(); } catch (...) { child_data.dy = 0; }
-                                        }
-                                        if (child_entry.size() >= 4 && child_entry[3].is_number()) {
-                                                try { child_data.degree = static_cast<float>(child_entry[3].get<double>()); } catch (...) { child_data.degree = 0.0f; }
-                                        }
-                                        if (child_entry.size() >= 5) {
-                                                if (child_entry[4].is_boolean()) {
-                                                        child_data.visible = child_entry[4].get<bool>();
-                                                } else if (child_entry[4].is_number_integer()) {
-                                                        child_data.visible = child_entry[4].get<int>() != 0;
-                                                }
-                                                // Non-boolean legacy entries are ignored so defaults stay visible.
-                                        }
-                                        if (child_entry.size() >= 6) {
-                                                if (child_entry[5].is_boolean()) {
-                                                        child_data.render_in_front = child_entry[5].get<bool>();
-                                                } else if (child_entry[5].is_number_integer()) {
-                                                        child_data.render_in_front = child_entry[5].get<int>() != 0;
-                                                }
-                                        }
-                                        if (child_data.child_index < 0 ||
-                                            child_data.child_index >= static_cast<int>(child_asset_names_.size())) {
-                                                std::cout << "[AnimationLoader] Ignoring child entry with invalid index " << child_data.child_index << " for asset list size " << child_asset_names_.size() << "\n";
-                                                continue;
-                                        }
-                                        fm.children.push_back(child_data);
-                                }
-                        }
-                        if (!fm.children.empty()) {
-                                // Debug: print mapping of child indices -> asset names for this frame
-                                std::cout << "[AnimationLoader] Parsed frame children: ";
-                                for (const auto& cd : fm.children) {
-                                        std::cout << "(idx=" << cd.child_index << ", dx=" << cd.dx << ", dy=" << cd.dy << ")";
-                                        if (cd.child_index >= 0 && cd.child_index < static_cast<int>(child_asset_names_.size())) {
-                                                std::cout << "->'" << child_asset_names_[cd.child_index] << "' ";
-                                        } else {
-                                                std::cout << "->'<invalid>' ";
-                                        }
-                                }
-                                std::cout << "\n";
-                        }
-                        if (fm.dx != 0 || fm.dy != 0 || mv.size() >= 3) {
-                                specified = true;
-                        }
-                        dest.push_back(std::move(fm));
-                }
-                return specified;
-};
-
-        std::vector<std::vector<AnimationFrame>> parsed_paths;
-        if (anim_json.contains("movement_paths") && anim_json["movement_paths"].is_array()) {
-                for (const auto& path_json : anim_json["movement_paths"]) {
-                        std::vector<AnimationFrame> path_frames;
-                        bool specified = parse_movement_sequence(path_json, path_frames);
-                        if (!path_frames.empty()) {
-                                parsed_paths.push_back(std::move(path_frames));
-                        } else {
-                                parsed_paths.emplace_back();
-                        }
-                        movement_specified = movement_specified || specified;
-                }
-        }
-
-        std::vector<AnimationFrame> primary_path;
-        if (anim_json.contains("movement") && anim_json["movement"].is_array()) {
-                bool specified = parse_movement_sequence(anim_json["movement"], primary_path);
-                movement_specified = movement_specified || specified;
-        }
-
-        if (!primary_path.empty()) {
-                parsed_paths.insert(parsed_paths.begin(), std::move(primary_path));
-        }
-
-        if (parsed_paths.empty()) {
-                parsed_paths.emplace_back();
-        }
-
-        movement_paths_ = std::move(parsed_paths);
-        if (source.kind == "animation" && !source.name.empty()) {
-                auto it = info.animations.find(source.name);
-                if (it != info.animations.end()) {
-                        const Animation& src_anim = it->second;
-                        if (!src_anim.frames.empty()) {
-                                // Inherit frame locking and playback FPS from source animation
-                                locked = src_anim.locked;
-                                playback_fps = src_anim.playback_fps;
-                                reused_animation = true;
-                                // Normalize variant count for derived cloning; mirror non-derived path behavior
-                                std::size_t variant_count = initial_variant_count;
-                                if (variant_count == 0) {
-                                        // Ensure at least one variant; update steps and info to stay consistent
-                                        variant_steps_.push_back(1.0f);
-                                        variant_count = 1;
-                                        info.scale_variants = variant_steps_;
-                                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                  << " normalized zero-variant derived source to one step: "
-                                                  << format_steps(variant_steps_) << "\n";
-                                }
-                                std::vector<SDL_Texture*> new_frames;
-                                std::vector<FrameCache>   new_caches;
-                                std::vector<SDL_Texture*> new_mask_frames;
-                                new_frames.reserve(src_anim.frames.size());
-                                new_caches.reserve(src_anim.frames.size());
-                                new_mask_frames.reserve(src_anim.frames.size());
-                                for (std::size_t frame_idx = 0; frame_idx < src_anim.frames.size(); ++frame_idx) {
-                                        FrameCache cache_entry;
-                                        cache_entry.resize(variant_count);
-                                        bool base_ok = false;
-                                        SDL_Texture* base_mask = nullptr;
-                                        for (std::size_t variant_idx = 0; variant_idx < variant_count; ++variant_idx) {
-                                                SDL_Texture* source_tex = src_anim.frame_variant(frame_idx, variant_idx);
-                                                if (!source_tex) {
-                                                        cache_entry.textures[variant_idx] = nullptr;
-                                                        cache_entry.widths[variant_idx]   = 0;
-                                                        cache_entry.heights[variant_idx]  = 0;
-                                                        cache_entry.mask_textures[variant_idx] = nullptr;
-                                                        cache_entry.mask_widths[variant_idx]   = 0;
-                                                        cache_entry.mask_heights[variant_idx]  = 0;
-                                                        continue;
-                                                }
-                                                Uint32 fmt = SDL_PIXELFORMAT_RGBA8888;
-                                                int access = 0;
-                                                int tex_w = 0;
-                                                int tex_h = 0;
-                                                if (SDL_QueryTexture(source_tex, &fmt, &access, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
-                                                        cache_entry.textures[variant_idx] = nullptr;
-                                                        cache_entry.widths[variant_idx]   = 0;
-                                                        cache_entry.heights[variant_idx]  = 0;
-                                                        continue;
-                                                }
-                                                SDL_Texture* dst = SDL_CreateTexture(renderer, fmt, SDL_TEXTUREACCESS_TARGET, tex_w, tex_h);
-                                                if (!dst) {
-                                                        cache_entry.textures[variant_idx] = nullptr;
-                                                        cache_entry.widths[variant_idx]   = 0;
-                                                        cache_entry.heights[variant_idx]  = 0;
-                                                        continue;
-                                                }
-                                                SDL_SetTextureBlendMode(dst, SDL_BLENDMODE_BLEND);
-                                                apply_scale_mode(dst, info);
-                                                SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
-                                                SDL_SetRenderTarget(renderer, dst);
-                                                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-                                                SDL_RenderClear(renderer);
-                                                SDL_Rect r{0, 0, tex_w, tex_h};
-                                                SDL_RenderCopy(renderer, source_tex, nullptr, &r);
-                                                SDL_SetRenderTarget(renderer, prev_target);
-                                                cache_entry.textures[variant_idx] = dst;
-                                                cache_entry.widths[variant_idx]   = tex_w;
-                                                cache_entry.heights[variant_idx]  = tex_h;
-                                                // Do not generate foreground/background overlays at runtime.
-                                                if (variant_idx == 0) {
-                                                        base_ok = true;
-                                                }
-
-                                                SDL_Texture* source_mask = src_anim.mask_variant(frame_idx, variant_idx);
-                                                SDL_Texture* mask_copy   = nullptr;
-                                                int mask_w = 0;
-                                                int mask_h = 0;
-                                                if (source_mask) {
-                                                        Uint32 mask_fmt = SDL_PIXELFORMAT_RGBA8888;
-                                                        int mask_access = 0;
-                                                        if (SDL_QueryTexture(source_mask, &mask_fmt, &mask_access, &mask_w, &mask_h) != 0 || mask_w <= 0 || mask_h <= 0) {
-                                                                mask_w = 0;
-                                                                mask_h = 0;
-                                                        } else {
-                                                                SDL_Texture* prev_target_mask = SDL_GetRenderTarget(renderer);
-                                                                mask_copy = SDL_CreateTexture(renderer, mask_fmt, SDL_TEXTUREACCESS_TARGET, mask_w, mask_h);
-                                                                if (mask_copy) {
-                                                                        SDL_SetTextureBlendMode(mask_copy, SDL_BLENDMODE_BLEND);
-                                                                        apply_scale_mode(mask_copy, info);
-                                                                        SDL_SetRenderTarget(renderer, mask_copy);
-                                                                        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-                                                                        SDL_RenderClear(renderer);
-                                                                        SDL_Rect mask_rect{0, 0, mask_w, mask_h};
-                                                                        SDL_RenderCopy(renderer, source_mask, nullptr, &mask_rect);
-                                                                        SDL_SetRenderTarget(renderer, prev_target_mask);
-                                                                } else {
-                                                                        mask_w = 0;
-                                                                        mask_h = 0;
-                                                                        SDL_SetRenderTarget(renderer, prev_target_mask);
-                                                                }
-                                                        }
-                                                }
-                                                cache_entry.mask_textures[variant_idx] = mask_copy;
-                                                if (!mask_copy) {
-                                                        mask_w = 0;
-                                                        mask_h = 0;
-                                                }
-                                                cache_entry.mask_widths[variant_idx]   = mask_w;
-                                                cache_entry.mask_heights[variant_idx]  = mask_h;
-                                                if (variant_idx == 0) {
-                                                        base_mask = mask_copy;
-                                                }
-                                        }
-                                        // Bail out cleanly if no textures were produced; avoid indexing empty containers
-                                        if (!base_ok || cache_entry.textures.empty() || !cache_entry.textures[0]) {
-                                                for (SDL_Texture*& tex : cache_entry.textures) {
-                                                        if (tex) {
-                                                                SDL_DestroyTexture(tex);
-                                                                tex = nullptr;
-                                                        }
-                                                }
-                                                for (SDL_Texture*& mask_tex : cache_entry.mask_textures) {
-                                                        if (mask_tex) {
-                                                                SDL_DestroyTexture(mask_tex);
-                                                                mask_tex = nullptr;
-                                                        }
-                                                }
-                                                for (SDL_Texture*& tex : cache_entry.foreground_textures) {
-                                                        if (tex) {
-                                                                SDL_DestroyTexture(tex);
-                                                                tex = nullptr;
-                                                        }
-                                                }
-                                                for (SDL_Texture*& tex : cache_entry.background_textures) {
-                                                        if (tex) {
-                                                                SDL_DestroyTexture(tex);
-                                                                tex = nullptr;
-                                                        }
-                                                }
-                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                          << " skipped cloned frame index " << frame_idx
-                                                          << " due to missing base texture\n";
-                                                continue;
-                                        }
-                                        // Defensive: ensure a texture exists before pushing
-                                        if (!cache_entry.textures.empty() && cache_entry.textures[0]) {
-                                                new_frames.push_back(cache_entry.textures[0]);
-                                                new_mask_frames.push_back(base_mask);
-                                                new_caches.push_back(std::move(cache_entry));
-                                        } else {
-                                                // Should be unreachable due to check above, but stay safe
-                                                for (SDL_Texture*& tex : cache_entry.textures) {
-                                                        if (tex) { SDL_DestroyTexture(tex); tex = nullptr; }
-                                                }
-                                                for (SDL_Texture*& mask_tex : cache_entry.mask_textures) {
-                                                        if (mask_tex) { SDL_DestroyTexture(mask_tex); mask_tex = nullptr; }
-                                                }
-                                                for (SDL_Texture*& tex : cache_entry.foreground_textures) {
-                                                        if (tex) { SDL_DestroyTexture(tex); tex = nullptr; }
-                                                }
-                                                for (SDL_Texture*& tex : cache_entry.background_textures) {
-                                                        if (tex) { SDL_DestroyTexture(tex); tex = nullptr; }
-                                                }
-                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                          << " failed to push cloned frame index " << frame_idx
-                                                          << " due to empty texture container\n";
-                                        }
-                                }
-                                frames.insert(frames.end(), new_frames.begin(), new_frames.end());
-                                frame_cache_.insert(frame_cache_.end(), std::make_move_iterator(new_caches.begin()), std::make_move_iterator(new_caches.end()));
-                                mask_frames.insert(mask_frames.end(), new_mask_frames.begin(), new_mask_frames.end());
-
-                                // Apply texture flips to derived frames if requested
-                                if ((flipped_source || flip_vertical_source) && renderer && !frame_cache_.empty()) {
-                                        SDL_RendererFlip flip_flags = SDL_FLIP_NONE;
-                                        if (flipped_source) {
-                                                flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_HORIZONTAL);
-                                        }
-                                        if (flip_vertical_source) {
-                                                flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_VERTICAL);
-                                        }
-                                        for (std::size_t frame_index = 0; frame_index < frame_cache_.size(); ++frame_index) {
-                                                FrameCache& cache_entry = frame_cache_[frame_index];
-                                                for (std::size_t variant_idx = 0; variant_idx < cache_entry.textures.size(); ++variant_idx) {
-                                                        SDL_Texture* src_tex = cache_entry.textures[variant_idx];
-                                                        if (!src_tex) {
-                                                                continue;
-                                                        }
-                                                        Uint32 fmt = SDL_PIXELFORMAT_RGBA8888;
-                                                        int access = 0;
-                                                        int tex_w = cache_entry.widths[variant_idx];
-                                                        int tex_h = cache_entry.heights[variant_idx];
-                                                        if (tex_w <= 0 || tex_h <= 0) {
-                                                                if (SDL_QueryTexture(src_tex, &fmt, &access, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
-                                                                        continue;
-                                                                }
-                                                        } else if (SDL_QueryTexture(src_tex, &fmt, &access, nullptr, nullptr) != 0) {
-                                                                fmt = SDL_PIXELFORMAT_RGBA8888;
-                                                        }
-                                                        SDL_Texture* dst = SDL_CreateTexture(renderer, fmt, SDL_TEXTUREACCESS_TARGET, tex_w, tex_h);
-                                                        if (!dst) {
-                                                                continue;
-                                                        }
-                                                        SDL_SetTextureBlendMode(dst, SDL_BLENDMODE_BLEND);
-                                                        apply_scale_mode(dst, info);
-                                                        SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
-                                                        SDL_SetRenderTarget(renderer, dst);
-                                                        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-                                                        SDL_RenderClear(renderer);
-                                                        SDL_Rect rect{0, 0, tex_w, tex_h};
-                                                        SDL_RenderCopyEx(renderer, src_tex, nullptr, &rect, 0.0, nullptr, flip_flags);
-                                                        SDL_SetRenderTarget(renderer, prev_target);
-                                                        SDL_DestroyTexture(src_tex);
-                                                        cache_entry.textures[variant_idx] = dst;
-                                                        cache_entry.widths[variant_idx]   = tex_w;
-                                                        cache_entry.heights[variant_idx]  = tex_h;
-                                                        // Do not generate foreground/background overlays at runtime.
-
-                                                        SDL_Texture* src_mask = nullptr;
-                                                        if (variant_idx < cache_entry.mask_textures.size()) {
-                                                                src_mask = cache_entry.mask_textures[variant_idx];
-                                                        }
-                                                        if (src_mask) {
-                                                                Uint32 mask_fmt = SDL_PIXELFORMAT_RGBA8888;
-                                                                int mask_access = 0;
-                                                                int mask_w = cache_entry.mask_widths[variant_idx];
-                                                                int mask_h = cache_entry.mask_heights[variant_idx];
-                                                                if (mask_w <= 0 || mask_h <= 0) {
-                                                                        if (SDL_QueryTexture(src_mask, &mask_fmt, &mask_access, &mask_w, &mask_h) != 0 || mask_w <= 0 || mask_h <= 0) {
-                                                                                SDL_DestroyTexture(src_mask);
-                                                                                cache_entry.mask_textures[variant_idx] = nullptr;
-                                                                                cache_entry.mask_widths[variant_idx]   = 0;
-                                                                                cache_entry.mask_heights[variant_idx]  = 0;
-                                                                                continue;
-                                                                        }
-                                                                } else if (SDL_QueryTexture(src_mask, &mask_fmt, &mask_access, nullptr, nullptr) != 0) {
-                                                                        mask_fmt = SDL_PIXELFORMAT_RGBA8888;
-                                                                }
-                                                                SDL_Texture* mask_dst = SDL_CreateTexture(renderer, mask_fmt, SDL_TEXTUREACCESS_TARGET, mask_w, mask_h);
-                                                                if (mask_dst) {
-                                                                        SDL_SetTextureBlendMode(mask_dst, SDL_BLENDMODE_BLEND);
-                                                                        apply_scale_mode(mask_dst, info);
-                                                                        SDL_Texture* prev_target_mask = SDL_GetRenderTarget(renderer);
-                                                                        SDL_SetRenderTarget(renderer, mask_dst);
-                                                                        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-                                                                        SDL_RenderClear(renderer);
-                                                                        SDL_Rect rect{0, 0, mask_w, mask_h};
-                                                                        SDL_RenderCopyEx(renderer, src_mask, nullptr, &rect, 0.0, nullptr, flip_flags);
-                                                                        SDL_SetRenderTarget(renderer, prev_target_mask);
-                                                                } else {
-                                                                        // Failed to create flipped mask; clear it to remain consistent
-                                                                        mask_w = 0;
-                                                                        mask_h = 0;
-                                                                }
-                                                                SDL_DestroyTexture(src_mask);
-                                                                cache_entry.mask_textures[variant_idx] = mask_dst;
-                                                                cache_entry.mask_widths[variant_idx]   = mask_w;
-                                                                cache_entry.mask_heights[variant_idx]  = mask_h;
-                                                        }
-                                                }
-                                               if (frame_index < frames.size() && !cache_entry.textures.empty()) {
-                                                       frames[frame_index] = cache_entry.textures[0];
-                                               }
-                                                if (frame_index < mask_frames.size() && !cache_entry.mask_textures.empty()) {
-                                                        mask_frames[frame_index] = cache_entry.mask_textures[0];
-                                                }
-                                        }
-                                }
-                                // Reverse frame order for derived animations if requested
-                                if (reverse_source && !frames.empty()) {
-                                        std::reverse(frames.begin(), frames.end());
-                                        std::reverse(mask_frames.begin(), mask_frames.end());
-                                        std::reverse(frame_cache_.begin(), frame_cache_.end());
-                                }
-                        }
-                }
+const FrameVariant* Animation::get_frame(const AnimationFrame* frame, float requested_scale) const {
+    
+    //if requested_scale == 25 50 75 100 percent return that exact matching frame variant
+    
+    if (!frame || frame->variants.empty()) return nullptr;
+    
+    int best_variant_idx = 0;
+    if (!variant_steps_.empty()) {
+        auto it = std::lower_bound(variant_steps_.begin(), variant_steps_.end(), requested_scale);
+        if (it != variant_steps_.end()) {
+            best_variant_idx = static_cast<int>(std::distance(variant_steps_.begin(), it));
         } else {
-                // Simplified cache loading - assume PNGs exist and load them directly
-                const fs::path cache_folder_path = fs::path(root_cache) / trigger;
-                std::string cache_folder = cache_folder_path.string();
-                
-                std::size_t variant_count = variant_steps_.size();
-                if (variant_count == 0) {
-                        variant_steps_.push_back(1.0f);
-                        variant_count = 1;
-                        info.scale_variants = variant_steps_;
-                }
-
-                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                          << " loading from cache_folder=" << cache_folder
-                          << " variant_count=" << variant_count << "\n";
-
-                // Check for .ready marker to ensure Python finished writing
-                const fs::path ready_marker = cache_folder_path / ".ready";
-                std::error_code ec;
-                bool ready_exists = fs::exists(ready_marker, ec);
-                if (!ready_exists || ec) {
-                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                  << " .ready marker not found, cache may not be complete\n";
-                        // Signal that cache is invalid so it gets regenerated
-                        cache_invalid_detected = true;
-                        // Continue anyway, but warn
-                }
-
-                // Build paths for each variant
-                std::vector<VariantLayerPaths> variant_paths;
-                variant_paths.reserve(variant_count);
-                for (std::size_t idx = 0; idx < variant_count; ++idx) {
-                        variant_paths.push_back(build_variant_layer_paths(cache_folder, variant_steps_, idx));
-                }
-
-                // Lambda for freeing surface lists
-                auto free_surface_lists = [](std::vector<std::vector<SDL_Surface*>>& lists) {
-                        for (auto& list : lists) {
-                                for (SDL_Surface* surf : list) {
-                                        if (surf) {
-                                                SDL_FreeSurface(surf);
-                                        }
-                                }
-                                list.clear();
-                        }
-                };
-
-                // Find the first variant that exists to determine frame count
-                int frame_count = 0;
-                std::size_t working_variant_idx = 0;
-                for (std::size_t idx = 0; idx < variant_paths.size(); ++idx) {
-                        const fs::path normal_folder_path(variant_paths[idx].normal_folder);
-                        const fs::path test_frame = normal_folder_path / "0.png";
-                        
-                        std::error_code test_ec;
-                        if (fs::exists(test_frame, test_ec) && !test_ec) {
-                                frame_count = count_png_files(variant_paths[idx].normal_folder);
-                                if (frame_count > 0) {
-                                        working_variant_idx = idx;
-                                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                  << " using variant " << idx << " (scale=" 
-                                                  << (idx < variant_steps_.size() ? variant_steps_[idx] : 0.0f)
-                                                  << ") to determine frame_count=" << frame_count << "\n";
-                                        break;
-                                }
-                        }
-                }
-                
-                if (frame_count == 0) {
-                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                  << " no cached frames found in any variant folder\n";
-                        for (std::size_t idx = 0; idx < variant_paths.size(); ++idx) {
-                                std::cout << "[AnimationLoader]   variant " << idx << " normal_folder=" 
-                                          << variant_paths[idx].normal_folder << "\n";
-                        }
-                        flush_diagnostics();
-                        return;
-                }
-
-                // Try to load surfaces from the expected cache locations
-                std::vector<std::vector<SDL_Surface*>> variant_surfaces(variant_count);
-                std::vector<std::vector<SDL_Surface*>> foreground_surfaces(variant_count);
-                std::vector<std::vector<SDL_Surface*>> background_surfaces(variant_count);
-                std::vector<std::vector<SDL_Surface*>> mask_surfaces(variant_count);
-
-                bool all_surfaces_loaded = true;
-                const bool needs_masks = info.is_shaded;
-                for (std::size_t idx = 0; idx < variant_count; ++idx) {
-                        const VariantLayerPaths& paths = variant_paths[idx];
-                        std::vector<SDL_Surface*> loaded;
-                        bool loaded_ok = CacheManager::load_surface_sequence(paths.normal_folder, frame_count, loaded);
-                        if (loaded_ok && static_cast<int>(loaded.size()) == frame_count) {
-                                variant_surfaces[idx] = std::move(loaded);
-                        } else {
-                                all_surfaces_loaded = false;
-                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                          << " failed to load variant " << idx << " from " << paths.normal_folder << "\n";
-                                break; // If any variant fails, we need to regenerate
-                        }
-                        
-                        // Load foreground textures if available
-                        std::vector<SDL_Surface*> fg_loaded;
-                        if (CacheManager::load_surface_sequence(paths.foreground_folder, frame_count, fg_loaded) && 
-                            static_cast<int>(fg_loaded.size()) == frame_count) {
-                                foreground_surfaces[idx] = std::move(fg_loaded);
-                        }
-                        
-                        // Load background textures if available
-                        std::vector<SDL_Surface*> bg_loaded;
-                        if (CacheManager::load_surface_sequence(paths.background_folder, frame_count, bg_loaded) && 
-                            static_cast<int>(bg_loaded.size()) == frame_count) {
-                                background_surfaces[idx] = std::move(bg_loaded);
-                        }
-
-                        // Load mask sequences if present
-                        std::vector<SDL_Surface*> mask_loaded;
-                        if (CacheManager::load_surface_sequence(paths.mask_folder, frame_count, mask_loaded) &&
-                            static_cast<int>(mask_loaded.size()) == frame_count) {
-                                mask_surfaces[idx] = std::move(mask_loaded);
-                        } else if (needs_masks) {
-                                all_surfaces_loaded = false;
-                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                          << " missing masks for variant " << idx << " at " << paths.mask_folder << "\n";
-                                break;
-                        }
-                }
-
-                if (!all_surfaces_loaded || variant_surfaces[0].empty() || !variant_surfaces[0][0]) {
-                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                  << " cache surfaces not found or incomplete, cannot load animation\n";
-                        free_surface_lists(variant_surfaces);
-                        free_surface_lists(foreground_surfaces);
-                        free_surface_lists(background_surfaces);
-                        free_surface_lists(mask_surfaces);
-                        cache_invalid_detected = true;
-                        flush_diagnostics();
-                        return;
-                }
-
-                const int expected_frames = static_cast<int>(variant_surfaces[0].size());
-                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                          << " loaded " << expected_frames << " cached frame(s) for "
-                          << variant_count << " variant(s)\n";
-
-                original_canvas_width  = variant_surfaces[0][0]->w;
-                original_canvas_height = variant_surfaces[0][0]->h;
-                scaled_sprite_w        = scaled_dimension(variant_surfaces[0][0]->w, safe_scale);
-                scaled_sprite_h        = scaled_dimension(variant_surfaces[0][0]->h, safe_scale);
-
-                // Cache is valid - load textures
-                int orig_w = variant_surfaces[0][0]->w;
-                int orig_h = variant_surfaces[0][0]->h;
-
-                if ((scaled_sprite_w <= 0 || scaled_sprite_h <= 0) && orig_w > 0 && orig_h > 0) {
-                        int fallback_w = scaled_dimension(orig_w, safe_scale);
-                        int fallback_h = scaled_dimension(orig_h, safe_scale);
-                        if (fallback_w <= 0) fallback_w = 1;
-                        if (fallback_h <= 0) fallback_h = 1;
-                        scaled_sprite_w = fallback_w;
-                        scaled_sprite_h = fallback_h;
-                }
-
-                // Mask load handled above for cache path
-
-                frames.clear();
-                mask_frames.clear();
-                frame_cache_.clear();
-                frames.reserve(expected_frames);
-                mask_frames.reserve(expected_frames);
-                frame_cache_.reserve(expected_frames);
-
-                for (std::size_t frame_idx = 0; frame_idx < variant_surfaces[0].size(); ++frame_idx) {
-                        FrameCache cache_entry;
-                        cache_entry.resize(variant_count);
-                        SDL_Texture* variant0_mask = nullptr;
-                        for (std::size_t variant_idx = 0; variant_idx < variant_count; ++variant_idx) {
-                                SDL_Surface* surface = (frame_idx < variant_surfaces[variant_idx].size()) ? variant_surfaces[variant_idx][frame_idx] : nullptr;
-                                SDL_Texture* tex_variant = nullptr;
-                                if (surface) {
-                                        tex_variant = CacheManager::surface_to_texture(renderer, surface);
-                                        if (tex_variant) {
-                                                apply_scale_mode(tex_variant, info);
-                                        }
-                                }
-                                int tex_w = surface ? surface->w : 0;
-                                int tex_h = surface ? surface->h : 0;
-                                if (tex_variant && (tex_w == 0 || tex_h == 0)) {
-                                        SDL_QueryTexture(tex_variant, nullptr, nullptr, &tex_w, &tex_h);
-                                }
-                                cache_entry.textures[variant_idx] = tex_variant;
-                                cache_entry.widths[variant_idx]   = tex_w;
-                                cache_entry.heights[variant_idx]  = tex_h;
-
-                                // Load foreground overlay if available
-                                SDL_Texture* fg_tex = nullptr;
-                                if (frame_idx < foreground_surfaces[variant_idx].size() && foreground_surfaces[variant_idx][frame_idx]) {
-                                        fg_tex = CacheManager::surface_to_texture(renderer, foreground_surfaces[variant_idx][frame_idx]);
-                                        if (fg_tex) {
-                                                apply_scale_mode(fg_tex, info);
-                                        }
-                                }
-                                cache_entry.foreground_textures[variant_idx] = fg_tex;
-
-                                // Load background overlay if available
-                                SDL_Texture* bg_tex = nullptr;
-                                if (frame_idx < background_surfaces[variant_idx].size() && background_surfaces[variant_idx][frame_idx]) {
-                                        bg_tex = CacheManager::surface_to_texture(renderer, background_surfaces[variant_idx][frame_idx]);
-                                        if (bg_tex) {
-                                                apply_scale_mode(bg_tex, info);
-                                        }
-                                }
-                                cache_entry.background_textures[variant_idx] = bg_tex;
-
-                                SDL_Texture* mask_tex = nullptr;
-                                if (frame_idx < mask_surfaces[variant_idx].size() && mask_surfaces[variant_idx][frame_idx]) {
-                                        SDL_Surface* mask_surface = mask_surfaces[variant_idx][frame_idx];
-                                        mask_tex = CacheManager::surface_to_texture(renderer, mask_surface);
-                                        if (mask_tex) {
-                                                apply_scale_mode(mask_tex, info);
-                                        }
-                                        int mask_w = mask_surface->w;
-                                        int mask_h = mask_surface->h;
-                                        cache_entry.mask_widths[variant_idx]  = mask_w;
-                                        cache_entry.mask_heights[variant_idx] = mask_h;
-                                } else {
-                                        cache_entry.mask_widths[variant_idx]  = 0;
-                                        cache_entry.mask_heights[variant_idx] = 0;
-                                }
-                                cache_entry.mask_textures[variant_idx] = mask_tex;
-
-                                if (variant_idx == 0) {
-                                        variant0_mask = mask_tex;
-                                }
-                                if (variant_idx == 0) {
-                                        frames.push_back(tex_variant);
-                                }
-                        }
-                        mask_frames.push_back(variant0_mask);
-                        frame_cache_.push_back(std::move(cache_entry));
-                }
-
-                free_surface_lists(variant_surfaces);
-                free_surface_lists(foreground_surfaces);
-                free_surface_lists(background_surfaces);
-                free_surface_lists(mask_surfaces);
-
-                // Flip processing disabled for cached loading
-                if (reverse_source && !frames.empty()) {
-                        std::reverse(frames.begin(), frames.end());
-                        std::reverse(mask_frames.begin(), mask_frames.end());
-                        std::reverse(frame_cache_.begin(), frame_cache_.end());
-                }
-                loaded_from_cache = true;
+            best_variant_idx = static_cast<int>(variant_steps_.size()) - 1;
         }
-        if (!movement_specified && source.kind == "animation" && inherit_source_movement && !source.name.empty()) {
-                auto it = info.animations.find(source.name);
-                if (it != info.animations.end()) {
-                        const Animation& src_anim = it->second;
-                        movement_paths_           = src_anim.movement_paths_;
-                        if (!movement_paths_.empty()) {
-                                if (reverse_source) {
-                                        for (auto& path : movement_paths_) {
-                                                std::reverse(path.begin(), path.end());
-                                        }
-                                }
-                                if (flip_movement_horizontal) {
-                                        for (auto& path : movement_paths_) {
-                                                for (auto& frame : path) {
-                                                        frame.dx = -frame.dx;
-                                                }
-                                        }
-                                }
-                                if (flip_movement_vertical) {
-                                        for (auto& path : movement_paths_) {
-                                                for (auto& frame : path) {
-                                                        frame.dy = -frame.dy;
-                                                }
-                                        }
-                                }
-                                movement_specified = true;
-                        }
-                }
-        }
-        // If movement is explicitly specified for a derived animation, still apply requested transforms
-        if (movement_specified && source.kind == "animation") {
-                if (reverse_source) {
-                        for (auto& path : movement_paths_) {
-                                std::reverse(path.begin(), path.end());
-                        }
-                }
-                if (flip_movement_horizontal) {
-                        for (auto& path : movement_paths_) {
-                                for (auto& frame : path) {
-                                        frame.dx = -frame.dx;
-                                }
-                        }
-                }
-                if (flip_movement_vertical) {
-                        for (auto& path : movement_paths_) {
-                                for (auto& frame : path) {
-                                        frame.dy = -frame.dy;
-                                }
-                        }
-                }
-        }
-        const bool has_audio_json = anim_json.contains("audio") && anim_json["audio"].is_object();
-        const nlohmann::json* audio_json = has_audio_json ? &anim_json["audio"] : nullptr;
-        auto clamp_volume = [](int value) {
-                if (value < 0) return 0;
-                if (value > 100) return 100;
-                return value;
-};
-        if (audio_json) {
-                audio_clip.volume = clamp_volume(audio_json->value("volume", audio_clip.volume));
-                audio_clip.effects = audio_json->value("effects", audio_clip.effects);
-                try {
-                        std::string clip_name = audio_json->value("name", std::string{});
-                        if (!clip_name.empty()) {
-                                audio_clip.name = clip_name;
-                                std::filesystem::path clip_path = std::filesystem::path(dir_path) / (clip_name + ".wav");
-                                audio_clip.path = clip_path.lexically_normal().string();
-                                audio_clip.chunk = load_audio_clip(audio_clip.path);
-                        }
-                } catch (...) {
-
-                }
-        }
-        if (!audio_clip.chunk && source.kind == "animation" && !source.name.empty()) {
-                auto it = info.animations.find(source.name);
-                if (it != info.animations.end()) {
-                        audio_clip = it->second.audio_clip;
-                        if (audio_json) {
-                                if (audio_json->contains("volume")) {
-                                        audio_clip.volume = clamp_volume(audio_json->value("volume", audio_clip.volume));
-                                }
-                                if (audio_json->contains("effects")) {
-                                        audio_clip.effects = audio_json->value("effects", audio_clip.effects);
-                                }
-                        }
-                }
-        }
-        const std::size_t frame_count = frames.size();
-        if (movement_paths_.empty()) {
-                movement_paths_.emplace_back();
-        }
-
-        bool any_motion = false;
-        for (auto& path : movement_paths_) {
-                if (path.size() != frame_count) {
-                        path.resize(frame_count);
-                }
-                for (std::size_t i = 0; i < path.size(); ++i) {
-                        AnimationFrame& f = path[i];
-                        f.prev        = (i > 0) ? &path[i - 1] : nullptr;
-                        f.next        = (i + 1 < path.size()) ? &path[i + 1] : nullptr;
-                        f.is_first    = (i == 0);
-                        f.is_last     = (i + 1 == path.size());
-                        f.frame_index = static_cast<int>(i);
-                        bind_textures_to_frame(f);
-                        if (f.dx != 0 || f.dy != 0) {
-                                any_motion = true;
-                        }
-                }
-        }
-
-        total_dx = 0;
-        total_dy = 0;
-        if (!movement_paths_.empty()) {
-                const auto& primary = movement_paths_.front();
-                for (const auto& frame : primary) {
-                        total_dx += frame.dx;
-                        total_dy += frame.dy;
-                        if (frame.dx != 0 || frame.dy != 0) {
-                                any_motion = true;
-                        }
-                }
-        }
-
-        movment = any_motion;
-        number_of_frames = static_cast<int>(frames.size());
-        if (trigger == "default" && !frames.empty()) {
-                base_sprite = frames[0];
-        }
-
-        int frame_width  = 0;
-        int frame_height = 0;
-        if (!frame_cache_.empty()) {
-                frame_width  = frame_cache_[0].widths[0];
-                frame_height = frame_cache_[0].heights[0];
-                if ((frame_width <= 0 || frame_height <= 0) && frame_cache_[0].textures[0]) {
-                        SDL_QueryTexture(frame_cache_[0].textures[0], nullptr, nullptr, &frame_width, &frame_height);
-                }
-        }
-
-        const auto load_end        = std::chrono::steady_clock::now();
-        const double elapsed_secs  = std::chrono::duration<double>(load_end - load_start).count();
-        std::string   origin_label = loaded_from_cache ? "cache" : "source";
-        if (reused_animation) {
-                origin_label = "animation '" + source.name + "'";
-        }
-
-        {
-                std::ostringstream oss;
-                oss << "[AnimationLoader] " << info.name << "::" << trigger
-                    << " -> " << frames.size() << " frame(s)";
-                if (frame_width > 0 && frame_height > 0) {
-                        oss << " @ " << frame_width << "x" << frame_height;
-                }
-                oss << " from " << origin_label << " in " << std::fixed << std::setprecision(3) << elapsed_secs << "s";
-                vibble::log::debug(oss.str());
-        }
-        flush_diagnostics();
-}
-
-SDL_Texture* Animation::get_frame(const AnimationFrame* frame) const {
-        if (!frame) return nullptr;
-        if (frame->base_texture) {
-                return frame->base_texture;
-        }
-        const int index = frame->frame_index;
-        if (index < 0 || index >= static_cast<int>(frames.size())) return nullptr;
-        return frames[index];
+    }
+    
+    if (best_variant_idx < 0) best_variant_idx = 0;
+    if (best_variant_idx >= static_cast<int>(frame->variants.size())) best_variant_idx = static_cast<int>(frame->variants.size()) - 1;
+    
+    return &frame->variants[best_variant_idx];
 }
 
 const AnimationFrame* Animation::get_first_frame(std::size_t path_index) const {
-        if (movement_paths_.empty()) return nullptr;
-        path_index = clamp_path_index(path_index);
-        const auto& path = movement_paths_[path_index];
-        if (path.empty()) return nullptr;
-        return &path[0];
+    if (movement_paths_.empty()) return nullptr;
+    path_index = clamp_path_index(path_index);
+    const auto& path = movement_paths_[path_index];
+    if (path.empty()) return nullptr;
+    return &path[0];
 }
 
 AnimationFrame* Animation::get_first_frame(std::size_t path_index) {
-        return const_cast<AnimationFrame*>(std::as_const(*this).get_first_frame(path_index));
+    return const_cast<AnimationFrame*>(std::as_const(*this).get_first_frame(path_index));
 }
 
 int Animation::index_of(const AnimationFrame* frame) const {
-        if (!frame) return -1;
-        const int index = frame->frame_index;
-        if (index < 0 || index >= static_cast<int>(frames.size())) return -1;
-        for (const auto& path : movement_paths_) {
-                if (path.empty()) continue;
-                const AnimationFrame* data = path.data();
-                const AnimationFrame* end  = data + path.size();
-                if (frame >= data && frame < end) {
-                        return index;
-                }
+    if (!frame) return -1;
+    const int index = frame->frame_index;
+    if (index < 0 || index >= static_cast<int>(frames.size())) return -1;
+    for (const auto& path : movement_paths_) {
+        if (path.empty()) continue;
+        const AnimationFrame* data = path.data();
+        const AnimationFrame* end  = data + path.size();
+        if (frame >= data && frame < end) {
+            return index;
         }
+    }
 
-        return index;
+    return index;
 }
 
 void Animation::change(AnimationFrame*& frame, bool& static_flag) const {
-        if (frozen) return;
-        auto& self = const_cast<Animation&>(*this);
-        frame      = self.get_first_frame();
-        static_flag = is_frozen() || locked;
+    if (frozen) return;
+    auto& self = const_cast<Animation&>(*this);
+    frame      = self.get_first_frame();
+    static_flag = is_frozen() || locked;
 }
 
 std::size_t Animation::movement_path_count() const { return movement_paths_.size(); }
 
 const std::vector<AnimationFrame>& Animation::movement_path(std::size_t index) const {
-        static const std::vector<AnimationFrame> kEmpty{};
-        if (movement_paths_.empty()) return kEmpty;
-        if (index >= movement_paths_.size()) index = 0;
-        return movement_paths_[index];
+    static const std::vector<AnimationFrame> kEmpty{};
+    if (movement_paths_.empty()) return kEmpty;
+    if (index >= movement_paths_.size()) index = 0;
+    return movement_paths_[index];
 }
 
 std::vector<AnimationFrame>& Animation::movement_path(std::size_t index) {
-        if (movement_paths_.empty()) movement_paths_.emplace_back();
-        if (index >= movement_paths_.size()) index = 0;
-        return movement_paths_[index];
+    if (movement_paths_.empty()) movement_paths_.emplace_back();
+    if (index >= movement_paths_.size()) index = 0;
+    return movement_paths_[index];
 }
 
 std::size_t Animation::clamp_path_index(std::size_t index) const {
-        if (movement_paths_.empty()) return 0;
-        if (index >= movement_paths_.size()) return 0;
-        return index;
+    if (movement_paths_.empty()) return 0;
+    if (index >= movement_paths_.size()) return 0;
+    return index;
 }
 
 void Animation::freeze() { frozen = true; }
@@ -1460,8 +193,8 @@ bool Animation::has_audio() const { return static_cast<bool>(audio_clip.chunk); 
 Mix_Chunk* Animation::audio_chunk() const { return audio_clip.chunk.get(); }
 
 const Animation::AudioClip* Animation::audio_data() const {
-        if (!audio_clip.chunk) {
-                return nullptr;
-        }
-        return &audio_clip;
+    if (!audio_clip.chunk) {
+        return nullptr;
+    }
+    return &audio_clip;
 }

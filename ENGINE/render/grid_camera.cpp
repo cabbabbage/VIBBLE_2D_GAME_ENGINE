@@ -101,10 +101,42 @@ void grid_camera::rebuild_grid(camera_grid& camera, world::Grid& world_grid, flo
         gp->screen             = screen_pos;
         gp->parallax_dx        = parallax_dx;
         gp->vertical_scale     = effects.vertical_scale;
-        gp->distance_scale     = effects.distance_scale;
+        gp->perspective_scale  = camera.get_scale() * effects.distance_scale;
         gp->distance_to_camera = 0.0f;
         gp->tilt_radians       = camera.current_pitch_degrees() * static_cast<float>(M_PI) / 180.0f;
         gp->on_screen          = on_screen;
+
+        // Calculate depth cue opacities
+        float fg_opacity = 0.0f;
+        float bg_opacity = 1.0f;
+        
+        if (on_screen && !gp->occupants.empty()) {
+            // Only calculate if on screen and has assets
+            float screen_y = screen_pos.y;
+            float fg_y = settings.foreground_plane_screen_y;
+            float bg_y = settings.background_plane_screen_y;
+            
+            // Simple linear falloff for now, can be expanded based on texture_opacity_falloff_method
+            if (screen_y > fg_y) {
+                fg_opacity = 1.0f;
+            } else if (screen_y < bg_y) {
+                fg_opacity = 0.0f;
+            } else {
+                float range = fg_y - bg_y;
+                if (range > 0.001f) {
+                    fg_opacity = (screen_y - bg_y) / range;
+                }
+            }
+            fg_opacity = std::clamp(fg_opacity, 0.0f, 1.0f);
+            bg_opacity = 1.0f - fg_opacity;
+            
+            // Apply max opacity settings
+            fg_opacity *= (static_cast<float>(settings.foreground_texture_max_opacity) / 255.0f);
+            bg_opacity *= (static_cast<float>(settings.background_texture_max_opacity) / 255.0f);
+        }
+        
+        gp->depth_cue_foreground_opacity = fg_opacity;
+        gp->depth_cue_background_opacity = bg_opacity;
 
         id_to_index_[gp->id] = warped_points_.size();
         warped_points_.push_back(gp);

@@ -9,17 +9,15 @@
 #include <nlohmann/json.hpp>
 #include "animation_frame.hpp"
 #include "render/render.hpp"
+#include "animation_frame_variant.hpp"
 
 class AssetInfo;
 struct Mix_Chunk;
 
 class Animation {
 
+    friend class AnimationLoader;
 public:
-    struct LoadDiagnostics {
-        bool cache_invalid = false;
-    };
-
     struct FrameCache {
         std::vector<SDL_Texture*> textures;
         std::vector<int> widths;
@@ -29,6 +27,8 @@ public:
         std::vector<int> mask_heights;
         std::vector<SDL_Texture*> foreground_textures;
         std::vector<SDL_Texture*> background_textures;
+        std::vector<SDL_Texture*> depthcue_foreground_textures;
+        std::vector<SDL_Texture*> depthcue_background_textures;
 
         void resize(std::size_t variant_count) {
             textures.assign(variant_count, nullptr);
@@ -39,20 +39,21 @@ public:
             mask_heights.assign(variant_count, 0);
             foreground_textures.assign(variant_count, nullptr);
             background_textures.assign(variant_count, nullptr);
+            depthcue_foreground_textures.assign(variant_count, nullptr);
+            depthcue_background_textures.assign(variant_count, nullptr);
         }
-};
+    };
+
     struct AudioClip {
         std::string name;
         std::string path;
         int volume = 100;
         bool effects = false;
         std::shared_ptr<Mix_Chunk> chunk;
-};
+    };
 
-public:
     Animation();
-    void load(const std::string& trigger, const nlohmann::json& anim_json, class AssetInfo& info, const std::string& dir_path, const std::string& root_cache, float scale_factor, SDL_Renderer* renderer, SDL_Texture*& base_sprite, int& scaled_sprite_w, int& scaled_sprite_h, int& original_canvas_width, int& original_canvas_height, bool scaling_refresh_pending, LoadDiagnostics* diagnostics = nullptr);
-    SDL_Texture* get_frame(const AnimationFrame* frame) const;
+    const FrameVariant* get_frame(const AnimationFrame* frame, float requested_scale) const;
     const AnimationFrame* get_first_frame(std::size_t path_index = 0) const;
     AnimationFrame* get_first_frame(std::size_t path_index = 0);
     int index_of(const AnimationFrame* frame) const;
@@ -63,12 +64,6 @@ public:
     Mix_Chunk* audio_chunk() const;
     const AudioClip* audio_data() const;
     void clear_texture_cache();
-    SDL_Texture* frame_variant(std::size_t frame_index, std::size_t variant_index) const;
-    SDL_Texture* mask_variant(std::size_t frame_index, std::size_t variant_index) const;
-    SDL_Texture* foreground_variant(std::size_t frame_index, std::size_t variant_index) const;
-    SDL_Texture* background_variant(std::size_t frame_index, std::size_t variant_index) const;
-    SDL_Texture* depthcue_foreground_variant(std::size_t frame_index, std::size_t variant_index) const;
-    SDL_Texture* depthcue_background_variant(std::size_t frame_index, std::size_t variant_index) const;
     void adopt_prebuilt_frames(std::vector<FrameCache> caches, std::vector<SDL_Texture*> base_frames, std::vector<SDL_Texture*> base_masks, std::vector<float> variant_steps);
     struct Source {
         std::string kind;
@@ -81,7 +76,6 @@ public:
     bool flip_movement_vertical = false;
     bool reverse_source = false;
     bool locked = false;
-    float speed_factor = 1.0f; // legacy; kept for backward-compat parsing
     int   playback_fps = 24;   // desired playback FPS (>=1). 24 is the engine base.
     int number_of_frames = 0;
     int total_dx = 0;
@@ -89,11 +83,11 @@ public:
     bool movment = false;
     bool rnd_start = false;
     std::string on_end_animation;
-    std::vector<SDL_Texture*> frames;
-    std::vector<SDL_Texture*> mask_frames;
+    std::vector<AnimationFrame*> frames;
     bool randomize = false;
     bool loop = true;
     bool frozen = false;
+    SDL_Texture* preview_texture = nullptr;
     std::size_t movement_path_count() const;
     const std::vector<AnimationFrame>& movement_path(std::size_t index) const;
     std::vector<AnimationFrame>& movement_path(std::size_t index);

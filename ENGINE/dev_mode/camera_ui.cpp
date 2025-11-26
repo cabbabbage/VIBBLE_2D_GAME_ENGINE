@@ -1090,6 +1090,7 @@ void CameraUIPanel::sync_from_camera() {
 
     if (min_render_size_slider_) min_render_size_slider_->set_value(last_settings_.min_visible_screen_ratio);
     if (render_quality_slider_) render_quality_slider_->set_value(last_settings_.render_quality_percent);
+    if (cull_margin_slider_) cull_margin_slider_->set_value(last_settings_.extra_cull_margin);
     if (zoom_in_keypoint_ || zoom_out_keypoint_) {
         ZoomKeyPointWidget::Values min_values;
         min_values.zoom = last_settings_.zoom_low;
@@ -1312,6 +1313,7 @@ void CameraUIPanel::rebuild_rows() {
     if (visibility_section_header_) rows.push_back({ visibility_section_header_.get() });
     if (visibility_section_expanded_) {
         if (min_render_size_slider_) rows.push_back({ min_render_size_slider_.get() });
+        if (cull_margin_slider_) rows.push_back({ cull_margin_slider_.get() });
         if (render_quality_slider_) rows.push_back({ render_quality_slider_.get() });
     }
 
@@ -1362,6 +1364,7 @@ void CameraUIPanel::apply_settings_if_needed() {
     changed = changed || differs(settings.depth_offset_at_zoom_low, prev.depth_offset_at_zoom_low) ||
         differs(settings.depth_offset_at_zoom_high, prev.depth_offset_at_zoom_high);
     changed = changed || differs(settings.min_visible_screen_ratio, prev.min_visible_screen_ratio);
+    changed = changed || differs(settings.extra_cull_margin, prev.extra_cull_margin);
     if (render_quality_slider_) {
         changed = changed || settings.render_quality_percent != prev.render_quality_percent;
     }

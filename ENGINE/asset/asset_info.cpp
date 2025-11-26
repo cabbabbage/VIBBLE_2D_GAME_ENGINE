@@ -1,6 +1,7 @@
 #include "asset_info.hpp"
-#include "asset_info_methods/animation_loader.hpp"
+
 #include "asset/asset_types.hpp"
+#include "asset/animation_loader.hpp"
 #include "asset_info_methods/asset_child_loader.hpp"
 #include "asset_info_methods/lighting_loader.hpp"
 #include "utils/cache_manager.hpp"
@@ -853,18 +854,7 @@ void AssetInfo::clear_light_textures() {
 	destroy_light_textures(light_sources);
 }
 
-void AssetInfo::loadAnimations(SDL_Renderer *renderer) {
-        AnimationLoader::load(*this, renderer);
 
-        const bool has_canvas = original_canvas_width > 0 && original_canvas_height > 0;
-        if (!has_canvas) {
-                areas.clear();
-                return;
-        }
-
-        load_areas(info_json_);
-        AnimationLoader::get_area_textures(*this, renderer);
-}
 
 void AssetInfo::load_base_properties(const nlohmann::json &data) {
         type = asset_types::canonicalize(data.value("asset_type", std::string{asset_types::object}));
@@ -1778,7 +1768,7 @@ bool AssetInfo::rename_animation(const std::string& old_name, const std::string&
 		anims_json_.erase(old_name);
 		if (start_animation == old_name) {
 			start_animation = new_name;
-			info_json_["start"] = start_animation;
+		 info_json_["start"] = start_animation;
 		}
 		return true;
 	} catch (...) {
@@ -1883,3 +1873,21 @@ bool AssetInfo::update_animation_properties(const std::string& animation_name, c
         return false;
     }
 }
+
+void AssetInfo::loadAnimations(SDL_Renderer* renderer) {
+    if (!anims_json_.is_object()) return;
+
+    SDL_Texture* dummy_base_sprite = nullptr;
+    int dummy_w = 0;
+    int dummy_h = 0;
+
+    for (auto& [name, anim] : animations) {
+        if (anims_json_.contains(name)) {
+             const auto& json = anims_json_[name];
+             std::filesystem::path cache_root = std::filesystem::path("cache") / this->name / name;
+             
+             AnimationLoader::load(anim, name, json, *this, dir_path_, cache_root.string(), scale_factor, renderer, dummy_base_sprite, dummy_w, dummy_h, original_canvas_width, original_canvas_height, false);
+        }
+    }
+}
+

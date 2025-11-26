@@ -37,7 +37,6 @@
 #include "animation_update/child_attachment_math.hpp"
 #include "utils/grid.hpp"
 #include "world/grid.hpp"
-#include "asset_info_methods/animation_loader.hpp"
 #include "core/manifest/manifest_loader.hpp"
 
 using animation_editor::AnimationDocument;
@@ -3914,9 +3913,13 @@ void FrameEditorSession::rebuild_child_preview_cache() {
                 if (const Animation* anim = pick_preview_animation(slot.info)) {
                     const AnimationFrame* frame = anim->get_first_frame();
                     if (frame) {
-                        SDL_Texture* tex = anim->get_frame(frame);
-                        if (!tex) {
-                            tex = frame->get_base_texture();
+                        SDL_Texture* tex = nullptr;
+                        const FrameVariant* variant = anim->get_frame(frame, 1.0f);
+                        if (variant) {
+                            tex = variant->get_base_texture();
+                        }
+                        if (!tex && !frame->variants.empty()) {
+                            tex = frame->variants[0].get_base_texture();
                         }
                         slot.texture = tex;
                         if (slot.texture) {

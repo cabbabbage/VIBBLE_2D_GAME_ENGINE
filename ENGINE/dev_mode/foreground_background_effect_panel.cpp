@@ -157,8 +157,8 @@ PreviewTextureSelection pick_cached_variant(Animation& animation, int preferred_
     std::size_t frame_index = 0;
     SDL_Texture* fallback = nullptr;
     for (std::size_t idx = 0; idx < animation.frames.size(); ++idx) {
-        if (animation.frames[idx]) {
-            fallback = animation.frames[idx];
+        if (animation.frames[idx] && !animation.frames[idx]->variants.empty()) {
+            fallback = animation.frames[idx]->variants[0].base_texture;
             frame_index = idx;
             break;
         }

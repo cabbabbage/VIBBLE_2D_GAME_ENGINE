@@ -3940,7 +3940,7 @@ void RoomEditor::update_drag_session(const SDL_Point& world_mouse) {
     }
 
     // Standard translate drag
-    SDL_Point delta{world_mouse.x - drag_last_world_.x, drag_last_world_.y - world_mouse.y};
+    SDL_Point delta{world_mouse.x - drag_last_world_.x, world_mouse.y - drag_last_world_.y};
     const bool anchor_should_follow_pointer =
         (drag_mode_ == DragMode::Exact || drag_mode_ == DragMode::Percent);
     if (anchor_should_follow_pointer) {

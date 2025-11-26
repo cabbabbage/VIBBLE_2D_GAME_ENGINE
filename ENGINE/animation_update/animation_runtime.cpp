@@ -255,6 +255,9 @@ bool AnimationRuntime::advance(AnimationFrame*& frame) {
             }
         }
     }
+    if (advanced_any) {
+        self_->mark_composite_dirty();
+    }
     update_child_attachments(anim, dt);
     return advanced_any || true;
 }
@@ -293,6 +296,7 @@ void AnimationRuntime::switch_to(const std::string& anim_id, std::size_t path_in
     }
     self_->frame_progress    = 0.0f;
     active_paths_[self_->current_animation] = path_index;
+    self_->mark_composite_dirty();
     ensure_child_slots(anim);
     apply_child_frame_data(self_->current_frame);
 }

@@ -27,7 +27,7 @@ void VibbleController::movement(const Input& input) {
     const bool dash = input.isScancodeDown(SDL_SCANCODE_SPACE);
 
     const int raw_x = (right ? 1 : 0) - (left ? 1 : 0);
-    const int raw_y = (up    ? 1 : 0) - (down  ? 1 : 0);
+    const int raw_y = (down  ? 1 : 0) - (up    ? 1 : 0);
 
     if (raw_x == 0 && raw_y == 0) {
         subpixel_x_ = 0.0f;
@@ -130,7 +130,7 @@ std::string VibbleController::animation_for_direction(int raw_x, int raw_y) cons
     const std::string right_anim     = "right";
 
     if (sign_x != 0 && sign_y != 0) {
-        const std::string vertical_choice = (sign_y < 0) ? backward_anim : forward_anim;
+        const std::string vertical_choice = (sign_y > 0) ? backward_anim : forward_anim;
         if (has_animation(vertical_choice)) {
             return vertical_choice;
         }
@@ -142,7 +142,7 @@ std::string VibbleController::animation_for_direction(int raw_x, int raw_y) cons
     }
 
     if (sign_y != 0) {
-        const std::string vertical_choice = (sign_y < 0) ? backward_anim : forward_anim;
+        const std::string vertical_choice = (sign_y > 0) ? backward_anim : forward_anim;
         if (has_animation(vertical_choice)) {
             return vertical_choice;
         }
@@ -171,4 +171,3 @@ void VibbleController::Dash() {
         std::chrono::duration<float>(dashingTime)
     ); // Ending dash within update and setting the bools back
 }
-
