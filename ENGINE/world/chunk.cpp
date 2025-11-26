@@ -97,8 +97,7 @@ void LightMap::update(SDL_Renderer*, std::uint32_t) {
 
     const auto weights = resolve_sampling_weights(0.0f, 1.0f);
 
-    const Global_Light_Source* map_light = assets_->map_light_source();
-    const float map_alpha = map_light ? chunk_detail::clamp01(static_cast<float>(map_light->get_current_color().a) / 255.0f) : 1.0f;
+    const float map_alpha = 1.0f;
 
     for (world::Chunk* chunk : grid.active_chunks()) {
         if (!chunk) {

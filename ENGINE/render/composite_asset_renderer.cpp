@@ -119,6 +119,7 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset, const world::GridP
 
     if (gp) {
         // Background
+        /*
         if (bg_tex && gp->depth_cue_background_opacity > 0.0f) {
             int w, h;
             SDL_QueryTexture(bg_tex, nullptr, nullptr, &w, &h);
@@ -131,7 +132,9 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset, const world::GridP
             SDL_Color color = {255, 255, 255, static_cast<Uint8>(gp->depth_cue_background_opacity * 255)};
             add_render_object(bg_tex, dest_rect, color);
         }
+        */
         // Foreground
+        /*
         if (fg_tex && gp->depth_cue_foreground_opacity > 0.0f) {
             int w, h;
             SDL_QueryTexture(fg_tex, nullptr, nullptr, &w, &h);
@@ -144,6 +147,7 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset, const world::GridP
             SDL_Color color = {255, 255, 255, static_cast<Uint8>(gp->depth_cue_foreground_opacity * 255)};
             add_render_object(fg_tex, dest_rect, color);
         }
+        */
     }
 
     // 5. Child animation assets in front

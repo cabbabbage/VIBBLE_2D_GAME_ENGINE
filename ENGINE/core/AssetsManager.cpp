@@ -448,7 +448,7 @@ void Assets::apply_camera_runtime_settings() {
     render_pipeline::ScalingLogic::SetQualityCap(quality_cap);
     if (scene) {
         const bool low_quality = (effective_percent < 100) && !force_high_quality_rendering_;
-        scene->set_low_quality_rendering(low_quality);
+        // scene->set_low_quality_rendering(low_quality);
     }
     const camera_grid::RealismSettings& settings = camera_.realism_settings();
     update_motion_smoothing_settings(settings);
@@ -503,7 +503,7 @@ void Assets::update_motion_smoothing_settings(const camera_grid::RealismSettings
         if (!asset) {
             continue;
         }
-        asset->set_smoothing_params(disabled, disabled, disabled);
+        // asset->set_smoothing_params(disabled, disabled, disabled);
     }
 }
 
@@ -516,7 +516,7 @@ void Assets::apply_map_light_config() {
     }
     auto it = map_info_json_.find("map_light_data");
     if (it != map_info_json_.end() && it->is_object()) {
-        scene->apply_map_light_config(*it);
+        // scene->apply_map_light_config(*it);
     }
 }
 
@@ -528,12 +528,12 @@ bool Assets::on_map_light_changed() {
 
 void Assets::set_update_map_light_enabled(bool enabled) {
     if (scene) {
-        scene->set_update_map_light_enabled(enabled);
+        // scene->set_update_map_light_enabled(enabled);
     }
 }
 
 bool Assets::update_map_light_enabled() const {
-    return scene ? scene->update_map_light_enabled() : true;
+    return false;
 }
 
 Assets::~Assets() {
@@ -769,9 +769,9 @@ void Assets::update(const Input& input)
 
     const bool ctrl_down = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
     if (scene && ctrl_down && input.wasScancodePressed(SDL_SCANCODE_Q)) {
-        scene->toggle_chunk_preview();
-        std::cout << "[Assets] Chunk preview "
-                  << (scene->chunk_preview_enabled() ? "enabled" : "disabled") << " (Ctrl+Q).\n";
+        // scene->toggle_chunk_preview();
+        // std::cout << "[Assets] Chunk preview "
+        //           << (scene->chunk_preview_enabled() ? "enabled" : "disabled") << " (Ctrl+Q).\n";
     }
 
     if (ctrl_down && input.wasScancodePressed(SDL_SCANCODE_B)) {
@@ -1153,11 +1153,11 @@ void Assets::set_render_suppressed(bool suppressed) {
     if (scene) {
         if (suppressed) {
             // Reduce load while suppressed
-            scene->set_low_quality_rendering(true);
-            scene->set_update_map_light_enabled(false);
+            // scene->set_low_quality_rendering(true);
+            // scene->set_update_map_light_enabled(false);
         } else {
             // Restore lighting updates and quality policy
-            scene->set_update_map_light_enabled(true);
+            // scene->set_update_map_light_enabled(true);
             apply_camera_runtime_settings();
         }
     }
@@ -1729,7 +1729,7 @@ SDL_Renderer* Assets::renderer() const {
 bool Assets::scene_light_map_only_mode() const {
     // If we have a scene, report its light-map-only mode state.
     // In that mode, SceneRenderer performs SDL_RenderPresent itself.
-    return scene ? scene->light_map_only_mode() : false;
+    return false;
 }
 
 std::optional<Asset::TilingInfo> Assets::compute_tiling_for_asset(const Asset* asset) const {
@@ -1829,23 +1829,22 @@ bool Assets::contains_asset(const Asset* asset) const {
     return false;
 }
 
+/*
 Global_Light_Source* Assets::map_light_source() {
-    if (!scene) {
-        return nullptr;
-    }
-    return &scene->map_light_source();
+    return nullptr;
 }
 
 const Global_Light_Source* Assets::map_light_source() const {
-    return const_cast<Assets*>(this)->map_light_source();
+    return nullptr;
 }
+*/
 
 LightMap* Assets::light_map() {
-    return scene ? scene->light_map() : nullptr;
+    return nullptr;
 }
 
 const LightMap* Assets::light_map() const {
-    return scene ? scene->light_map() : nullptr;
+    return nullptr;
 }
 
 void Assets::force_shaded_assets_rerender() {

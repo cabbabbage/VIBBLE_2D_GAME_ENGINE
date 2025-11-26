@@ -100,7 +100,7 @@ void AnimationRegenerator::refresh_loaded_instances(Assets* assets,
 
         asset->rebuild_animation_runtime();
         asset->clear_render_caches();
-        asset->clear_downscale_cache();
+        // asset->clear_downscale_cache();
         asset->set_final_texture(nullptr);
         asset->current_frame = nullptr;
         asset->frame_progress = 0.0f;

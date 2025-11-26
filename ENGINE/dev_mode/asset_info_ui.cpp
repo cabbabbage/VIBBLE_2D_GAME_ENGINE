@@ -347,12 +347,14 @@ AssetInfoUI::~AssetInfoUI() {
     apply_camera_override(false);
     sync_map_light_panel_visibility(false);
     if (assets_) {
+        /*
         if (auto* gl = assets_->map_light_source()) {
             gl->set_alpha_override(std::nullopt);
         }
+        */
     }
     if (assets_ && forcing_high_quality_rendering_) {
-        assets_->set_force_high_quality_rendering(false);
+        // assets_->set_force_high_quality_rendering(false);
     }
     forcing_high_quality_rendering_ = false;
     cancel_color_sampling(true);
@@ -366,14 +368,16 @@ AssetInfoUI::~AssetInfoUI() {
 void AssetInfoUI::set_assets(Assets* a) {
     if (assets_ == a) return;
     if (assets_ && forcing_high_quality_rendering_) {
-        assets_->set_force_high_quality_rendering(false);
+        // assets_->set_force_high_quality_rendering(false);
         forcing_high_quality_rendering_ = false;
     }
     // Clear any map light override on the previous assets context
     if (assets_) {
+        /*
         if (auto* gl = assets_->map_light_source()) {
             gl->set_alpha_override(std::nullopt);
         }
+        */
     }
     if (map_light_panel_auto_opened_ && assets_) {
         assets_->set_map_light_panel_visible(false);
@@ -473,12 +477,14 @@ void AssetInfoUI::clear_info() {
     sync_map_light_panel_visibility(false);
     destroy_mask_preview_texture();
     if (assets_) {
+        /*
         if (auto* gl = assets_->map_light_source()) {
             gl->set_alpha_override(std::nullopt);
         }
+        */
     }
     if (assets_ && forcing_high_quality_rendering_) {
-        assets_->set_force_high_quality_rendering(false);
+        // assets_->set_force_high_quality_rendering(false);
         forcing_high_quality_rendering_ = false;
     }
     info_.reset();
@@ -526,14 +532,16 @@ void AssetInfoUI::close() {
     clear_section_focus();
     sync_map_light_panel_visibility(false);
     if (assets_) {
+        /*
         if (auto* gl = assets_->map_light_source()) {
             gl->set_alpha_override(std::nullopt);
         }
+        */
     }
     if (animation_editor_window_) animation_editor_window_->set_visible(false);
     if (asset_selector_) asset_selector_->close();
     if (assets_ && forcing_high_quality_rendering_) {
-        assets_->set_force_high_quality_rendering(false);
+        // assets_->set_force_high_quality_rendering(false);
         forcing_high_quality_rendering_ = false;
     }
 }
@@ -911,7 +919,7 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
     const bool need_high_quality = shading_requires_high_quality;
     if (assets_) {
         if (need_high_quality != forcing_high_quality_rendering_) {
-            assets_->set_force_high_quality_rendering(need_high_quality);
+            // assets_->set_force_high_quality_rendering(need_high_quality);
             forcing_high_quality_rendering_ = need_high_quality;
         }
     } else {
@@ -920,6 +928,7 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
 
     // While the Lighting section is expanded, force the map light to darkest opacity
     if (assets_) {
+        /*
         Global_Light_Source* gl = assets_->map_light_source();
         if (gl) {
             const bool lighting_open = visible_ && info_ && lighting_section_ && lighting_section_->is_expanded();
@@ -929,6 +938,7 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
                 gl->set_alpha_override(std::nullopt);
             }
         }
+        */
     }
 
     if (!visible_) return;
@@ -1161,7 +1171,13 @@ float AssetInfoUI::compute_player_screen_height(const camera_grid& cam) const {
     if (!player_asset) return 1.0f;
 
     SDL_Texture* player_final = player_asset->get_final_texture();
-    SDL_Texture* player_frame = player_asset->get_current_frame();
+    SDL_Texture* player_frame = nullptr;
+    if (player_asset->info && player_asset->info->animations.count(player_asset->current_animation)) {
+        AnimationFrame* frame = player_asset->info->animations[player_asset->current_animation].get_first_frame();
+        if (frame && !frame->variants.empty()) {
+            player_frame = frame->get_base_texture(0);
+        }
+    }
     int pw = player_asset->cached_w;
     int ph = player_asset->cached_h;
     if ((pw == 0 || ph == 0) && player_final) {
@@ -2073,10 +2089,12 @@ void AssetInfoUI::refresh_loaded_asset_instances() {
 
     // Clear the entire asset cache when animation sources change
     if (!info_->name.empty()) {
+        /*
         if (!AnimationLoader::clear_asset_cache(info_->name)) {
             std::cerr << "[AssetInfoUI] Failed to clear cache for " << info_->name
                       << " after source changes\n";
         }
+        */
     }
 
     // Force scaling profile refresh for this asset

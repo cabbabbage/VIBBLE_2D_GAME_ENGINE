@@ -25,8 +25,6 @@ struct GridPoint {
     SDL_Point  grid_index   = SDL_Point{0, 0};
     SDL_Point  chunk_index  = SDL_Point{0, 0};
     Chunk*     chunk        = nullptr;
-    float depth_cue_foreground_opacity = 0.0f;
-    float depth_cue_background_opacity = 1.0f;
 
     // Screen/wrapping state populated by ScreenGrid.
     SDL_FPoint screen       = SDL_FPoint{0.0f, 0.0f};
@@ -41,19 +39,3 @@ struct GridPoint {
 };
 
 }  // namespace world
-
-
-
-
-
-//TODO do these somewhere: 
-
-float compute_depthcue_opacity(const DepthCueSample& sample,
-                               int max_opacity,
-                               camera_grid::BlurFalloffMethod method) {
-    if (sample.plane == DepthCuePlane::None || max_opacity <= 0) {
-        return 0.0f;
-    }
-    const float curve = evaluate_depth_curve(method, sample.t);
-    return curve * static_cast<float>(std::clamp(max_opacity, 0, 255)) / 255.0f;
-}

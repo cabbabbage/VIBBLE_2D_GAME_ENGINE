@@ -36,7 +36,15 @@ struct AnimationPlayer {
         if (!m_animation || m_current_frame < 0 || m_current_frame >= int(m_animation->frames.size())) {
             return nullptr;
         }
-        return m_animation->frame_variant(m_current_frame, m_variant);
+        const auto* frame = m_animation->frames[m_current_frame];
+        if (!frame || frame->variants.empty()) {
+            return nullptr;
+        }
+        int variant_index = m_variant;
+        if (variant_index < 0 || variant_index >= static_cast<int>(frame->variants.size())) {
+            variant_index = 0;
+        }
+        return frame->variants[variant_index].base_texture;
     }
 };
 

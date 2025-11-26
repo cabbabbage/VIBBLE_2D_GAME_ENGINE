@@ -27,7 +27,7 @@ class Room;
 class Input;
 class DevControls;
 class AssetInfo;
-class Global_Light_Source;
+// class Global_Light_Source;
 class QuickTaskPopup;
 namespace animation_editor {
 class AnimationDocument;
@@ -157,8 +157,8 @@ public:
     void initialize_active_assets(SDL_Point center);
     std::uint64_t dev_active_state_version() const { return dev_active_state_version_; }
 
-    Global_Light_Source* map_light_source();
-    const Global_Light_Source* map_light_source() const;
+    // Global_Light_Source* map_light_source();
+    // const Global_Light_Source* map_light_source() const;
     const LightMap* light_map() const;
     LightMap*       light_map();
     void force_shaded_assets_rerender();

@@ -355,7 +355,11 @@ std::vector<AssetMerger::SampledAsset> AssetMerger::sample_assets(const std::vec
             frame_index = 0;
         }
 
-        SDL_Texture* frame_texture = anim.get_frame(frame_ptr);
+        const FrameVariant* frame_variant = anim.get_frame(frame_ptr, 1.0f);
+        if (!frame_variant) {
+            continue;
+        }
+        SDL_Texture* frame_texture = frame_variant->base_texture;
         if (!frame_texture) {
             continue;
         }
@@ -366,7 +370,7 @@ std::vector<AssetMerger::SampledAsset> AssetMerger::sample_assets(const std::vec
             continue;
         }
 
-        SDL_Texture* mask_texture = anim.mask_variant(static_cast<std::size_t>(frame_index), 0);
+        SDL_Texture* mask_texture = frame_variant->shadow_mask_texture;
 
         auto render_frame = select_render_frame(*asset->info);
         float pivot_ratio_x = 0.5f;
@@ -613,7 +617,6 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
     animation.adopt_prebuilt_frames(std::move(caches), std::move(frames), std::move(masks), variant_steps);
     animation.loop = true;
     animation.locked = true;
-    animation.speed_factor = 1.0f;
     animation.number_of_frames = 1;
     auto& path = animation.movement_path(0);
     if (path.empty()) {
@@ -624,9 +627,6 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
     path[0].is_last = true;
     path[0].next = nullptr;
     path[0].prev = nullptr;
-    path[0].base_texture = animation.frame_variant(0, 0);
-    path[0].foreground_texture = animation.depthcue_foreground_variant(0, 0);
-    path[0].background_texture = animation.depthcue_background_variant(0, 0);
 
     TemporaryMergedAssetInfo info_builder(merged_name);
     info_builder.set_geometry(base_width, base_height, pivot, local_polygon);

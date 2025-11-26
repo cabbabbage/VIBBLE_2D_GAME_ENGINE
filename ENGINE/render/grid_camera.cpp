@@ -135,8 +135,8 @@ void grid_camera::rebuild_grid(camera_grid& camera, world::Grid& world_grid, flo
             bg_opacity *= (static_cast<float>(settings.background_texture_max_opacity) / 255.0f);
         }
         
-        gp->depth_cue_foreground_opacity = fg_opacity;
-        gp->depth_cue_background_opacity = bg_opacity;
+        // gp->depth_cue_foreground_opacity = fg_opacity;
+        // gp->depth_cue_background_opacity = bg_opacity;
 
         id_to_index_[gp->id] = warped_points_.size();
         warped_points_.push_back(gp);

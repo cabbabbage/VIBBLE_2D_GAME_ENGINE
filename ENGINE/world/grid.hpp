@@ -43,7 +43,17 @@ public:
     Chunk* ensure_chunk_from_world(SDL_Point world_px);
     Chunk* chunk_from_world(SDL_Point world_px) const;
     Chunk* get_or_create_chunk_ij(int i, int j);
-    std::vector<Chunk*> all_chunks() const;
+    std::vector<Chunk*> all_chunks() const {
+        const auto& storage = chunks_.storage();
+        std::vector<Chunk*> result;
+        result.reserve(storage.size());
+        for (const auto& chunk : storage) {
+            if (chunk) {
+                result.push_back(chunk.get());
+            }
+        }
+        return result;
+    }
 
     Asset* move_asset_to_point(Asset* a, SDL_Point old_pos, SDL_Point new_pos);
     Asset* move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos);

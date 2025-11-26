@@ -117,8 +117,18 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
         scale_smoothing_.reset(initial_scale);
         alpha_smoothing_.reset(hidden ? 0.0f : 1.0f);
 
-        clear_downscale_cache();
+}
 
+void Asset::clear_downscale_cache() {
+    if (last_scaled_texture_) {
+        SDL_DestroyTexture(last_scaled_texture_);
+        last_scaled_texture_ = nullptr;
+    }
+    last_scaled_source_ = nullptr;
+    last_scaled_w_ = 0;
+    last_scaled_h_ = 0;
+    last_scaled_camera_scale_ = -1.0f;
+    downscale_cache_ready_revision_ = 0;
 }
 
 Asset::~Asset() {
@@ -130,7 +140,7 @@ Asset::~Asset() {
         for (Asset* asset_child : asset_children) {
                 if (asset_child && asset_child->parent == this) asset_child->parent = nullptr;
         }
-        clear_downscale_cache();
+        // clear_downscale_cache();
         clear_render_caches();
         if (final_texture) {
                 SDL_DestroyTexture(final_texture);
@@ -194,7 +204,7 @@ Asset::Asset(const Asset& o)
 , composite_dirty_(true)
 , composite_rect_({0, 0, 0, 0})
 {
-        clear_downscale_cache();
+        // clear_downscale_cache();
         clear_render_caches();
         last_scale_usage_ = o.last_scale_usage_;
         scale_variant_state_ = o.scale_variant_state_;
@@ -210,7 +220,7 @@ Asset::Asset(const Asset& o)
 
 Asset& Asset::operator=(const Asset& o) {
         if (this == &o) return *this;
-        clear_downscale_cache();
+        // clear_downscale_cache();
         clear_render_caches();
         parent               = o.parent;
         info                 = o.info;
@@ -367,6 +377,40 @@ SDL_Texture* Asset::get_current_variant_texture() const {
     if (!current_frame) return nullptr;
     return current_frame->get_base_texture(current_variant_index);
 }
+
+SDL_Texture* Asset::get_texture()
+{
+	if (current_frame) {
+		return current_frame->get_base_texture(current_variant_index);
+	}
+	return nullptr;
+}
+
+
+
+SDL_Texture* Asset::get_current_frame() const
+{
+	if (current_frame) {
+		return current_frame->get_base_texture(current_variant_index);
+	}
+	return nullptr;
+}
+
+void Asset::set_current_animation(const std::string& name)
+{
+	if (info == nullptr) {
+		return;
+	}
+
+	auto it = info->animations.find(name);
+	if (it != info->animations.end()) {
+		current_animation = name;
+		Animation& anim = it->second;
+		anim.change(current_frame, static_frame);
+		frame_progress = 0.0f;
+	}
+}
+
 
 void Asset::update() {
     if (!info) return;
@@ -720,10 +764,10 @@ void Asset::set_final_texture(SDL_Texture* tex) {
                 }
                 final_texture = tex;
                 if (size_changed) {
-                        clear_downscale_cache();
+                        // clear_downscale_cache();
                 }
         } else if (size_changed) {
-                clear_downscale_cache();
+                // clear_downscale_cache();
         }
 
         invalidate_downscale_cache();
@@ -763,7 +807,7 @@ Area Asset::get_area(const std::string& name) const {
 }
 
 void Asset::deactivate() {
-        clear_downscale_cache();
+        // clear_downscale_cache();
         clear_render_caches();
         if (final_texture) {
                 SDL_DestroyTexture(final_texture);
@@ -820,11 +864,9 @@ void Asset::invalidate_downscale_cache() {
         last_scaled_h_            = 0;
         last_scaled_camera_scale_ = -1.0f;
         last_scale_usage_         = {};
-        reset_scale_variant_state();
+        // reset_scale_variant_state();
         downscale_cache_ready_revision_ = 0;
 }
-
-
 
 
 
@@ -859,9 +901,9 @@ void Asset::refresh_cached_dimensions() {
 }
 
 void Asset::on_scale_factor_changed() {
-        clear_downscale_cache();
+        // clear_downscale_cache();
         last_scale_usage_ = {};
-        reset_scale_variant_state();
+        // reset_scale_variant_state();
         refresh_cached_dimensions();
 
         shadow_mask_cache_.width  = 0;

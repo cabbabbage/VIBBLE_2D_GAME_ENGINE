@@ -48,10 +48,10 @@ namespace animation_update::child_attachments {
 void update_dimensions(Asset::AnimationChildAttachment& slot) {
     slot.cached_w = 0;
     slot.cached_h = 0;
-    if (!slot.animation || !slot.current_frame) {
+    if (!slot.animation || !slot.current_frame || slot.current_frame->variants.empty()) {
         return;
     }
-    SDL_Texture* texture = slot.animation->get_frame(slot.current_frame);
+    SDL_Texture* texture = slot.current_frame->variants[0].base_texture;
     if (!texture) {
         return;
     }

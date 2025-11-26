@@ -542,6 +542,7 @@ Chunk* Grid::get_or_create_chunk_ij(int i, int j) {
     return &chunks_.ensure(i, j, r_chunk_, origin_);
 }
 
+/*
 std::vector<Chunk*> Grid::all_chunks() const {
     const auto& storage = chunks_.storage();
     std::vector<Chunk*> result;
@@ -553,6 +554,7 @@ std::vector<Chunk*> Grid::all_chunks() const {
     }
     return result;
 }
+*/
 
 void Grid::remove_from_chunk(Asset* a, Chunk* c) {
     if (!a || !c) {

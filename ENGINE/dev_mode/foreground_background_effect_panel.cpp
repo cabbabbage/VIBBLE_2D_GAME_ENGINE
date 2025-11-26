@@ -172,7 +172,7 @@ PreviewTextureSelection pick_cached_variant(Animation& animation, int preferred_
 
     // If preferred variant specified and available, use it
     if (preferred_variant_index >= 0 && static_cast<std::size_t>(preferred_variant_index) < variant_count) {
-        SDL_Texture* preferred_tex = animation.frame_variant(frame_index, preferred_variant_index);
+        SDL_Texture* preferred_tex = animation.frames[frame_index]->variants[preferred_variant_index].base_texture;
         if (preferred_tex) {
             selection.texture = preferred_tex;
             if (query_texture_size(preferred_tex, selection.width, selection.height)) {
@@ -185,7 +185,7 @@ PreviewTextureSelection pick_cached_variant(Animation& animation, int preferred_
     if (variant_count > 0) {
         double best_area = std::numeric_limits<double>::max();
         for (std::size_t variant_idx = 0; variant_idx < variant_count; ++variant_idx) {
-            SDL_Texture* candidate = animation.frame_variant(frame_index, variant_idx);
+            SDL_Texture* candidate = animation.frames[frame_index]->variants[variant_idx].base_texture;
             if (!candidate) {
                 continue;
             }

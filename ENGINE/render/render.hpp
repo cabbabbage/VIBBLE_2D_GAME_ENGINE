@@ -200,7 +200,6 @@ private:
     bool ensure_sky_texture();
     void destroy_sky_texture();
     void render_sky_layer(const camera_grid& cam, bool depth_effects_enabled);
-    bool ensure_darkness_overlay();
 
     SDL_Renderer*  renderer_;
     Assets*        assets_;

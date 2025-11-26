@@ -181,6 +181,7 @@ class Asset {
     void set_last_rendered_frame(const AnimationFrame* frame) { last_rendered_frame_ = frame; }
     void reset_last_rendered_frame() { last_rendered_frame_ = nullptr; }
     SDL_Texture* get_final_texture() const;
+    SDL_Texture* get_texture();
     void set_final_texture(SDL_Texture* tex);
     void set_camera(camera_grid* v) { window = v; }
     void set_assets(Assets* a);
@@ -269,6 +270,7 @@ class Asset {
 
     void update_scale_values();
     SDL_Texture* get_current_variant_texture() const;
+    void set_current_animation(const std::string& name);
     // Per-spawn-group flip override (set by planner/UI); thread-safe accessors
 public:
     static void SetFlipOverrideForSpawnId(const std::string& spawn_id, bool enabled, bool flipped);
@@ -308,11 +310,6 @@ private:
     void update_neighbor_lists(bool force_update);
     void ensure_animation_runtime(bool force_recreate);
 
-    SDL_Point cached_grid_residency_{ std::numeric_limits<int>::min(), std::numeric_limits<int>::min() };
-    bool      has_cached_grid_residency_ = false;
-
-
-
     void clear_downscale_cache();
     void invalidate_downscale_cache();
     void refresh_cached_dimensions();
@@ -342,7 +339,7 @@ private:
     mutable RenderTextureCache cast_shadow_cache_{};
     mutable MaskRenderMetadata mask_render_metadata_{};
 
-    void reset_scale_variant_state();
+    // void reset_scale_variant_state();
 
     TransformSmoothingState translation_smoothing_x_{};
     TransformSmoothingState translation_smoothing_y_{};
@@ -355,6 +352,8 @@ private:
     // Tracks whether finalize_setup() has already run for this asset
     bool finalized_ = false;
     std::uint64_t grid_id_ = 0;
+    bool has_cached_grid_residency_ = false;
+    SDL_Point cached_grid_residency_{0, 0};
 
     SDL_Texture* composite_texture_ = nullptr;
     bool         composite_dirty_   = true;
