@@ -155,6 +155,7 @@ public:
     void refresh_filtered_active_assets();
     void mark_active_assets_dirty();
     void initialize_active_assets(SDL_Point center);
+    std::uint64_t dev_active_state_version() const { return dev_active_state_version_; }
 
     Global_Light_Source* map_light_source();
     const Global_Light_Source* map_light_source() const;
@@ -220,15 +221,6 @@ private:
 
     friend class SceneRenderer;
     friend class Asset;
-
-    TransformSmoothingParams last_camera_motion_params_{};
-    TransformSmoothingParams last_asset_translation_params_{};
-    TransformSmoothingParams last_asset_scale_params_{};
-    TransformSmoothingParams last_asset_alpha_params_{};
-    TransformSmoothingParams cached_enabled_translation_params_{};
-    TransformSmoothingParams cached_enabled_scale_params_{};
-    TransformSmoothingParams cached_enabled_alpha_params_{};
-    bool smoothing_cache_initialized_ = false;
 
     CurrentRoomFinder* finder_ = nullptr;
     Input* input = nullptr;
@@ -309,6 +301,11 @@ private:
     std::vector<GridMovementCommand> movement_commands_buffer_;
     std::vector<Asset*> grid_registration_buffer_;
     // Legacy tiling caches removed.
+
+    void touch_dev_active_state_version();
+
+    std::uint64_t dev_active_state_version_ = 1;
+    std::uint64_t filtered_active_assets_hash_ = 0;
 
     struct DevNotice {
         using TexturePtr = std::unique_ptr<SDL_Texture, decltype(&SDL_DestroyTexture)>;

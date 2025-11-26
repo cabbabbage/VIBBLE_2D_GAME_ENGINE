@@ -770,9 +770,6 @@ void Grid::update_parallax(const camera_grid& cam, float dt) {
 
     TransformSmoothingParams smoothing =
         sanitize_smoothing(settings.parallax_smoothing);
-    if (!settings.smooth_motion_zoom) {
-        smoothing.method = TransformSmoothingMethod::None;
-    }
     if (smoothing.method == TransformSmoothingMethod::Lerp &&
         smoothing.lerp_rate <= 0.0f) {
         smoothing.lerp_rate = 12.5f;
@@ -891,8 +888,8 @@ void Grid::update_parallax(const camera_grid& cam, float dt) {
             const double projected_x_px = (dx_world / forward) * focal_px;
 
             double parallax_px = projected_x_px - ortho_x_px;
-            const double pitch_factor = std::clamp(std::abs(std::sin(pitch_rad)), 0.0, 1.0);
-            parallax_px *= pitch_factor;
+            // Apply a strength multiplier to make parallax more visible (increase from 1.0 to make stronger)
+            parallax_px *= 3.0;
             if (!std::isfinite(parallax_px)) {
                 parallax_px = 0.0;
             }

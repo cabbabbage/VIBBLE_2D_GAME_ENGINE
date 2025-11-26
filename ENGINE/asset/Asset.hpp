@@ -192,6 +192,7 @@ class Asset {
     void clear_grid_residency_cache();
     bool has_grid_residency_cache() const;
     SDL_Point grid_residency_cache() const;
+    void sync_transform_to_position();
     void set_grid_id(std::uint64_t id);
     std::uint64_t grid_id() const { return grid_id_; }
     void clear_grid_id();

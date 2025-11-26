@@ -21,6 +21,7 @@
 #include <iostream>
 #include "animation_update.hpp" // planner interface
 #include "animation_update/child_attachment_controller.hpp"
+#include "utils/transform_smoothing.hpp"
 
 namespace {
 template <typename Fn>
@@ -382,15 +383,9 @@ void AnimationRuntime::ensure_child_slots(Animation& anim) {
             slot.last_parent_frame_index = -1;
             slot.visible = false;
             any_slot_changed = true;
-            std::cout << "[AnimationRuntime] Initializing child slot " << i << ": name='" << slot.asset_name << "'\n";
         }
         if (!slot.info && library && !slot.asset_name.empty()) {
             slot.info = library->get(slot.asset_name);
-            if (!slot.info) {
-                std::cout << "[AnimationRuntime] Failed to find AssetInfo for child '" << slot.asset_name << "'\n";
-            } else {
-                std::cout << "[AnimationRuntime] Loaded AssetInfo for child '" << slot.asset_name << "'\n";
-            }
         }
         if (!slot.animation && slot.info) {
             auto child_anim_it =
@@ -406,18 +401,14 @@ void AnimationRuntime::ensure_child_slots(Animation& anim) {
                 slot.cached_h = 0;
                 slot.was_visible = false;
                 slot.last_parent_frame_index = -1;
-                std::cout << "[AnimationRuntime] Bound animation for child '" << slot.asset_name << "'\n";
             } else {
-                std::cout << "[AnimationRuntime] No animation found for child '" << slot.asset_name << "'\n";
             }
         }
         if (slot.animation && !slot.current_frame) {
             animation_update::child_attachments::restart(slot);
-            std::cout << "[AnimationRuntime] Restarted animation for child '" << slot.asset_name << "'\n";
         }
         if (!slot.spawned_asset && slot.info && slot.visible) {
             slot.spawned_asset = spawn_child_asset(slot);
-            std::cout << "[AnimationRuntime] Spawned asset for child '" << slot.asset_name << "'\n";
         }
         if (slot.current_frame != previous_frame) {
             animation_update::child_attachments::update_dimensions(slot);
@@ -426,17 +417,13 @@ void AnimationRuntime::ensure_child_slots(Animation& anim) {
 
     // Force update child visibility if any slot changed
     if (any_slot_changed && self_) {
-        std::cout << "[AnimationRuntime] Forcing child frame data update after slot changes\n";
         animation_update::child_attachments::ParentState parent_state;
-        parent_state.position = self_->pos;
+        SDL_Point render_pos{ static_cast<int>(std::lround(self_->smoothed_translation_x())),
+                              static_cast<int>(std::lround(self_->smoothed_translation_y())) };
+        parent_state.position = render_pos;
         parent_state.flipped = self_->flipped;
         parent_state.animation_id = self_->current_animation;
         animation_update::child_attachments::apply_frame_data(self_->animation_children_, parent_state, self_->current_frame);
-        // Debug: print child slot visibility
-        for (std::size_t i = 0; i < self_->animation_children_.size(); ++i) {
-            const auto& slot = self_->animation_children_[i];
-            std::cout << "[AnimationRuntime] Child slot " << i << " ('" << slot.asset_name << "') visible=" << slot.visible << ", index=" << slot.child_index << "\n";
-        }
     }
 
     for (std::size_t i = requested.size(); i < slots.size(); ++i) {
@@ -456,7 +443,9 @@ void AnimationRuntime::advance_child_frames(float dt) {
         return;
     }
     animation_update::child_attachments::ParentState parent_state;
-    parent_state.position = self_->pos;
+    SDL_Point render_pos{ static_cast<int>(std::lround(self_->smoothed_translation_x())),
+                          static_cast<int>(std::lround(self_->smoothed_translation_y())) };
+    parent_state.position = render_pos;
     parent_state.flipped = self_->flipped;
     parent_state.animation_id = self_->current_animation;
     animation_update::child_attachments::advance_frames(self_->animation_children_, parent_state, dt);
@@ -467,7 +456,9 @@ void AnimationRuntime::apply_child_frame_data(const AnimationFrame* frame) {
         return;
     }
     animation_update::child_attachments::ParentState parent_state;
-    parent_state.position = self_->pos;
+    SDL_Point render_pos{ static_cast<int>(std::lround(self_->smoothed_translation_x())),
+                          static_cast<int>(std::lround(self_->smoothed_translation_y())) };
+    parent_state.position = render_pos;
     parent_state.flipped = self_->flipped;
     parent_state.animation_id = self_->current_animation;
     animation_update::child_attachments::apply_frame_data(self_->animation_children_, parent_state, frame);
@@ -485,7 +476,10 @@ Asset* AnimationRuntime::spawn_child_asset(Asset::AnimationChildAttachment& slot
         return slot.spawned_asset;
     }
 
-    SDL_Point spawn_pos = self_->pos;
+    SDL_Point spawn_pos{
+        static_cast<int>(std::lround(self_->smoothed_translation_x())),
+        static_cast<int>(std::lround(self_->smoothed_translation_y()))
+    };
     Asset* child = assets_owner_->spawn_asset(slot.asset_name, spawn_pos);
     if (!child) {
         return nullptr;
@@ -572,10 +566,16 @@ void AnimationRuntime::sync_child_assets() {
         child->hidden = !slot.visible;
         child->z_offset = self_->z_offset + (slot.render_in_front ? 1 : -1);
         child->set_z_index();
-        // Keep smoothing targets aligned with the forced position/alpha.
-        child->translation_smoothing_x_.target = static_cast<float>(child->pos.x);
-        child->translation_smoothing_y_.target = static_cast<float>(child->pos.y);
-        child->alpha_smoothing_.target = child->hidden ? 0.0f : 1.0f;
+        // Keep child aligned exactly with parent: disable smoothing and snap to the attachment position.
+        TransformSmoothingParams snap{};
+        snap.method = TransformSmoothingMethod::None;
+        snap.snap_threshold = 0.0f;
+        child->translation_smoothing_x_.set_params(snap);
+        child->translation_smoothing_y_.set_params(snap);
+        child->translation_smoothing_x_.reset(static_cast<float>(child->pos.x));
+        child->translation_smoothing_y_.reset(static_cast<float>(child->pos.y));
+        child->alpha_smoothing_.set_params(snap);
+        child->alpha_smoothing_.reset(child->hidden ? 0.0f : 1.0f);
     }
 }
 
@@ -1010,45 +1010,14 @@ vibble::grid::Grid& AnimationRuntime::grid() const {
 }
 
 int AnimationRuntime::effective_grid_resolution(std::optional<int> override_resolution) const {
-    if (override_resolution.has_value()) {
-        return vibble::grid::clamp_resolution(*override_resolution);
-    }
-    if (self_) {
-        try {
-            if (self_->info && asset_types::canonicalize(self_->info->type) == asset_types::player) {
-                return 0; // always pixel-precise for player
-            }
-        } catch (...) {
-            // ignore, fall through to default behavior
-        }
-        return vibble::grid::clamp_resolution(self_->grid_resolution);
-    }
+    (void)override_resolution;
+    // Animation runtime always operates at pixel precision.
     return 0;
 }
 
 SDL_Point AnimationRuntime::convert_delta_to_world(SDL_Point delta, int resolution) const {
-    const int clamped_resolution = vibble::grid::clamp_resolution(resolution);
-    if (clamped_resolution <= 0) {
-        return delta;
-    }
-
-    const int grid_step = vibble::grid::delta(clamped_resolution);
-    if (grid_step <= 1) {
-        return delta;
-    }
-
-    const bool delta_aligned_x = vibble::grid::is_multiple_of_delta(delta.x, clamped_resolution);
-    const bool delta_aligned_y = vibble::grid::is_multiple_of_delta(delta.y, clamped_resolution);
-
-    if (!delta_aligned_x || !delta_aligned_y) {
-        return delta;
-    }
-
-    vibble::grid::Grid& grid_service = grid();
-    SDL_Point           indices      = grid_service.convert_resolution(delta, 0, clamped_resolution);
-    const SDL_Point     origin_world = grid_service.index_to_world(SDL_Point{ 0, 0 }, clamped_resolution);
-    const SDL_Point     target_world = grid_service.index_to_world(indices, clamped_resolution);
-    return SDL_Point{ target_world.x - origin_world.x, target_world.y - origin_world.y };
+    (void)resolution;
+    return delta;
 }
 
 void AnimationRuntime::refresh_z_index() {

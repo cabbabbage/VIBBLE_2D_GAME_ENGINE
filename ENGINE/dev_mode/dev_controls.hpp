@@ -3,6 +3,7 @@
 #include <SDL.h>
 
 #include <functional>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -49,7 +50,7 @@ public:
 
     void set_input(Input* input);
     void set_player(Asset* player);
-    void set_active_assets(std::vector<Asset*>& actives);
+    void set_active_assets(std::vector<Asset*>& actives, std::uint64_t version);
     void set_screen_dimensions(int width, int height);
     void set_current_room(Room* room, bool force_refresh = false);
     void set_rooms(std::vector<Room*>* rooms, std::size_t generation = 0);
@@ -215,6 +216,7 @@ private:
     Assets* assets_ = nullptr;
     Input* input_ = nullptr;
     std::vector<Asset*>* active_assets_ = nullptr;
+    std::uint64_t active_assets_version_ = 0;
     Asset* player_ = nullptr;
     Room* current_room_ = nullptr;
     Room* detected_room_ = nullptr;

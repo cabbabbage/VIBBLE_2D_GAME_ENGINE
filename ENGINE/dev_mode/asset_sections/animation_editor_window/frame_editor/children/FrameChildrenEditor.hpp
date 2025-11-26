@@ -37,7 +37,7 @@ class FrameChildrenEditor {
         float dx = 0.0f;
         float dy = 0.0f;
         float rotation = 0.0f;
-        bool visible = false;
+        bool visible = true;
         bool render_in_front = true;
 };
 

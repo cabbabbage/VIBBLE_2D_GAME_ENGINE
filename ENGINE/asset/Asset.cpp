@@ -95,19 +95,17 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
                 }
         }
         
-        // Player uses instant snap (no smoothing) since movement is already smooth at update rate
-        // with grid_resolution=0 for pixel-perfect movement
+        // Player keeps pixel-precise targets but still uses render-time smoothing so motion appears fluid
         const bool is_player_asset = info && asset_types::canonicalize(info->type) == asset_types::player;
+        TransformSmoothingParams translation_params = transform_smoothing::asset_translation_params();
         if (is_player_asset) {
-                TransformSmoothingParams instant_snap{};
-                instant_snap.method = TransformSmoothingMethod::None;
-                instant_snap.snap_threshold = 0.0f;
-                translation_smoothing_x_.set_params(instant_snap);
-                translation_smoothing_y_.set_params(instant_snap);
-        } else {
-                translation_smoothing_x_.set_params(transform_smoothing::asset_translation_params());
-                translation_smoothing_y_.set_params(transform_smoothing::asset_translation_params());
+                translation_params.method = TransformSmoothingMethod::Lerp;
+                translation_params.lerp_rate = 100.0f; // fast response with minimal perceived jitter
+                translation_params.max_step = 0.0f;    // no clamp so the player keeps up with input
+                translation_params.snap_threshold = 0.0f;
         }
+        translation_smoothing_x_.set_params(translation_params);
+        translation_smoothing_y_.set_params(translation_params);
         scale_smoothing_.set_params(transform_smoothing::asset_scale_params());
         alpha_smoothing_.set_params(transform_smoothing::asset_alpha_params());
 
@@ -1170,6 +1168,11 @@ void Asset::cache_grid_residency(SDL_Point point) {
 void Asset::clear_grid_residency_cache() {
         cached_grid_residency_    = SDL_Point{ std::numeric_limits<int>::min(), std::numeric_limits<int>::min() };
         has_cached_grid_residency_ = false;
+}
+
+void Asset::sync_transform_to_position() {
+        translation_smoothing_x_.reset(static_cast<float>(pos.x));
+        translation_smoothing_y_.reset(static_cast<float>(pos.y));
 }
 
 bool Asset::has_grid_residency_cache() const {

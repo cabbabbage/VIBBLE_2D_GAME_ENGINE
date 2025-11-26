@@ -67,7 +67,7 @@ private:
         float dx = 0.0f;
         float dy = 0.0f;
         float degree = 0.0f;
-        bool visible = false;
+        bool visible = true;
         bool render_in_front = true;
     };
     struct MovementFrame {
@@ -591,7 +591,7 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
                     } else {
                         child.degree = 0.0f;
                     }
-                    child.visible = child_entry.value("visible", false);
+                    child.visible = child_entry.value("visible", true);
                     child.render_in_front = child_entry.value("render_in_front", true);
                 } else if (child_entry.is_array()) {
                     try { child.child_index = child_entry[0].get<int>(); } catch (...) { child.child_index = -1; }

@@ -11,7 +11,9 @@
 #include "world/grid.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstdint>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -33,7 +35,6 @@ namespace {
     constexpr double PI_D       = 3.14159265358979323846;
     constexpr float  kDefaultPitchDegrees   = 60.0f;
     constexpr float  kMaxForeshortenSliderStrength = 2.0f;
-    constexpr float  kMaxDistanceSliderStrength = 1.0f;
     constexpr float  kFixedDepthOffsetPx    = 4000.0f;
     constexpr double kMinZoomRange = 1e-4;
 
@@ -148,36 +149,6 @@ namespace {
         return 1.0f / rate;
     }
 
-    TransformSmoothingParams motion_params_from_settings(const camera_grid::RealismSettings& settings) {
-        TransformSmoothingParams params{};
-        if (!settings.smooth_motion_zoom) {
-            params.method = TransformSmoothingMethod::None;
-            return sanitize_params(params);
-        }
-
-        params.method = settings.motion_smoothing_method;
-        switch (params.method) {
-        case TransformSmoothingMethod::Lerp:
-            params.lerp_rate        = rate_from_tau(std::max(settings.motion_smoothing_tau, 0.0f));
-            params.spring_frequency = 0.0f;
-            break;
-        case TransformSmoothingMethod::CriticallyDampedSpring:
-            params.spring_frequency = std::max(0.0f, settings.motion_smoothing_spring_frequency);
-            params.lerp_rate        = 0.0f;
-            break;
-        case TransformSmoothingMethod::None:
-            params.method = TransformSmoothingMethod::None;
-            params.lerp_rate = params.spring_frequency = 0.0f;
-            break;
-        }
-
-        params.max_step       = std::max(0.0f, settings.motion_smoothing_max_step);
-        params.snap_threshold = std::max(0.0f, settings.motion_smoothing_snap_threshold);
-        return sanitize_params(params);
-    }
-
-
-
     static inline Area make_rect_area(const std::string& name, SDL_Point center, int w, int h, int resolution) {
         const int left   = center.x - (w / 2);
         const int top    = center.y - (h / 2);
@@ -199,15 +170,82 @@ namespace {
             static_cast<double>(camera_grid::kMaxZoomAnchors));
     }
 
+    camera_grid::CameraGeometry from_ndc_geometry(const ndc::CameraGeometry& src) {
+        camera_grid::CameraGeometry out{};
+        out.valid            = src.valid;
+        out.camera_height    = src.camera_height;
+        out.focus_depth      = src.focus_depth;
+        out.anchor_world_y   = src.anchor_world_y;
+        out.focus_ndc_offset = src.focus_ndc_offset;
+        out.pitch_radians    = src.pitch_radians;
+        out.pitch_degrees    = src.pitch_degrees;
+        out.camera_world_y   = src.camera_world_y;
+        return out;
+    }
+
+    ndc::CameraGeometry to_ndc_geometry(const camera_grid::CameraGeometry& src) {
+        ndc::CameraGeometry out{};
+        out.camera_height    = src.camera_height;
+        out.focus_depth      = src.focus_depth;
+        out.anchor_world_y   = src.anchor_world_y;
+        out.camera_world_y   = src.camera_world_y;
+        out.focus_ndc_offset = src.focus_ndc_offset;
+        out.pitch_radians    = src.pitch_radians;
+        out.pitch_degrees    = src.pitch_degrees;
+        out.valid            = src.valid;
+        return out;
+    }
+
+    camera_grid::FloorDepthParams from_ndc_floor_params(
+        const ndc::FloorDepthParams& src,
+        const camera_grid::CameraGeometry& geom) {
+        camera_grid::FloorDepthParams out{};
+        out.enabled            = src.enabled;
+        out.horizon_screen_y   = src.horizon_screen_y;
+        out.bottom_screen_y    = src.bottom_screen_y;
+        out.camera_height      = src.camera_height;
+        out.focus_depth        = geom.focus_depth;
+        out.pitch_radians      = src.pitch_radians;
+        out.anchor_world_y     = geom.anchor_world_y;
+        out.base_world_y       = src.base_world_y;
+        out.camera_world_y     = src.camera_world_y;
+        out.focus_ndc_offset   = src.focus_ndc_offset;
+        out.horizon_ndc        = src.horizon_ndc;
+        out.near_ndc           = src.near_ndc;
+        out.ndc_scale          = src.ndc_scale;
+        out.pitch_norm         = src.pitch_norm;
+        out.strength           = src.strength;
+        return out;
+    }
+
+    ndc::FloorDepthParams to_ndc_floor_params(const camera_grid::FloorDepthParams& src) {
+        ndc::FloorDepthParams out{};
+        out.horizon_screen_y = src.horizon_screen_y;
+        out.bottom_screen_y  = src.bottom_screen_y;
+        out.base_world_y     = src.base_world_y;
+        out.camera_world_y   = src.camera_world_y;
+        out.horizon_ndc      = src.horizon_ndc;
+        out.near_ndc         = src.near_ndc;
+        out.ndc_scale        = src.ndc_scale;
+        out.camera_height    = src.camera_height;
+        out.pitch_radians    = src.pitch_radians;
+        out.focus_ndc_offset = src.focus_ndc_offset;
+        out.pitch_norm       = src.pitch_norm;
+        out.strength         = src.strength;
+        out.enabled          = src.enabled;
+        return out;
+    }
+
 }
 camera_grid::CameraGeometry camera_grid::compute_geometry_for_scale(double scale_value) const {
     if (!ndc_calculator_) {
         return CameraGeometry{};
     }
-    return ndc_calculator_->compute_geometry_for_scale(
+    const ndc::CameraGeometry ndc_geom = ndc_calculator_->compute_geometry_for_scale(
         scale_value,
         anchor_world_y(),
         realism_enabled_);
+    return from_ndc_geometry(ndc_geom);
 }
 
 camera_grid::CameraGeometry camera_grid::compute_geometry() const {
@@ -222,8 +260,6 @@ void camera_grid::update_geometry_cache(const CameraGeometry& g) {
     runtime_focus_ndc_offset_ = g.focus_ndc_offset;
     runtime_pitch_rad_     = g.pitch_radians;
     runtime_pitch_deg_     = g.pitch_degrees;
-    runtime_foreshorten_strength_ = foreshorten_for_scale(scale_value);
-    runtime_distance_scale_strength_ = distance_scale_for_scale(scale_value);
     runtime_depth_offset_px_ = depth_offset_for_scale(scale_value);
     runtime_floor_params_ = compute_floor_depth_params_for_geometry(g, scale_value);
     geometry_valid_        = g.valid;
@@ -234,88 +270,8 @@ void camera_grid::update_geometry_cache(const CameraGeometry& g) {
         runtime_focus_ndc_offset_ = 0.0;
         runtime_pitch_rad_     = 0.0;
         runtime_pitch_deg_     = 0.0f;
-        runtime_foreshorten_strength_ = foreshorten_for_scale(scale_value);
-        runtime_distance_scale_strength_ = distance_scale_for_scale(scale_value);
         runtime_depth_offset_px_ = depth_offset_for_scale(scale_value);
         runtime_floor_params_ = FloorDepthParams{};
-    }
-}
-
-// TransformSmoother1D implementation
-
-void camera_grid::TransformSmoother1D::set_params(const TransformSmoothingParams& p) {
-    params = sanitize_params(p);
-}
-
-void camera_grid::TransformSmoother1D::reset(float value) {
-    const float safe = std::isfinite(value) ? value : 0.0f;
-    current  = safe;
-    target   = safe;
-    velocity = 0.0f;
-}
-
-void camera_grid::TransformSmoother1D::advance(float dt) {
-    if (!std::isfinite(dt) || dt <= 0.0f) {
-        return;
-    }
-
-    const float snap_threshold = std::max(0.0f, params.snap_threshold);
-    const float max_step       = std::max(0.0f, params.max_step);
-
-    const float delta = target - current;
-    const auto snap_to_target = [&]() {
-        current = target;
-        velocity = 0.0f;
-    };
-
-    const auto apply_step = [&](float step) {
-        if (max_step > 0.0f) {
-            const float limit = max_step * dt;
-            step = std::clamp(step, -limit, limit);
-        }
-        current += step;
-        velocity = step / std::max(dt, 1e-6f);
-    };
-
-    if (snap_threshold > 0.0f && std::fabs(delta) < snap_threshold) {
-        snap_to_target();
-        return;
-    }
-
-    switch (params.method) {
-    case TransformSmoothingMethod::None:
-        snap_to_target();
-        break;
-    case TransformSmoothingMethod::Lerp: {
-        const float rate = std::max(0.0f, params.lerp_rate);
-        if (rate <= 0.0f) {
-            snap_to_target();
-            break;
-        }
-        const float t = 1.0f - std::exp(-rate * dt);
-        apply_step(delta * t);
-        break;
-    }
-    case TransformSmoothingMethod::CriticallyDampedSpring: {
-        const float freq = std::max(0.0f, params.spring_frequency);
-        if (freq <= 0.0f) {
-            snap_to_target();
-            break;
-        }
-        const float omega = 2.0f * static_cast<float>(PI_D) * freq;
-        const float x0    = current - target;
-        const float v0    = velocity;
-        const float e     = std::exp(-omega * dt);
-
-        const float x = (x0 + (v0 + omega * x0) * dt) * e;
-        const float v = (v0 - omega * (v0 + omega * x0) * dt) * e;
-
-        current  = target + x;
-        velocity = v;
-        break;
-    }
-    default:
-        break;
     }
 }
 
@@ -354,29 +310,13 @@ camera_grid::camera_grid(int screen_width, int screen_height, const Area& starti
     start_scale_ = scale_;
     target_scale_ = scale_;
 
-    TransformSmoothingParams center_defaults = transform_smoothing::camera_center_params();
-    TransformSmoothingParams zoom_defaults   = transform_smoothing::camera_zoom_params();
-
-    center_smoothing_x_.set_params(center_defaults);
-    center_smoothing_y_.set_params(center_defaults);
-    zoom_smoothing_.set_params(zoom_defaults);
-
-    center_smoothing_x_.reset(static_cast<float>(screen_center_.x));
-    center_smoothing_y_.reset(static_cast<float>(screen_center_.y));
-    zoom_smoothing_.reset(std::max(scale_, 0.0001f));
-
-    smoothed_center_.x = center_smoothing_x_.value_for_render();
-    smoothed_center_.y = center_smoothing_y_.value_for_render();
-    smoothed_scale_    = std::max(0.0001f, zoom_smoothing_.value_for_render());
+    smoothed_center_.x = static_cast<float>(screen_center_.x);
+    smoothed_center_.y = static_cast<float>(screen_center_.y);
+    smoothed_scale_    = std::max(0.0001f, scale_);
     update_geometry_cache(compute_geometry());
-
-    settings_.smooth_motion_zoom                 = center_defaults.method != TransformSmoothingMethod::None;
-    settings_.motion_smoothing_method            = center_defaults.method;
-    settings_.motion_smoothing_tau               = tau_from_rate(center_defaults.lerp_rate);
-    settings_.motion_smoothing_spring_frequency  = center_defaults.spring_frequency;
-    settings_.motion_smoothing_max_step          = center_defaults.max_step;
-    settings_.motion_smoothing_snap_threshold    = center_defaults.snap_threshold;
 }
+
+camera_grid::~camera_grid() = default;
 
 void camera_grid::set_realism_settings(const RealismSettings& settings) {
     settings_ = settings;
@@ -401,34 +341,13 @@ void camera_grid::set_realism_settings(const RealismSettings& settings) {
         settings_.parallax_smoothing.spring_frequency = 10.0f;
     }
 
-    settings_.foreshorten_strength = clamp_slider(settings_.foreshorten_strength, kMaxForeshortenSliderStrength);
-    settings_.foreshorten_at_zoom_low = clamp_slider(
-        std::isfinite(settings_.foreshorten_at_zoom_low)
-            ? settings_.foreshorten_at_zoom_low
-            : settings_.foreshorten_strength,
-        kMaxForeshortenSliderStrength);
-    settings_.foreshorten_at_zoom_high = clamp_slider(
-        std::isfinite(settings_.foreshorten_at_zoom_high)
-            ? settings_.foreshorten_at_zoom_high
-            : settings_.foreshorten_strength,
-        kMaxForeshortenSliderStrength);
-    settings_.foreshorten_strength =
-        0.5f * (settings_.foreshorten_at_zoom_low + settings_.foreshorten_at_zoom_high);
 
-    settings_.distance_scale_strength = 1.0f;
-    settings_.distance_scale_at_zoom_low = 1.0f;
-    settings_.distance_scale_at_zoom_high = 1.0f;
 
     // Lock the depth offset at the fixed value so the convergence point never flips.
     settings_.depth_offset_at_zoom_low  = kFixedDepthOffsetPx;
     settings_.depth_offset_at_zoom_high = kFixedDepthOffsetPx;
     settings_.grid_depth_offset_px      = kFixedDepthOffsetPx;
 
-    TransformSmoothingParams motion_params = motion_params_from_settings(settings_);
-    center_smoothing_x_.set_params(motion_params);
-    center_smoothing_y_.set_params(motion_params);
-    zoom_smoothing_.set_params(motion_params);
-    
     // Update NDC calculator settings
     if (ndc_calculator_) {
         ndc::Settings ndc_settings;
@@ -451,10 +370,8 @@ void camera_grid::set_screen_center(SDL_Point p) {
         screen_center_initialized_  = true;
         pan_offset_x_               = 0.0;
         pan_offset_y_               = 0.0;
-        center_smoothing_x_.reset(static_cast<float>(screen_center_.x));
-        center_smoothing_y_.reset(static_cast<float>(screen_center_.y));
-        smoothed_center_.x = center_smoothing_x_.value_for_render();
-        smoothed_center_.y = center_smoothing_y_.value_for_render();
+        smoothed_center_.x          = static_cast<float>(screen_center_.x);
+        smoothed_center_.y          = static_cast<float>(screen_center_.y);
         return;
     }
 
@@ -463,17 +380,8 @@ void camera_grid::set_screen_center(SDL_Point p) {
     pan_offset_x_ += dx;
     pan_offset_y_ += dy;
     screen_center_ = p;
-
-    const double distance     = std::hypot(dx, dy);
-    const double px_margin    = static_cast<double>(std::max(screen_width_, screen_height_));
-    const double scale_world  = std::max(0.0001, static_cast<double>(smoothed_scale_));
-    const double teleport_thr = std::max(200.0, px_margin * scale_world * 0.25);
-    if (distance > teleport_thr) {
-        center_smoothing_x_.reset(static_cast<float>(screen_center_.x));
-        center_smoothing_y_.reset(static_cast<float>(screen_center_.y));
-        smoothed_center_.x = center_smoothing_x_.value_for_render();
-        smoothed_center_.y = center_smoothing_y_.value_for_render();
-    }
+    smoothed_center_.x = static_cast<float>(screen_center_.x);
+    smoothed_center_.y = static_cast<float>(screen_center_.y);
 }
 
 void camera_grid::set_scale(float s) {
@@ -484,7 +392,6 @@ void camera_grid::set_scale(float s) {
     steps_done_  = 0;
     start_scale_ = scale_;
     target_scale_= scale_;
-    zoom_smoothing_.reset(scale_);
     smoothed_scale_ = scale_;
     update_geometry_cache(compute_geometry());
 }
@@ -564,25 +471,10 @@ void camera_grid::update(float dt) {
         }
     }
 
-    center_smoothing_x_.target = static_cast<float>(screen_center_.x);
-    center_smoothing_y_.target = static_cast<float>(screen_center_.y);
-    zoom_smoothing_.target     = std::max(scale_, 0.0001f);
+    const float safe_sx = static_cast<float>(screen_center_.x);
+    const float safe_sy = static_cast<float>(screen_center_.y);
+    const float safe_ss = std::max(0.0001f, scale_);
 
-    center_smoothing_x_.advance(dt);
-    center_smoothing_y_.advance(dt);
-    zoom_smoothing_.advance(dt);
-
-    // Grab smoothed values and sanitize them to avoid NaN/inf propagation
-    const float raw_sx = center_smoothing_x_.value_for_render();
-    const float raw_sy = center_smoothing_y_.value_for_render();
-    const float raw_ss = zoom_smoothing_.value_for_render();
-
-    // If smoothing produced non-finite values, fall back to the last known good center/scale
-    const float safe_sx = std::isfinite(raw_sx) ? raw_sx : static_cast<float>(screen_center_.x);
-    const float safe_sy = std::isfinite(raw_sy) ? raw_sy : static_cast<float>(screen_center_.y);
-    const float safe_ss = std::isfinite(raw_ss) ? raw_ss : std::max(0.0001f, scale_);
-
-    // Clamp scale to valid zoom anchors range
     const float clamped_ss = static_cast<float>(std::clamp(static_cast<double>(safe_ss), 0.0001, static_cast<double>(camera_grid::kMaxZoomAnchors)));
 
     smoothed_center_.x = std::clamp(safe_sx, -1e8f, 1e8f);
@@ -629,11 +521,6 @@ void camera_grid::update_zoom(Room* cur,
                          bool refresh_requested,
                          float dt)
 {
-    if (!refresh_requested && !zooming_) {
-        update(dt);
-        return;
-    }
-
     pan_offset_x_ = 0.0;
     pan_offset_y_ = 0.0;
 
@@ -645,6 +532,11 @@ void camera_grid::update_zoom(Room* cur,
         } else if (cur && cur->room_area) {
             set_screen_center(cur->room_area->get_center());
         }
+    }
+
+    if (!refresh_requested && !zooming_) {
+        update(dt);
+        return;
     }
 
     if (!starting_room_ && cur && cur->room_area) {
@@ -728,7 +620,7 @@ void camera_grid::recompute_current_view() {
         static_cast<int>(std::lround(smoothed_center_.x)),
         static_cast<int>(std::lround(smoothed_center_.y))
     };
-    current_view_ = make_rect_area("current_view", center, cur_w, cur_h, base_zoom_.resolution());
+    current_view_ = make_rect_area("current_view", center, cur_w, cur_h, 0);
     update_geometry_cache(compute_geometry());
 }
 
@@ -934,31 +826,7 @@ camera_grid::RenderEffects camera_grid::compute_render_effects(
     }
 
     const double camera_height = geom.camera_height;
-    const double height_reference = std::max(
-        1.0,
-        static_cast<double>(settings_.base_height_px));
-    const double slider_vertical_strength = std::clamp(
-        static_cast<double>(runtime_foreshorten_strength_),
-        0.0,
-        static_cast<double>(kMaxForeshortenSliderStrength));
-
-    const double horizon_y = horizon_screen_y_for_scale();
-    const double bottom_y  = static_cast<double>(screen_height_);
-    const double depth_span = std::max(1.0, bottom_y - horizon_y);
-    const double depth_t = std::clamp(
-        (bottom_y - static_cast<double>(warped_screen.y)) / depth_span,
-        0.0,
-        1.0);
-
-    const double foreshorten_strength = std::clamp(
-        camera_height / (camera_height + height_reference),
-        0.0,
-        1.0) * slider_vertical_strength;
-    const double vertical_scale = std::clamp(
-        1.0 - foreshorten_strength * (1.0 - depth_t),
-        0.35,
-        1.0);
-    result.vertical_scale = static_cast<float>(vertical_scale);
+    result.vertical_scale = 1.0f;
 
     // Compute distance scale based on actual world space depth from camera
     // This accounts for the perspective warping that happens in NDC space
@@ -967,14 +835,23 @@ camera_grid::RenderEffects camera_grid::compute_render_effects(
     const double focus_depth = geom.anchor_world_y - geom.camera_world_y;
     
     // Compute distance scale as ratio of depths (farther = smaller)
-    // This maintains consistent incremental spacing even after NDC transformation
-    double distance_scale = 1.0;
+    // Blend between linear screen-space and world-space depth for gradual transition
+    double depth_based_scale = 1.0;
     if (focus_depth > EPS && depth_world > EPS) {
-        distance_scale = focus_depth / depth_world;
+        depth_based_scale = focus_depth / depth_world;
     }
-    
-    // Make the scaling more extreme for better visual consistency
-    distance_scale = std::clamp(distance_scale, 0.2, 2.0);
+
+    double screen_based_scale = 1.0;
+    if (reference_screen_height > EPS && asset_screen_height > EPS) {
+        screen_based_scale = std::clamp(
+            static_cast<double>(reference_screen_height) /
+            std::max(static_cast<double>(asset_screen_height), EPS),
+            0.35,
+            1.5);
+    }
+
+    const double blended_scale = 0.5 * depth_based_scale + 0.5 * screen_based_scale;
+    const double distance_scale = std::clamp(blended_scale, 0.35, 1.5);
     result.distance_scale = static_cast<float>(distance_scale);
 
     if (!std::isfinite(result.vertical_scale) || result.vertical_scale <= 0.0f) {
@@ -1043,13 +920,7 @@ void camera_grid::apply_camera_settings(const nlohmann::json& data) {
 
     try_read_bool("realism_enabled", realism_enabled_);
 
-    const std::pair<const char*, float*> float_fields[] = {
-        { "foreshorten_strength", &settings_.foreshorten_strength },
-        { "distance_scale_strength", &settings_.distance_scale_strength },
-        { "foreshorten_at_zoom_low", &settings_.foreshorten_at_zoom_low },
-        { "foreshorten_at_zoom_high", &settings_.foreshorten_at_zoom_high },
-        { "distance_scale_at_zoom_low", &settings_.distance_scale_at_zoom_low },
-        { "distance_scale_at_zoom_high", &settings_.distance_scale_at_zoom_high },
+    const std::array<std::pair<const char*, float*>, 18> float_fields{ {
         { "base_height_at_zoom_low", &settings_.base_height_at_zoom_low },
         { "base_height_at_zoom_high", &settings_.base_height_at_zoom_high },
         { "zoom_low", &settings_.zoom_low },
@@ -1065,38 +936,27 @@ void camera_grid::apply_camera_settings(const nlohmann::json& data) {
         { "parallax_smoothing_spring_frequency", &settings_.parallax_smoothing.spring_frequency },
         { "parallax_smoothing_max_step", &settings_.parallax_smoothing.max_step },
         { "parallax_smoothing_snap_threshold", &settings_.parallax_smoothing.snap_threshold },
-        { "motion_smoothing_tau", &settings_.motion_smoothing_tau },
-        { "motion_smoothing_spring_frequency", &settings_.motion_smoothing_spring_frequency },
-        { "motion_smoothing_max_step", &settings_.motion_smoothing_max_step },
-        { "motion_smoothing_snap_threshold", &settings_.motion_smoothing_snap_threshold },
         { "scale_hysteresis_margin", &settings_.scale_variant_hysteresis_margin },
         { "foreground_plane_screen_y", &settings_.foreground_plane_screen_y },
         { "background_plane_screen_y", &settings_.background_plane_screen_y }
-    };
+    } };
     for (const auto& [key, field] : float_fields) {
         try_read_number(key, *field);
     }
 
-    const std::pair<const char*, int*> int_fields[] = {
+    const std::array<std::pair<const char*, int*>, 3> int_fields{ {
         { "render_quality_percent", &settings_.render_quality_percent },
         { "foreground_texture_max_opacity", &settings_.foreground_texture_max_opacity },
         { "background_texture_max_opacity", &settings_.background_texture_max_opacity }
-    };
+    } };
     for (const auto& [key, field] : int_fields) {
         try_read_number(key, *field);
     }
 
-    try_read_bool("smooth_motion_zoom", settings_.smooth_motion_zoom);
     try_read_enum("parallax_smoothing_method", settings_.parallax_smoothing.method, 0, 2);
-    try_read_enum("motion_smoothing_method", settings_.motion_smoothing_method, 0, 2);
     if (!try_read_enum("texture_opacity_falloff_method", settings_.texture_opacity_falloff_method, 0, 4)) {
         settings_.texture_opacity_falloff_method = BlurFalloffMethod::Linear;
     }
-
-    // Distance scaling is now fixed to a realistic value; ignore any persisted values.
-    settings_.distance_scale_strength = 1.0f;
-    settings_.distance_scale_at_zoom_low = 1.0f;
-    settings_.distance_scale_at_zoom_high = 1.0f;
 
     settings_.foreground_texture_max_opacity =
         std::clamp(settings_.foreground_texture_max_opacity, 0, 255);
@@ -1121,11 +981,6 @@ void camera_grid::apply_camera_settings(const nlohmann::json& data) {
     settings_.foreshorten_at_zoom_high = clamp_slider(settings_.foreshorten_at_zoom_high, kMaxForeshortenSliderStrength);
     settings_.foreshorten_strength =
         0.5f * (settings_.foreshorten_at_zoom_low + settings_.foreshorten_at_zoom_high);
-
-    settings_.distance_scale_at_zoom_low = clamp_slider(settings_.distance_scale_at_zoom_low, kMaxDistanceSliderStrength);
-    settings_.distance_scale_at_zoom_high = clamp_slider(settings_.distance_scale_at_zoom_high, kMaxDistanceSliderStrength);
-    settings_.distance_scale_strength =
-        0.5f * (settings_.distance_scale_at_zoom_low + settings_.distance_scale_at_zoom_high);
 
     // Force depth offset to the fixed value after loading.
     settings_.grid_depth_offset_px   = kFixedDepthOffsetPx;
@@ -1190,50 +1045,18 @@ void camera_grid::apply_camera_settings(const nlohmann::json& data) {
     settings_.render_quality_percent = align_quality(settings_.render_quality_percent);
 
     settings_.parallax_smoothing = sanitize_params(settings_.parallax_smoothing);
-
-    settings_.smooth_motion_zoom =
-        settings_.smooth_motion_zoom &&
-        settings_.motion_smoothing_method != TransformSmoothingMethod::None;
-
-    if (!std::isfinite(settings_.motion_smoothing_tau) ||
-        settings_.motion_smoothing_tau < 0.0f) {
-        settings_.motion_smoothing_tau = 0.0f;
-    }
-    if (!std::isfinite(settings_.motion_smoothing_max_step) ||
-        settings_.motion_smoothing_max_step < 0.0f) {
-        settings_.motion_smoothing_max_step = 0.0f;
-    }
-    if (!std::isfinite(settings_.motion_smoothing_snap_threshold) ||
-        settings_.motion_smoothing_snap_threshold < 0.0f) {
-        settings_.motion_smoothing_snap_threshold = 0.0f;
-    }
-    if (!std::isfinite(settings_.motion_smoothing_spring_frequency) ||
-        settings_.motion_smoothing_spring_frequency < 0.0f) {
-        settings_.motion_smoothing_spring_frequency = 0.0f;
-    }
     if (!std::isfinite(settings_.scale_variant_hysteresis_margin) ||
         settings_.scale_variant_hysteresis_margin < 0.0f) {
         settings_.scale_variant_hysteresis_margin = 0.05f;
     }
-    TransformSmoothingParams motion_params = motion_params_from_settings(settings_);
-    center_smoothing_x_.set_params(motion_params);
-    center_smoothing_y_.set_params(motion_params);
-    zoom_smoothing_.set_params(motion_params);
     update_geometry_cache(compute_geometry());
 }
 
 nlohmann::json camera_grid::camera_settings_to_json() const {
     nlohmann::json j = nlohmann::json::object();
     j["realism_enabled"] = realism_enabled_;
-    j["smooth_motion_zoom"] = settings_.smooth_motion_zoom;
 
     const std::pair<const char*, float> float_fields[] = {
-        { "foreshorten_strength", settings_.foreshorten_strength },
-        { "distance_scale_strength", settings_.distance_scale_strength },
-        { "foreshorten_at_zoom_low", settings_.foreshorten_at_zoom_low },
-        { "foreshorten_at_zoom_high", settings_.foreshorten_at_zoom_high },
-        { "distance_scale_at_zoom_low", settings_.distance_scale_at_zoom_low },
-        { "distance_scale_at_zoom_high", settings_.distance_scale_at_zoom_high },
         { "depth_offset_at_zoom_low", settings_.depth_offset_at_zoom_low },
         { "depth_offset_at_zoom_high", settings_.depth_offset_at_zoom_high },
         { "base_height_at_zoom_low", settings_.base_height_at_zoom_low },
@@ -1244,10 +1067,6 @@ nlohmann::json camera_grid::camera_settings_to_json() const {
         { "tilt_zoom_in_degrees", settings_.tilt_zoom_in_degrees },
         { "tilt_zoom_out_degrees", settings_.tilt_zoom_out_degrees },
         { "min_visible_screen_ratio", settings_.min_visible_screen_ratio },
-        { "motion_smoothing_tau", settings_.motion_smoothing_tau },
-        { "motion_smoothing_spring_frequency", settings_.motion_smoothing_spring_frequency },
-        { "motion_smoothing_max_step", settings_.motion_smoothing_max_step },
-        { "motion_smoothing_snap_threshold", settings_.motion_smoothing_snap_threshold },
         { "scale_hysteresis_margin", settings_.scale_variant_hysteresis_margin },
         { "parallax_smoothing_lerp_rate", settings_.parallax_smoothing.lerp_rate },
         { "parallax_smoothing_spring_frequency", settings_.parallax_smoothing.spring_frequency },
@@ -1263,7 +1082,6 @@ nlohmann::json camera_grid::camera_settings_to_json() const {
 
     const std::pair<const char*, int> int_fields[] = {
         { "render_quality_percent", settings_.render_quality_percent },
-        { "motion_smoothing_method", static_cast<int>(settings_.motion_smoothing_method) },
         { "parallax_smoothing_method", static_cast<int>(settings_.parallax_smoothing.method) },
         { "foreground_texture_max_opacity", settings_.foreground_texture_max_opacity },
         { "background_texture_max_opacity", settings_.background_texture_max_opacity },
@@ -1275,12 +1093,6 @@ nlohmann::json camera_grid::camera_settings_to_json() const {
 
     return j;
 }
-
-
-TransformSmoothingParams camera_grid::motion_smoothing_params() const {
-    return motion_params_from_settings(settings_);
-}
-
 SDL_FPoint camera_grid::get_view_center_f() const {
     if (std::isfinite(smoothed_center_.x) && std::isfinite(smoothed_center_.y)) {
         return smoothed_center_;
@@ -1296,10 +1108,15 @@ SDL_FPoint camera_grid::get_view_center_f() const {
 
 
 camera_grid::FloorDepthParams camera_grid::compute_floor_depth_params_for_geometry(const CameraGeometry& geom, double scale_value) const {
-    if (!ndc_calculator_) {
+    if (!ndc_calculator_ || !geom.valid) {
         return FloorDepthParams{};
     }
-    return ndc_calculator_->compute_floor_depth_params_for_geometry(geom, scale_value, realism_enabled_);
+    const ndc::CameraGeometry ndc_geom = to_ndc_geometry(geom);
+    const ndc::FloorDepthParams ndc_params = ndc_calculator_->compute_floor_depth_params_for_geometry(
+        ndc_geom,
+        scale_value,
+        realism_enabled_);
+    return from_ndc_floor_params(ndc_params, geom);
 }
 
 camera_grid::FloorDepthParams camera_grid::compute_floor_depth_params_for_scale(double scale_value) const {
@@ -1320,7 +1137,8 @@ float camera_grid::warp_floor_screen_y(float world_y, float linear_screen_y) con
         // Fallback to a fresh computation if the cache is empty (e.g., before the first update).
         p = compute_floor_depth_params();
     }
-    return ndc_calculator_->warp_floor_screen_y(world_y, linear_screen_y, p);
+    const ndc::FloorDepthParams native = to_ndc_floor_params(p);
+    return ndc_calculator_->warp_floor_screen_y(world_y, linear_screen_y, native);
 }
 
 double camera_grid::view_height_world() const {
@@ -1344,11 +1162,6 @@ float camera_grid::foreshorten_for_scale(double scale_value) const {
         settings_.foreshorten_at_zoom_low,
         settings_.foreshorten_at_zoom_high));
     return clamp_slider(value, kMaxForeshortenSliderStrength);
-}
-
-float camera_grid::distance_scale_for_scale(double scale_value) const {
-    (void)scale_value;
-    return 1.0f;
 }
 
 float camera_grid::depth_offset_for_scale(double scale_value) const {
@@ -1473,7 +1286,8 @@ void camera_grid::rebuild_grid(world::Grid& world_grid, float dt_seconds) {
         const RenderEffects effects = compute_render_effects(
             world_pos,
             0.0f,
-            settings_.base_height_px);
+            settings_.base_height_px,
+            RenderSmoothingKey(a));
 
         float base_scale = a->smoothed_scale();
         if (!std::isfinite(base_scale) || base_scale <= 0.0f) {
@@ -1548,3 +1362,37 @@ const world::GridPoint* camera_grid::grid_point_for_asset(const Asset* asset) co
     if (idx >= warped_points_.size()) return nullptr;
     return warped_points_[idx];
 }
+
+// RenderSmoothingKey constructor
+camera_grid::RenderSmoothingKey::RenderSmoothingKey(const Asset* asset, int frame)
+    : asset_id(asset
+        ? (asset->grid_id() != 0
+            ? asset->grid_id()
+            : static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(asset)))
+        : 0),
+      frame_index(frame) {}
+
+// Focus and zoom override methods
+void camera_grid::set_focus_override(SDL_Point focus) {
+    focus_override_ = true;
+    focus_point_ = focus;
+}
+
+void camera_grid::set_manual_zoom_override(bool enabled) {
+    manual_zoom_override_ = enabled;
+}
+
+void camera_grid::clear_focus_override() {
+    focus_override_ = false;
+}
+
+void camera_grid::clear_manual_zoom_override() {
+    manual_zoom_override_ = false;
+}
+
+// Default zoom for room
+double camera_grid::default_zoom_for_room(const Room* room) const {
+    return compute_room_scale_from_area(room);
+}
+
+// Recompute current view

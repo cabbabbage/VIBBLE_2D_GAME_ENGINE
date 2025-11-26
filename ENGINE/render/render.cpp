@@ -1330,7 +1330,7 @@ SDL_FRect SceneRenderer::get_scaled_position_rect(Asset* a,int fw,int fh,float i
         }
     } else {
         const camera_grid::RenderSmoothingKey smoothing_key = a ?
-            reinterpret_cast<camera_grid::RenderSmoothingKey>(a) : 0;
+            camera_grid::RenderSmoothingKey(a) : camera_grid::RenderSmoothingKey();
         camera_grid::RenderEffects ef = cam.compute_render_effects(
             world_point,
             base_sh,
@@ -1427,7 +1427,7 @@ SDL_FRect SceneRenderer::get_child_position_rect(const Asset* parent,
         center_y += dy;
     } else {
         const camera_grid::RenderSmoothingKey smoothing_key =
-            reinterpret_cast<camera_grid::RenderSmoothingKey>(parent);
+            camera_grid::RenderSmoothingKey(parent);
         camera_grid::RenderEffects ef = cam.compute_render_effects(
             world_point,
             base_sh,
@@ -1612,39 +1612,56 @@ void SceneRenderer::render(){
         // SceneRenderer::render - build asset render commands
         //////////////////////////////////////////////////////////////////////////////////
         const std::vector<world::GridPoint*>& active_points = assets_->active_points();
-        std::vector<Asset*> active;
-        active.reserve(active_points.size() * 2 + 16);
-        auto& cam_grid = assets_->getView();
+        active_asset_infos_.clear();
+        active_asset_infos_.reserve(active_points.size() * 2 + 16);
+        active_asset_order_.clear();
+        active_asset_order_.reserve(active_points.size() * 2 + 16);
         for (world::GridPoint* gp : active_points) {
-            if (!gp) continue;
+            if (!gp) {
+                continue;
+            }
             for (const auto& occ_up : gp->occupants) {
-                if (occ_up) active.push_back(occ_up.get());
+                Asset* occupant_asset = occ_up ? occ_up.get() : nullptr;
+                if (!occupant_asset) {
+                    continue;
+                }
+                ActiveAssetInfo info;
+                info.asset      = occupant_asset;
+                info.grid_point = gp;
+                info.screen_y   = gp->screen.y;
+                info.z_index    = occupant_asset->z_index;
+                active_asset_infos_.push_back(info);
             }
         }
-        std::stable_sort(active.begin(), active.end(), [&](Asset* lhs, Asset* rhs) {
-            if (lhs == rhs) return false;
-            world::GridPoint* lp = cam_grid.grid_point_for_asset(lhs);
-            world::GridPoint* rp = cam_grid.grid_point_for_asset(rhs);
-            const float ly = lp ? lp->screen.y : 0.0f;
-            const float ry = rp ? rp->screen.y : 0.0f;
-            if (std::fabs(ly - ry) > 0.5f) return ly < ry;
-            const int lz = lhs ? lhs->z_index : 0;
-            const int rz = rhs ? rhs->z_index : 0;
-            if (lz != rz) return lz < rz;
-            return lhs < rhs;
+        std::stable_sort(active_asset_infos_.begin(), active_asset_infos_.end(), [](const ActiveAssetInfo& lhs, const ActiveAssetInfo& rhs) {
+            if (lhs.asset == rhs.asset) {
+                return false;
+            }
+            if (std::fabs(lhs.screen_y - rhs.screen_y) > 0.5f) {
+                return lhs.screen_y < rhs.screen_y;
+            }
+            if (lhs.z_index != rhs.z_index) {
+                return lhs.z_index < rhs.z_index;
+            }
+            return lhs.asset < rhs.asset;
         });
+        for (const ActiveAssetInfo& info : active_asset_infos_) {
+            if (info.asset) {
+                active_asset_order_.push_back(info.asset);
+            }
+        }
         // Horizon-aware culling rect (float) for perspective/warping
         float horizon_y = camera_state ? camera_state->horizon_screen_y_for_scale() : 0.0f;
         float cull_top = std::max(0.0f, horizon_y);
         float cull_bottom = static_cast<float>(screen_height_) + 4000.0f;
-        const SDL_FRect cull_rect{ 0.0f, cull_top, static_cast<float>(screen_width_), cull_bottom - cull_top };
+        const SDL_FRect scene_cull_rect{ 0.0f, cull_top, static_cast<float>(screen_width_), cull_bottom - cull_top };
 
         // Fog rendering removed.
         texture_commands_.clear();
-        texture_commands_.reserve(active.size());
+        texture_commands_.reserve(active_asset_order_.size());
         remaining_commands_.clear();
-        remaining_commands_.reserve(active.size());
-        light_overlay_sources_.reserve(active.size());
+        remaining_commands_.reserve(active_asset_order_.size());
+        light_overlay_sources_.reserve(active_asset_order_.size());
 
         struct ChildRenderBatch {
             bool processed = false;
@@ -1652,7 +1669,7 @@ void SceneRenderer::render(){
             std::vector<AssetRenderCommand> commands_back;
             std::vector<AssetRenderCommand> commands_front;
         };
-        std::vector<ChildRenderBatch> child_render_batches(active.size());
+        std::vector<ChildRenderBatch> child_render_batches(active_asset_order_.size());
 
         auto ensure_child_commands = [&](Asset* parent, ChildRenderBatch& batch) {
             if (!parent) {
@@ -1775,7 +1792,9 @@ void SceneRenderer::render(){
                     }
                 }
                 if (child_fw <= 0 || child_fh <= 0) {
-                    std::cout << "[Render] Invalid child texture size for '" << slot.asset_name << "'\n";
+                    if (debugging) {
+                        std::cout << "[Render] Invalid child texture size for '" << slot.asset_name << "'\n";
+                    }
                     continue;
                 }
 
@@ -1788,10 +1807,12 @@ void SceneRenderer::render(){
                                                                min_h,
                                                                player_sh);
                 if (child_rect.w <= 0.0f || child_rect.h <= 0.0f) {
-                    std::cout << "[Render] Child rect not drawable for '" << slot.asset_name << "'\n";
+                    if (debugging) {
+                        std::cout << "[Render] Child rect not drawable for '" << slot.asset_name << "'\n";
+                    }
                     continue;
                 }
-                if (!intersects_padded(child_rect, cull_rect)) {
+                if (!intersects_padded(child_rect, scene_cull_rect)) {
                     continue;
                 }
 
@@ -1894,9 +1915,9 @@ void SceneRenderer::render(){
             SDL_FRect expanded_bounds{};
             const bool has_expanded_bounds =
                 assets_ && assets_->asset_bounds_in_screen_space(asset, expanded_bounds);
-            const SDL_FRect& cull_rect = has_expanded_bounds ? expanded_bounds : dst;
-            const bool sprite_visible  = intersects_padded(dst, cull_rect);
-            const bool bounds_visible  = intersects_padded(cull_rect, cull_rect);
+            const SDL_FRect& asset_visible_bounds = has_expanded_bounds ? expanded_bounds : dst;
+            const bool sprite_visible  = intersects_padded(dst, scene_cull_rect);
+            const bool bounds_visible  = intersects_padded(asset_visible_bounds, scene_cull_rect);
             const bool has_light_sources = asset->info && !asset->info->light_sources.empty();
 
             bool any_child_visible = false;
@@ -1914,8 +1935,8 @@ void SceneRenderer::render(){
             return false;
         };
 
-        for (std::size_t asset_index = 0; asset_index < active.size(); ++asset_index) {
-            Asset* a = active[asset_index];
+        for (std::size_t asset_index = 0; asset_index < active_asset_order_.size(); ++asset_index) {
+            Asset* a = active_asset_order_[asset_index];
             auto& child_batch = child_render_batches[asset_index];
             if (!a || !a->info) {
                 continue;
@@ -1972,9 +1993,9 @@ void SceneRenderer::render(){
             SDL_FRect expanded_bounds{};
             const bool has_expanded_bounds =
                 assets_ && assets_->asset_bounds_in_screen_space(a, expanded_bounds);
-            const SDL_FRect& cull_rect = has_expanded_bounds ? expanded_bounds : dst;
-            const bool sprite_visible  = intersects_padded(dst, cull_rect);
-            const bool bounds_visible  = intersects_padded(cull_rect, cull_rect);
+            const SDL_FRect& asset_visible_bounds = has_expanded_bounds ? expanded_bounds : dst;
+            const bool sprite_visible  = intersects_padded(dst, scene_cull_rect);
+            const bool bounds_visible  = intersects_padded(asset_visible_bounds, scene_cull_rect);
 
             // Evaluate child attachments once so their visibility can keep the parent alive.
             ensure_child_commands(a, child_batch);
@@ -2326,7 +2347,7 @@ void SceneRenderer::render(){
                         static_cast<int>(std::lround(cmd.asset->smoothed_translation_x())),
                         static_cast<int>(std::lround(cmd.asset->smoothed_translation_y()))
                     };
-                    camera_grid::RenderEffects ef = cam.compute_render_effects(world_point, base_sh, ref_sh, reinterpret_cast<camera_grid::RenderSmoothingKey>(cmd.asset));
+                    camera_grid::RenderEffects ef = cam.compute_render_effects(world_point, base_sh, ref_sh, camera_grid::RenderSmoothingKey(cmd.asset));
                     const float distance_scale = (cmd.asset->info && cmd.asset->info->apply_distance_scaling) ? ef.distance_scale : 1.0f;
                     const float vertical_scale = (cmd.asset->info && cmd.asset->info->apply_vertical_scaling) ? ef.vertical_scale : 1.0f;
 
@@ -2986,7 +3007,7 @@ void StageContext::update_projection(Asset& asset) {
             SDL_Point{ static_cast<int>(std::lround(world_x)), static_cast<int>(std::lround(world_y)) },
             base_sh,
             reference_height,
-            reinterpret_cast<camera_grid::RenderSmoothingKey>(&asset));
+            camera_grid::RenderSmoothingKey(&asset));
 
     world::Grid* grid = (lighting && lighting->world_grid) ? lighting->world_grid : nullptr;
     const float distance_scale  = (asset.info && asset.info->apply_distance_scaling) ? effects.distance_scale : 1.0f;

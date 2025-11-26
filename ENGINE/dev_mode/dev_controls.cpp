@@ -819,9 +819,12 @@ void DevControls::set_player(Asset* player) {
     if (room_editor_) room_editor_->set_player(player);
 }
 
-void DevControls::set_active_assets(std::vector<Asset*>& actives) {
+void DevControls::set_active_assets(std::vector<Asset*>& actives, std::uint64_t version) {
     active_assets_ = &actives;
-    if (room_editor_) room_editor_->set_active_assets(actives);
+    active_assets_version_ = version;
+    if (room_editor_) {
+        room_editor_->set_active_assets(actives, version);
+    }
 }
 
 void DevControls::set_screen_dimensions(int width, int height) {
@@ -3621,7 +3624,7 @@ void DevControls::refresh_active_asset_filters() {
     }
     assets_->refresh_filtered_active_assets();
     auto& filtered = assets_->mutable_filtered_active_assets();
-    set_active_assets(filtered);
+    set_active_assets(filtered, assets_->dev_active_state_version());
     if (room_editor_) {
         room_editor_->clear_highlighted_assets();
     }

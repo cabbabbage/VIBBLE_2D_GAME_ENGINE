@@ -73,7 +73,6 @@ private:
     std::unique_ptr<SectionToggleWidget> visibility_section_header_;
     std::unique_ptr<SectionToggleWidget> depth_section_header_;
     std::unique_ptr<SectionToggleWidget> depthcue_section_header_;
-    std::unique_ptr<SectionToggleWidget> smoothing_section_header_;
 
     std::unique_ptr<ZoomKeyPointWidget> zoom_in_keypoint_;
     std::unique_ptr<ZoomKeyPointWidget> zoom_out_keypoint_;
@@ -90,22 +89,11 @@ private:
 
     // DepthCue section enable/disable
     std::unique_ptr<DiscreteSliderWidget> render_quality_slider_;
-    std::unique_ptr<DMCheckbox> smoothing_checkbox_;
-    std::unique_ptr<CheckboxWidget> smoothing_widget_;
-    std::unique_ptr<DMDropdown> smoothing_method_dropdown_;
-    std::unique_ptr<DropdownWidget> smoothing_method_widget_;
-    std::unique_ptr<FloatSliderWidget> motion_tau_slider_;
-    std::unique_ptr<FloatSliderWidget> motion_stiffness_slider_;
-    std::unique_ptr<FloatSliderWidget> motion_max_step_slider_;
-    std::unique_ptr<FloatSliderWidget> motion_snap_slider_;
-    std::unique_ptr<FloatSliderWidget> parallax_smoothing_slider_;
-    std::unique_ptr<FloatSliderWidget> hysteresis_margin_slider_;
     bool visibility_section_expanded_ = true;
     bool depth_section_expanded_ = true;
     bool zoom_in_settings_expanded_ = true;
     bool zoom_out_settings_expanded_ = false;
     bool depthcue_section_expanded_ = false;
-    bool smoothing_section_expanded_ = false;
     bool applying_settings_ = false;
 
     bool last_depthcue_enabled_ = false;

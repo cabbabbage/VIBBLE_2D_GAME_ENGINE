@@ -54,6 +54,17 @@ void dev_mode_trace(const std::string& message) {
     }
 }
 
+std::uint64_t hash_active_asset_list(const std::vector<Asset*>& list) {
+    std::uint64_t hash = static_cast<std::uint64_t>(list.size());
+    constexpr std::uint64_t prime = 1469598103934665603ull;
+    for (const Asset* asset : list) {
+        auto ptr_value = static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(asset));
+        hash ^= (ptr_value >> 4);
+        hash *= prime;
+    }
+    return hash;
+}
+
 struct SDLSurfaceDeleter {
     void operator()(SDL_Surface* surface) const {
         if (surface) {
@@ -478,137 +489,21 @@ TransformSmoothingParams Assets::sanitize_smoothing(const TransformSmoothingPara
     return result;
 }
 
-void Assets::update_motion_smoothing_settings(const camera_grid::RealismSettings& settings) {
-    constexpr float kMinTau = 1e-4f;
-    auto build_translation_params = [&](const camera_grid::RealismSettings& s) {
-        TransformSmoothingParams result{};
-        result.method = s.motion_smoothing_method;
-        switch (result.method) {
-        case TransformSmoothingMethod::Lerp:
-            result.lerp_rate        = (s.motion_smoothing_tau > kMinTau)
-                ? 1.0f / std::max(s.motion_smoothing_tau, kMinTau)
-                : 0.0f;
-            result.spring_frequency = 0.0f;
-            break;
-        case TransformSmoothingMethod::CriticallyDampedSpring:
-            result.spring_frequency = std::max(0.0f, s.motion_smoothing_spring_frequency);
-            result.lerp_rate        = 0.0f;
-            break;
-        case TransformSmoothingMethod::None:
-        default:
-            result.method = TransformSmoothingMethod::None;
-            result.lerp_rate = result.spring_frequency = 0.0f;
-            break;
+void Assets::update_motion_smoothing_settings(const camera_grid::RealismSettings&) {
+    TransformSmoothingParams disabled{};
+    disabled = sanitize_smoothing(disabled);
+
+    transform_smoothing::set_camera_center_params(disabled);
+    transform_smoothing::set_camera_zoom_params(disabled);
+    transform_smoothing::set_asset_translation_params(disabled);
+    transform_smoothing::set_asset_scale_params(disabled);
+    transform_smoothing::set_asset_alpha_params(disabled);
+
+    for (Asset* asset : all) {
+        if (!asset) {
+            continue;
         }
-        result.max_step       = std::max(0.0f, s.motion_smoothing_max_step);
-        result.snap_threshold = std::max(0.0f, s.motion_smoothing_snap_threshold);
-        return sanitize_smoothing(result);
-    };
-
-    TransformSmoothingParams desired_motion = build_translation_params(settings);
-    const bool smoothing_enabled = settings.smooth_motion_zoom &&
-        desired_motion.method != TransformSmoothingMethod::None;
-
-    auto params_equal = [](const TransformSmoothingParams& a, const TransformSmoothingParams& b) {
-        constexpr float kEpsilon = 1e-4f;
-        auto close = [kEpsilon](float x, float y) {
-            return std::fabs(x - y) <= kEpsilon;
-        };
-        return a.method == b.method &&
-            close(a.lerp_rate, b.lerp_rate) &&
-            close(a.spring_frequency, b.spring_frequency) &&
-            close(a.max_step, b.max_step) &&
-            close(a.snap_threshold, b.snap_threshold);
-    };
-
-    if (!smoothing_cache_initialized_) {
-        cached_enabled_translation_params_ = sanitize_smoothing(transform_smoothing::asset_translation_params());
-        cached_enabled_scale_params_       = sanitize_smoothing(transform_smoothing::asset_scale_params());
-        cached_enabled_alpha_params_       = sanitize_smoothing(transform_smoothing::asset_alpha_params());
-        last_camera_motion_params_         = sanitize_smoothing(transform_smoothing::camera_center_params());
-        last_asset_translation_params_     = cached_enabled_translation_params_;
-        last_asset_scale_params_           = cached_enabled_scale_params_;
-        last_asset_alpha_params_           = cached_enabled_alpha_params_;
-        smoothing_cache_initialized_       = true;
-    }
-
-    if (smoothing_enabled) {
-        cached_enabled_translation_params_ = desired_motion;
-        if (cached_enabled_scale_params_.method == TransformSmoothingMethod::None) {
-            cached_enabled_scale_params_ = sanitize_smoothing(transform_smoothing::asset_scale_params());
-        }
-        if (cached_enabled_alpha_params_.method == TransformSmoothingMethod::None) {
-            cached_enabled_alpha_params_ = sanitize_smoothing(transform_smoothing::asset_alpha_params());
-        }
-    } else {
-        cached_enabled_translation_params_ = desired_motion;
-    }
-
-    TransformSmoothingParams translation_to_apply = smoothing_enabled
-        ? cached_enabled_translation_params_
-        : TransformSmoothingParams{};
-    TransformSmoothingParams scale_to_apply = smoothing_enabled
-        ? cached_enabled_scale_params_
-        : TransformSmoothingParams{};
-    TransformSmoothingParams alpha_to_apply = smoothing_enabled
-        ? cached_enabled_alpha_params_
-        : TransformSmoothingParams{};
-
-    if (!smoothing_enabled) {
-        translation_to_apply.method = TransformSmoothingMethod::None;
-        translation_to_apply.lerp_rate = translation_to_apply.spring_frequency = 0.0f;
-        translation_to_apply.max_step = translation_to_apply.snap_threshold = 0.0f;
-        scale_to_apply.method = TransformSmoothingMethod::None;
-        scale_to_apply.lerp_rate = scale_to_apply.spring_frequency = 0.0f;
-        scale_to_apply.max_step = scale_to_apply.snap_threshold = 0.0f;
-        alpha_to_apply.method = TransformSmoothingMethod::None;
-        alpha_to_apply.lerp_rate = alpha_to_apply.spring_frequency = 0.0f;
-        alpha_to_apply.max_step = alpha_to_apply.snap_threshold = 0.0f;
-    }
-
-    translation_to_apply = sanitize_smoothing(translation_to_apply);
-    scale_to_apply       = sanitize_smoothing(scale_to_apply);
-    alpha_to_apply       = sanitize_smoothing(alpha_to_apply);
-
-    const bool motion_changed       = !params_equal(desired_motion, last_camera_motion_params_);
-    const bool translation_changed  = !params_equal(translation_to_apply, last_asset_translation_params_);
-    const bool scale_changed        = !params_equal(scale_to_apply, last_asset_scale_params_);
-    const bool alpha_changed        = !params_equal(alpha_to_apply, last_asset_alpha_params_);
-
-    if (motion_changed) {
-        transform_smoothing::set_camera_center_params(desired_motion);
-        transform_smoothing::set_camera_zoom_params(desired_motion);
-        last_camera_motion_params_ = desired_motion;
-    }
-    if (translation_changed) {
-        transform_smoothing::set_asset_translation_params(translation_to_apply);
-        last_asset_translation_params_ = translation_to_apply;
-        if (smoothing_enabled) {
-            cached_enabled_translation_params_ = translation_to_apply;
-        }
-    }
-    if (scale_changed) {
-        transform_smoothing::set_asset_scale_params(scale_to_apply);
-        last_asset_scale_params_ = scale_to_apply;
-        if (smoothing_enabled) {
-            cached_enabled_scale_params_ = scale_to_apply;
-        }
-    }
-    if (alpha_changed) {
-        transform_smoothing::set_asset_alpha_params(alpha_to_apply);
-        last_asset_alpha_params_ = alpha_to_apply;
-        if (smoothing_enabled) {
-            cached_enabled_alpha_params_ = alpha_to_apply;
-        }
-    }
-
-    if (motion_changed || translation_changed || scale_changed || alpha_changed) {
-        for (Asset* asset : all) {
-            if (!asset) {
-                continue;
-            }
-            asset->set_smoothing_params(translation_to_apply, scale_to_apply, alpha_to_apply);
-        }
+        asset->set_smoothing_params(disabled, disabled, disabled);
     }
 }
 
@@ -722,13 +617,19 @@ void Assets::refresh_filtered_active_assets() {
 }
 
 void Assets::update_filtered_active_assets() {
+    const std::uint64_t previous_hash = filtered_active_assets_hash_;
+
     if (dev_controls_ && dev_controls_->is_enabled()) {
         filtered_active_assets = active_assets;
         dev_controls_->filter_active_assets(filtered_active_assets);
-        return;
+    } else {
+        filtered_active_assets.clear();
     }
 
-    filtered_active_assets.clear();
+    filtered_active_assets_hash_ = hash_active_asset_list(filtered_active_assets);
+    if (filtered_active_assets_hash_ != previous_hash) {
+        touch_dev_active_state_version();
+    }
 }
 
 void Assets::reset_dev_controls_current_room_cache() {
@@ -794,7 +695,7 @@ void Assets::ensure_dev_controls() {
         dev_mode_trace("[Assets] Dev Controls -> set_player");
         dev_controls_->set_player(player);
         dev_mode_trace("[Assets] Dev Controls -> set_active_assets");
-        dev_controls_->set_active_assets(filtered_active_assets);
+        dev_controls_->set_active_assets(filtered_active_assets, dev_active_state_version_);
         dev_mode_trace("[Assets] Dev Controls -> sync_current_room");
         sync_dev_controls_current_room(current_room_, true);
         dev_mode_trace("[Assets] Dev Controls -> set_screen_dimensions");
@@ -844,7 +745,7 @@ void Assets::set_input(Input* m) {
         dev_controls_->set_input(m);
         if (dev_controls_->is_enabled()) {
             dev_controls_->set_player(player);
-            dev_controls_->set_active_assets(filtered_active_assets);
+            dev_controls_->set_active_assets(filtered_active_assets, dev_active_state_version_);
             sync_dev_controls_current_room(current_room_);
             dev_controls_->set_screen_dimensions(screen_width, screen_height);
             dev_controls_->set_rooms(&rooms_, rooms_generation_);
@@ -902,7 +803,7 @@ void Assets::update(const Input& input)
         rebuild_active_assets_if_needed();
         update_filtered_active_assets();
         if (dev_controls_ && dev_controls_->is_enabled()) {
-            dev_controls_->set_active_assets(filtered_active_assets);
+            dev_controls_->set_active_assets(filtered_active_assets, dev_active_state_version_);
         }
     }
 
@@ -981,6 +882,7 @@ void Assets::update(const Input& input)
         // Clear any auxiliary buffers related to grid updates/registration
         moving_assets_for_grid_.clear();
         grid_registration_buffer_.clear();
+        touch_dev_active_state_version();
     }
 
     const bool zoom_animation_active = camera_.is_zooming();
@@ -1034,7 +936,7 @@ void Assets::update(const Input& input)
     // state so overlays/highlights render correctly.
     update_filtered_active_assets();
     if (dev_controls_ && dev_controls_->is_enabled()) {
-        dev_controls_->set_active_assets(filtered_active_assets);
+        dev_controls_->set_active_assets(filtered_active_assets, dev_active_state_version_);
         sync_dev_controls_current_room(current_room_);
         dev_controls_->update(input);
         // Update dev-mode UI panels (e.g., asset library, camera panel) after world state
@@ -1049,7 +951,7 @@ void Assets::update(const Input& input)
         rebuild_active_assets_if_needed();
         update_filtered_active_assets();
         if (dev_controls_ && dev_controls_->is_enabled()) {
-            dev_controls_->set_active_assets(filtered_active_assets);
+            dev_controls_->set_active_assets(filtered_active_assets, dev_active_state_version_);
         }
     }
 
@@ -1308,6 +1210,13 @@ void Assets::initialize_active_assets(SDL_Point /*center*/) {
     active_moving_light_assets_ = std::move(new_moving_lights);
     active_assets_dirty_.store(false, std::memory_order_release);
     mark_non_player_update_buffer_dirty();
+}
+
+void Assets::touch_dev_active_state_version() {
+    ++dev_active_state_version_;
+    if (dev_active_state_version_ == 0) {
+        ++dev_active_state_version_;
+    }
 }
 
 void Assets::mark_active_assets_dirty() {

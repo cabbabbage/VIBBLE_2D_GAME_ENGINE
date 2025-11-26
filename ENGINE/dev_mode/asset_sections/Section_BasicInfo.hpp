@@ -265,7 +265,7 @@ inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
         SDL_Point{target->pos.x, target->pos.y},
         base_sh,
         reference_screen_height <= 0.0f ? 1.0f : reference_screen_height,
-                                                    reinterpret_cast<camera_grid::RenderSmoothingKey>(target));
+        camera_grid::RenderSmoothingKey(target));
 
     float scaled_sw = base_sw * effects.distance_scale;
     float scaled_sh = base_sh * effects.distance_scale;

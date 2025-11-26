@@ -7,7 +7,7 @@
             "map_assets": true,
             "methods": {
                 "center": true,
-                "childrandom": true,
+                "childrandom": false,
                 "edge": true,
                 "exact": true,
                 "exact_position": false,
@@ -23,14 +23,14 @@
                 "npc": false,
                 "object": true,
                 "player": true,
-                "texture": true
+                "texture": false
             }
         },
         "grid": {
-            "cell_size_px": 128.0,
+            "cell_size_px": 32.0,
             "overlay": {
                 "enabled": true,
-                "r": 7.0
+                "r": 5.0
             },
             "snap": {
                 "enabled": false
@@ -40,7 +40,7 @@
     "dev_ui": {
         "camera": {
             "background_texture_max_opacity": 0.0,
-            "depthcue_enabled": true,
+            "depthcue_enabled": false,
             "foreground_texture_max_opacity": 0.0
         },
         "lighting": {
@@ -112,17 +112,17 @@
             "camera": {
                 "center": {
                     "lerp_rate": 0.0,
-                    "max_step": 300.0,
-                    "method": 2.0,
-                    "snap_threshold": 0.25,
-                    "spring_frequency": 5.0
+                    "max_step": 0.0,
+                    "method": 0.0,
+                    "snap_threshold": 0.0,
+                    "spring_frequency": 0.0
                 },
                 "zoom": {
                     "lerp_rate": 0.0,
-                    "max_step": 300.0,
-                    "method": 2.0,
-                    "snap_threshold": 0.25,
-                    "spring_frequency": 5.0
+                    "max_step": 0.0,
+                    "method": 0.0,
+                    "snap_threshold": 0.0,
+                    "spring_frequency": 0.0
                 }
             }
         }

@@ -71,7 +71,8 @@ void grid_camera::rebuild_grid(camera_grid& camera, world::Grid& world_grid, flo
         const auto effects = camera.compute_render_effects(
             world_pos,
             0.0f,
-            settings.base_height_px);
+            settings.base_height_px,
+            camera_grid::RenderSmoothingKey(a));
 
         float base_scale = a->smoothed_scale();
         if (!std::isfinite(base_scale) || base_scale <= 0.0f) {

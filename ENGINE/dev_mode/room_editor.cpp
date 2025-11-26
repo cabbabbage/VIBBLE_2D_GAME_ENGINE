@@ -656,10 +656,14 @@ void RoomEditor::set_player(Asset* player) {
     mark_spatial_index_dirty();
 }
 
-void RoomEditor::set_active_assets(std::vector<Asset*>& actives) {
+void RoomEditor::set_active_assets(std::vector<Asset*>& actives, std::uint64_t generation) {
+    const bool pointer_changed = active_assets_ != &actives;
     active_assets_ = &actives;
-    mark_highlight_dirty();
-    mark_spatial_index_dirty();
+    if (pointer_changed || active_assets_version_ != generation) {
+        active_assets_version_ = generation;
+        mark_highlight_dirty();
+        mark_spatial_index_dirty();
+    }
 }
 
 void RoomEditor::set_screen_dimensions(int width, int height) {
@@ -2370,8 +2374,8 @@ void RoomEditor::handle_mouse_input(const Input& input) {
             was_dragged = true;
             dragging_ = true;
             drag_last_world_ = world_pt;
-            const bool shift_modifier = input.isScancodeDown(SDL_SCANCODE_LSHIFT) || input.isScancodeDown(SDL_SCANCODE_RSHIFT);
-            begin_drag_session(world_pt, shift_modifier);
+            const bool ctrl_modifier = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
+            begin_drag_session(world_pt, ctrl_modifier);
         }
 
         if (was_dragged && dragging_) {
@@ -2632,7 +2636,7 @@ bool RoomEditor::compute_asset_screen_bounds(const camera_grid& cam,
             SDL_Point{ static_cast<int>(std::lround(world_x)), static_cast<int>(std::lround(world_y)) },
             base_sh,
             reference_height,
-            reinterpret_cast<camera_grid::RenderSmoothingKey>(asset));
+            camera_grid::RenderSmoothingKey(asset));
 
     const float scaled_sw = base_sw * effects.distance_scale;
     const float scaled_sh = base_sh * effects.distance_scale;
@@ -2773,6 +2777,30 @@ void RoomEditor::refresh_spatial_entries_for_dragged_assets() {
     for (const auto& state : drag_states_) {
         if (!state.asset) continue;
         refresh_asset_spatial_entry(cam, state.asset);
+    }
+}
+
+void RoomEditor::sync_dragged_assets_immediately() {
+    bool moved_any = false;
+    for (auto& state : drag_states_) {
+        Asset* asset = state.asset;
+        if (!asset) {
+            continue;
+        }
+        SDL_Point current{asset->pos.x, asset->pos.y};
+        if (current.x == state.last_synced_pos.x && current.y == state.last_synced_pos.y) {
+            continue;
+        }
+        asset->clear_grid_residency_cache();
+        asset->sync_transform_to_position();
+        if (assets_) {
+            (void)assets_->world_grid().move_asset(asset, state.last_synced_pos, current);
+        }
+        state.last_synced_pos = current;
+        moved_any = true;
+    }
+    if (moved_any && assets_) {
+        assets_->mark_active_assets_dirty();
     }
 }
 
@@ -3666,7 +3694,7 @@ void RoomEditor::handle_delete_shortcut(const Input& input) {
     }
 }
 
-void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool shift_modifier) {
+void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modifier) {
     // If primary selection belongs to a locked group, do not start drag
     if (!selected_assets_.empty()) {
         Asset* primary = selected_assets_.front();
@@ -3707,12 +3735,10 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool shift_mod
     MapGridSettings map_settings = current_room_ ? current_room_->map_grid_settings() : MapGridSettings::defaults();
     map_settings.clamp();
     drag_resolution_ = vibble::grid::clamp_resolution(map_settings.resolution);
-    nlohmann::json* spawn_entry = nullptr;
-    if (!drag_spawn_id_.empty()) {
-        spawn_entry = find_spawn_entry(drag_spawn_id_);
-        if (spawn_entry && drag_mode_ != DragMode::Exact) {
-            drag_resolution_ = vibble::grid::clamp_resolution(spawn_entry->value("resolution", drag_resolution_));
-        }
+    SpawnEntryResolution resolved_entry = drag_spawn_id_.empty() ? SpawnEntryResolution{} : locate_spawn_entry(drag_spawn_id_);
+    nlohmann::json* spawn_entry = resolved_entry.entry;
+    if (spawn_entry && drag_mode_ != DragMode::Exact) {
+        drag_resolution_ = vibble::grid::clamp_resolution(spawn_entry->value("resolution", drag_resolution_));
     }
 
     const std::string& method = primary->spawn_method;
@@ -3721,14 +3747,13 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool shift_mod
     } else if (method == "Percent") {
         drag_mode_ = DragMode::Percent;
     } else if (method == "Perimeter") {
-        drag_mode_ = shift_modifier ? DragMode::PerimeterCenter : DragMode::Perimeter;
+        // Ctrl toggles center-drag vs radius-resize while in Shift+drag edit mode.
+        drag_mode_ = ctrl_modifier ? DragMode::PerimeterCenter : DragMode::Perimeter;
     } else if (method == "Edge") {
         drag_mode_ = DragMode::Edge;
     } else if (method == "Random") {
-        drag_mode_ = DragMode::None;
-        dragging_ = false;
-        drag_states_.clear();
-        return;
+        // Allow freeform translation for random spawns so users can position the group anchor.
+        drag_mode_ = DragMode::Free;
     } else {
         drag_mode_ = DragMode::Free;
     }
@@ -3835,6 +3860,7 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool shift_mod
         DraggedAssetState state;
         state.asset = asset;
         state.start_pos = asset->pos;
+        state.last_synced_pos = asset->pos;
         state.active = true;
         if (drag_mode_ == DragMode::Perimeter) {
             double dx = static_cast<double>(asset->pos.x - drag_perimeter_circle_center_.x);
@@ -3879,6 +3905,7 @@ void RoomEditor::update_drag_session(const SDL_Point& world_mouse) {
 
     // Helper to invalidate caches for all dragged assets
     auto invalidate_after_move = [this]() {
+        sync_dragged_assets_immediately();
         for (auto& st : drag_states_) {
             if (st.asset) {
                 auto it = asset_bounds_cache_.find(st.asset);
@@ -3913,7 +3940,7 @@ void RoomEditor::update_drag_session(const SDL_Point& world_mouse) {
     }
 
     // Standard translate drag
-    SDL_Point delta{world_mouse.x - drag_last_world_.x, world_mouse.y - drag_last_world_.y};
+    SDL_Point delta{world_mouse.x - drag_last_world_.x, drag_last_world_.y - world_mouse.y};
     const bool anchor_should_follow_pointer =
         (drag_mode_ == DragMode::Exact || drag_mode_ == DragMode::Percent);
     if (anchor_should_follow_pointer) {
@@ -3925,7 +3952,7 @@ void RoomEditor::update_drag_session(const SDL_Point& world_mouse) {
             vibble::grid::Grid& grid_service = vibble::grid::global_grid();
             SDL_Point snapped_pointer = grid_service.snap_to_vertex(world_mouse, drag_resolution_);
             delta.x = snapped_pointer.x - anchor_asset->pos.x;
-            delta.y = snapped_pointer.y - anchor_asset->pos.y;
+            delta.y = anchor_asset->pos.y - snapped_pointer.y;
         }
     }
 
@@ -4185,7 +4212,8 @@ void RoomEditor::update_spawn_json_during_drag() {
     }
 
     // Find the spawn entry
-    nlohmann::json* entry = find_spawn_entry(drag_spawn_id_);
+    SpawnEntryResolution resolved = locate_spawn_entry(drag_spawn_id_);
+    nlohmann::json* entry = resolved.entry;
     if (!entry) {
         return;
     }
@@ -4279,6 +4307,7 @@ bool RoomEditor::snap_dragged_assets_to_grid() {
 
     if (changed) {
         drag_moved_ = true;
+        sync_dragged_assets_immediately();
     }
     return changed;
 }
@@ -4307,7 +4336,9 @@ void RoomEditor::finalize_drag_session() {
     auto [width, height] = get_room_dimensions();
 
     if (!drag_spawn_id_.empty()) {
-        if (nlohmann::json* entry = find_spawn_entry(drag_spawn_id_)) {
+        SpawnEntryResolution resolved = locate_spawn_entry(drag_spawn_id_);
+        nlohmann::json* entry = resolved.entry;
+        if (entry) {
             bool request_respawn = false;
             switch (drag_mode_) {
                 case DragMode::Exact:
@@ -4370,16 +4401,24 @@ void RoomEditor::finalize_drag_session() {
                     json_modified = true;
                 }
             }
-            if (request_respawn) {
-                // Persist first so the respawn uses current values
-                save_current_room_assets_json();
-                respawn_spawn_group(*entry);
+
+            if (json_modified) {
+                if (resolved.source == SpawnEntryResolution::Source::Room) {
+                    save_current_room_assets_json();
+                    if (request_respawn) {
+                        respawn_spawn_group(*entry);
+                    }
+                } else if (resolved.source == SpawnEntryResolution::Source::Map) {
+                    if (assets_) {
+                        assets_->persist_map_info_json();
+                        assets_->notify_spawn_group_config_changed(*entry);
+                    }
+                }
             }
         }
     }
 
     if (json_modified) {
-        save_current_room_assets_json();
         if (!drag_spawn_id_.empty()) {
             active_spawn_group_id_ = drag_spawn_id_;
         }

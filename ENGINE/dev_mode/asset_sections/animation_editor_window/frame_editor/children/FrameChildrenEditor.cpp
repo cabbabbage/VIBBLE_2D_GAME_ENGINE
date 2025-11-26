@@ -393,7 +393,7 @@ void FrameChildrenEditor::reload_from_document() {
                             child.dx = static_cast<float>(child_entry.value("dx", 0.0));
                             child.dy = static_cast<float>(child_entry.value("dy", 0.0));
                             child.rotation = static_cast<float>(child_entry.value("rotation", 0.0));
-                            child.visible = child_entry.value("visible", false);
+                            child.visible = child_entry.value("visible", true);
                             child.render_in_front = child_entry.value("render_in_front", true);
                         } else if (child_entry.is_array()) {
                             try { child.child_index = child_entry[0].get<int>(); } catch (...) { child.child_index = -1; }
@@ -407,7 +407,7 @@ void FrameChildrenEditor::reload_from_document() {
                                 child.rotation = static_cast<float>(child_entry[3].get<double>());
                             }
                             if (child_entry.size() > 4) {
-                                child.visible = is_true(child_entry[4], false);
+                                child.visible = is_true(child_entry[4], true);
                             }
                             if (child_entry.size() > 5) {
                                 child.render_in_front = is_true(child_entry[5], true);
@@ -539,7 +539,14 @@ void FrameChildrenEditor::persist_changes() {
             payload = parsed;
         }
     }
-    payload.erase("children");
+    if (document_) {
+        document_->replace_animation_children(child_ids_);
+        if (child_ids_.empty()) {
+            payload.erase("children");
+        } else {
+            payload["children"] = child_ids_;
+        }
+    }
 
     nlohmann::json movement_json = nlohmann::json::array();
     for (std::size_t i = 0; i < frames_.size(); ++i) {

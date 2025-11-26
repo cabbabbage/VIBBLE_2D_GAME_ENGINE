@@ -16,7 +16,6 @@ constexpr double HALF_FOV_Y = PI_D / 4.0; // 45 deg half FOV (90 total)
 constexpr double RAD_TO_DEG = 180.0 / PI_D;
 constexpr float  kDefaultPitchDegrees   = 60.0f;
 constexpr float  kMaxForeshortenSliderStrength = 2.0f;
-constexpr float  kMaxDistanceSliderStrength = 1.0f;
 constexpr float  kFixedDepthOffsetPx    = 4000.0f;
 constexpr double kMinZoomRange = 1e-4;
 

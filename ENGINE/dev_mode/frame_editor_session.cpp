@@ -307,7 +307,7 @@ SDL_FRect child_preview_rect(Assets* assets,
         static_cast<int>(std::lround(child_world.y))
     };
     const camera_grid::RenderSmoothingKey smoothing_key =
-        reinterpret_cast<camera_grid::RenderSmoothingKey>(parent);
+        camera_grid::RenderSmoothingKey(parent);
     camera_grid::RenderEffects ef = cam.compute_render_effects(
         world_point,
         base_sh,
@@ -4058,7 +4058,15 @@ void FrameEditorSession::persist_changes() {
         payload = nlohmann::json::parse(*j, nullptr, false);
         if (!payload.is_object()) payload = nlohmann::json::object();
     }
-    payload.erase("children");
+    // Keep the animation children list in sync with the document so runtimes know which assets to bind.
+    if (document_) {
+        document_->replace_animation_children(child_assets_);
+        if (child_assets_.empty()) {
+            payload.erase("children");
+        } else {
+            payload["children"] = child_assets_;
+        }
+    }
     nlohmann::json movement = nlohmann::json::array();
     nlohmann::json hit_geometry = nlohmann::json::array();
     nlohmann::json attack_geometry = nlohmann::json::array();
@@ -4184,6 +4192,14 @@ void FrameEditorSession::persist_mode_changes(Mode mode) {
     if (auto j = document_->animation_payload(animation_id_)) {
         payload = nlohmann::json::parse(*j, nullptr, false);
         if (!payload.is_object()) payload = nlohmann::json::object();
+    }
+    if (document_) {
+        document_->replace_animation_children(child_assets_);
+        if (child_assets_.empty()) {
+            payload.erase("children");
+        } else {
+            payload["children"] = child_assets_;
+        }
     }
 
     auto build_movement_json = [&]() -> nlohmann::json {

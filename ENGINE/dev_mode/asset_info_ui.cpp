@@ -750,7 +750,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                 const float base_sh = static_cast<float>(fh) * base_scale * inv_scale;
 
                 const float ref_sh = compute_player_screen_height(cam);
-                const camera_grid::RenderSmoothingKey smoothing_key = reinterpret_cast<camera_grid::RenderSmoothingKey>(target_asset_);
+                const camera_grid::RenderSmoothingKey smoothing_key = camera_grid::RenderSmoothingKey(target_asset_);
                 camera_grid::RenderEffects ef = cam.compute_render_effects(
                     SDL_Point{ target_asset_->pos.x, target_asset_->pos.y },
                     base_sh,
@@ -1224,7 +1224,7 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera_grid& cam) 
             const float base_sh = static_cast<float>(fh) * base_scale * inv_scale;
 
             const float ref_sh = compute_player_screen_height(cam);
-            const camera_grid::RenderSmoothingKey smoothing_key = reinterpret_cast<camera_grid::RenderSmoothingKey>(target_asset_);
+            const camera_grid::RenderSmoothingKey smoothing_key = camera_grid::RenderSmoothingKey(target_asset_);
             camera_grid::RenderEffects ef = cam.compute_render_effects(
                 SDL_Point{ target_asset_->pos.x, target_asset_->pos.y },
                 base_sh,

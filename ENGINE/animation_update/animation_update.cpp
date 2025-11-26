@@ -151,38 +151,10 @@ SDL_Point bottom_middle_for(const Asset& asset, SDL_Point pos) {
 SDL_Point frame_world_delta(const AnimationFrame& frame,
                             const Asset&          asset,
                             const vibble::grid::Grid& grid) {
-    // Interpret frame dx/dy primarily as world-space pixel deltas.
-    // Only snap to grid when the delta is aligned to the grid step, to avoid
-    // rounding small movements to zero at higher grid resolutions.
-    int resolution = vibble::grid::clamp_resolution(asset.grid_resolution);
-    try {
-        if (asset.info && asset_types::canonicalize(asset.info->type) == asset_types::player) {
-            resolution = 0; // player always moves pixel-by-pixel
-        }
-    } catch (...) {
-        // if anything goes wrong, just use the clamped asset value
-    }
-    if (resolution <= 0) {
-        return SDL_Point{ frame.dx, frame.dy };
-    }
-
-    const int step = vibble::grid::delta(resolution);
-    if (step <= 1) {
-        return SDL_Point{ frame.dx, frame.dy };
-    }
-
-    const bool aligned_x = vibble::grid::is_multiple_of_delta(frame.dx, resolution);
-    const bool aligned_y = vibble::grid::is_multiple_of_delta(frame.dy, resolution);
-    if (!aligned_x || !aligned_y) {
-        // Keep sub-grid motion as-is in world space
-        return SDL_Point{ frame.dx, frame.dy };
-    }
-
-    // Delta is aligned with the grid; convert via indices to preserve exact steps
-    SDL_Point indices    = grid.convert_resolution(SDL_Point{ frame.dx, frame.dy }, 0, resolution);
-    const SDL_Point origin = grid.index_to_world(SDL_Point{ 0, 0 }, resolution);
-    const SDL_Point target = grid.index_to_world(indices, resolution);
-    return SDL_Point{ target.x - origin.x, target.y - origin.y };
+    (void)asset;
+    (void)grid;
+    // Treat animation frame deltas as pixel-precise world offsets to avoid grid snapping.
+    return SDL_Point{ frame.dx, frame.dy };
 }
 
 bool bottom_point_inside_playable_area(const Assets* assets, SDL_Point bottom_point) {
@@ -373,11 +345,7 @@ vibble::grid::Grid& AnimationUpdate::grid() const {
 }
 
 int AnimationUpdate::effective_grid_resolution(std::optional<int> override_resolution) const {
-    if (override_resolution.has_value()) {
-        return vibble::grid::clamp_resolution(*override_resolution);
-    }
-    if (self_) {
-        return vibble::grid::clamp_resolution(self_->grid_resolution);
-    }
+    (void)override_resolution;
+    // Force pixel-level precision for all animation updates.
     return 0;
 }

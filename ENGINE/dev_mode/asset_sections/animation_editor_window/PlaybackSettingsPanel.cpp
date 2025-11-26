@@ -418,9 +418,20 @@ void PlaybackSettingsPanel::apply_state_to_controls(const PlaybackState& state) 
         }
     }
     if (fps_dropdown_) {
-        int idx = 0;
+        int idx = 1; // Default to 24 fps if no exact match found
+        int min_diff = std::abs(kFpsOptions[1] - state.fps);
+        
+        // Find exact match or closest value
         for (size_t i = 0; i < kFpsOptions.size(); ++i) {
-            if (kFpsOptions[i] == state.fps) { idx = static_cast<int>(i); break; }
+            if (kFpsOptions[i] == state.fps) {
+                idx = static_cast<int>(i);
+                break;
+            }
+            int diff = std::abs(kFpsOptions[i] - state.fps);
+            if (diff < min_diff) {
+                min_diff = diff;
+                idx = static_cast<int>(i);
+            }
         }
         fps_dropdown_->set_selected(idx);
     }

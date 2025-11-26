@@ -2,7 +2,10 @@
 
 #include "animation_update/animation_update.hpp"
 #include "asset/Asset.hpp"
+#include "core/AssetsManager.hpp"
 #include "utils/input.hpp"
+#include <algorithm>
+#include <cmath>
 
 VibbleController::VibbleController(Asset* player)
     : player_(player) {}
@@ -13,6 +16,8 @@ int VibbleController::get_dy() const { return dy_; }
 void VibbleController::movement(const Input& input) {
     dx_ = dy_ = 0;
     if (!player_ || !player_->anim_) return;
+
+    const float dt = frame_dt();
 
     const bool up    = input.isScancodeDown(SDL_SCANCODE_W) || input.isScancodeDown(SDL_SCANCODE_UP);
     const bool down  = input.isScancodeDown(SDL_SCANCODE_S) || input.isScancodeDown(SDL_SCANCODE_DOWN);
@@ -25,11 +30,13 @@ void VibbleController::movement(const Input& input) {
     const int raw_y = (up    ? 1 : 0) - (down  ? 1 : 0);
 
     if (raw_x == 0 && raw_y == 0) {
+        subpixel_x_ = 0.0f;
+        subpixel_y_ = 0.0f;
         player_->anim_->move(SDL_Point{ 0, 0 }, animation_update::detail::kDefaultAnimation);
         return;
     }
 
-    const int stride_count = sprint ? kSprintMultiplier : 1;
+    const float stride_count = sprint ? kSprintMultiplier : 1.0f;
 
     if(dash && canDash == true) {
         Dash();
@@ -41,13 +48,45 @@ void VibbleController::movement(const Input& input) {
         speedMultiplier *= dashingPower;
     }
 
-    dx_ = raw_x * speedMultiplier * stride_count;
-    dy_ = raw_y * speedMultiplier * stride_count;
+    const float velocity_x = static_cast<float>(raw_x) * speedMultiplier * stride_count;
+    const float velocity_y = static_cast<float>(raw_y) * speedMultiplier * stride_count;
 
-    const std::string animation_id = animation_for_direction(raw_x, raw_y);
+    // Accumulate subpixel movement so rounding does not drop motion on uneven frame times
+    subpixel_x_ += velocity_x * dt;
+    subpixel_y_ += velocity_y * dt;
+
+    dx_ = static_cast<int>(std::round(subpixel_x_));
+    dy_ = static_cast<int>(std::round(subpixel_y_));
+
+    subpixel_x_ -= static_cast<float>(dx_);
+    subpixel_y_ -= static_cast<float>(dy_);
+
+    std::string animation_id = animation_for_direction(raw_x, raw_y);
+    if (isDashing && player_->info) {
+        // Prefer a dash animation if available while dashing
+        const auto& animations = player_->info->animations;
+        if (animations.find("dash") != animations.end()) {
+            animation_id = "dash";
+        }
+    }
 
     player_->anim_->move(SDL_Point{ dx_, dy_ }, animation_id);
 
+}
+
+float VibbleController::frame_dt() const {
+    constexpr float kFallbackDt = 1.0f / 60.0f;
+    if (!player_) {
+        return kFallbackDt;
+    }
+    if (Assets* assets = player_->get_assets()) {
+        const float dt = assets->frame_delta_seconds();
+        if (std::isfinite(dt) && dt > 0.0f) {
+            // Clamp extreme spikes so we do not teleport on long frames
+            return std::min(dt, 0.1f);
+        }
+    }
+    return kFallbackDt;
 }
 
 void VibbleController::update(const Input& input) {
@@ -89,7 +128,6 @@ std::string VibbleController::animation_for_direction(int raw_x, int raw_y) cons
     const std::string backward_anim  = "backward";
     const std::string left_anim      = "left";
     const std::string right_anim     = "right";
-    const std::string dash_anim      = "dash";
 
     if (sign_x != 0 && sign_y != 0) {
         const std::string vertical_choice = (sign_y < 0) ? backward_anim : forward_anim;
@@ -132,5 +170,5 @@ void VibbleController::Dash() {
     dashEndTime = std::chrono::steady_clock::now() + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
         std::chrono::duration<float>(dashingTime)
     ); // Ending dash within update and setting the bools back
-    };
+}
 

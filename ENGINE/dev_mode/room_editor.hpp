@@ -47,7 +47,7 @@ public:
 
     void set_input(Input* input);
     void set_player(Asset* player);
-    void set_active_assets(std::vector<Asset*>& actives);
+    void set_active_assets(std::vector<Asset*>& actives, std::uint64_t generation);
     void set_screen_dimensions(int width, int height);
     void set_current_room(Room* room);
     void set_room_config_visible(bool visible);
@@ -156,6 +156,7 @@ private:
     struct DraggedAssetState {
         Asset*     asset     = nullptr;
         SDL_Point  start_pos {0, 0};
+        SDL_Point  last_synced_pos {0, 0};
         SDL_FPoint direction {0.0f, 0.0f};
         bool       active    = false;
         double     edge_length = 0.0;
@@ -178,6 +179,7 @@ private:
     void apply_perimeter_drag(const SDL_Point& world_mouse);
     void apply_edge_drag(const SDL_Point& world_mouse);
     bool snap_dragged_assets_to_grid();
+    void sync_dragged_assets_immediately();
     void update_spawn_json_during_drag();
     void finalize_drag_session();
     void reset_drag_state();
@@ -284,6 +286,7 @@ private:
     Assets* assets_ = nullptr;
     Input* input_ = nullptr;
     std::vector<Asset*>* active_assets_ = nullptr;
+    std::uint64_t active_assets_version_ = 0;
     Asset* player_ = nullptr;
     Room* current_room_ = nullptr;
 

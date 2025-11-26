@@ -34,6 +34,7 @@ using camera = camera_grid;
 class LightSource;
 namespace world { class Chunk; }
 namespace world { class Grid; }
+namespace world { struct GridPoint; }
 namespace runtime_lighting { struct AssetLight; }
 
 
@@ -434,6 +435,14 @@ private:
     std::size_t             grid_slice_index_capacity_hint_  = 0;
     std::uint64_t           grid_slice_draw_calls_saved_accum_ = 0;
     std::uint64_t           grid_slice_batches_accum_         = 0;
+    struct ActiveAssetInfo {
+        Asset*              asset       = nullptr;
+        world::GridPoint*   grid_point  = nullptr;
+        float               screen_y    = 0.0f;
+        int                 z_index     = 0;
+    };
+    std::vector<ActiveAssetInfo> active_asset_infos_;
+    std::vector<Asset*>          active_asset_order_;
     SDL_Texture* darkness_overlay_texture_ = nullptr;
     int          darkness_overlay_width_   = 0;
     int          darkness_overlay_height_  = 0;
