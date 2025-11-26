@@ -447,280 +447,23 @@ void AnimationLoader::load(Animation& animation,
                 if (it != info.animations.end()) {
                         const Animation& src_anim = it->second;
                         if (!src_anim.frames.empty()) {
-                                // Inherit frame locking and playback FPS from source animation
-                                animation.locked = src_anim.locked;
-                                animation.playback_fps = src_anim.playback_fps;
+                                // Use copy constructor to create derived animation with all modifiers applied
                                 reused_animation = true;
-                                // Normalize variant count for derived cloning; mirror non-derived path behavior
-                                std::size_t variant_count = initial_variant_count;
-                                if (variant_count == 0) {
-                                        // Ensure at least one variant; update steps and info to stay consistent
-                                        animation.variant_steps_.push_back(1.0f);
-                                        variant_count = 1;
-                                        info.scale_variants = animation.variant_steps_;
+                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                          << " copying from source animation '" << animation.source.name << "'"
+                                          << " (flipH=" << animation.flipped_source
+                                          << ", flipV=" << animation.flip_vertical_source
+                                          << ", reverse=" << animation.reverse_source << ")\n";
+                                
+                                if (!animation.copy_from(src_anim, animation.flipped_source, animation.flip_vertical_source, animation.reverse_source, renderer, info)) {
                                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                  << " normalized zero-variant derived source to one step: "
-                                                  << format_steps(animation.variant_steps_) << "\n";
-                                }
-                                std::vector<Animation::FrameCache>   new_caches;
-                                new_caches.reserve(src_anim.frames.size());
-                                for (std::size_t frame_idx = 0; frame_idx < src_anim.frames.size(); ++frame_idx) {
-                                        Animation::FrameCache cache_entry;
-                                        cache_entry.resize(variant_count);
-                                        bool base_ok = false;
-                                        for (std::size_t variant_idx = 0; variant_idx < variant_count; ++variant_idx) {
-                                                const FrameVariant* source_variant = src_anim.get_frame(src_anim.frames[frame_idx], animation.variant_steps_[variant_idx]);
-                                                SDL_Texture* source_tex = source_variant ? source_variant->base_texture : nullptr;
-                                                if (!source_tex) {
-                                                        cache_entry.textures[variant_idx] = nullptr;
-                                                        cache_entry.widths[variant_idx]   = 0;
-                                                        cache_entry.heights[variant_idx]  = 0;
-                                                        cache_entry.mask_textures[variant_idx] = nullptr;
-                                                        cache_entry.mask_widths[variant_idx]   = 0;
-                                                        cache_entry.mask_heights[variant_idx]  = 0;
-                                                        continue;
-                                                }
-                                                Uint32 fmt = SDL_PIXELFORMAT_RGBA8888;
-                                                int access = 0;
-                                                int tex_w = 0;
-                                                int tex_h = 0;
-                                                if (SDL_QueryTexture(source_tex, &fmt, &access, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
-                                                        cache_entry.textures[variant_idx] = nullptr;
-                                                        cache_entry.widths[variant_idx]   = 0;
-                                                        cache_entry.heights[variant_idx]  = 0;
-                                                        continue;
-                                                }
-                                                SDL_Texture* dst = SDL_CreateTexture(renderer, fmt, SDL_TEXTUREACCESS_TARGET, tex_w, tex_h);
-                                                if (!dst) {
-                                                        cache_entry.textures[variant_idx] = nullptr;
-                                                        cache_entry.widths[variant_idx]   = 0;
-                                                        cache_entry.heights[variant_idx]  = 0;
-                                                        continue;
-                                                }
-                                                SDL_SetTextureBlendMode(dst, SDL_BLENDMODE_BLEND);
-                                                apply_scale_mode(dst, info);
-                                                SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
-                                                SDL_SetRenderTarget(renderer, dst);
-                                                SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-                                                SDL_RenderClear(renderer);
-                                                SDL_Rect r{0, 0, tex_w, tex_h};
-                                                SDL_RenderCopy(renderer, source_tex, nullptr, &r);
-                                                SDL_SetRenderTarget(renderer, prev_target);
-                                                cache_entry.textures[variant_idx] = dst;
-                                                cache_entry.widths[variant_idx]   = tex_w;
-                                                cache_entry.heights[variant_idx]  = tex_h;
-                                                // Do not generate foreground/background overlays at runtime.
-                                                if (variant_idx == 0) {
-                                                        base_ok = true;
-                                                }
-
-                                                SDL_Texture* source_mask = source_variant ? source_variant->shadow_mask_texture : nullptr;
-                                                SDL_Texture* mask_copy   = nullptr;
-                                                int mask_w = 0;
-                                                int mask_h = 0;
-                                                if (source_mask) {
-                                                        Uint32 mask_fmt = SDL_PIXELFORMAT_RGBA8888;
-                                                        int mask_access = 0;
-                                                        if (SDL_QueryTexture(source_mask, &mask_fmt, &mask_access, &mask_w, &mask_h) != 0 || mask_w <= 0 || mask_h <= 0) {
-                                                                mask_w = 0;
-                                                                mask_h = 0;
-                                                        } else {
-                                                                SDL_Texture* prev_target_mask = SDL_GetRenderTarget(renderer);
-                                                                mask_copy = SDL_CreateTexture(renderer, mask_fmt, SDL_TEXTUREACCESS_TARGET, mask_w, mask_h);
-                                                                if (mask_copy) {
-                                                                        SDL_SetTextureBlendMode(mask_copy, SDL_BLENDMODE_BLEND);
-                                                                        apply_scale_mode(mask_copy, info);
-                                                                        SDL_SetRenderTarget(renderer, mask_copy);
-                                                                        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-                                                                        SDL_RenderClear(renderer);
-                                                                        SDL_Rect mask_rect{0, 0, mask_w, mask_h};
-                                                                        SDL_RenderCopy(renderer, source_mask, nullptr, &mask_rect);
-                                                                        SDL_SetRenderTarget(renderer, prev_target_mask);
-                                                                } else {
-                                                                        mask_w = 0;
-                                                                        mask_h = 0;
-                                                                        SDL_SetRenderTarget(renderer, prev_target_mask);
-                                                                }
-                                                        }
-                                                }
-                                                cache_entry.mask_textures[variant_idx] = mask_copy;
-                                                if (!mask_copy) {
-                                                        mask_w = 0;
-                                                        mask_h = 0;
-                                                }
-                                                cache_entry.mask_widths[variant_idx]   = mask_w;
-                                                cache_entry.mask_heights[variant_idx]  = mask_h;
-                                        }
-                                        // Bail out cleanly if no textures were produced; avoid indexing empty containers
-                                        if (!base_ok || cache_entry.textures.empty() || !cache_entry.textures[0]) {
-                                                for (SDL_Texture*& tex : cache_entry.textures) {
-                                                        if (tex) {
-                                                                SDL_DestroyTexture(tex);
-                                                                tex = nullptr;
-                                                        }
-                                                }
-                                                for (SDL_Texture*& mask_tex : cache_entry.mask_textures) {
-                                                        if (mask_tex) {
-                                                                SDL_DestroyTexture(mask_tex);
-                                                                mask_tex = nullptr;
-                                                        }
-                                                }
-                                                for (SDL_Texture*& tex : cache_entry.foreground_textures) {
-                                                        if (tex) {
-                                                                SDL_DestroyTexture(tex);
-                                                                tex = nullptr;
-                                                        }
-                                                }
-                                                for (SDL_Texture*& tex : cache_entry.background_textures) {
-                                                        if (tex) {
-                                                                SDL_DestroyTexture(tex);
-                                                                tex = nullptr;
-                                                        }
-                                                }
-                                                for (SDL_Texture*& tex : cache_entry.depthcue_foreground_textures) {
-                                                        if (tex) {
-                                                                SDL_DestroyTexture(tex);
-                                                                tex = nullptr;
-                                                        }
-                                                }
-                                                for (SDL_Texture*& tex : cache_entry.depthcue_background_textures) {
-                                                        if (tex) {
-                                                                SDL_DestroyTexture(tex);
-                                                                tex = nullptr;
-                                                        }
-                                                }
-                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                          << " skipped cloned frame index " << frame_idx
-                                                          << " due to missing base texture\n";
-                                                continue;
-                                        }
-                                        // Defensive: ensure a texture exists before pushing
-                                        if (!cache_entry.textures.empty() && cache_entry.textures[0]) {
-                                                new_caches.push_back(std::move(cache_entry));
-                                        } else {
-                                                // Should be unreachable due to check above, but stay safe
-                                                for (SDL_Texture*& tex : cache_entry.textures) {
-                                                        if (tex) { SDL_DestroyTexture(tex); tex = nullptr; }
-                                                }
-                                                for (SDL_Texture*& mask_tex : cache_entry.mask_textures) {
-                                                        if (mask_tex) { SDL_DestroyTexture(mask_tex); mask_tex = nullptr; }
-                                                }
-                                                for (SDL_Texture*& tex : cache_entry.foreground_textures) {
-                                                        if (tex) { SDL_DestroyTexture(tex); tex = nullptr; }
-                                                }
-                                                for (SDL_Texture*& tex : cache_entry.background_textures) {
-                                                        if (tex) { SDL_DestroyTexture(tex); tex = nullptr; }
-                                                }
-                                                for (SDL_Texture*& tex : cache_entry.depthcue_foreground_textures) {
-                                                        if (tex) { SDL_DestroyTexture(tex); tex = nullptr; }
-                                                }
-                                                for (SDL_Texture*& tex : cache_entry.depthcue_background_textures) {
-                                                        if (tex) { SDL_DestroyTexture(tex); tex = nullptr; }
-                                                }
-                                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                          << " failed to push cloned frame index " << frame_idx
-                                                          << " due to empty texture container\n";
-                                        }
-                                }
-                                animation.frame_cache_.insert(animation.frame_cache_.end(), std::make_move_iterator(new_caches.begin()), std::make_move_iterator(new_caches.end()));
-
-                                // Apply texture flips to derived frames if requested
-                                if ((animation.flipped_source || animation.flip_vertical_source) && renderer && !animation.frame_cache_.empty()) {
-                                        SDL_RendererFlip flip_flags = SDL_FLIP_NONE;
-                                        if (animation.flipped_source) {
-                                                flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_HORIZONTAL);
-                                        }
-                                        if (animation.flip_vertical_source) {
-                                                flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_VERTICAL);
-                                        }
-                                        for (std::size_t frame_index = 0; frame_index < animation.frame_cache_.size(); ++frame_index) {
-                                                Animation::FrameCache& cache_entry = animation.frame_cache_[frame_index];
-                                                for (std::size_t variant_idx = 0; variant_idx < cache_entry.textures.size(); ++variant_idx) {
-                                                        SDL_Texture* src_tex = cache_entry.textures[variant_idx];
-                                                        if (!src_tex) {
-                                                                continue;
-                                                        }
-                                                        Uint32 fmt = SDL_PIXELFORMAT_RGBA8888;
-                                                        int access = 0;
-                                                        int tex_w = cache_entry.widths[variant_idx];
-                                                        int tex_h = cache_entry.heights[variant_idx];
-                                                        if (tex_w <= 0 || tex_h <= 0) {
-                                                                if (SDL_QueryTexture(src_tex, &fmt, &access, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
-                                                                        continue;
-                                                                }
-                                                        } else if (SDL_QueryTexture(src_tex, &fmt, &access, nullptr, nullptr) != 0) {
-                                                                fmt = SDL_PIXELFORMAT_RGBA8888;
-                                                        }
-                                                        SDL_Texture* dst = SDL_CreateTexture(renderer, fmt, SDL_TEXTUREACCESS_TARGET, tex_w, tex_h);
-                                                        if (!dst) {
-                                                                continue;
-                                                        }
-                                                        SDL_SetTextureBlendMode(dst, SDL_BLENDMODE_BLEND);
-                                                        apply_scale_mode(dst, info);
-                                                        SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
-                                                        SDL_SetRenderTarget(renderer, dst);
-                                                        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-                                                        SDL_RenderClear(renderer);
-                                                        SDL_Rect rect{0, 0, tex_w, tex_h};
-                                                        SDL_RenderCopyEx(renderer, src_tex, nullptr, &rect, 0.0, nullptr, flip_flags);
-                                                        SDL_SetRenderTarget(renderer, prev_target);
-                                                        SDL_DestroyTexture(src_tex);
-                                                        cache_entry.textures[variant_idx] = dst;
-                                                        cache_entry.widths[variant_idx]   = tex_w;
-                                                        cache_entry.heights[variant_idx]  = tex_h;
-                                                        // Do not generate foreground/background overlays at runtime.
-
-                                                        SDL_Texture* src_mask = nullptr;
-                                                        if (variant_idx < cache_entry.mask_textures.size()) {
-                                                                src_mask = cache_entry.mask_textures[variant_idx];
-                                                        }
-                                                        if (src_mask) {
-                                                                Uint32 mask_fmt = SDL_PIXELFORMAT_RGBA8888;
-                                                                int mask_access = 0;
-                                                                int mask_w = cache_entry.mask_widths[variant_idx];
-                                                                int mask_h = cache_entry.mask_heights[variant_idx];
-                                                                if (mask_w <= 0 || mask_h <= 0) {
-                                                                        if (SDL_QueryTexture(src_mask, &mask_fmt, &mask_access, &mask_w, &mask_h) != 0 || mask_w <= 0 || mask_h <= 0) {
-                                                                                SDL_DestroyTexture(src_mask);
-                                                                                cache_entry.mask_textures[variant_idx] = nullptr;
-                                                                                cache_entry.mask_widths[variant_idx]   = 0;
-                                                                                cache_entry.mask_heights[variant_idx]  = 0;
-                                                                                continue;
-                                                                        }
-                                                                } else if (SDL_QueryTexture(src_mask, &mask_fmt, &mask_access, nullptr, nullptr) != 0) {
-                                                                        mask_fmt = SDL_PIXELFORMAT_RGBA8888;
-                                                                }
-                                                                SDL_Texture* mask_dst = SDL_CreateTexture(renderer, mask_fmt, SDL_TEXTUREACCESS_TARGET, mask_w, mask_h);
-                                                                if (mask_dst) {
-                                                                        SDL_SetTextureBlendMode(mask_dst, SDL_BLENDMODE_BLEND);
-                                                                        apply_scale_mode(mask_dst, info);
-                                                                        SDL_Texture* prev_target_mask = SDL_GetRenderTarget(renderer);
-                                                                        SDL_SetRenderTarget(renderer, mask_dst);
-                                                                        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-                                                                        SDL_RenderClear(renderer);
-                                                                        SDL_Rect rect{0, 0, mask_w, mask_h};
-                                                                        SDL_RenderCopyEx(renderer, src_mask, nullptr, &rect, 0.0, nullptr, flip_flags);
-                                                                        SDL_SetRenderTarget(renderer, prev_target_mask);
-                                                                } else {
-                                                                        // Failed to create flipped mask; clear it to remain consistent
-                                                                        mask_w = 0;
-                                                                        mask_h = 0;
-                                                                }
-                                                                SDL_DestroyTexture(src_mask);
-                                                                cache_entry.mask_textures[variant_idx] = mask_dst;
-                                                                cache_entry.mask_widths[variant_idx]   = mask_w;
-                                                                cache_entry.mask_heights[variant_idx]  = mask_h;
-                                                        }
-                                                }
-                                        }
-                                }
-                                // Reverse frame order for derived animations if requested
-                                if (animation.reverse_source && !animation.frame_cache_.empty()) {
-                                        std::reverse(animation.frame_cache_.begin(), animation.frame_cache_.end());
+                                                  << " failed to copy from source animation\n";
+                                        flush_diagnostics();
+                                        return;
                                 }
                         }
                 }
-        } else {
+        } else if (animation.source.kind == "folder") {
                 // Simplified cache loading - assume PNGs exist and load them directly
                 const fs::path cache_folder_path = fs::path(root_cache) / trigger;
                 std::string cache_folder = cache_folder_path.string();
@@ -1101,7 +844,8 @@ void AnimationLoader::load(Animation& animation,
         animation.frames.clear();
 
         bool any_motion = false;
-        for (auto& path : animation.movement_paths_) {
+        for (std::size_t path_idx = 0; path_idx < animation.movement_paths_.size(); ++path_idx) {
+                auto& path = animation.movement_paths_[path_idx];
                 if (path.size() != frame_count) {
                         path.resize(frame_count);
                 }
@@ -1130,7 +874,10 @@ void AnimationLoader::load(Animation& animation,
                         if (f.dx != 0 || f.dy != 0) {
                                 any_motion = true;
                         }
-                        animation.frames.push_back(&f);
+                        // Only add frames from the primary path (index 0) to the frames list
+                        if (path_idx == 0) {
+                                animation.frames.push_back(&f);
+                        }
                 }
         }
 

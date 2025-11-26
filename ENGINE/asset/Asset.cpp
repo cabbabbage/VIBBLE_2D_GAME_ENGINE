@@ -342,16 +342,21 @@ void Asset::update_scale_values() {
 
         if (window) {
                 if (auto* gp = window->grid_point_for_asset(this)) {
-                        if (info && info->apply_distance_scaling) {
-                                current_scale = base_scale * gp->perspective_scale;
-                        } else {
-                                current_scale = base_scale;
-                        }
+                        current_scale = base_scale * gp->perspective_scale;
+                        std::cout<<"[Asset] Updating scale for asset \"" 
+                                  << (info ? info->name : "<null>") << "\": base_scale=" 
+                                  << base_scale << ", perspective_scale=" 
+                                  << gp->perspective_scale << ", current_scale=" 
+                                  << current_scale << "\n";
+                        
                 } else {
-                        // No grid point: fall back to base scale only.
+                        std::cout<<"[Asset] Warning: Unable to find grid point for asset \"" 
+                                  << (info ? info->name : "<null>") << "\" when updating scale values.\n";
                         current_scale = base_scale;
                 }
         } else {
+                                        std::cout<<"[Asset] NO WINODOW Warning: Unable to find grid point for asset \"" 
+                                  << (info ? info->name : "<null>") << "\" when updating scale values.\n";
                 current_scale = base_scale;
         }
 

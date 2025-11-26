@@ -754,9 +754,8 @@ void Grid::update_parallax(const camera_grid& cam, float dt) {
     const auto& settings = cam.realism_settings();
 
     const double pitch_rad  = floor.pitch_radians;
-    // Parallax-only pitch: flip by 180° to change convergence direction
-    const double kPi = 3.14159265358979323846;
-    const double parallax_pitch_rad = pitch_rad + kPi;
+    // Use the pitch as-is for correct parallax convergence
+    const double parallax_pitch_rad = pitch_rad;
 
     const SDL_FPoint center_px = cam.get_view_center_f();
     const double base_x = static_cast<double>(center_px.x);
@@ -882,22 +881,22 @@ void Grid::update_parallax(const camera_grid& cam, float dt) {
 
             const double dx_world = cell_cx - base_x;
 
-            // Screen-space driven "realistic" parallax: converge at horizon.
-            // 1) Compute warped screen Y for this world Y.
-            const double warped_y = warped_screen_y(cell_cy);
-            // 2) Map to [0..1] depth factor from horizon (0) to bottom (1).
-            const double denom_screen = std::max(1e-4, std::abs(floor.bottom_screen_y - floor.horizon_screen_y));
-            const double t_screen = std::clamp((warped_y - floor.horizon_screen_y) / denom_screen, 0.0, 1.0);
-            // 3) Build a strong growth factor that blows up near the horizon.
-            //    Using 1/(t+eps)-1 ensures zero at bottom and large near horizon.
-            const double eps_t = 1e-3;
-            const double growth = (1.0 / std::max(eps_t, t_screen)) - 1.0;
-            // 4) Horizontal parallax offset pulls columns toward the center as they rise.
-            //    Using -dx_world makes left side shift right and right side shift left.
+            // 3D projection-based parallax: compute perspective vs orthographic difference
+            const double depth_world = cell_cy - anchor_y;
+            const double y_cam = depth_world * cos_p + camera_height * sin_p;
+            const double z_cam = depth_world * sin_p - camera_height * cos_p;
+            const double forward = -z_cam;
+            if (forward <= kParallaxEpsilon || !std::isfinite(forward)) {
+                continue;
+            }
+
             const double ortho_x_px = dx_world * inv_scale;
-            double parallax_px = -ortho_x_px * growth;
-            // Additional intensity shaping to feel stronger but bounded by clamp below.
-            parallax_px *= 2.0;
+            const double projected_x_px = (dx_world / forward) * focal_px;
+
+            // Original formula (the flip is done in parallax_adjusted_screen_x)
+            double parallax_px = projected_x_px - ortho_x_px;
+            // Apply a strength multiplier to make parallax more visible
+            parallax_px *= 3.0;
             if (!std::isfinite(parallax_px)) {
                 parallax_px = 0.0;
             }
@@ -957,45 +956,78 @@ void Grid::update_parallax(const camera_grid& cam, float dt) {
 }
 
 float Grid::parallax_offset(SDL_Point world) const {
-    if (!parallax_active_) {
-        return 0.0f;
-    }
-    const int step = parallax_step_size();
-    if (step <= 0) {
-        return 0.0f;
-    }
-    const int i = grid_floor_div(world.x - origin_.x, step);
-    const int j = grid_floor_div(world.y - origin_.y, step);
-    std::size_t cache_index = 0;
-    if (parallax_cache_.try_index(i, j, step, cache_index)) {
-        return parallax_cache_.values[cache_index];
-    }
-    const auto key = parallax_key(i, j);
-    auto it = parallax_entries_.find(key);
-    if (it == parallax_entries_.end()) {
-        return 0.0f;
-    }
-    return it->second.last_value;
+    // Parallax offset is now computed directly in floor_warped_screen_position
+    // This function is kept for backward compatibility but returns 0
+    return 0.0f;
 }
 
 float Grid::parallax_adjusted_screen_x(SDL_Point world, float base_screen_x) const {
-    return base_screen_x + parallax_offset(world);
+    // Parallax is now applied directly in floor_warped_screen_position
+    return base_screen_x;
 }
 
 SDL_FPoint Grid::parallax_adjusted_screen_position(SDL_Point world, SDL_FPoint base_screen) const {
-    base_screen.x = parallax_adjusted_screen_x(world, base_screen.x);
+    // Parallax is now applied directly in floor_warped_screen_position
     return base_screen;
 }
 
 SDL_FPoint Grid::floor_warped_screen_position(const camera_grid& cam, SDL_Point world) const {
-    SDL_FPoint base = cam.map_to_screen(world);
-
+    // Get the base orthographic screen position
+    SDL_FPoint result = cam.map_to_screen(world);
+    
+    // Apply Y warping (floor depth effect)
     const float safe_world_y  = std::isfinite(static_cast<float>(world.y)) ? static_cast<float>(world.y) : 0.0f;
-    const float safe_linear_y = std::isfinite(base.y) ? base.y : 0.0f;
+    const float safe_linear_y = std::isfinite(result.y) ? result.y : 0.0f;
     const float warped_y      = cam.warp_floor_screen_y(safe_world_y, safe_linear_y);
-    base.y = std::isfinite(warped_y) ? warped_y : safe_linear_y;
-
-    return parallax_adjusted_screen_position(world, base);
+    result.y = std::isfinite(warped_y) ? warped_y : safe_linear_y;
+    
+    // Apply X parallax (horizontal perspective) if realism is enabled
+    if (!parallax_active_ || !cam.realism_enabled()) {
+        return result;
+    }
+    
+    const auto& floor = cam.current_floor_depth_params();
+    if (!floor.enabled || 
+        !std::isfinite(floor.horizon_screen_y) || 
+        !std::isfinite(floor.bottom_screen_y)) {
+        return result;
+    }
+    
+    // Get screen dimensions from camera bounds
+    const auto& bounds = cam.get_bounds();
+    const float screen_center_x = (bounds.left + bounds.right) * 0.5f;
+    const float screen_width = bounds.right - bounds.left;
+    
+    if (screen_width < 1.0f) {
+        return result;
+    }
+    
+    // Calculate how far this point is from screen center (in normalized -1 to 1 range)
+    const float dx_from_center = (result.x - screen_center_x) / (screen_width * 0.5f);
+    
+    // Calculate depth factor based on screen Y position
+    const float horizon_y = static_cast<float>(floor.horizon_screen_y);
+    const float bottom_y = static_cast<float>(floor.bottom_screen_y);
+    
+    const float range = std::abs(bottom_y - horizon_y);
+    
+    if (range < 1.0f) {
+        return result;
+    }
+    
+    // t: 0 at horizon, 1 at bottom
+    float t = (result.y - horizon_y) / (bottom_y - horizon_y);
+    t = std::clamp(t, 0.0f, 1.0f);
+    
+    // Parallax: at bottom (t=1) push toward center, at top (t=0) no effect
+    // NEGATIVE spread to make lines CONVERGE at bottom
+    const float parallax_strength = 0.5f;
+    const float spread_factor = t * parallax_strength;
+    
+    // SUBTRACT instead of ADD to push points TOWARD center at the bottom
+    result.x -= dx_from_center * spread_factor * screen_width * 0.5f;
+    
+    return result;
 }
 
 } // namespace world

@@ -269,20 +269,91 @@ namespace {
         return (params.near_ndc - ndc_y) / ndc_span;
     }
 
-    double perspective_scale_from_measure(double measure, const PerspectiveRange& range) {
-        const double denom = std::max(std::abs(range.far_distance - range.near_distance), 1e-4);
-        double t = std::clamp((measure - range.near_distance) / denom, 0.0, 1.0);
-        
-        // Apply strong gamma curve for aggressive shrinking near horizon
-        // Higher gamma makes objects shrink much faster as they approach horizon
-        constexpr double kGamma = 2.5;
-        t = std::pow(t, kGamma);
-        
-        const double scale = kMaxPerspectiveScale + (kMinPerspectiveScale - kMaxPerspectiveScale) * t;
-        return std::clamp(scale, 0.01, 4.0);
+    // Calculate perspective scale for a specific screen Y position and zoom level
+    // Uses a smooth 3-point regression (quadratic) with a pitch-dependent falloff.
+    double calculate_reference_perspective_scale(
+        double screen_y,
+        const camera_grid::FloorDepthParams& params,
+        const PerspectiveRange& range,
+        double zoom_factor)
+    {
+        // Compute normalized position along the floor (0 = horizon, 1 = bottom)
+        const double min_y = std::min(params.horizon_screen_y, params.bottom_screen_y);
+        const double max_y = std::max(params.horizon_screen_y, params.bottom_screen_y);
+        const double denom = std::max(max_y - min_y, 1e-4);
+        double t = std::clamp((screen_y - min_y) / denom, 0.0, 1.0);
+
+        // Get pitch in degrees, clamp to [camera_grid::kMinPitchDegrees, camera_grid::kMaxPitchDegrees]
+        float pitch_deg = static_cast<float>(params.pitch_radians * (180.0 / PI_D));
+        if (!std::isfinite(pitch_deg)) pitch_deg = kDefaultPitchDegrees;
+        pitch_deg = std::clamp(pitch_deg, camera_grid::kMinPitchDegrees, camera_grid::kMaxPitchDegrees);
+
+        // Map pitch to a falloff factor: lower pitch = more extreme falloff
+        // At min pitch, falloff = 1.3; at max pitch, falloff = 1.0 (gentler)
+        const float min_falloff = 1.0f;
+        const float max_falloff = 1.3f;
+        float pitch_norm = (pitch_deg - camera_grid::kMinPitchDegrees) /
+                           (camera_grid::kMaxPitchDegrees - camera_grid::kMinPitchDegrees);
+        float falloff = max_falloff - (max_falloff - min_falloff) * pitch_norm;
+
+        // Quadratic regression through three points:
+        // At t=0 (horizon): scale = 0
+        // At t=0.5 (center): scale = 1
+        // At t=1 (bottom): scale = 0.7 (or adjust as desired)
+        const double s0 = 0.0;   // at horizon
+        const double s1 = 1.0;   // at center
+        const double s2 = 0.7;   // at bottom
+
+        // Fit quadratic: scale = a*t^2 + b*t + c
+        // Using points: (0, s0), (0.5, s1), (1, s2)
+        const double a = -4.0 * (s1 - s0 - 0.5 * (s2 - s0));
+        const double b = (s2 - s0) - a;
+        const double c = s0;
+
+        // Apply a smoothstep to t for a more natural curve
+        double smooth_t = t * t * (3.0 - 2.0 * t);
+
+        // Apply falloff exponent for pitch
+        double regressed = a * smooth_t * smooth_t + b * smooth_t + c;
+        regressed = std::clamp(regressed, 0.0, 2.0);
+        regressed = std::pow(regressed, falloff);
+
+        // Zoom effect: higher zoom (zooming in) should make everything smaller
+        // zoom_factor 0.0 -> multiplier 1.0 (no reduction)
+        // zoom_factor 1.0 -> multiplier 0.4 (60% reduction at max zoom)
+        const double zoom_reduction = 1.0 - (zoom_factor * 0.3);
+
+        double final_scale = regressed * zoom_reduction;
+
+        return std::clamp(final_scale, 0.5, 2.0);
+    }
+
+    // Interpolate perspective scale based on screen Y position between two reference points
+    double interpolate_perspective_scale(double screen_y, double horizon_y, double bottom_y,
+                                         double horizon_scale, double bottom_scale) {
+        // Clamp screen_y to valid range
+        screen_y = std::clamp(screen_y, horizon_y, bottom_y);
+
+        // Calculate interpolation parameter (0.0 at horizon, 1.0 at bottom)
+        const double range = std::max(1.0, bottom_y - horizon_y);
+        double t = (screen_y - horizon_y) / range;
+        t = std::clamp(t, 0.6, 2.0);
+
+        // Use a smoother, less extreme curve: ease-in-out quadratic
+        // t' = t < 0.5 ? 2*t*t : 1 - 2*(1-t)*(1-t)
+        double smooth_t;
+        if (t < 0.5) {
+            smooth_t = 1.0 * t * t;
+        } else {
+            smooth_t = 1.0 - 2.0 * (1.0 - t) * (1.0 - t);
+        }
+
+        // Linear interpolation between the two scales
+        return horizon_scale + (bottom_scale - horizon_scale) * smooth_t;
     }
 
 }
+
 camera_grid::CameraGeometry camera_grid::compute_geometry_for_scale(double scale_value) const {
     if (!ndc_calculator_) {
         return CameraGeometry{};
@@ -905,16 +976,30 @@ camera_grid::RenderEffects camera_grid::compute_render_effects(
 
     const PerspectiveRange range = sanitize_perspective_range(settings_);
     
-    // Use warped screen Y for consistent distance measurement
-    const double distance_measure = compute_floor_distance_measure(warped_screen.y, p);
-    double depth_scale = perspective_scale_from_measure(distance_measure, range);
+    // Calculate zoom factor (0.0 = zoomed out, 1.0 = zoomed in)
+    const double zoom_low = std::max(static_cast<double>(kMinZoomAnchors), static_cast<double>(settings_.zoom_low));
+    const double zoom_high = std::max(zoom_low + kMinZoomRange, static_cast<double>(settings_.zoom_high));
+    const double current_zoom = std::clamp(static_cast<double>(smoothed_scale_), zoom_low, zoom_high);
+    const double zoom_span = std::max(kMinZoomRange, zoom_high - zoom_low);
+    const double zoom_factor = std::clamp((current_zoom - zoom_low) / zoom_span, 0.0, 1.0);
     
-    // Additional scale factor based on distance from horizon for extra shrinking
-    const double horizon_dist = std::max(0.0, static_cast<double>(warped_screen.y) - p.horizon_screen_y);
-    const double horizon_range = std::max(1.0, p.bottom_screen_y - p.horizon_screen_y);
-    const double horizon_factor = std::clamp(horizon_dist / horizon_range, 0.0, 1.0);
-    const double horizon_scale = 0.1 + 0.9 * std::pow(horizon_factor, 1.5);
-    depth_scale *= horizon_scale;
+    // Calculate reference perspective scales for interpolation
+    const double horizon_screen_y = p.horizon_screen_y;
+    const double bottom_screen_y = p.bottom_screen_y;
+    const double horizon_perspective_scale = 0.0;  // Always 0 at horizon
+    const double bottom_perspective_scale = calculate_reference_perspective_scale(
+        bottom_screen_y, p, range, zoom_factor);
+    
+    // Interpolate perspective scale based on screen Y position
+    double depth_scale = interpolate_perspective_scale(
+        static_cast<double>(warped_screen.y),
+        horizon_screen_y,
+        bottom_screen_y,
+        horizon_perspective_scale,
+        bottom_perspective_scale);
+    
+    // The perspective_scale_from_measure now handles horizon distance properly,
+    // so we don't need additional horizon scaling here
 
     // Optional blend with any screen-height hint if you ever pass a real asset_screen_height.
     double final_scale = depth_scale;
@@ -944,26 +1029,26 @@ camera_grid::RenderEffects camera_grid::compute_render_effects(
     // Distance from horizon (negative = above horizon, positive = below)
     const float dist_from_horizon = screen_y - horizon_y;
     
-    if (dist_from_horizon <= 0.5f) {
-        // At or above horizon: completely invisible and zero scale
+    if (dist_from_horizon <= 1.0f) {
+        // At or above horizon: completely invisible
         result.horizon_fade_alpha = 0.0f;
         horizon_scale_multiplier = 0.0f;
     } else if (dist_from_horizon < fade_band_px) {
-        // Within fade band: aggressive fadeout with cubic easing
+        // Within fade band: smooth fadeout
         const float t = dist_from_horizon / fade_band_px;
         
-        // Cubic easing for more dramatic fade
+        // Smooth cubic fade for alpha
         const float fade_alpha = t * t * t;
         result.horizon_fade_alpha = std::clamp(fade_alpha, 0.0f, 1.0f);
         
-        // Even stronger scale reduction - quadratic so objects shrink to nearly nothing
-        const float scale_factor = t * t;
-        horizon_scale_multiplier = std::clamp(scale_factor, 0.01f, 1.0f);
+        // Scale is already handled by perspective_scale_from_measure,
+        // but ensure consistency with alpha fade
+        horizon_scale_multiplier = std::clamp(t * t, 0.0f, 1.0f);
     }
     
     // Apply horizon scale multiplier to distance scale
     result.distance_scale *= horizon_scale_multiplier;
-    result.distance_scale = std::clamp(result.distance_scale, 0.001f, 4.0f);
+    result.distance_scale = std::clamp(result.distance_scale, 0.0f, 4.0f);
     // ---------------------------------------------------------------------
 
     if (!std::isfinite(result.vertical_scale) || result.vertical_scale <= 0.0f) {
@@ -972,10 +1057,10 @@ camera_grid::RenderEffects camera_grid::compute_render_effects(
         result.vertical_scale = std::clamp(result.vertical_scale, 0.1f, 2.0f);
     }
 
-    if (!std::isfinite(result.distance_scale) || result.distance_scale <= 0.0f) {
+    if (!std::isfinite(result.distance_scale)) {
         result.distance_scale = 1.0f;
     } else {
-        result.distance_scale = std::clamp(result.distance_scale, 0.1f, 4.0f);
+        result.distance_scale = std::clamp(result.distance_scale, 0.0f, 4.0f);
     }
 
     if (!std::isfinite(result.screen_position.x) || !std::isfinite(result.screen_position.y)) {
@@ -1436,6 +1521,28 @@ void camera_grid::rebuild_grid(world::Grid& world_grid, float dt_seconds) {
     perspective_distance_at_scale_zero_    = perspective_range.far_distance;
     perspective_distance_at_scale_hundred_ = perspective_range.near_distance;
 
+    // ------------------------------------------------------------------
+    // Calculate reference perspective scales for interpolation
+    // ------------------------------------------------------------------
+    // Calculate zoom factor once for all assets
+    const double zoom_low = std::max(static_cast<double>(kMinZoomAnchors), static_cast<double>(settings_.zoom_low));
+    const double zoom_high = std::max(zoom_low + kMinZoomRange, static_cast<double>(settings_.zoom_high));
+    const double current_zoom = std::clamp(static_cast<double>(smoothed_scale_), zoom_low, zoom_high);
+    const double zoom_span = std::max(kMinZoomRange, zoom_high - zoom_low);
+    const double zoom_factor = std::clamp((current_zoom - zoom_low) / zoom_span, 0.0, 1.0);
+
+    // Calculate perspective scale at two reference points:
+    // 1. Horizon (top-most visible point) = 0.0
+    const double horizon_screen_y = depth_params.horizon_screen_y;
+    const double horizon_perspective_scale = 0.0;  // Always 0 at horizon
+
+    // 2. Bottom-most visible point = calculated based on distance and zoom
+    const double bottom_screen_y = depth_params.bottom_screen_y;
+    const double bottom_perspective_scale = calculate_reference_perspective_scale(
+        bottom_screen_y, depth_params, perspective_range, zoom_factor);
+
+    // ------------------------------------------------------------------
+
     auto rects_intersect = [](const SDL_FRect& a, const SDL_FRect& b) -> bool {
         const float ax1 = a.x + a.w;
         const float ay1 = a.y + a.h;
@@ -1485,25 +1592,27 @@ void camera_grid::rebuild_grid(world::Grid& world_grid, float dt_seconds) {
             approx_w,
             approx_h
         };
-        const bool on_screen = rects_intersect(bounds, cull_rect);
+        
+        // Check if asset's top edge extends above horizon - if so, it should not be rendered
+        // screen_pos.y is the bottom anchor, so top is at (screen_pos.y - approx_h)
+        const float asset_top_y = screen_pos.y - approx_h;
+        const bool above_horizon = (asset_top_y < horizon_y);
+        const bool on_screen = !above_horizon && rects_intersect(bounds, cull_rect);
 
         gp->screen             = screen_pos;
         gp->parallax_dx        = parallax_dx;
         gp->vertical_scale     = effects.vertical_scale;
 
-        // Distance-based perspective scale: assets rely solely on this
-        // value (and their base scale). We estimate the floor distance
-        // by using world Y position relative to horizon in world space.
-        double camera_world_y = depth_params.camera_world_y;
-        double base_world_y = depth_params.base_world_y;
-        double asset_world_y = static_cast<double>(world_pos.y);
-        double distance_measure = 0.0;
-        if (std::isfinite(camera_world_y) && std::isfinite(base_world_y) && base_world_y != camera_world_y) {
-            distance_measure = std::clamp((asset_world_y - camera_world_y) / (base_world_y - camera_world_y), 0.0, 1.0);
-        }
-        const double perspective_scale_value = perspective_scale_from_measure(distance_measure, perspective_range);
+        // Interpolate perspective scale based on screen Y position between horizon and bottom
+        const double perspective_scale_value = interpolate_perspective_scale(
+            static_cast<double>(screen_pos.y),
+            horizon_screen_y,
+            bottom_screen_y,
+            horizon_perspective_scale,
+            bottom_perspective_scale);
 
         gp->perspective_scale  = static_cast<float>(perspective_scale_value);
+        const double distance_measure = compute_floor_distance_measure(screen_pos.y, depth_params);
         gp->distance_to_camera = static_cast<float>(distance_measure);
         gp->tilt_radians       = runtime_pitch_rad_;
         gp->on_screen          = on_screen;

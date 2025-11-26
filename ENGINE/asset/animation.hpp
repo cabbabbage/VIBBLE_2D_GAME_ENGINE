@@ -65,6 +65,7 @@ public:
     const AudioClip* audio_data() const;
     void clear_texture_cache();
     void adopt_prebuilt_frames(std::vector<FrameCache> caches, std::vector<SDL_Texture*> base_frames, std::vector<SDL_Texture*> base_masks, std::vector<float> variant_steps);
+    bool copy_from(const Animation& source, bool flip_horizontal, bool flip_vertical, bool reverse_frames, SDL_Renderer* renderer, class AssetInfo& info);
     struct Source {
         std::string kind;
         std::string path;

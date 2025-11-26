@@ -1424,13 +1424,16 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
         selected_index_ < static_cast<int>(frames_.size())) {
         const auto& frame = frames_[selected_index_];
         const ChildPreviewContext preview_ctx = build_child_preview_context();
+        // Get parent's base (bottom-middle) for child positioning
+        SDL_Point parent_base = asset_anchor_world();
         // Draw markers and names
         for (std::size_t i = 0; i < child_assets_.size() && i < frame.children.size(); ++i) {
             const auto& child = frame.children[i];
+            // Child offsets are in pixels relative to parent's base (bottom-middle)
             const float dx_world = target_->flipped ? -static_cast<float>(child.dx) : static_cast<float>(child.dx);
             SDL_FPoint screen = cam.map_to_screen_f(SDL_FPoint{
-                dx_world + static_cast<float>(target_->pos.x),
-                static_cast<float>(child.dy) + static_cast<float>(target_->pos.y)
+                dx_world + static_cast<float>(parent_base.x),
+                static_cast<float>(child.dy) + static_cast<float>(parent_base.y)
             });
             SDL_Point cp = round_point(screen);
             const int marker_r = (static_cast<int>(i) == selected_child_index_) ? 6 : 4;
@@ -1461,12 +1464,12 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
             const int th = slot.height;
             if (tw <= 0 || th <= 0) continue;
 
-            // Match in-scene attachment anchoring: offsets are relative to the asset's world pos,
+            // Child offsets are in pixels relative to the parent's base (bottom-middle),
             // mirroring dx when the parent is flipped (see AnimationRuntime::apply_child_frame_data).
             const float dx_world = target_->flipped ? -static_cast<float>(child.dx) : static_cast<float>(child.dx);
             SDL_FPoint child_world{
-                static_cast<float>(target_->pos.x) + dx_world,
-                static_cast<float>(target_->pos.y) + static_cast<float>(child.dy)
+                static_cast<float>(parent_base.x) + dx_world,
+                static_cast<float>(parent_base.y) + static_cast<float>(child.dy)
             };
 
             SDL_FRect base_rect = child_preview_rect(child_world, tw, th, preview_ctx, scale_override_base);

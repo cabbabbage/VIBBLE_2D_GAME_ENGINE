@@ -425,6 +425,7 @@ void AnimationRuntime::ensure_child_slots(Animation& anim) {
         SDL_Point render_pos{ static_cast<int>(std::lround(self_->smoothed_translation_x())),
                               static_cast<int>(std::lround(self_->smoothed_translation_y())) };
         parent_state.position = render_pos;
+        parent_state.base_position = animation_update::detail::bottom_middle_for(*self_, render_pos);
         parent_state.flipped = self_->flipped;
         parent_state.animation_id = self_->current_animation;
         animation_update::child_attachments::apply_frame_data(self_->animation_children_, parent_state, self_->current_frame);
@@ -450,6 +451,7 @@ void AnimationRuntime::advance_child_frames(float dt) {
     SDL_Point render_pos{ static_cast<int>(std::lround(self_->smoothed_translation_x())),
                           static_cast<int>(std::lround(self_->smoothed_translation_y())) };
     parent_state.position = render_pos;
+    parent_state.base_position = animation_update::detail::bottom_middle_for(*self_, render_pos);
     parent_state.flipped = self_->flipped;
     parent_state.animation_id = self_->current_animation;
     animation_update::child_attachments::advance_frames(self_->animation_children_, parent_state, dt);
@@ -463,6 +465,7 @@ void AnimationRuntime::apply_child_frame_data(const AnimationFrame* frame) {
     SDL_Point render_pos{ static_cast<int>(std::lround(self_->smoothed_translation_x())),
                           static_cast<int>(std::lround(self_->smoothed_translation_y())) };
     parent_state.position = render_pos;
+    parent_state.base_position = animation_update::detail::bottom_middle_for(*self_, render_pos);
     parent_state.flipped = self_->flipped;
     parent_state.animation_id = self_->current_animation;
     animation_update::child_attachments::apply_frame_data(self_->animation_children_, parent_state, frame);
@@ -563,7 +566,15 @@ void AnimationRuntime::sync_child_assets() {
             self_->add_child(child);
         }
 
-        child->pos = slot.world_pos;
+        // slot.world_pos is the child's base (bottom-middle) position in world coordinates.
+        // Convert to top-left position for the child asset using its dimensions.
+        int child_w = slot.cached_w > 0 ? slot.cached_w : child->cached_w;
+        int child_h = slot.cached_h > 0 ? slot.cached_h : child->cached_h;
+        SDL_Point child_top_left{
+            slot.world_pos.x - child_w / 2,
+            slot.world_pos.y - child_h
+        };
+        child->pos = child_top_left;
         child->grid_resolution = self_->grid_resolution;
         child->depth = self_->depth;
         child->flipped = self_->flipped;

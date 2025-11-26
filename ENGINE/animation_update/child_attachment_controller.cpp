@@ -186,9 +186,11 @@ void apply_frame_data(std::vector<Asset::AnimationChildAttachment>& slots,
                       << "') visible=true dx=" << child_data.dx << " dy=" << child_data.dy
                       << " deg=" << child_data.degree << "\n";
         }
+        // Position child relative to parent's base (bottom-middle) in pixels,
+        // not relative to the parent's top-left position or grid.
         const int dx = parent_state.flipped ? -child_data.dx : child_data.dx;
-        slot.world_pos.x = parent_state.position.x + dx;
-        slot.world_pos.y = parent_state.position.y + child_data.dy;
+        slot.world_pos.x = parent_state.base_position.x + dx;
+        slot.world_pos.y = parent_state.base_position.y + child_data.dy;
         slot.rotation_degrees = mirrored_child_rotation(parent_state.flipped, child_data.degree);
         slot.render_in_front = child_data.render_in_front;
     }

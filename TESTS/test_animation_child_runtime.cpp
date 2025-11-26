@@ -29,6 +29,7 @@ TEST_CASE("Hidden child attachments restart from frame zero when revealed") {
 
     animation_update::child_attachments::ParentState parent_state;
     parent_state.position = SDL_Point{10, 20};
+    parent_state.base_position = SDL_Point{10, 20}; // For tests, assume base is same as position
     parent_state.flipped = false;
     parent_state.animation_id = "custom_anim";
 
