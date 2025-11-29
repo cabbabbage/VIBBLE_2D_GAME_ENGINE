@@ -45,13 +45,8 @@ public:
         float zoom_low                     = 0.75f;
         float zoom_high                    = 3.0f;
 
-        // Single baseline height that scales with zoom for perspective depth.
-        float base_height_px               = 720.0f;
-
-        // Pitch mapping: zooming in lifts the horizon, zooming out tilts downward.
-        // Downward-looking defaults keep the horizon above the screen.
-        float tilt_zoom_in_degrees        = 75.0f;
-        float tilt_zoom_out_degrees       = 60.0f;
+        // The camera's height in world units when zoom is 1.0.
+        float base_height_at_zoom_1        = 1000.0f;
 
         int   render_quality_percent       = 100;
 
@@ -70,19 +65,6 @@ public:
 
         // Extra margin for culling below screen (for warping)
         float extra_cull_margin = 300.0f;
-
-        // Grid depth parameters
-        // grid_depth_offset_px is kept for legacy serialization; runtime code derives
-        // the actual padding from the world-space depth targets below.
-        float grid_depth_offset_px           = 4000.0f;
-
-        // Per-zoom interpolation values (expressed in world units, not screen pixels).
-        // Represents the ground-plane distance from the camera focus to the point that
-        // should land exactly at the bottom edge of the screen.
-        float depth_offset_at_zoom_low  = 4000.0f;
-        float depth_offset_at_zoom_high = 4000.0f;
-        float base_height_at_zoom_low  = 720.0f;
-        float base_height_at_zoom_high = 720.0f;
 
         // Distance-based perspective mapping controls (world-space distances
         // that map to perspective scales 0 and 100).
@@ -239,6 +221,7 @@ public:
     void clear_grid_state();
     void rebuild_grid_bounds();
     void rebuild_grid(world::WorldGrid& world_grid, float dt_seconds);
+    void project_to_screen(world::GridPoint& point) const;
     world::GridPoint* grid_point_for_asset(const Asset* asset);
     const world::GridPoint* grid_point_for_asset(const Asset* asset) const;
 

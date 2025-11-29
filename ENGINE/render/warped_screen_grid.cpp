@@ -7,7 +7,6 @@
 #include "utils/transform_smoothing_settings.hpp"
 #include "utils/log.hpp"
 #include "world/world_grid.hpp"
-#include "render/screen_projector.hpp"
 
 #include <algorithm>
 #include <array>
@@ -940,8 +939,6 @@ void WarpedScreenGrid::pan_and_zoom_to_point(SDL_Point world_pos, double zoom_sc
         steps_done_           = 0;
         start_scale_          = new_scale;
         target_scale_         = new_scale;
-        start_center_         = world_pos;
-        target_center_        = world_pos;
         set_screen_center(world_pos);
         set_scale(static_cast<float>(new_scale));
         recompute_current_view();
@@ -1625,7 +1622,6 @@ void WarpedScreenGrid::rebuild_grid_bounds() {
 void WarpedScreenGrid::rebuild_grid(world::WorldGrid& world_grid, float dt_seconds) {
     clear_grid_state();
 
-    ScreenProjector projector(*this);
     // world_grid.update_parallax(*this, dt_seconds);
 
     std::vector<Asset*> assets = world_grid.all_assets();
@@ -1899,6 +1895,20 @@ void WarpedScreenGrid::clear_manual_zoom_override() {
 // Default zoom for room
 double WarpedScreenGrid::default_zoom_for_room(const Room* room) const {
     return compute_room_scale_from_area(room);
+}
+
+void WarpedScreenGrid::project_to_screen(world::GridPoint& point) const {
+    // 1. Map world to screen (linear)
+    SDL_FPoint linear_screen = map_to_screen(point.world);
+    
+    // 2. Apply floor warping
+    float warped_y = warp_floor_screen_y(static_cast<float>(point.world.y), linear_screen.y);
+    
+    // 3. Apply parallax
+    float parallax_dx = 0.0f; 
+
+    point.screen = SDL_FPoint{linear_screen.x + parallax_dx, warped_y};
+    point.parallax_dx = parallax_dx;
 }
 
 // Recompute current view
