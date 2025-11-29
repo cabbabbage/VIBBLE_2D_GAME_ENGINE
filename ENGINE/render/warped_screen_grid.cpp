@@ -1066,15 +1066,14 @@ SDL_FPoint WarpedScreenGrid::map_to_screen(SDL_Point world) const {
 SDL_FPoint WarpedScreenGrid::map_to_screen_f(SDL_FPoint world) const {
     int minx, miny, maxx, maxy;
     std::tie(minx, miny, maxx, maxy) = current_view_.get_bounds();
-    // World bounds use math-style +Y upward; mirror around maxy so screen-space +Y points downward.
     const double inv_scale =
         (smoothed_scale_ > 0.000001f)
             ? (1.0 / static_cast<double>(smoothed_scale_))
             : 1e6;
     const double sx = (static_cast<double>(world.x) - static_cast<double>(minx)) * inv_scale;
-    const double sy = (static_cast<double>(maxy) - static_cast<double>(world.y)) * inv_scale + static_cast<double>(player_center_offset_y_);
+    const double sy = (static_cast<double>(world.y) - static_cast<double>(miny)) * inv_scale + static_cast<double>(player_center_offset_y_);
     const double safe_sx = std::isfinite(sx) ? sx : static_cast<double>(minx);
-    const double safe_sy = std::isfinite(sy) ? sy : static_cast<double>(maxy);
+    const double safe_sy = std::isfinite(sy) ? sy : static_cast<double>(miny);
     const float out_x = static_cast<float>(std::clamp(safe_sx, -1e8, 1e8));
     const float out_y = static_cast<float>(std::clamp(safe_sy, -1e8, 1e8));
     return SDL_FPoint{ out_x, out_y };
