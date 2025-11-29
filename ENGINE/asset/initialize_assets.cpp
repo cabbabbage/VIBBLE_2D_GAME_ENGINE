@@ -4,18 +4,11 @@
 #include "asset_info.hpp"
 #include "asset_types.hpp"
 #include "asset_utils.hpp"
+#include "utils/log.hpp"
 #include <algorithm>
 #include <iostream>
 #include <memory>
 #include <SDL.h>
-
-namespace {
-#ifdef VIBBLE_DEBUG_ASSET_LOGS
-constexpr bool kAssetLoggingEnabled = true;
-#else
-constexpr bool kAssetLoggingEnabled = false;
-#endif
-}
 
 void InitializeAssets::initialize(Assets& assets,
                                   std::vector<Room*> rooms,
@@ -25,9 +18,7 @@ void InitializeAssets::initialize(Assets& assets,
                                   int /*screen_center_y*/,
                                   int)
 {
-        if (kAssetLoggingEnabled) {
-                std::cout << "[InitializeAssets] Initializing Assets manager...\n";
-        }
+        vibble::log::debug("[InitializeAssets] Initializing Assets manager...");
         assets.set_rooms(std::move(rooms));
         assets.all.clear();
         auto grid_assets = assets.world_grid().all_assets();
@@ -37,18 +28,13 @@ void InitializeAssets::initialize(Assets& assets,
                         continue;
                 }
                 if (!raw->info) {
-                        if (kAssetLoggingEnabled) {
-                                std::cerr << "[InitializeAssets] Skipping asset: info is null\n";
-                        }
+                        vibble::log::debug("[InitializeAssets] Skipping asset: info is null");
                         assets.world_grid().remove_asset(raw);
                         continue;
                 }
                 auto it = raw->info->animations.find("default");
                 if (it == raw->info->animations.end() || it->second.frames.empty()) {
-                        if (kAssetLoggingEnabled) {
-                                std::cerr << "[InitializeAssets] Skipping asset '" << raw->info->name
-                                << "': missing or empty default animation\n";
-                        }
+                        vibble::log::debug("[InitializeAssets] Skipping asset '" + raw->info->name + "': missing or empty default animation");
                         assets.world_grid().remove_asset(raw);
                         continue;
                 }
@@ -58,10 +44,7 @@ void InitializeAssets::initialize(Assets& assets,
                 // Assets should already be finalized by AssetLoader::finalizeAssets().
                 // Guard to avoid double-initialization; finalize only if somehow not finalized.
                 if (!raw->is_finalized()) {
-                    if (kAssetLoggingEnabled) {
-                        std::cerr << "[InitializeAssets] Asset '" << (raw->info ? raw->info->name : std::string{"<null>"})
-                                  << "' not finalized by loader; finalizing now.\n";
-                    }
+                    vibble::log::debug("[InitializeAssets] Asset '" + (raw->info ? raw->info->name : std::string{"<null>"}) + "' not finalized by loader; finalizing now.");
                     raw->finalize_setup();
                 }
                 // Initialize tiling for tileable assets on load
@@ -86,10 +69,7 @@ void InitializeAssets::initialize(Assets& assets,
         // Just mark lists dirty; the first rebuild will occur lazily on
         // the first update after the world grid populates active chunks.
         assets.mark_active_assets_dirty();
-        if (kAssetLoggingEnabled) {
-                std::cout << "[InitializeAssets] Initialization base complete. Total assets: "
-                << assets.all.size() << "\n";
-        }
+        vibble::log::debug("[InitializeAssets] Initialization base complete. Total assets: " + std::to_string(assets.all.size()));
     // Leave rebuild to the runtime update once chunks are available.
 
 }
@@ -98,10 +78,7 @@ void InitializeAssets::find_player(Assets& assets) {
         for (Asset* asset : assets.all) {
                 if (asset && asset->info && asset->info->type == asset_types::player) {
 			assets.player = asset;
-                        if (kAssetLoggingEnabled) {
-                                std::cout << "[InitializeAssets] Found player asset: "
-                                << assets.player->info->name << "\n";
-                        }
+                        vibble::log::debug("[InitializeAssets] Found player asset: " + assets.player->info->name);
                         break;
                 }
 	}

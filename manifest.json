@@ -2488,14 +2488,14 @@
         "background_plane_screen_y": 443.0,
         "background_texture_max_opacity": 173,
         "base_height_at_zoom_high": 2530.0,
-        "base_height_at_zoom_low": -6280.0,
-        "base_height_px": 720.0,
+        "base_height_at_zoom_low": 60.0,
+        "base_height_px": 1295.0,
         "depth_offset_at_zoom_high": 4000.0,
-        "depth_offset_at_zoom_low": 4000.0,
+        "depth_offset_at_zoom_low": 70.0,
         "extra_cull_margin": 300.0,
         "foreground_plane_screen_y": 613.0,
         "foreground_texture_max_opacity": 148,
-        "grid_depth_offset_px": 4000.0,
+        "grid_depth_offset_px": 2035.0,
         "horizon_fade_band_px": 80.0,
         "min_visible_screen_ratio": 0.006000000052154064,
         "parallax_smoothing_lerp_rate": 4.1666669845581055,
@@ -2510,7 +2510,7 @@
         "render_quality_percent": 50,
         "scale_hysteresis_margin": 0.004999999888241291,
         "texture_opacity_falloff_method": 3,
-        "tilt_zoom_in_degrees": 30.160057067871094,
+        "tilt_zoom_in_degrees": 0.0,
         "tilt_zoom_out_degrees": 67.69378662109375,
         "zoom_high": 3.999999761581421,
         "zoom_low": 0.9399999976158142
@@ -2834,7 +2834,7 @@
           "curvyness": 2,
           "display_color": [
             36,
-            54,
+            110,
             242,
             255
           ],
@@ -2907,8 +2907,8 @@
           "curvyness": 2,
           "display_color": [
             242,
-            39,
-            36,
+            85,
+            241,
             255
           ],
           "edge_smoothness": 101,
@@ -3114,8 +3114,8 @@
                 }
               ],
               "display_name": "Candle",
-              "dx": -457,
-              "dy": -1217,
+              "dx": -540,
+              "dy": -1308,
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
