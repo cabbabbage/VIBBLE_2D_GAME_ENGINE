@@ -1,6 +1,6 @@
 #include "dev_mode/pan_and_zoom.hpp"
 
-#include "render/camera_grid.hpp"
+#include "render/warped_screen_grid.hpp"
 #include "utils/input.hpp"
 
 #include <algorithm>
@@ -10,7 +10,7 @@ void PanAndZoom::set_zoom_scale_factor(double factor) {
     zoom_scale_factor_ = (factor > 0.0) ? factor : 1.0;
 }
 
-void PanAndZoom::handle_input(camera_grid& cam, const Input& input, bool pan_blocked) {
+void PanAndZoom::handle_input(WarpedScreenGrid& cam, const Input& input, bool pan_blocked) {
     const SDL_Point mouse{ input.getX(), input.getY() };
     const int wheel_y = input.getScrollY();
     if (wheel_y != 0) {
@@ -27,7 +27,7 @@ void PanAndZoom::handle_input(camera_grid& cam, const Input& input, bool pan_blo
         const double target_scale = std::clamp(
             unclamped_target,
             0.0001,
-            static_cast<double>(camera_grid::kMaxZoomAnchors));
+            static_cast<double>(WarpedScreenGrid::kMaxZoomAnchors));
         const double adjusted_eff = target_scale / base_scale;
 
         if (std::abs(adjusted_eff - 1.0) > 1e-6) {
@@ -97,7 +97,7 @@ void PanAndZoom::handle_input(camera_grid& cam, const Input& input, bool pan_blo
     cam.set_screen_center(new_center);    // and actually move the view
 }
 
-void PanAndZoom::cancel(camera_grid& cam) {
+void PanAndZoom::cancel(WarpedScreenGrid& cam) {
     pan_drag_pending_ = false;
     if (!panning_) {
         return;

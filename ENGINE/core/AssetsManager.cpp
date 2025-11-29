@@ -162,7 +162,7 @@ Assets::Assets(AssetLibrary& library,
                const std::string& map_id,
                const nlohmann::json& map_manifest,
                std::string content_root,
-               world::Grid&& world_grid)
+               world::WorldGrid&& world_grid)
     : camera_(
           screen_width_,
           screen_height_,
@@ -429,7 +429,7 @@ void Assets::reload_camera_settings() {
 }
 
 int Assets::saved_render_quality_percent() const {
-    const camera_grid::RealismSettings& settings = camera_.realism_settings();
+    const WarpedScreenGrid::RealismSettings& settings = camera_.realism_settings();
     const int clamped = std::clamp(settings.render_quality_percent, kMinRenderQuality, kQualityOptions[0]);
     return align_render_quality_percent(clamped);
 }
@@ -450,7 +450,7 @@ void Assets::apply_camera_runtime_settings() {
         const bool low_quality = (effective_percent < 100) && !force_high_quality_rendering_;
         // scene->set_low_quality_rendering(low_quality);
     }
-    const camera_grid::RealismSettings& settings = camera_.realism_settings();
+    const WarpedScreenGrid::RealismSettings& settings = camera_.realism_settings();
     update_motion_smoothing_settings(settings);
     // Image effects are now handled by Python, so no longer setting global state here
 }
@@ -489,7 +489,7 @@ TransformSmoothingParams Assets::sanitize_smoothing(const TransformSmoothingPara
     return result;
 }
 
-void Assets::update_motion_smoothing_settings(const camera_grid::RealismSettings&) {
+void Assets::update_motion_smoothing_settings(const WarpedScreenGrid::RealismSettings&) {
     TransformSmoothingParams disabled{};
     disabled = sanitize_smoothing(disabled);
 
@@ -1442,9 +1442,6 @@ bool Assets::asset_bounds_in_screen_space(const Asset* asset, SDL_FRect& out_rec
         // Apply the same warping/parallax used during rendering so culling respects the warped grid.
         top_left_screen.y = camera_.warp_floor_screen_y(top_world, top_left_screen.y);
         bottom_right_screen.y = camera_.warp_floor_screen_y(bottom_world, bottom_right_screen.y);
-        const float parallax_dx = world_grid_.parallax_offset(world_center_point);
-        top_left_screen.x += parallax_dx;
-        bottom_right_screen.x += parallax_dx;
 
         const float left_screen   = std::min(top_left_screen.x, bottom_right_screen.x);
         const float right_screen  = std::max(top_left_screen.x, bottom_right_screen.x);
@@ -1892,7 +1889,6 @@ void Assets::apply_map_grid_settings(const MapGridSettings& settings, bool persi
     }
 
     world_grid_.set_chunk_resolution(std::max(0, sanitized.r_chunk));
-    world_grid_.set_parallax_resolution(std::max(0, sanitized.resolution));
 
     if (chunk_changed) {
         for (Asset* asset : all) {

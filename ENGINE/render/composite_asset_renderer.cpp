@@ -1,7 +1,7 @@
 #include "composite_asset_renderer.hpp"
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
-#include "world/grid.hpp"
+#include "world/world_grid.hpp"
 #include "world/grid_point.hpp"
 #include "render/light_flicker.hpp"
 #include "render/render.hpp"
@@ -77,7 +77,10 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                                  SDL_Rect rect,
                                  SDL_Color color = {255, 255, 255, 255},
                                  SDL_BlendMode blend = SDL_BLENDMODE_BLEND,
-                                 bool apply_scale = true) {
+                                 bool apply_scale = true,
+                                 double angle = 0.0,
+                                 std::optional<SDL_Point> center = std::nullopt,
+                                 SDL_RendererFlip flip = SDL_FLIP_NONE) {
         if (!tex) return;
         if (apply_scale) {
             rect.w = static_cast<int>(std::lround(static_cast<float>(rect.w) * package_scale));
@@ -85,7 +88,19 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
             rect.w = std::max(1, rect.w);
             rect.h = std::max(1, rect.h);
         }
-        asset->render_package.push_back({tex, rect, color, blend});
+
+        SDL_Point c = {0, 0};
+        bool custom = false;
+        if (center.has_value()) {
+            c = center.value();
+            if (apply_scale) {
+                 c.x = static_cast<int>(std::lround(static_cast<float>(c.x) * package_scale));
+                 c.y = static_cast<int>(std::lround(static_cast<float>(c.y) * package_scale));
+            }
+            custom = true;
+        }
+
+        asset->render_package.push_back({tex, rect, color, blend, angle, c, custom, flip});
     };
 
     auto add_scene_mask_light = [&](SDL_Texture* tex,
@@ -180,11 +195,21 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                 SDL_Rect child_rect = render_obj.screen_rect;
                 child_rect.x += (child->pos.x - asset->pos.x);
                 child_rect.y += (child->pos.y - asset->pos.y);
+
+                double final_angle = render_obj.angle + static_cast<double>(child_attachment.rotation_degrees);
+                std::optional<SDL_Point> center_opt = std::nullopt;
+                if (render_obj.use_custom_center) {
+                    center_opt = render_obj.center;
+                }
+
                 add_render_object(render_obj.texture,
                                   child_rect,
                                   render_obj.color_mod,
                                   render_obj.blend_mode,
-                                  false);
+                                  false,
+                                  final_angle,
+                                  center_opt,
+                                  render_obj.flip);
             }
         }
     }
@@ -287,11 +312,21 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                 SDL_Rect child_rect = render_obj.screen_rect;
                 child_rect.x += (child->pos.x - asset->pos.x);
                 child_rect.y += (child->pos.y - asset->pos.y);
+
+                double final_angle = render_obj.angle + static_cast<double>(child_attachment.rotation_degrees);
+                std::optional<SDL_Point> center_opt = std::nullopt;
+                if (render_obj.use_custom_center) {
+                    center_opt = render_obj.center;
+                }
+
                 add_render_object(render_obj.texture,
                                   child_rect,
                                   render_obj.color_mod,
                                   render_obj.blend_mode,
-                                  false);
+                                  false,
+                                  final_angle,
+                                  center_opt,
+                                  render_obj.flip);
             }
         }
     }

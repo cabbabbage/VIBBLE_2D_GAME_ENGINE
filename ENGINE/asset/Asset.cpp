@@ -3,7 +3,7 @@
 #include "animation.hpp"
 #include "core/AssetsManager.hpp"
 #include "core/asset_list.hpp"
-#include "render/camera_grid.hpp"
+#include "render/warped_screen_grid.hpp"
 #include "render/render.hpp"
 #include "animation_update/animation_runtime.hpp"
 #include "utils/area_helpers.hpp"

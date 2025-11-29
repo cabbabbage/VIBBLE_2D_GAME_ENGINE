@@ -12,7 +12,7 @@
 class Assets;
 class Input;
 class Room;
-class camera_grid;
+class WarpedScreenGrid;
 
 class MapEditor {
 public:
@@ -26,7 +26,7 @@ public:
     // Provide the screen-space safe area within which labels may spawn.
     // When not provided, labels may spawn across the full screen.
     void set_label_safe_area_provider(std::function<SDL_Rect()> provider);
-    void set_camera_override_for_testing(camera_grid* camera_override);
+    void set_camera_override_for_testing(WarpedScreenGrid* camera_override);
 
     void enter();
     void exit(bool focus_player, bool restore_previous_state = true);
@@ -54,7 +54,7 @@ private:
     SDL_Rect resolve_vertical_edge_overlap(SDL_Rect rect, float desired_center_y, bool left_edge);
     static bool rects_overlap(const SDL_Rect& a, const SDL_Rect& b);
     Room* find_spawn_room() const;
-    camera_grid* active_camera() const;
+    WarpedScreenGrid* active_camera() const;
     SDL_Rect effective_label_bounds() const;
 
 private:
@@ -90,6 +90,6 @@ private:
     Room* pending_selection_ = nullptr;
     PanAndZoom pan_zoom_;
     std::vector<std::pair<Room*, SDL_Rect>> label_rects_;
-    camera_grid* camera_override_for_testing_ = nullptr;
+    WarpedScreenGrid* camera_override_for_testing_ = nullptr;
     mutable SDL_Rect active_label_bounds_{0,0,0,0};
 };

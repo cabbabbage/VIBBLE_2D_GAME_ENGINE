@@ -11,9 +11,9 @@
 
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
-#include "render/camera_grid.hpp"
+#include "render/warped_screen_grid.hpp"
 #include "render/render.hpp"
-#include "world/grid.hpp"
+#include "world/world_grid.hpp"
 
 namespace chunk_detail {
 
@@ -79,8 +79,8 @@ void LightMap::rebuild(SDL_Renderer*) {
     if (!assets_) {
         return;
     }
-    world::Grid& grid = assets_->world_grid();
-    for (world::Chunk* chunk : grid.all_chunks()) {
+    world::WorldGrid& grid = assets_->world_grid();
+    for (const auto& chunk : grid.chunks().storage()) {
         if (chunk) {
             chunk->releaseLightingArtifacts();
         }
@@ -93,7 +93,7 @@ void LightMap::update(SDL_Renderer*, std::uint32_t) {
         return;
     }
 
-    world::Grid& grid = assets_->world_grid();
+    world::WorldGrid& grid = assets_->world_grid();
 
     const auto weights = resolve_sampling_weights(0.0f, 1.0f);
 
@@ -242,7 +242,7 @@ void LightMap::render_visible_chunks(SDL_Renderer* renderer,
         return;
     }
 
-    const camera_grid& cam = assets_->getView();
+    const WarpedScreenGrid& cam = assets_->getView();
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
     for (world::Chunk* chunk : active_chunks()) {
@@ -350,20 +350,20 @@ int LightMap::chunk_count() const {
     if (!assets_) {
         return 0;
     }
-    return static_cast<int>(assets_->world_grid().all_chunks().size());
+    return static_cast<int>(assets_->world_grid().chunks().storage().size());
 }
 
 int LightMap::chunk_columns() const {
     if (!assets_) {
         return 0;
     }
-    const auto chunks = assets_->world_grid().all_chunks();
+    const auto& chunks = assets_->world_grid().chunks().storage();
     if (chunks.empty()) {
         return 0;
     }
     int min_i = chunks.front()->i;
     int max_i = chunks.front()->i;
-    for (const world::Chunk* chunk : chunks) {
+    for (const auto& chunk : chunks) {
         if (!chunk) {
             continue;
         }
@@ -377,13 +377,13 @@ int LightMap::chunk_rows() const {
     if (!assets_) {
         return 0;
     }
-    const auto chunks = assets_->world_grid().all_chunks();
+    const auto& chunks = assets_->world_grid().chunks().storage();
     if (chunks.empty()) {
         return 0;
     }
     int min_j = chunks.front()->j;
     int max_j = chunks.front()->j;
-    for (const world::Chunk* chunk : chunks) {
+    for (const auto& chunk : chunks) {
         if (!chunk) {
             continue;
         }
@@ -397,11 +397,11 @@ const world::Chunk* LightMap::chunk_at(int index) const {
     if (!assets_ || index < 0) {
         return nullptr;
     }
-    const auto chunks = assets_->world_grid().all_chunks();
+    const auto& chunks = assets_->world_grid().chunks().storage();
     if (index >= static_cast<int>(chunks.size())) {
         return nullptr;
     }
-    return chunks[static_cast<std::size_t>(index)];
+    return chunks[static_cast<std::size_t>(index)].get();
 }
 
 SDL_Rect LightMap::chunk_bounds(int index) const {

@@ -2,7 +2,7 @@
 
 #include "Asset.hpp"
 
-inline void set_camera_recursive(Asset* asset, camera_grid* v) {
+inline void set_camera_recursive(Asset* asset, WarpedScreenGrid* v) {
         if (!asset) return;
         asset->set_camera(v);
         for (Asset* asset_child : asset->asset_children) {

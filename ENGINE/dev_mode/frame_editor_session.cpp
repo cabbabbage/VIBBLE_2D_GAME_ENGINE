@@ -23,7 +23,7 @@
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/rebuildAnimation.hpp"
 #include "dev_mode/widgets.hpp"
-#include "render/camera_grid.hpp"
+#include "render/warped_screen_grid.hpp"
 #include "utils/grid.hpp"
 #include "utils/input.hpp"
 
@@ -197,7 +197,7 @@ void FrameEditorSession::begin(Assets* assets,
     }
 
     // Snapshot state
-    camera_grid& cam = assets_->getView();
+    WarpedScreenGrid& cam = assets_->getView();
     prev_realism_enabled_ = cam.realism_enabled();
     prev_parallax_enabled_ = cam.parallax_enabled();
     prev_asset_hidden_ = target_->is_hidden();
@@ -242,7 +242,7 @@ void FrameEditorSession::begin(Assets* assets,
         if (assets_ && assets_->renderer()) {
             SDL_GetRendererOutputSize(assets_->renderer(), &sw, &sh);
         }
-        const camera_grid& cam = assets_->getView();
+        const WarpedScreenGrid& cam = assets_->getView();
         SDL_Point anchor_world = animation_update::detail::bottom_middle_for(*target_, target_->pos);
         SDL_FPoint anchor_screen_f = cam.map_to_screen_f(SDL_FPoint{ static_cast<float>(anchor_world.x), static_cast<float>(anchor_world.y) });
         SDL_Point anchor_screen = round_point(anchor_screen_f);
@@ -376,7 +376,7 @@ void FrameEditorSession::end() {
     
     // Restore camera and overlay state
     if (has_assets) {
-        camera_grid& cam = assets_->getView();
+        WarpedScreenGrid& cam = assets_->getView();
         cam.set_realism_enabled(prev_realism_enabled_);
         cam.set_parallax_enabled(prev_parallax_enabled_);
         // Cancel any transient pan/zoom override
@@ -500,7 +500,7 @@ void FrameEditorSession::update(const Input& input) {
     refresh_child_assets_from_document();
     // Enable mouse wheel zoom; disable click-drag panning while editing
     if (assets_) {
-        camera_grid& cam = assets_->getView();
+        WarpedScreenGrid& cam = assets_->getView();
         // Make sure layout is up to date before computing any UI blocking logic (future use)
         ensure_widgets();
         rebuild_layout();
@@ -1300,7 +1300,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
             return true;
         }
         if (!assets_ || !target_) return false;
-        camera_grid& cam = assets_->getView();
+        WarpedScreenGrid& cam = assets_->getView();
         SDL_FPoint world_f = cam.screen_to_map(sp);
         // Anchor is bottom-middle of the asset
         SDL_Point anchor_world = animation_update::detail::bottom_middle_for(*target_, target_->pos);
@@ -1390,7 +1390,7 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
     if (!assets_->contains_asset(target_)) return;
 
     // Compute anchor
-    const camera_grid& cam = assets_->getView();
+    const WarpedScreenGrid& cam = assets_->getView();
     SDL_Point anchor_world = animation_update::detail::bottom_middle_for(*target_, target_->pos);
 
     // Draw path lines and points in world space
@@ -1795,7 +1795,7 @@ void FrameEditorSession::refresh_animation_dropdown() const {
 
 void FrameEditorSession::rebuild_layout() const {
     if (!assets_ || !target_) return;
-    const camera_grid& cam = assets_->getView();
+    const WarpedScreenGrid& cam = assets_->getView();
     const int screen_w = assets_->renderer() ? assets_->getView().get_camera_area().width() : 0; // not used for clamp heavily
     (void)screen_w;
     (void)cam; // anchor-based layout replaced by draggable screen-space positions
@@ -2801,7 +2801,7 @@ SDL_Point FrameEditorSession::asset_anchor_world() const {
 
 bool FrameEditorSession::screen_to_local(SDL_Point screen, SDL_FPoint& out_local) const {
     if (!assets_ || !target_) return false;
-    const camera_grid& cam = assets_->getView();
+    const WarpedScreenGrid& cam = assets_->getView();
     SDL_FPoint world = cam.screen_to_map(screen);
     SDL_Point anchor = asset_anchor_world();
     const float scale = asset_local_scale();
@@ -2814,7 +2814,7 @@ bool FrameEditorSession::screen_to_local(SDL_Point screen, SDL_FPoint& out_local
 bool FrameEditorSession::build_hitbox_visual(const animation_update::FrameHitGeometry::HitBox& box,
                                              HitBoxVisual& out) const {
     if (!assets_ || !target_) return false;
-    const camera_grid& cam = assets_->getView();
+    const WarpedScreenGrid& cam = assets_->getView();
     SDL_Point anchor = asset_anchor_world();
     const float scale = asset_local_scale();
     if (scale <= 0.0001f) return false;
@@ -3148,7 +3148,7 @@ bool FrameEditorSession::begin_attack_drag(SDL_Point mp) {
     bool hovered_control = false;
     bool hovered_end = false;
 
-    const camera_grid& cam = assets_->getView();
+    const WarpedScreenGrid& cam = assets_->getView();
     SDL_Point anchor = asset_anchor_world();
     const float scale = asset_local_scale();
     auto to_screen = [&](float lx, float ly) -> SDL_FPoint {
@@ -3830,7 +3830,7 @@ SDL_FRect FrameEditorSession::child_preview_rect(SDL_FPoint child_world,
         child_world.x - rect.w * 0.5f,
         child_world.y - rect.h
     };
-    const camera_grid& cam = assets_->getView();
+    const WarpedScreenGrid& cam = assets_->getView();
     SDL_FPoint top_left_screen = cam.map_to_screen_f(top_left_world);
     rect.x = top_left_screen.x;
     rect.y = top_left_screen.y;
@@ -3904,7 +3904,7 @@ void FrameEditorSession::render_attack_geometry(SDL_Renderer* renderer) const {
     if (frame.attack.vectors.empty()) return;
 
     if (!assets_ || !target_) return;
-    const camera_grid& cam = assets_->getView();
+    const WarpedScreenGrid& cam = assets_->getView();
     SDL_Point anchor = asset_anchor_world();
     const float scale = asset_local_scale();
     if (scale <= 0.0001f) return;

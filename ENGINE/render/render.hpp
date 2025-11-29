@@ -11,8 +11,8 @@
 #include <nlohmann/json.hpp>
 
 class Assets;
-class camera_grid;
-namespace world { class Grid; }
+class WarpedScreenGrid;
+namespace world { class WorldGrid; }
 
 // Renders prebuilt per-grid tiles with parallax applied. Intended to be
 // invoked at the start of SceneRenderer::render().
@@ -24,7 +24,7 @@ public:
     void render(SDL_Renderer* renderer);
 
     // Render using explicit camera and grid references.
-    void render(SDL_Renderer* renderer, const camera_grid& cam, const world::Grid& grid);
+    void render(SDL_Renderer* renderer, const WarpedScreenGrid& cam, const world::WorldGrid& grid);
 
 private:
     Assets* assets_ = nullptr;
@@ -81,10 +81,10 @@ private:
 
     bool ensure_sky_texture();
     void destroy_sky_texture();
-    void render_sky_layer(const camera_grid& cam, bool depth_effects_enabled);
+    void render_sky_layer(const WarpedScreenGrid& cam, bool depth_effects_enabled);
     bool ensure_fog_texture();
     void destroy_fog_texture();
-    void render_fog_layer(const camera_grid& cam, const world::Grid& grid, bool depth_effects_enabled);
+    void render_fog_layer(const WarpedScreenGrid& cam, const world::WorldGrid& grid, bool depth_effects_enabled);
 
     SDL_Renderer*  renderer_;
     Assets*        assets_;

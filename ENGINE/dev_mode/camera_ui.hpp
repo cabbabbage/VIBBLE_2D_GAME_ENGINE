@@ -3,7 +3,7 @@
 #include <functional>
 #include <memory>
 #include "DockableCollapsible.hpp"
-#include "render/camera_grid.hpp"
+#include "render/warped_screen_grid.hpp"
 
 class Assets;
 class DMCheckbox;
@@ -50,14 +50,14 @@ private:
     void build_ui();
     void rebuild_rows();
     void apply_settings_if_needed();
-    void apply_settings_to_camera(const camera_grid::RealismSettings& settings, bool effects_enabled, bool depthcue_enabled);
-    camera_grid::RealismSettings read_settings_from_ui() const;
+    void apply_settings_to_camera(const WarpedScreenGrid::RealismSettings& settings, bool effects_enabled, bool depthcue_enabled);
+    WarpedScreenGrid::RealismSettings read_settings_from_ui() const;
     void on_control_value_changed();
     void snap_zoom_to_anchor(float target_zoom, bool anchor_is_min_section);
 
 private:
     Assets* assets_ = nullptr;
-    camera_grid::RealismSettings last_settings_{};
+    WarpedScreenGrid::RealismSettings last_settings_{};
     bool last_realism_enabled_ = true;
 
     bool suppress_apply_once_ = false;

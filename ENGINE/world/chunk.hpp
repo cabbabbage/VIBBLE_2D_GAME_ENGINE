@@ -12,7 +12,7 @@
 
 class Assets;
 class Asset;
-class camera_grid;
+class WarpedScreenGrid;
 namespace world {
 class Grid;
 }

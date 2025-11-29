@@ -17,11 +17,11 @@
 
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
-#include "render/camera_grid.hpp"
+#include "render/warped_screen_grid.hpp"
 #include "tiling/grid_tile.hpp"
 #include "utils/log.hpp"
 #include "world/chunk.hpp"
-#include "world/grid.hpp"
+#include "world/world_grid.hpp"
 
 
 
@@ -35,7 +35,7 @@ void GridTileRenderer::render(SDL_Renderer* renderer) {
     render(renderer, assets_->getView(), assets_->world_grid());
 }
 
-void GridTileRenderer::render(SDL_Renderer* renderer, const camera_grid& cam, const world::Grid& grid) {
+void GridTileRenderer::render(SDL_Renderer* renderer, const WarpedScreenGrid& cam, const world::WorldGrid& grid) {
     if (!renderer) return;
 
     const auto& chunks = grid.active_chunks();
@@ -56,10 +56,15 @@ void GridTileRenderer::render(SDL_Renderer* renderer, const camera_grid& cam, co
             SDL_Point world_br{ tile.world_rect.x + tile.world_rect.w, tile.world_rect.y + tile.world_rect.h };
             SDL_Point world_bl{ tile.world_rect.x, tile.world_rect.y + tile.world_rect.h };
 
-            SDL_FPoint screen_tl = grid.floor_warped_screen_position(cam, world_tl);
-            SDL_FPoint screen_tr = grid.floor_warped_screen_position(cam, world_tr);
-            SDL_FPoint screen_br = grid.floor_warped_screen_position(cam, world_br);
-            SDL_FPoint screen_bl = grid.floor_warped_screen_position(cam, world_bl);
+            auto floor_warped_screen_position = [&](SDL_Point world_pos) -> SDL_FPoint {
+                auto effects = cam.compute_render_effects(world_pos, 0, 0, {});
+                return {std::floor(effects.screen_position.x), std::floor(effects.screen_position.y)};
+            };
+
+            SDL_FPoint screen_tl = floor_warped_screen_position(world_tl);
+            SDL_FPoint screen_tr = floor_warped_screen_position(world_tr);
+            SDL_FPoint screen_br = floor_warped_screen_position(world_br);
+            SDL_FPoint screen_bl = floor_warped_screen_position(world_bl);
 
             // Drop degenerate quads from extreme warping/parallax.
             const float area_doubled =
@@ -224,8 +229,8 @@ void SceneRenderer::render() {
 
     ++frame_counter_;
 
-    camera_grid& cam = assets_->getView();
-    world::Grid& grid = assets_->world_grid();
+    WarpedScreenGrid& cam = assets_->getView();
+    world::WorldGrid& grid = assets_->world_grid();
     cam.rebuild_grid(grid, assets_->frame_delta_seconds());
 
     SDL_SetRenderTarget(renderer_, nullptr);
@@ -318,7 +323,17 @@ void SceneRenderer::render() {
             SDL_SetTextureColorMod(obj.texture, obj.color_mod.r, obj.color_mod.g, obj.color_mod.b);
             SDL_SetTextureAlphaMod(obj.texture, final_alpha);
 
-            SDL_RenderCopy(renderer_, obj.texture, nullptr, &screen_rect);
+            if (obj.angle != 0.0 || obj.use_custom_center || obj.flip != SDL_FLIP_NONE) {
+                SDL_Point final_center = obj.center;
+                if (obj.use_custom_center) {
+                    final_center.x = static_cast<int>(std::lround(static_cast<double>(final_center.x) * perspective_scale));
+                    final_center.y = static_cast<int>(std::lround(static_cast<double>(final_center.y) * perspective_scale * vertical_scale));
+                }
+                const SDL_Point* center_ptr = obj.use_custom_center ? &final_center : nullptr;
+                SDL_RenderCopyEx(renderer_, obj.texture, nullptr, &screen_rect, obj.angle, center_ptr, obj.flip);
+            } else {
+                SDL_RenderCopy(renderer_, obj.texture, nullptr, &screen_rect);
+            }
         }
     }
 
@@ -411,7 +426,7 @@ void SceneRenderer::destroy_sky_texture() {
     sky_texture_height_ = 0;
 }
 
-void SceneRenderer::render_sky_layer(const camera_grid& cam, bool depth_effects_enabled) {
+void SceneRenderer::render_sky_layer(const WarpedScreenGrid& cam, bool depth_effects_enabled) {
     if (!depth_effects_enabled) {
         return;
     }

@@ -22,7 +22,7 @@
 #include "animation_update/animation_update.hpp"
 #include "render/render.hpp"
 
-class camera_grid;
+class WarpedScreenGrid;
 class Assets;
 class Input;
 class AnimationFrame;
@@ -40,6 +40,10 @@ struct RenderObject {
     SDL_Rect screen_rect{};
     SDL_Color color_mod{255, 255, 255, 255};
     SDL_BlendMode blend_mode = SDL_BLENDMODE_BLEND;
+    double angle = 0.0;
+    SDL_Point center{0, 0};
+    bool use_custom_center = false;
+    SDL_RendererFlip flip = SDL_FLIP_NONE;
 };
 
 using RenderCompositePackage = std::vector<RenderObject>;
@@ -184,7 +188,7 @@ class Asset {
     SDL_Texture* get_final_texture() const;
     SDL_Texture* get_texture();
     void set_final_texture(SDL_Texture* tex);
-    void set_camera(camera_grid* v) { window = v; }
+    void set_camera(WarpedScreenGrid* v) { window = v; }
     void set_assets(Assets* a);
     Assets* get_assets() const { return assets_; }
     void set_tiling_info(std::optional<TilingInfo> info);
@@ -288,7 +292,7 @@ private:
     friend class Assets;
     friend class devmode::AnimationRegenerator;
     friend class CompositeAssetRenderer;
-    camera_grid* window = nullptr;
+    WarpedScreenGrid* window = nullptr;
     bool highlighted = false;
     bool hidden = false;
     bool selected = false;

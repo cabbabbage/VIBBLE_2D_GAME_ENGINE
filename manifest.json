@@ -2488,7 +2488,7 @@
         "background_plane_screen_y": 443.0,
         "background_texture_max_opacity": 173,
         "base_height_at_zoom_high": 2530.0,
-        "base_height_at_zoom_low": -3625.0,
+        "base_height_at_zoom_low": -6280.0,
         "base_height_px": 720.0,
         "depth_offset_at_zoom_high": 4000.0,
         "depth_offset_at_zoom_low": 4000.0,
@@ -2510,10 +2510,10 @@
         "render_quality_percent": 50,
         "scale_hysteresis_margin": 0.004999999888241291,
         "texture_opacity_falloff_method": 3,
-        "tilt_zoom_in_degrees": 30.068580627441406,
+        "tilt_zoom_in_degrees": 30.160057067871094,
         "tilt_zoom_out_degrees": 67.69378662109375,
         "zoom_high": 3.999999761581421,
-        "zoom_low": 1.4900000095367432
+        "zoom_low": 0.9399999976158142
       },
       "content_root": "MAPS/FORREST",
       "map_assets_data": {
@@ -2813,9 +2813,9 @@
         "bar": {
           "curvyness": 2,
           "display_color": [
-            242,
-            85,
-            242,
+            31,
+            204,
+            31,
             255
           ],
           "edge_smoothness": 19,
@@ -2833,9 +2833,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            31,
-            204,
-            31,
+            36,
+            54,
+            242,
             255
           ],
           "edge_smoothness": 43,
@@ -2886,9 +2886,9 @@
         "rnd": {
           "curvyness": 2,
           "display_color": [
-            36,
-            143,
+            160,
             242,
+            36,
             255
           ],
           "edge_smoothness": 2,
@@ -2906,9 +2906,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            224,
-            34,
-            125,
+            242,
+            39,
+            36,
             255
           ],
           "edge_smoothness": 101,

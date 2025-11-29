@@ -5,7 +5,7 @@
 #include "asset/asset_types.hpp"
 #include "AssetsManager.hpp"
 #include "input.hpp"
-#include "world/grid.hpp"
+#include "world/world_grid.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -284,7 +284,7 @@ void MenuUI::doRestart() {
                     std::string map_id = loader_->map_identifier();
                     loader_ = std::make_unique<AssetLoader>(map_id, manifest_copy, renderer_, content_root, nullptr, asset_library_);
                 }
-                world::Grid world_grid{};
+                world::WorldGrid world_grid{};
                 loader_->createAssets(world_grid);
                 auto all_assets = world_grid.all_assets();
                 Asset* player_ptr = nullptr;

@@ -16,7 +16,7 @@
 #include "audio/audio_engine.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "utils/loading_status_notifier.hpp"
-#include "world/grid.hpp"
+#include "world/world_grid.hpp"
 #include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_mixer.h>
@@ -255,7 +255,7 @@ void MainApp::setup() {
 
                 loading_status::notify("Spawning assets");
                 auto spawn_begin = std::chrono::steady_clock::now();
-                world::Grid world_grid{};
+                world::WorldGrid world_grid{};
                 loader_->createAssets(world_grid);
                 auto all_assets = world_grid.all_assets();
                 vibble::log::info(std::string("[MainApp] Asset spawning finished for map '") +

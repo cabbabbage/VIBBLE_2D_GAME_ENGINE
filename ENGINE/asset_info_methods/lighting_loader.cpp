@@ -47,9 +47,8 @@ void LightingLoader::load(AssetInfo& info, const json& data) {
                 light.radius    = std::max(1, l.value("radius", light.radius));
                 light.fall_off  = std::max(0, l.value("fall_off", light.fall_off));
                 light.flare     = clamp_int(l.value("flare", light.flare), 0, 100);
-                const int legacy_flicker = std::clamp(read_int(l, "flicker", light.flicker_speed), 0, 100);
-                light.flicker_speed      = std::clamp(read_int(l, "flicker_speed", legacy_flicker), 0, 100);
-                light.flicker_smoothness = std::clamp(read_int(l, "flicker_smoothness", legacy_flicker), 0, 100);
+                light.flicker_speed      = std::clamp(read_int(l, "flicker_speed", 0), 0, 100);
+                light.flicker_smoothness = std::clamp(read_int(l, "flicker_smoothness", 0), 0, 100);
                 light.offset_x  = l.value("offset_x", light.offset_x);
                 light.offset_y  = l.value("offset_y", light.offset_y);
                 light.color     = {255, 255, 255, 255};

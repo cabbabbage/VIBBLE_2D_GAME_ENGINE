@@ -1,4 +1,4 @@
-﻿#include "dev_controls.hpp"
+#include "dev_controls.hpp"
 
 #include <SDL.h>
 #include <fstream>
@@ -37,7 +37,7 @@
 #include "asset/asset_types.hpp"
 #include "asset/asset_utils.hpp"
 #include "core/AssetsManager.hpp"
-#include "render/camera_grid.hpp"
+#include "render/warped_screen_grid.hpp"
 #include "map_generation/room.hpp"
 #include "spawn/asset_spawn_planner.hpp"
 #include "spawn/asset_spawner.hpp"
@@ -909,7 +909,7 @@ void DevControls::set_rooms(std::vector<Room*>* rooms, std::size_t generation) {
     if (map_editor_) map_editor_->set_rooms(rooms);
 }
 
-void DevControls::set_camera_override_for_testing(camera_grid* camera_override) {
+void DevControls::set_camera_override_for_testing(WarpedScreenGrid* camera_override) {
     camera_override_for_testing_ = camera_override;
     if (map_editor_) {
         map_editor_->set_camera_override_for_testing(camera_override);
@@ -1003,7 +1003,7 @@ void DevControls::set_enabled(bool enabled) {
         const char* msg = "[DevControls] preparing enable flow";
         dev_mode_trace(msg);
         std::cout << msg << "\n";
-        camera_grid* camera_ptr = assets_ ? &assets_->getView() : nullptr;
+        WarpedScreenGrid* camera_ptr = assets_ ? &assets_->getView() : nullptr;
         SDL_Point preserved_center{0, 0};
         float preserved_scale = 1.0f;
         bool should_restore_camera = false;
@@ -1204,8 +1204,8 @@ void DevControls::update(const Input& input) {
 
     // Update depth cue hover states
     if (camera_panel_ && camera_panel_->is_blur_section_visible() && assets_ && enabled_) {
-        const camera_grid& cam = assets_->getView();
-        const camera_grid::RealismSettings& settings = cam.realism_settings();
+        const WarpedScreenGrid& cam = assets_->getView();
+        const WarpedScreenGrid::RealismSettings& settings = cam.realism_settings();
         auto clamp_line = [&](float value) -> float {
             if (!std::isfinite(value)) {
                 return static_cast<float>(screen_h_) * 0.5f;
@@ -1236,7 +1236,7 @@ void DevControls::update(const Input& input) {
     // If we are suppressing render during a Map→Room transition, resume
     // once the camera finishes its pan/zoom animation.
     if (render_suppression_in_progress_) {
-        camera_grid* cam = assets_ ? &assets_->getView() : nullptr;
+        WarpedScreenGrid* cam = assets_ ? &assets_->getView() : nullptr;
         const bool camera_idle = !cam || !cam->is_zooming();
         if (camera_idle) {
             if (assets_) {
@@ -1598,7 +1598,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
             };
             if (hover_depthcue_foreground_) {
                 depthcue_drag_state_ = DepthCueDragState::Foreground;
-                const camera_grid::RealismSettings& settings = assets_->getView().realism_settings();
+                const WarpedScreenGrid::RealismSettings& settings = assets_->getView().realism_settings();
                 depthcue_drag_start_y_ = clamp_line(settings.foreground_plane_screen_y);
                 depthcue_drag_mouse_start_ = event.button.y;
                 if (input_) {
@@ -1607,7 +1607,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                 return;
             } else if (hover_depthcue_background_) {
                 depthcue_drag_state_ = DepthCueDragState::Background;
-                const camera_grid::RealismSettings& settings = assets_->getView().realism_settings();
+                const WarpedScreenGrid::RealismSettings& settings = assets_->getView().realism_settings();
                 depthcue_drag_start_y_ = clamp_line(settings.background_plane_screen_y);
                 depthcue_drag_mouse_start_ = event.button.y;
                 if (input_) {
@@ -1621,8 +1621,8 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
             int delta_y = event.motion.y - depthcue_drag_mouse_start_;
             float new_y = depthcue_drag_start_y_ + delta_y;
             if (assets_) {
-                camera_grid& cam = assets_->getView();
-                camera_grid::RealismSettings new_settings = cam.realism_settings();
+                WarpedScreenGrid& cam = assets_->getView();
+                WarpedScreenGrid::RealismSettings new_settings = cam.realism_settings();
                 if (depthcue_drag_state_ == DepthCueDragState::Foreground) {
                     new_settings.foreground_plane_screen_y = new_y;
                 } else if (depthcue_drag_state_ == DepthCueDragState::Background) {
@@ -1669,6 +1669,12 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         return;
     }
 
+    auto floor_warped_screen_position = [&](const WarpedScreenGrid& c, SDL_Point w) {
+        SDL_FPoint linear = c.map_to_screen(w);
+        float warped_y = c.warp_floor_screen_y(static_cast<float>(w.y), linear.y);
+        return SDL_FPoint{linear.x, warped_y};
+    };
+
     const bool show_depth_guides = camera_panel_ && camera_panel_->is_depth_section_visible();
     std::optional<float> horizon_screen_y;
     std::optional<std::string> parallax_probe_label;
@@ -1676,9 +1682,12 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     // Render grid overlay if enabled (moved to beginning to render behind UI)
         const bool need_grid_helpers = assets_ && (grid_overlay_enabled_ || show_depth_guides);
         if (renderer && need_grid_helpers) {
-            const camera_grid& cam = assets_->getView();
-            const camera_grid::FloorDepthParams depth_params = cam.compute_floor_depth_params();
-            world::Grid& grid = assets_->world_grid();
+            const WarpedScreenGrid& cam = assets_->getView();
+            const WarpedScreenGrid::FloorDepthParams depth_params = cam.compute_floor_depth_params();
+            world::WorldGrid& grid = assets_->world_grid();
+
+            auto parallax_offset = [&](SDL_Point w) { return 0.0f; };
+
         SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
         Uint8 pr = 0, pg = 0, pb = 0, pa = 0;
         if (grid_overlay_enabled_) {
@@ -1730,7 +1739,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                         static_cast<int>(std::lround(x)),
                         static_cast<int>(std::lround(wy))
                     };
-                    SDL_FPoint screen = grid.floor_warped_screen_position(cam, world_point);
+                    SDL_FPoint screen = floor_warped_screen_position(cam, world_point);
                     polyline.push_back(SDL_Point{
                         static_cast<int>(std::lround(screen.x)),
                         static_cast<int>(std::lround(screen.y))
@@ -1787,7 +1796,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                     static_cast<int>(std::lround(mid_world_x)),
                     static_cast<int>(std::lround(y))
                 };
-                SDL_FPoint sample_screen = grid.floor_warped_screen_position(cam, sample_world);
+                SDL_FPoint sample_screen = floor_warped_screen_position(cam, sample_world);
                 const float screen_y = sample_screen.y;
                 if (std::isfinite(screen_y)) {
                     highest_horizontal_screen_y = std::min(highest_horizontal_screen_y, screen_y);
@@ -1802,7 +1811,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                         static_cast<int>(std::lround(wx)),
                         static_cast<int>(std::lround(y))
                     };
-                    SDL_FPoint screen = grid.floor_warped_screen_position(cam, world_point);
+                    SDL_FPoint screen = floor_warped_screen_position(cam, world_point);
                     polyline.push_back(SDL_Point{
                         static_cast<int>(std::lround(screen.x)),
                         static_cast<int>(std::lround(screen.y))
@@ -1859,9 +1868,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                                                            static_cast<double>(max_world_y))))
                 };
 
-                const float parallax_anchor = grid.parallax_offset(anchor_sample);
-                const float parallax_above  = grid.parallax_offset(above_sample);
-                const float parallax_below  = grid.parallax_offset(below_sample);
+                const float parallax_anchor = parallax_offset(anchor_sample);
+                const float parallax_above  = parallax_offset(above_sample);
+                const float parallax_below  = parallax_offset(below_sample);
                 if (std::isfinite(parallax_anchor) && std::isfinite(parallax_above) && std::isfinite(parallax_below)) {
                     char buffer[192];
                     std::snprintf(buffer, sizeof(buffer),
@@ -1886,21 +1895,21 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     }
 
     if (renderer && camera_panel_ && camera_panel_->is_visible() && assets_) {
-        const camera_grid& cam = assets_->getView();
-        const camera_grid::FloorDepthParams depth_params = cam.compute_floor_depth_params();
+        const WarpedScreenGrid& cam = assets_->getView();
+        const WarpedScreenGrid::FloorDepthParams depth_params = cam.compute_floor_depth_params();
         if (depth_params.enabled) {
             SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
             SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
             Uint8 pr = 0, pg = 0, pb = 0, pa = 0;
             SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
 
-            const world::Grid& grid = assets_->world_grid();
-            SDL_FPoint center_world = cam.get_view_center_f();
+            const world::WorldGrid& grid = assets_->world_grid();
+            SDL_FPoint center_world_f = cam.get_view_center_f();
             SDL_Point depth_world{
-                static_cast<int>(std::lround(center_world.x)),
+                static_cast<int>(std::lround(center_world_f.x)),
                 static_cast<int>(std::lround(depth_params.base_world_y))
             };
-            SDL_FPoint depth_screen = grid.floor_warped_screen_position(cam, depth_world);
+            SDL_FPoint depth_screen = floor_warped_screen_position(cam, depth_world);
             const int y_line = static_cast<int>(std::lround(depth_screen.y));
 
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -1953,7 +1962,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         }
         // Draw room area overlays (always visible in Room mode)
         if (renderer && assets_ && current_room_) {
-            const camera_grid& cam = assets_->getView();
+            const WarpedScreenGrid& cam = assets_->getView();
             SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
             SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -2053,7 +2062,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         }
     }
     if (renderer && map_mode_ui_ && map_mode_ui_->is_light_panel_visible() && assets_) {
-        const camera_grid& cam = assets_->getView();
+        const WarpedScreenGrid& cam = assets_->getView();
         SDL_Point screen_center_map = cam.get_screen_center();
         SDL_FPoint screen_center_f = cam.map_to_screen(screen_center_map);
         SDL_Point screen_center{static_cast<int>(std::lround(screen_center_f.x)),
@@ -2073,8 +2082,8 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     }
 
     if (renderer && camera_panel_ && camera_panel_->is_blur_section_visible() && assets_ && screen_w_ > 0 && screen_h_ > 0) {
-        const camera_grid& cam = assets_->getView();
-        const camera_grid::RealismSettings& settings = cam.realism_settings();
+        const WarpedScreenGrid& cam = assets_->getView();
+        const WarpedScreenGrid::RealismSettings& settings = cam.realism_settings();
         SDL_FPoint center_world_f = cam.get_view_center_f();
         SDL_FPoint center_screen_f = cam.map_to_screen_f(center_world_f);
         float center_y = std::isfinite(center_screen_f.y)
@@ -2151,7 +2160,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
 
     // When the Camera Settings panel is open, draw a crosshair at the rendered focus point (actual view center).
     if (renderer && camera_panel_ && camera_panel_->is_visible() && assets_) {
-        const camera_grid& cam = assets_->getView();
+        const WarpedScreenGrid& cam = assets_->getView();
         SDL_FPoint center_world_f = cam.get_view_center_f();
         SDL_FPoint center_screen_f = cam.map_to_screen_f(center_world_f);
         const int cx = static_cast<int>(std::lround(center_screen_f.x));
@@ -3057,7 +3066,7 @@ void DevControls::toggle_map_assets_modal() {
 }
 
 void DevControls::apply_camera_area_render_flag() {
-    camera_grid* cam_ptr = nullptr;
+    WarpedScreenGrid* cam_ptr = nullptr;
     if (camera_override_for_testing_) {
         cam_ptr = camera_override_for_testing_;
     } else if (assets_) {
@@ -3499,7 +3508,7 @@ void DevControls::handle_map_selection() {
         render_suppression_in_progress_ = true;
     }
     if (assets_) {
-        camera_grid* cam = &assets_->getView();
+        WarpedScreenGrid* cam = &assets_->getView();
         if (cam && selected && selected->room_area) {
             const SDL_Point center = selected->room_area->get_center();
             const double current_scale = std::max(0.0001, static_cast<double>(cam->get_scale()));

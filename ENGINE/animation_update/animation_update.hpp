@@ -9,7 +9,7 @@
 #include "stride_types.hpp"
 #include "path_sanitizer.hpp"
 #include "get_best_path.hpp"
-#include "render/camera_grid.hpp"
+#include "render/warped_screen_grid.hpp"
 #include "asset/animation.hpp"
 
 class Area;

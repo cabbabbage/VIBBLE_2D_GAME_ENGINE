@@ -12,7 +12,7 @@
 #include "utils/shadow_mask_settings.hpp"
 
 class Asset;
-class camera_grid;
+class WarpedScreenGrid;
 class Animation;
 class AssetInfo;
 
@@ -51,7 +51,7 @@ private:
 
 class AssetMerger {
 public:
-    AssetMerger(SDL_Renderer* renderer, const camera_grid* active_camera = nullptr);
+    AssetMerger(SDL_Renderer* renderer, const WarpedScreenGrid* active_camera = nullptr);
 
     std::unique_ptr<Asset> merge(std::vector<std::unique_ptr<Asset>> assets);
 
@@ -75,7 +75,7 @@ private:
     std::vector<SampledAsset> sample_assets(const std::vector<std::unique_ptr<Asset>>& assets, double& min_x, double& min_y, double& max_x, double& max_y) const;
 
     SDL_Renderer* renderer_ = nullptr;
-    const camera_grid* camera_ = nullptr;
+    const WarpedScreenGrid* camera_ = nullptr;
 };
 
 }

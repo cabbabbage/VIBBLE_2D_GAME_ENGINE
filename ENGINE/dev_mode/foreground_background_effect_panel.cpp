@@ -7,7 +7,7 @@
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/font_cache.hpp"
 #include "dev_mode/widgets.hpp"
-#include "render/camera_grid.hpp"
+#include "render/warped_screen_grid.hpp"
 #include "utils/cache_manager.hpp"
 
 #include <SDL_image.h>
@@ -835,8 +835,8 @@ void ForegroundBackgroundEffectPanel::refresh_from_camera() {
         load_current_mode_settings();
         return;
     }
-    camera_grid& cam = assets_->getView();
-    const camera_grid::RealismSettings& settings = cam.realism_settings();
+    WarpedScreenGrid& cam = assets_->getView();
+    const WarpedScreenGrid::RealismSettings& settings = cam.realism_settings();
     fg_settings_ = settings.foreground_effects;
     bg_settings_ = settings.background_effects;
     saved_fg_ = fg_settings_;
@@ -977,8 +977,8 @@ void ForegroundBackgroundEffectPanel::apply_and_regenerate() {
 
     // Save settings to manifest and camera
     save_depth_cue_settings_to_manifest();
-    camera_grid& cam = assets_->getView();
-    camera_grid::RealismSettings settings = cam.realism_settings();
+    WarpedScreenGrid& cam = assets_->getView();
+    WarpedScreenGrid::RealismSettings settings = cam.realism_settings();
     settings.foreground_effects = fg_settings_;
     settings.background_effects = bg_settings_;
     cam.set_realism_settings(settings);

@@ -26,7 +26,7 @@
 #include "map_generation/generate_rooms.hpp"
 #include "map_generation/map_layers_geometry.hpp"
 #include "world/chunk.hpp"
-#include "world/grid.hpp"
+#include "world/world_grid.hpp"
 #include "utils/grid.hpp"
 #include "core/tile_builder.hpp"
 #include <nlohmann/json.hpp>
@@ -398,11 +398,10 @@ std::vector<std::unique_ptr<Asset>> AssetLoader::extract_all_assets() {
         return out;
 }
 
-void AssetLoader::createAssets(world::Grid& grid) {
+void AssetLoader::createAssets(world::WorldGrid& grid) {
         const auto t0 = std::chrono::steady_clock::now();
 
         grid.set_chunk_resolution(std::max(0, map_grid_settings_.r_chunk));
-        grid.set_parallax_resolution(std::max(0, map_grid_settings_.resolution));
         vibble::log::debug(std::string("[AssetLoader] createAssets: requested r_chunk=") + std::to_string(map_grid_settings_.r_chunk));
 
         auto extracted_assets = extract_all_assets();

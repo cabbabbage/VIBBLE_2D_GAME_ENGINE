@@ -404,9 +404,9 @@ private:
     void render_directory_panel(SDL_Renderer* renderer);
     void render_navigation_panel(SDL_Renderer* renderer);
     void render_toolbox(SDL_Renderer* renderer);
-    void render_child_guides(SDL_Renderer* renderer, const camera_grid& cam);
-    void render_hitbox_guides(SDL_Renderer* renderer, const camera_grid& cam);
-    void render_attack_guides(SDL_Renderer* renderer, const camera_grid& cam);
+    void render_child_guides(SDL_Renderer* renderer, const WarpedScreenGrid& cam);
+    void render_hitbox_guides(SDL_Renderer* renderer, const WarpedScreenGrid& cam);
+    void render_attack_guides(SDL_Renderer* renderer, const WarpedScreenGrid& cam);
     ChildPreviewContext build_child_preview_context() const;
     SDL_FRect child_preview_rect(SDL_FPoint child_world,
                                  int texture_w,

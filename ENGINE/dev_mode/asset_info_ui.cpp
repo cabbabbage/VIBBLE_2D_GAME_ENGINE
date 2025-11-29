@@ -42,14 +42,14 @@
 #include "map_generation/room.hpp"
 #include "core/AssetsManager.hpp"
 #include "core/manifest/manifest_loader.hpp"
-#include "world/grid.hpp"
+#include "world/world_grid.hpp"
 #include "world/chunk.hpp"
 #include "utils/map_grid_settings.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "asset_sections/animation_editor_window/AnimationEditorWindow.hpp"
 #include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
-#include "render/camera_grid.hpp"
+#include "render/warped_screen_grid.hpp"
 #include "render/render.hpp"
 #include "search_assets.hpp"
 #include "draw_utils.hpp"
@@ -732,7 +732,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
         const bool pointer_event =
             (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
         if (pointer_event && target_asset_ && target_asset_->info.get() == info_.get()) {
-            const camera_grid& cam = assets_->getView();
+            const WarpedScreenGrid& cam = assets_->getView();
 
             // Build a transform consistent with SceneRenderer::render_lights_for_source
             auto compute_light_transform = [&]() {
@@ -758,8 +758,8 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                 const float base_sh = static_cast<float>(fh) * base_scale * inv_scale;
 
                 const float ref_sh = compute_player_screen_height(cam);
-                const camera_grid::RenderSmoothingKey smoothing_key = camera_grid::RenderSmoothingKey(target_asset_);
-                camera_grid::RenderEffects ef = cam.compute_render_effects(
+                const WarpedScreenGrid::RenderSmoothingKey smoothing_key = WarpedScreenGrid::RenderSmoothingKey(target_asset_);
+                WarpedScreenGrid::RenderEffects ef = cam.compute_render_effects(
                     SDL_Point{ target_asset_->pos.x, target_asset_->pos.y },
                     base_sh,
                     ref_sh,
@@ -770,7 +770,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                 if (assets_ && target_asset_) {
                     // Do not apply grid parallax to the player asset
                     if (!(assets_->player == target_asset_)) {
-                        adjusted_cx = assets_->world_grid().parallax_adjusted_screen_x(world_point, ef.screen_position.x);
+                        // parallax_adjusted_screen_x is now handled internally by compute_render_effects
                     }
                 }
                 const float distance_scale  = ef.distance_scale;
@@ -1149,7 +1149,7 @@ void AssetInfoUI::pulse_header() {
 
 void AssetInfoUI::apply_camera_override(bool enable) {
     if (!assets_) return;
-    camera_grid& cam = assets_->getView();
+    WarpedScreenGrid& cam = assets_->getView();
     if (enable) {
         if (camera_override_active_) return;
         prev_camera_realism_enabled_ = cam.realism_enabled();
@@ -1165,7 +1165,7 @@ void AssetInfoUI::apply_camera_override(bool enable) {
     }
 }
 
-float AssetInfoUI::compute_player_screen_height(const camera_grid& cam) const {
+float AssetInfoUI::compute_player_screen_height(const WarpedScreenGrid& cam) const {
     if (!assets_ || !assets_->player) return 1.0f;
     Asset* player_asset = assets_->player;
     if (!player_asset) return 1.0f;
@@ -1199,7 +1199,7 @@ float AssetInfoUI::compute_player_screen_height(const camera_grid& cam) const {
     return 1.0f;
 }
 
-void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera_grid& cam) const {
+void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const WarpedScreenGrid& cam) const {
     if (!visible_ || !info_) return;
 
     validate_target_asset();
@@ -1217,7 +1217,7 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera_grid& cam) 
         SDL_SetRenderDrawColor(r, lh.r, lh.g, lh.b, 220);
 
         // Compute transform consistent with runtime light rendering
-        const camera_grid& cam = assets_->getView();
+        const WarpedScreenGrid& cam = assets_->getView();
         auto compute_light_transform = [&]() {
             struct Xform { float cx; float cy; float sx; float sy; } out{0,0,1,1};
             int fw = target_asset_->cached_w;
@@ -1240,8 +1240,8 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera_grid& cam) 
             const float base_sh = static_cast<float>(fh) * base_scale * inv_scale;
 
             const float ref_sh = compute_player_screen_height(cam);
-            const camera_grid::RenderSmoothingKey smoothing_key = camera_grid::RenderSmoothingKey(target_asset_);
-            camera_grid::RenderEffects ef = cam.compute_render_effects(
+            const WarpedScreenGrid::RenderSmoothingKey smoothing_key = WarpedScreenGrid::RenderSmoothingKey(target_asset_);
+            WarpedScreenGrid::RenderEffects ef = cam.compute_render_effects(
                 SDL_Point{ target_asset_->pos.x, target_asset_->pos.y },
                 base_sh,
                 ref_sh,
@@ -1252,7 +1252,7 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const camera_grid& cam) 
             if (assets_ && target_asset_) {
                 // Do not apply grid parallax to the player asset
                 if (!(assets_->player == target_asset_)) {
-                    adjusted_cx = assets_->world_grid().parallax_adjusted_screen_x(world_point, ef.screen_position.x);
+                    // parallax_adjusted_screen_x is now handled internally by compute_render_effects
                 }
             }
             const float distance_scale  = ef.distance_scale;

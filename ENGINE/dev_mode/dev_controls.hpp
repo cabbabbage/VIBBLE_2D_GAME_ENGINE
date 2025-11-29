@@ -22,7 +22,7 @@
 class Asset;
 class Input;
 class Assets;
-class camera_grid;
+class WarpedScreenGrid;
 class AssetInfo;
 class Room;
 class RoomEditor;
@@ -94,7 +94,7 @@ public:
     bool is_enabled() const { return enabled_; }
     Mode mode() const { return mode_; }
 
-    void set_camera_override_for_testing(camera_grid* camera_override);
+    void set_camera_override_for_testing(WarpedScreenGrid* camera_override);
 
     void update(const Input& input);
     void update_ui(const Input& input);
@@ -250,7 +250,7 @@ private:
     devmode::core::ManifestStore manifest_store_;
     AssetFilterBar asset_filter_;
 
-    camera_grid* camera_override_for_testing_ = nullptr;
+    WarpedScreenGrid* camera_override_for_testing_ = nullptr;
 
     std::unique_ptr<SingleSpawnGroupModal> map_assets_modal_;
     std::unique_ptr<SingleSpawnGroupModal> boundary_assets_modal_;

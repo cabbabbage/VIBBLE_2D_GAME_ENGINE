@@ -22,7 +22,7 @@ class ManifestStore;
 }
 
 namespace world {
-class Grid;
+class WorldGrid;
 struct Chunk;
 }
 
@@ -38,7 +38,7 @@ class AssetLoader {
     ~AssetLoader();
     std::vector<Asset*> collectDistantAssets(int lock_threshold, int remove_threshold);
 
-    void createAssets(world::Grid& grid);
+    void createAssets(world::WorldGrid& grid);
     std::vector<const Area*> getAllRoomAndTrailAreas() const;
     AssetLibrary* getAssetLibrary() const { return asset_library_; }
     const std::vector<Room*>& getRooms() const { return rooms_; }
