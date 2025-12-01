@@ -171,6 +171,7 @@ Asset::Asset(const Asset& o)
 , is_shaded(o.is_shaded)
 , dead(o.dead)
 , static_frame(o.static_frame)
+, needs_target(o.needs_target)
 , cached_w(o.cached_w)
 , cached_h(o.cached_h)
 , window(o.window)
@@ -240,6 +241,7 @@ Asset& Asset::operator=(const Asset& o) {
         is_shaded            = o.is_shaded;
 	dead                 = o.dead;
 	static_frame         = o.static_frame;
+        needs_target        = o.needs_target;
 	cached_w             = o.cached_w;
 	cached_h             = o.cached_h;
 	window               = o.window;

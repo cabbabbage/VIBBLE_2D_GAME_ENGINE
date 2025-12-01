@@ -24,9 +24,11 @@ void CompositeAssetRenderer::update(Asset* asset,
     bool children_dirty = false;
     for (const auto& child_attachment : asset->animation_children()) {
         if (child_attachment.spawned_asset) {
+            Asset* child = child_attachment.spawned_asset;
+            const bool child_was_dirty = child->is_composite_dirty();
             // Children do not have their own grid point, they are relative to the parent
-            update(child_attachment.spawned_asset, nullptr, flicker_time_seconds);
-            if (child_attachment.spawned_asset->is_composite_dirty()) {
+            update(child, nullptr, flicker_time_seconds);
+            if (child_was_dirty || child->is_composite_dirty()) {
                 children_dirty = true;
             }
         }
@@ -192,9 +194,8 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
 
             Asset* child = child_attachment.spawned_asset;
             for (const auto& render_obj : child->render_package) {
+                // Child render packages are already expressed in world space.
                 SDL_Rect child_rect = render_obj.screen_rect;
-                child_rect.x += (child->pos.x - asset->pos.x);
-                child_rect.y += (child->pos.y - asset->pos.y);
 
                 double final_angle = render_obj.angle + static_cast<double>(child_attachment.rotation_degrees);
                 std::optional<SDL_Point> center_opt = std::nullopt;
@@ -309,9 +310,8 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
 
             Asset* child = child_attachment.spawned_asset;
             for (const auto& render_obj : child->render_package) {
+                // Child render packages are already expressed in world space.
                 SDL_Rect child_rect = render_obj.screen_rect;
-                child_rect.x += (child->pos.x - asset->pos.x);
-                child_rect.y += (child->pos.y - asset->pos.y);
 
                 double final_angle = render_obj.angle + static_cast<double>(child_attachment.rotation_degrees);
                 std::optional<SDL_Point> center_opt = std::nullopt;

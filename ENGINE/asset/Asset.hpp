@@ -259,6 +259,7 @@ class Asset {
     bool is_shaded = false;
     bool dead = false;
     bool static_frame = true;
+    bool needs_target = false;
     int cached_w = 0;
     int cached_h = 0;
     std::uint64_t last_render_frame_id = 0;

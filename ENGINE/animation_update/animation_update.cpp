@@ -243,6 +243,30 @@ AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets)
 AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets, double)
     : AnimationUpdate(self, assets) {}
 
+void AnimationUpdate::auto_move(SDL_Point rel_checkpoint,
+                                int visited_thresh_px,
+                                std::optional<int> checkpoint_resolution,
+                                bool override_non_locked) {
+    std::vector<SDL_Point> rel{ rel_checkpoint };
+    auto_move(rel, visited_thresh_px, checkpoint_resolution, override_non_locked);
+}
+
+void AnimationUpdate::auto_move(Asset* target_asset,
+                                int visited_thresh_px,
+                                bool override_non_locked) {
+    if (!self_ || !target_asset) {
+        return;
+    }
+    SDL_Point delta{ target_asset->pos.x - self_->pos.x, target_asset->pos.y - self_->pos.y };
+    if (delta.x == 0 && delta.y == 0) {
+        if (self_) {
+            self_->needs_target = false;
+        }
+        return;
+    }
+    auto_move(delta, visited_thresh_px, std::nullopt, override_non_locked);
+}
+
 void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
                                 int visited_thresh_px,
                                 std::optional<int> checkpoint_resolution,
@@ -259,7 +283,6 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
             visited_thresh_ = ((visited_thresh_ + step - 1) / step) * step;
         }
     }
-    path_requested = false;
     const bool debug_logging = debug_enabled_;
     if (debug_logging) {
         std::ostringstream oss;
@@ -300,7 +323,9 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
         if (debug_logging) {
             vibble::log::info("[AnimationUpdate] auto_move plan produced no strides for asset=" + asset_name);
         }
-        path_requested = true;
+        if (self_) {
+            self_->needs_target = true;
+        }
         return;
     }
 
@@ -310,6 +335,9 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
 
     // Signal executor to re-evaluate plan
     input_event_ = true;
+    if (self_) {
+        self_->needs_target = false;
+    }
 }
 
 void AnimationUpdate::move(SDL_Point delta,
@@ -336,7 +364,6 @@ void AnimationUpdate::clear_movement_plan() {
     plan_.final_dest = self_ ? self_->pos : SDL_Point{ 0, 0 };
     plan_.override_non_locked = true;
     final_dest       = plan_.final_dest;
-    path_requested   = false;
     input_event_     = true;
 
     if (debug_logging) {
@@ -348,6 +375,9 @@ void AnimationUpdate::clear_movement_plan() {
 
     if (runtime_) {
         runtime_->reset_plan_progress();
+    }
+    if (self_) {
+        self_->needs_target = true;
     }
 }
 

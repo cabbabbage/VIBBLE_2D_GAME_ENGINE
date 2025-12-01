@@ -81,6 +81,13 @@ public:
                    int visited_thresh_px,
                    std::optional<int> checkpoint_resolution = std::nullopt,
                    bool override_non_locked = true);
+    void auto_move(SDL_Point rel_checkpoint,
+                   int visited_thresh_px = 0,
+                   std::optional<int> checkpoint_resolution = std::nullopt,
+                   bool override_non_locked = true);
+    void auto_move(Asset* target_asset,
+                   int visited_thresh_px = 0,
+                   bool override_non_locked = true);
 
     // Request an immediate move + animation selection (applied by executor in update)
     void move(SDL_Point delta,
@@ -101,7 +108,6 @@ public:
     }
 
     // Exposed state for controllers to inspect
-    bool      path_requested = false;
     SDL_Point final_dest{0, 0};
 
     // Executor interface (internal)

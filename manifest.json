@@ -1148,7 +1148,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 60.0
+        "scale_percentage": 49.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -1860,11 +1860,11 @@
         }
       },
       "anti_tags": [],
-      "custom_controller_key": "Bomb_controller",
       "asset_directory": "SRC/assets/bomb",
       "asset_name": "bomb",
       "asset_type": "object",
       "can_invert": false,
+      "custom_controller_key": "Bomb_controller",
       "has_shading": false,
       "lighting_info": [
         {
@@ -2488,15 +2488,10 @@
       "camera_settings": {
         "background_plane_screen_y": 443.0,
         "background_texture_max_opacity": 173,
-        "base_height_at_zoom_high": 970.0,
-        "base_height_at_zoom_low": 4400.0,
         "base_height_px": 2685.0,
-        "depth_offset_at_zoom_high": 4000.0,
-        "depth_offset_at_zoom_low": 4000.0,
         "extra_cull_margin": 300.0,
         "foreground_plane_screen_y": 613.0,
         "foreground_texture_max_opacity": 148,
-        "grid_depth_offset_px": 4000.0,
         "horizon_fade_band_px": 80.0,
         "min_visible_screen_ratio": 0.006000000052154064,
         "parallax_smoothing_lerp_rate": 4.1666669845581055,
@@ -2506,13 +2501,11 @@
         "parallax_smoothing_spring_frequency": 0.0,
         "perspective_distance_at_scale_hundred": -5000.0,
         "perspective_distance_at_scale_zero": -2511.0,
-        "perspective_scale_gamma": 1.7999999523162842,
+        "perspective_scale_gamma": 2.5,
         "realism_enabled": true,
         "render_quality_percent": 50,
         "scale_hysteresis_margin": 0.004999999888241291,
         "texture_opacity_falloff_method": 3,
-        "tilt_zoom_in_degrees": 0.0,
-        "tilt_zoom_out_degrees": 0.0,
         "zoom_high": 3.999999761581421,
         "zoom_low": 0.9399999976158142
       },
@@ -2814,9 +2807,9 @@
         "bar": {
           "curvyness": 2,
           "display_color": [
-            31,
-            204,
-            31,
+            242,
+            85,
+            160,
             255
           ],
           "edge_smoothness": 19,
@@ -2835,7 +2828,7 @@
           "curvyness": 2,
           "display_color": [
             36,
-            133,
+            143,
             242,
             255
           ],
@@ -2887,9 +2880,9 @@
         "rnd": {
           "curvyness": 2,
           "display_color": [
-            160,
-            242,
-            36,
+            31,
+            204,
+            56,
             255
           ],
           "edge_smoothness": 2,
@@ -2907,9 +2900,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            204,
-            31,
-            31,
+            242,
+            242,
+            85,
             255
           ],
           "edge_smoothness": 101,
@@ -2934,154 +2927,6 @@
                 },
                 {
                   "chance": 100,
-                  "name": "trail"
-                }
-              ],
-              "display_name": "trail",
-              "dx": -1732,
-              "dy": -2080052420,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 6904,
-              "origional_width": 6904,
-              "position": "Exact",
-              "priority": 0,
-              "resolution": 7,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-ed314c8d8471"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Candle"
-                }
-              ],
-              "display_name": "Candle",
-              "dx": -28,
-              "dy": -1820,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 6904,
-              "origional_width": 6904,
-              "position": "Exact",
-              "priority": 1,
-              "resolution": 7,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-2c581a849c4d"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "barrel"
-                }
-              ],
-              "display_name": "barrel",
-              "dx": -1052,
-              "dy": 996,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 6904,
-              "origional_width": 6904,
-              "position": "Exact",
-              "priority": 2,
-              "resolution": 7,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-58558f88418c"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "barrel"
-                }
-              ],
-              "display_name": "barrel",
-              "dx": -1988,
-              "dy": 1404,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 2,
-              "min_number": 2,
-              "origional_height": 6904,
-              "origional_width": 6904,
-              "perimeter_radius": 1365,
-              "position": "Exact",
-              "priority": 3,
-              "quantity": 2,
-              "radius": 1365,
-              "resolution": 6,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-70838cefc6c9"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "lantern"
-                }
-              ],
-              "display_name": "lantern",
-              "dx": 956,
-              "dy": 67516,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 6904,
-              "origional_width": 6904,
-              "position": "Exact",
-              "priority": 4,
-              "resolution": 7,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-6a46463463ba"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
                   "name": "Vibble"
                 }
               ],
@@ -3097,127 +2942,11 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 5,
+              "priority": 0,
               "resolution": 5,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-aa75627185b2"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Candle"
-                }
-              ],
-              "display_name": "Candle",
-              "dx": -540,
-              "dy": -1308,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 6904,
-              "origional_width": 6904,
-              "position": "Exact",
-              "priority": 6,
-              "resolution": 7,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-005666825730"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Candle"
-                }
-              ],
-              "display_name": "Candle",
-              "dx": -284,
-              "dy": -1052,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 6904,
-              "origional_width": 6904,
-              "position": "Exact",
-              "priority": 7,
-              "resolution": 5,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-ce00b29f02fd"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "town_hall"
-                }
-              ],
-              "display_name": "town_hall",
-              "dx": -156,
-              "dy": -33423772,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 6904,
-              "origional_width": 6904,
-              "position": "Exact",
-              "priority": 8,
-              "resolution": 7,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-e8920fc0e0a0"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Candle"
-                }
-              ],
-              "display_name": "Candle",
-              "dx": -1308,
-              "dy": -924,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 6904,
-              "origional_width": 6904,
-              "position": "Exact",
-              "priority": 9,
-              "resolution": 7,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-12f8612f85c3"
             },
             {
               "candidates": [
@@ -3242,11 +2971,40 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 10,
+              "priority": 1,
               "resolution": 7,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-64b0cfcf9b7b"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "barrel"
+                }
+              ],
+              "display_name": "barrel",
+              "dx": 484,
+              "dy": -796,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 6904,
+              "origional_width": 6904,
+              "position": "Exact",
+              "priority": 2,
+              "resolution": 7,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-ea8ff615b43e"
             }
           ]
         }

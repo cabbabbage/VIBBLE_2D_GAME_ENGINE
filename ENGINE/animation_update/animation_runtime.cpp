@@ -940,7 +940,6 @@ bool AnimationRuntime::adjust_next_checkpoint(const std::vector<const Asset*>& b
         stride_index_ = 0;
         stride_frame_counter_ = 0;
         next_checkpoint_index_ = 0;
-        planner_iface_->path_requested = false;
         mark_progress_toward_checkpoints();
         return true;
 };
@@ -1013,7 +1012,6 @@ bool AnimationRuntime::replan_to_destination() {
     planner_iface_->final_dest = planner_iface_->plan_.final_dest;
     stride_index_ = 0;
     stride_frame_counter_ = 0;
-    planner_iface_->path_requested = false;
     next_checkpoint_index_ = 0;
     mark_progress_toward_checkpoints();
     return true;
