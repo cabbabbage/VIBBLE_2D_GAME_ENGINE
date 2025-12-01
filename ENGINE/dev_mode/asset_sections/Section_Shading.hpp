@@ -128,7 +128,7 @@ public:
                 (void)info_->commit_manifest();
                 shading_changed = true;
                 if (ui_) {
-                    ui_->notify_light_sources_modified(true);
+                    ui_->sync_target_shading_settings();
                     ui_->regenerate_shadow_masks();
                 }
             }
@@ -170,6 +170,7 @@ public:
             info_->set_shadow_mask_settings(updated);
             (void)info_->commit_manifest();
             if (ui_) {
+                ui_->sync_target_shading_settings();
                 ui_->regenerate_shadow_masks();
             }
         }
@@ -277,19 +278,30 @@ inline SDL_Texture* Section_Shading::resolve_preview_sprite() const {
     if (index < 0 || index >= static_cast<int>(animation->frames.size())) {
         return nullptr;
     }
-    return animation->frames[index];
+    if (animation->frames[index] && !animation->frames[index]->variants.empty()) {
+        return animation->frames[index]->variants[0].base_texture;
+    }
+    return nullptr;
 }
 
 inline SDL_Texture* Section_Shading::resolve_preview_mask() const {
+    if (ui_) {
+        if (SDL_Texture* preview = ui_->mask_preview_texture()) {
+            return preview;
+        }
+    }
     const Animation* animation = find_preview_animation();
     if (!animation) {
         return nullptr;
     }
     const int index = preview_frame_index(*animation);
-    if (index < 0 || index >= static_cast<int>(animation->mask_frames.size())) {
+    if (index < 0 || index >= static_cast<int>(animation->frames.size())) {
         return nullptr;
     }
-    return animation->mask_frames[index];
+    if (animation->frames[index] && !animation->frames[index]->variants.empty()) {
+        return animation->frames[index]->variants[0].shadow_mask_texture;
+    }
+    return nullptr;
 }
 
 inline void Section_Shading::render_preview(SDL_Renderer* renderer, const SDL_Rect& bounds) const {

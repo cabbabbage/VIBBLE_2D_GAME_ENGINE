@@ -14,13 +14,11 @@
 #include "Asset.hpp"
 #include "animation.hpp"
 #include "asset_info.hpp"
-#include "asset/surface_utils.hpp"
-#include "render/image_effect_settings.hpp"
-#include "render/camera.hpp"
-#include "render_pipeline/ScalingLogic.hpp"
+
+#include "render/warped_screen_grid.hpp"
+#include "render/render.hpp"
 #include "utils/area.hpp"
 #include "utils/cache_manager.hpp"
-#include "utils/image_effects.hpp"
 #include "utils/log.hpp"
 
 #include <nlohmann/json.hpp>
@@ -30,8 +28,6 @@ namespace runtime {
 namespace {
 
 namespace fs = std::filesystem;
-
-constexpr int kAnimationCacheVersion     = 3;
 
 SDL_Surface* texture_to_surface(SDL_Renderer* renderer, SDL_Texture* texture, int width, int height) {
     if (!renderer || !texture || width <= 0 || height <= 0) {
@@ -67,17 +63,13 @@ void free_surface_lists(std::vector<std::vector<SDL_Surface*>>& lists) {
     }
 }
 
-camera_effects::image_effects::GlobalState resolve_effect_state() {
-    camera_effects::image_effects::GlobalState state = camera_effects::image_effects::current_state();
-    if (auto defaults = camera_effects::manifest_effect_defaults()) {
-        if (camera_effects::ImageEffectSettingsIsIdentity(state.foreground)) {
-            state.foreground = defaults->foreground;
-        }
-        if (camera_effects::ImageEffectSettingsIsIdentity(state.background)) {
-            state.background = defaults->background;
-        }
-    }
-    return state;
+struct DummyEffectState {
+    // Dummy structure since image effects are now handled by Python
+};
+
+DummyEffectState resolve_effect_state() {
+    // Image effects are now handled by Python, so we don't need runtime resolvement
+    return {};
 }
 
 std::optional<AssetInfo::NamedArea::RenderFrame> select_render_frame(const AssetInfo& info) {
@@ -238,6 +230,7 @@ std::shared_ptr<AssetInfo> TemporaryMergedAssetInfo::finalize(const std::vector<
     info_->anti_tags.erase(std::unique(info_->anti_tags.begin(), info_->anti_tags.end()), info_->anti_tags.end());
 
     info_->scale_variants = variant_steps;
+    render_pipeline::ScalingLogic::NormalizeVariantSteps(info_->scale_variants);
     if (scale_factor_count_ > 0) {
         info_->scale_factor = scale_factor_sum_ / static_cast<float>(scale_factor_count_);
     } else {
@@ -251,7 +244,7 @@ std::shared_ptr<AssetInfo> TemporaryMergedAssetInfo::finalize(const std::vector<
     return info_;
 }
 
-AssetMerger::AssetMerger(SDL_Renderer* renderer, const camera* active_camera)
+AssetMerger::AssetMerger(SDL_Renderer* renderer, const WarpedScreenGrid* active_camera)
     : renderer_(renderer), camera_(active_camera) {
     if (!renderer_) {
         throw std::invalid_argument("AssetMerger requires a valid SDL_Renderer");
@@ -362,7 +355,11 @@ std::vector<AssetMerger::SampledAsset> AssetMerger::sample_assets(const std::vec
             frame_index = 0;
         }
 
-        SDL_Texture* frame_texture = anim.get_frame(frame_ptr);
+        const FrameVariant* frame_variant = anim.get_frame(frame_ptr, 1.0f);
+        if (!frame_variant) {
+            continue;
+        }
+        SDL_Texture* frame_texture = frame_variant->base_texture;
         if (!frame_texture) {
             continue;
         }
@@ -373,7 +370,7 @@ std::vector<AssetMerger::SampledAsset> AssetMerger::sample_assets(const std::vec
             continue;
         }
 
-        SDL_Texture* mask_texture = anim.mask_variant(static_cast<std::size_t>(frame_index), 0);
+        SDL_Texture* mask_texture = frame_variant->shadow_mask_texture;
 
         auto render_frame = select_render_frame(*asset->info);
         float pivot_ratio_x = 0.5f;
@@ -501,11 +498,6 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
         merged_name = samples.front().asset->info->name + "_merged";
     }
 
-    const std::string animation_id = "merged_static";
-    const fs::path cache_root = fs::path("cache") / merged_name / "animations" / animation_id;
-
-    CacheManager cache;
-
     SDL_Surface* base_surface = texture_to_surface(renderer_, composite, base_width, base_height);
     SDL_Surface* base_mask_surface = composite_mask ? texture_to_surface(renderer_, composite_mask, base_width, base_height) : nullptr;
     SDL_DestroyTexture(composite);
@@ -564,42 +556,9 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
 
     // Do not generate foreground/background overlay stacks at runtime.
 
-    const std::vector<int> percent_steps = render_pipeline::ScalingLogic::PercentSteps(variant_steps);
-    const std::string cache_root_str = cache_root.string();
+    vibble::log::debug("[AssetMerger] Skipping disk cache writes for merged asset; Python handles cache generation.");
 
-    auto save_stack = [&](const std::string& folder, const std::vector<SDL_Surface*>& stack, const char* label) {
-        if (!cache.save_surface_sequence(folder, stack)) {
-            cleanup_surfaces();
-            throw std::runtime_error(std::string("Failed to save ") + label + " surfaces to '" + folder + "'");
-        }
-    };
-
-    for (std::size_t idx = 0; idx < variant_count; ++idx) {
-        const std::string scale_folder = render_pipeline::ScalingLogic::VariantFolder(cache_root_str, variant_steps, idx);
-        const fs::path scale_root(scale_folder);
-        const std::string normal_folder = (scale_root / "normal").string();
-        const std::string foreground_folder = (scale_root / "foreground").string();
-        const std::string background_folder = (scale_root / "background").string();
-
-        save_stack(normal_folder, variant_surfaces[idx], "normal");
-        // Skip saving overlay layers at runtime.
-    }
-
-    nlohmann::json metadata;
-    metadata["cache_version"] = kAnimationCacheVersion;
-    metadata["frame_count"] = 1;
-    metadata["original_width"] = base_width;
-    metadata["original_height"] = base_height;
-    nlohmann::json steps_json = nlohmann::json::array();
-    for (int step : percent_steps) {
-        steps_json.push_back(step);
-    }
-    metadata["scale_steps"] = std::move(steps_json);
-    metadata["scale_profile_revision"] = static_cast<std::uint64_t>(0);
-    metadata["has_masks"] = (base_mask_surface != nullptr);
-    // Skip recording foreground/background effect hashes for runtime-merged assets.
-    metadata["source_signature"] = asset::surface_utils::compute_surface_signature(variant_surfaces);
-    CacheManager::save_metadata((cache_root / "metadata.json").string(), metadata);
+    const std::string animation_id = "merged_static";
 
     std::vector<Animation::FrameCache> caches(1);
     caches[0].resize(variant_count);
@@ -658,7 +617,6 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
     animation.adopt_prebuilt_frames(std::move(caches), std::move(frames), std::move(masks), variant_steps);
     animation.loop = true;
     animation.locked = true;
-    animation.speed_factor = 1.0f;
     animation.number_of_frames = 1;
     auto& path = animation.movement_path(0);
     if (path.empty()) {
@@ -669,9 +627,6 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
     path[0].is_last = true;
     path[0].next = nullptr;
     path[0].prev = nullptr;
-    path[0].base_texture = animation.frame_variant(0, 0);
-    path[0].foreground_texture = animation.depthcue_foreground_variant(0, 0);
-    path[0].background_texture = animation.depthcue_background_variant(0, 0);
 
     TemporaryMergedAssetInfo info_builder(merged_name);
     info_builder.set_geometry(base_width, base_height, pivot, local_polygon);

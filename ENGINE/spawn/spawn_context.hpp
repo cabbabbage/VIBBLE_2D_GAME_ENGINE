@@ -12,8 +12,8 @@
 #include "utils/area.hpp"
 #include "asset/asset_info.hpp"
 #include "spawn/check.hpp"
-#include "util/grid.hpp"
-#include "util/grid_occupancy.hpp"
+#include "utils/grid.hpp"
+#include "utils/grid_occupancy.hpp"
 #include "utils/map_grid_settings.hpp"
 
 class Asset;

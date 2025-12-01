@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdint>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -18,8 +19,9 @@
 #include "animation_runtime.hpp"
 #include "core/AssetsManager.hpp"
 #include "map_generation/room.hpp"
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 #include "utils/area.hpp"
+#include "utils/log.hpp"
 
 namespace {
 
@@ -151,38 +153,10 @@ SDL_Point bottom_middle_for(const Asset& asset, SDL_Point pos) {
 SDL_Point frame_world_delta(const AnimationFrame& frame,
                             const Asset&          asset,
                             const vibble::grid::Grid& grid) {
-    // Interpret frame dx/dy primarily as world-space pixel deltas.
-    // Only snap to grid when the delta is aligned to the grid step, to avoid
-    // rounding small movements to zero at higher grid resolutions.
-    int resolution = vibble::grid::clamp_resolution(asset.grid_resolution);
-    try {
-        if (asset.info && asset_types::canonicalize(asset.info->type) == asset_types::player) {
-            resolution = 0; // player always moves pixel-by-pixel
-        }
-    } catch (...) {
-        // if anything goes wrong, just use the clamped asset value
-    }
-    if (resolution <= 0) {
-        return SDL_Point{ frame.dx, frame.dy };
-    }
-
-    const int step = vibble::grid::delta(resolution);
-    if (step <= 1) {
-        return SDL_Point{ frame.dx, frame.dy };
-    }
-
-    const bool aligned_x = vibble::grid::is_multiple_of_delta(frame.dx, resolution);
-    const bool aligned_y = vibble::grid::is_multiple_of_delta(frame.dy, resolution);
-    if (!aligned_x || !aligned_y) {
-        // Keep sub-grid motion as-is in world space
-        return SDL_Point{ frame.dx, frame.dy };
-    }
-
-    // Delta is aligned with the grid; convert via indices to preserve exact steps
-    SDL_Point indices    = grid.convert_resolution(SDL_Point{ frame.dx, frame.dy }, 0, resolution);
-    const SDL_Point origin = grid.index_to_world(SDL_Point{ 0, 0 }, resolution);
-    const SDL_Point target = grid.index_to_world(indices, resolution);
-    return SDL_Point{ target.x - origin.x, target.y - origin.y };
+    (void)asset;
+    (void)grid;
+    // Treat animation frame deltas as pixel-precise world offsets to avoid grid snapping.
+    return SDL_Point{ frame.dx, frame.dy };
 }
 
 bool bottom_point_inside_playable_area(const Assets* assets, SDL_Point bottom_point) {
@@ -269,6 +243,34 @@ AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets)
 AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets, double)
     : AnimationUpdate(self, assets) {}
 
+void AnimationUpdate::auto_move(SDL_Point rel_checkpoint,
+                                int visited_thresh_px,
+                                std::optional<int> checkpoint_resolution,
+                                bool override_non_locked) {
+    std::vector<SDL_Point> rel{ rel_checkpoint };
+    auto_move(rel, visited_thresh_px, checkpoint_resolution, override_non_locked);
+}
+
+void AnimationUpdate::auto_move(Asset* target_asset,
+                                int visited_thresh_px,
+                                bool override_non_locked) {
+    if (!self_ || !target_asset) {
+        return;
+    }
+    if (self_) {
+        self_->target_reached = false;
+    }
+    SDL_Point delta{ target_asset->pos.x - self_->pos.x, target_asset->pos.y - self_->pos.y };
+    if (delta.x == 0 && delta.y == 0) {
+        if (self_) {
+            self_->target_reached = true;
+            self_->needs_target = true;
+        }
+        return;
+    }
+    auto_move(delta, visited_thresh_px, std::nullopt, override_non_locked);
+}
+
 void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
                                 int visited_thresh_px,
                                 std::optional<int> checkpoint_resolution,
@@ -276,6 +278,7 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
     if (!self_) {
         return;
     }
+    const std::string asset_name = self_->info ? self_->info->name : std::string{"<unknown>"};
     const int resolution = effective_grid_resolution(checkpoint_resolution);
     visited_thresh_      = std::max(0, visited_thresh_px);
     if (resolution > 0) {
@@ -284,7 +287,15 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
             visited_thresh_ = ((visited_thresh_ + step - 1) / step) * step;
         }
     }
-    path_requested = false;
+    const bool debug_logging = debug_enabled_;
+    if (debug_logging) {
+        std::ostringstream oss;
+        oss << "[AnimationUpdate] auto_move asset=" << asset_name
+            << " rel_checkpoints=" << rel_checkpoints.size()
+            << " visited_thresh=" << visited_thresh_
+            << " override_non_locked=" << std::boolalpha << override_non_locked;
+        vibble::log::info(oss.str());
+    }
 
     std::vector<SDL_Point> absolute;
     absolute.reserve(rel_checkpoints.size());
@@ -298,9 +309,30 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
         absolute.push_back(next_world);
     }
 
-    plan_      = planner_(*self_, sanitizer_.sanitize(*self_, absolute, visited_thresh_), visited_thresh_);
+    plan_      = planner_(*self_, sanitizer_.sanitize(*self_, absolute, visited_thresh_), visited_thresh_, grid());
     final_dest = plan_.final_dest;
+    plan_.world_start = self_->pos;
     plan_.override_non_locked = override_non_locked;
+    if (debug_logging) {
+        std::ostringstream oss;
+        oss << "[AnimationUpdate] auto_move plan asset=" << asset_name
+            << " final_dest=(" << final_dest.x << "," << final_dest.y << ")"
+            << " sanitized_points=" << plan_.sanitized_checkpoints.size()
+            << " strides=" << plan_.strides.size();
+        vibble::log::info(oss.str());
+    }
+
+    // If no viable strides were produced, immediately request another plan so controllers
+    // can try alternative inputs instead of getting stuck with a cleared request flag.
+    if (plan_.strides.empty()) {
+        if (debug_logging) {
+            vibble::log::info("[AnimationUpdate] auto_move plan produced no strides for asset=" + asset_name);
+        }
+        if (self_) {
+            self_->needs_target = true;
+        }
+        return;
+    }
 
     if (runtime_) {
         runtime_->reset_plan_progress();
@@ -308,6 +340,9 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
 
     // Signal executor to re-evaluate plan
     input_event_ = true;
+    if (self_) {
+        self_->needs_target = false;
+    }
 }
 
 void AnimationUpdate::move(SDL_Point delta,
@@ -327,16 +362,27 @@ void AnimationUpdate::move(SDL_Point delta,
 }
 
 void AnimationUpdate::clear_movement_plan() {
+    const std::string asset_name = self_ && self_->info ? self_->info->name : std::string{"<unknown>"};
+    const bool debug_logging = debug_enabled_;
     plan_.strides.clear();
     plan_.sanitized_checkpoints.clear();
     plan_.final_dest = self_ ? self_->pos : SDL_Point{ 0, 0 };
     plan_.override_non_locked = true;
     final_dest       = plan_.final_dest;
-    path_requested   = false;
     input_event_     = true;
+
+    if (debug_logging) {
+        std::ostringstream oss;
+        oss << "[AnimationUpdate] clear_movement_plan asset=" << asset_name
+            << " final_dest=(" << final_dest.x << "," << final_dest.y << ")";
+        vibble::log::info(oss.str());
+    }
 
     if (runtime_) {
         runtime_->reset_plan_progress();
+    }
+    if (self_) {
+        self_->needs_target = true;
     }
 }
 
@@ -358,6 +404,17 @@ bool AnimationUpdate::consume_input_event() {
     return had;
 }
 
+void AnimationUpdate::set_debug_enabled(bool enabled) {
+    debug_enabled_ = enabled;
+    if (runtime_) {
+        runtime_->set_debug_enabled(enabled);
+    }
+}
+
+bool AnimationUpdate::debug_enabled() const {
+    return debug_enabled_;
+}
+
 vibble::grid::Grid& AnimationUpdate::grid() const {
     if (grid_service_) {
         return *grid_service_;
@@ -366,12 +423,16 @@ vibble::grid::Grid& AnimationUpdate::grid() const {
 }
 
 int AnimationUpdate::effective_grid_resolution(std::optional<int> override_resolution) const {
-    if (override_resolution.has_value()) {
-        return vibble::grid::clamp_resolution(*override_resolution);
-    }
-    if (self_) {
-        return vibble::grid::clamp_resolution(self_->grid_resolution);
-    }
+    (void)override_resolution;
+    // Force pixel-level precision for all animation updates.
     return 0;
 }
 
+void AnimationUpdate::set_animation(const std::string& animation_id) {
+    if (!self_ || !self_->info) return;
+    auto it = self_->info->animations.find(animation_id);
+    if (it == self_->info->animations.end()) return;
+    const Animation& anim = it->second;
+    player_.m_animation = const_cast<Animation*>(&anim);
+    player_.m_fps = (anim.playback_fps > 0) ? anim.playback_fps : 24;
+}

@@ -40,6 +40,9 @@ class Section_Tags : public DockableCollapsible {
           bool wrote = info_->commit_manifest();
           if (wrote) {
             tag_utils::notify_tags_changed();
+            if (ui_) {
+              ui_->sync_target_tags();
+            }
           }
         });
       }

@@ -14,7 +14,7 @@ public:
         int preferred_width = 0;
         int preferred_height = 0;
         bool force_layout = false;
-};
+    };
 
     struct SlidingParentInfo {
         SDL_Rect bounds{0, 0, 0, 0};

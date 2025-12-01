@@ -386,6 +386,15 @@ void AnimationDocument::save_to_file() const {
         if (!root.is_object()) {
             root = nlohmann::json::object();
         }
+        if (base_data_.is_object()) {
+            // Keep any top-level metadata (animation_children, size_settings, etc.) in sync before overwriting "animations".
+            for (auto it = base_data_.begin(); it != base_data_.end(); ++it) {
+                if (it.key() == "animations" || it.key() == "start") {
+                    continue;
+                }
+                root[it.key()] = it.value();
+            }
+        }
     }
 
     nlohmann::json animations_json = nlohmann::json::object();
@@ -659,6 +668,84 @@ std::optional<std::string> AnimationDocument::animation_payload(const std::strin
     auto it = animations_.find(animation_id);
     if (it == animations_.end()) return std::nullopt;
     return it->second;
+}
+
+namespace {
+std::vector<std::string> parse_child_names(const nlohmann::json& value) {
+    std::vector<std::string> names;
+    if (!value.is_array()) {
+        return names;
+    }
+    std::unordered_set<std::string> seen;
+    for (const auto& entry : value) {
+        if (!entry.is_string()) {
+            continue;
+        }
+        std::string name = entry.get<std::string>();
+        if (name.empty() || !seen.insert(name).second) {
+            continue;
+        }
+        names.push_back(std::move(name));
+    }
+    return names;
+}
+}  // namespace
+
+std::vector<std::string> AnimationDocument::animation_children() const {
+    auto* self = const_cast<AnimationDocument*>(this);
+    if (!self->base_data_.is_object()) {
+        self->base_data_ = nlohmann::json::object();
+    }
+    auto it = self->base_data_.find("animation_children");
+    if (it == self->base_data_.end() || !it->is_array()) {
+        nlohmann::json arr = nlohmann::json::array();
+        std::unordered_set<std::string> seen;
+        for (const auto& [id, payload_dump] : self->animations_) {
+            nlohmann::json payload = parse_payload(payload_dump, id);
+            auto child_it = payload.find("children");
+            if (child_it == payload.end() || !child_it->is_array()) {
+                continue;
+            }
+            for (const auto& entry : *child_it) {
+                if (!entry.is_string()) continue;
+                std::string name = entry.get<std::string>();
+                if (name.empty() || !seen.insert(name).second) continue;
+                arr.push_back(std::move(name));
+            }
+        }
+        self->base_data_["animation_children"] = arr;
+        it = self->base_data_.find("animation_children");
+        self->mark_dirty();
+    }
+    return parse_child_names(*it);
+}
+
+void AnimationDocument::replace_animation_children(const std::vector<std::string>& children) {
+    if (!base_data_.is_object()) {
+        base_data_ = nlohmann::json::object();
+    }
+    nlohmann::json arr = nlohmann::json::array();
+    std::unordered_set<std::string> seen;
+    for (const auto& entry : children) {
+        if (entry.empty()) continue;
+        if (seen.insert(entry).second) {
+            arr.push_back(entry);
+        }
+    }
+    if (base_data_.contains("animation_children") && base_data_["animation_children"] == arr) {
+        return;
+    }
+    base_data_["animation_children"] = std::move(arr);
+    mark_dirty();
+}
+
+std::string AnimationDocument::animation_children_signature() const {
+    auto names = animation_children();
+    nlohmann::json arr = nlohmann::json::array();
+    for (const auto& name : names) {
+        arr.push_back(name);
+    }
+    return arr.dump();
 }
 
 void AnimationDocument::ensure_document_initialized() {

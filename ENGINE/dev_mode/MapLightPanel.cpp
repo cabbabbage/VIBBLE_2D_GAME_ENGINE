@@ -19,7 +19,7 @@
 #include "utils/input.hpp"
 #include "utils/map_grid_settings.hpp"
 #include "utils/ranged_color.hpp"
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 
 using nlohmann::json;
 

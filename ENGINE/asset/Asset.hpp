@@ -20,9 +20,9 @@
 
 #include "asset_controller.hpp"
 #include "animation_update/animation_update.hpp"
-#include "render_pipeline/ScalingLogic.hpp"
+#include "render/render.hpp"
 
-class camera;
+class WarpedScreenGrid;
 class Assets;
 class Input;
 class AnimationFrame;
@@ -31,9 +31,35 @@ class AssetInfoUI;
 class RenderAsset;
 class AssetList;
 
+namespace devmode {
+class AnimationRegenerator;
+}
+
+struct RenderObject {
+    SDL_Texture* texture = nullptr;
+    SDL_Rect screen_rect{};
+    SDL_Color color_mod{255, 255, 255, 255};
+    SDL_BlendMode blend_mode = SDL_BLENDMODE_BLEND;
+    double angle = 0.0;
+    SDL_Point center{0, 0};
+    bool use_custom_center = false;
+    SDL_RendererFlip flip = SDL_FLIP_NONE;
+};
+
+using RenderCompositePackage = std::vector<RenderObject>;
+
+struct DepthCueRenderData {
+    SDL_Texture* base_texture = nullptr;
+    SDL_Texture* foreground_texture = nullptr;
+    SDL_Texture* background_texture = nullptr;
+    bool has_depth_cue = false;
+};
+
 class Asset {
 
         public:
+    RenderCompositePackage render_package;
+    RenderCompositePackage scene_mask_lights;
     struct RenderTextureCache {
         SDL_Texture* texture = nullptr;
         int          width   = 0;
@@ -90,6 +116,7 @@ class Asset {
         int cached_h = 0;
         bool was_visible = false;
         int last_parent_frame_index = -1;
+        Asset* spawned_asset = nullptr;
     };
 
     struct BoundsSquare {
@@ -115,12 +142,14 @@ class Asset {
     Asset& operator=(Asset&&) noexcept = default;
     ~Asset();
     void finalize_setup();
+    void rebuild_animation_runtime();
+    // Initialize animation child attachments immediately and recursively
+    void initialize_animation_children_recursive();
     bool is_finalized() const { return finalized_; }
     void on_scale_factor_changed();
 
     void update();
     SDL_Texture* get_current_frame() const;
-    SDL_Texture* get_current_mask_texture(std::size_t variant_index = 0) const;
     std::string get_current_animation() const;
     bool is_current_animation_locked_in_progress() const;
     bool is_current_animation_last_frame() const;
@@ -159,8 +188,9 @@ class Asset {
     void set_last_rendered_frame(const AnimationFrame* frame) { last_rendered_frame_ = frame; }
     void reset_last_rendered_frame() { last_rendered_frame_ = nullptr; }
     SDL_Texture* get_final_texture() const;
+    SDL_Texture* get_texture();
     void set_final_texture(SDL_Texture* tex);
-    void set_camera(camera* v) { window = v; }
+    void set_camera(WarpedScreenGrid* v) { window = v; }
     void set_assets(Assets* a);
     Assets* get_assets() const { return assets_; }
     void set_tiling_info(std::optional<TilingInfo> info);
@@ -186,6 +216,21 @@ class Asset {
     void clear_grid_residency_cache();
     bool has_grid_residency_cache() const;
     SDL_Point grid_residency_cache() const;
+    void sync_transform_to_position();
+    void set_grid_id(std::uint64_t id);
+    std::uint64_t grid_id() const { return grid_id_; }
+    void clear_grid_id();
+
+    // Composite Rendering Support
+    SDL_Texture* composite_texture() const { return composite_texture_; }
+    void set_composite_texture(SDL_Texture* tex);
+    bool is_composite_dirty() const { return composite_dirty_; }
+    void mark_composite_dirty() { composite_dirty_ = true; }
+    void clear_composite_dirty() { composite_dirty_ = false; }
+    const SDL_Rect& composite_rect() const { return composite_rect_; }
+    void set_composite_rect(const SDL_Rect& r) { composite_rect_ = r; }
+    float        composite_scale() const { return composite_scale_; }
+
     RenderTextureCache& shadow_mask_cache();
     RenderTextureCache& shadow_mask_cache() const;
     RenderTextureCache& cast_shadow_cache();
@@ -216,6 +261,8 @@ class Asset {
     bool is_shaded = false;
     bool dead = false;
     bool static_frame = true;
+    bool needs_target = false;
+    bool target_reached = false;
     int cached_w = 0;
     int cached_h = 0;
     std::uint64_t last_render_frame_id = 0;
@@ -225,6 +272,14 @@ class Asset {
     std::string owning_room_name_;
     std::unique_ptr<AnimationUpdate> anim_;
     std::unique_ptr<class AnimationRuntime> anim_runtime_;
+    float current_scale = 1.00f;
+    float current_nearest_variant_scale = 1.00f;
+    float current_remaining_scale_adjustment = 1.00f;
+    int   current_variant_index = 0;
+
+    void update_scale_values();
+    SDL_Texture* get_current_variant_texture() const;
+    void set_current_animation(const std::string& name);
     // Per-spawn-group flip override (set by planner/UI); thread-safe accessors
 public:
     static void SetFlipOverrideForSpawnId(const std::string& spawn_id, bool enabled, bool flipped);
@@ -232,7 +287,6 @@ public:
 private:
     static std::unordered_map<std::string, std::pair<bool,bool>> s_flip_overrides_;
     static std::mutex s_flip_overrides_mutex_;
-        private:
     friend class AnimationUpdate;
     friend class AnimationRuntime;
     friend class Move;
@@ -240,7 +294,9 @@ private:
     friend class RenderAsset;
     friend class FrameEditorSession;
     friend class Assets;
-    camera* window = nullptr;
+    friend class devmode::AnimationRegenerator;
+    friend class CompositeAssetRenderer;
+    WarpedScreenGrid* window = nullptr;
     bool highlighted = false;
     bool hidden = false;
     bool selected = false;
@@ -257,31 +313,23 @@ private:
     std::unique_ptr<AssetList> neighbors;
     AssetList* impassable_naighbors = nullptr;
     std::vector<AnimationChildAttachment> animation_children_;
+    bool animation_children_initialized_ = false;
+    bool initializing_animation_children_ = false;
     std::optional<TilingInfo> tiling_info_{};
     SDL_Point last_neighbor_origin_{ std::numeric_limits<int>::min(), std::numeric_limits<int>::min() };
     bool neighbor_lists_initialized_ = false;
     void update_neighbor_lists(bool force_update);
-
-    SDL_Point cached_grid_residency_{ std::numeric_limits<int>::min(), std::numeric_limits<int>::min() };
-    bool      has_cached_grid_residency_ = false;
-
-    struct DownscaleCacheEntry {
-        float          scale    = 1.0f;
-        int            width    = 0;
-        int            height   = 0;
-        SDL_Texture*   texture  = nullptr;
-        std::uint64_t  revision = 0;
-};
+    void ensure_animation_runtime(bool force_recreate);
 
     void clear_downscale_cache();
     void invalidate_downscale_cache();
     void refresh_cached_dimensions();
     void recompute_local_bounds_square();
 
-    std::vector<DownscaleCacheEntry> downscale_cache_{};
     std::uint64_t downscale_cache_ready_revision_ = 0;
 
     BoundsSquare base_bounds_local_{};
+    SDL_Rect     composite_bounds_local_{0, 0, 0, 0};
 
     SDL_Texture* last_scaled_texture_      = nullptr;
     SDL_Texture* last_scaled_source_       = nullptr;
@@ -292,15 +340,8 @@ private:
     ScaleUsageStats last_scale_usage_{};
     ScaleVariantState scale_variant_state_{};
 
-    void update_scale_usage(float requested,
-                            float texture_scale,
-                            float remainder,
-                            int   variant_index,
-                            float hysteresis_min,
-                            float hysteresis_max);
-    void set_smoothing_params(const TransformSmoothingParams& translation,
-                              const TransformSmoothingParams& scale,
-                              const TransformSmoothingParams& alpha);
+
+
     void clear_render_caches();
     void reset_mask_render_metadata();
     static void destroy_render_cache(RenderTextureCache& cache);
@@ -309,7 +350,7 @@ private:
     mutable RenderTextureCache cast_shadow_cache_{};
     mutable MaskRenderMetadata mask_render_metadata_{};
 
-    void reset_scale_variant_state();
+    // void reset_scale_variant_state();
 
     TransformSmoothingState translation_smoothing_x_{};
     TransformSmoothingState translation_smoothing_y_{};
@@ -321,7 +362,14 @@ private:
 
     // Tracks whether finalize_setup() has already run for this asset
     bool finalized_ = false;
+    std::uint64_t grid_id_ = 0;
+    bool has_cached_grid_residency_ = false;
+    SDL_Point cached_grid_residency_{0, 0};
 
+    SDL_Texture* composite_texture_ = nullptr;
+    bool         composite_dirty_   = true;
+    SDL_Rect     composite_rect_    = {0, 0, 0, 0};
+    float        composite_scale_   = 1.0f;
 };
 
 #endif

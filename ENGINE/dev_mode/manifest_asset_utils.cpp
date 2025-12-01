@@ -67,8 +67,7 @@ bool remove_manifest_asset_entry(const std::string& asset_name, std::ostream* lo
         manifest::save_manifest(manifest);
     } catch (const std::exception& error) {
         if (log) {
-            *log << "[ManifestAsset] Failed to save manifest after removing '" << asset_name << "': "
-                 << error.what() << "\n";
+            *log << "[ManifestAsset] Failed to save manifest after removing '" << asset_name << "': " << error.what() << "\n";
         }
         return false;
     }

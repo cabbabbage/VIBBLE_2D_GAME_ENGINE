@@ -6,7 +6,7 @@
 
 #include <SDL.h>
 
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 
 struct SpawnInfo;
 class Area;

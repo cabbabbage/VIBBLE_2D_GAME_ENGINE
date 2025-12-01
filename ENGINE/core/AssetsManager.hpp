@@ -1,10 +1,9 @@
 #pragma once
 
-#include "render/camera.hpp"
+#include "render/warped_screen_grid.hpp"
 #include "asset/asset_library.hpp"
 #include <SDL.h>
 #include <atomic>
-#include <deque>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -15,8 +14,9 @@
 #include <unordered_set>
 #include <nlohmann/json.hpp>
 #include "map_generation/room.hpp"
-#include "world/grid.hpp"
+#include "world/world_grid.hpp"
 #include "asset/Asset.hpp"
+#include "world/grid_point.hpp"
 
 class Asset;
 class SceneRenderer;
@@ -27,7 +27,7 @@ class Room;
 class Input;
 class DevControls;
 class AssetInfo;
-class Global_Light_Source;
+// class Global_Light_Source;
 class QuickTaskPopup;
 namespace animation_editor {
 class AnimationDocument;
@@ -39,8 +39,7 @@ class ManifestStore;
 }
 class Assets {
 public:
-    Assets(std::vector<std::unique_ptr<Asset>>&& loaded,
-           AssetLibrary& library,
+    Assets(AssetLibrary& library,
            Asset*,
            std::vector<Room*> rooms,
            int screen_width,
@@ -52,7 +51,7 @@ public:
            const std::string& map_id,
            const nlohmann::json& map_manifest,
            std::string content_root = {},
-           world::Grid&& world_grid = world::Grid{});
+           world::WorldGrid&& world_grid = world::WorldGrid{});
     ~Assets();
 
     nlohmann::json save_current_room(std::string room_name);
@@ -74,14 +73,15 @@ public:
 
     const std::vector<Asset*>& getActive() const;
     const std::vector<Asset*>& getFilteredActiveAssets() const;
+    const std::vector<world::GridPoint*>& active_points() const { return active_points_; }
     const std::vector<Asset*>& getActiveRaw() const { return active_assets; }
     const std::vector<Asset*>& getActiveLightAssets() const { return active_light_assets_; }
     const std::vector<Asset*>& getActiveLitAssets() const { return active_light_assets_; }
     const std::vector<Asset*>& getActiveStaticLightAssets() const { return active_static_light_assets_; }
     const std::vector<Asset*>& getActiveMovingLightAssets() const { return active_moving_light_assets_; }
     std::vector<Asset*>& mutable_filtered_active_assets() { return filtered_active_assets; }
-    camera& getView() { return camera_; }
-    const camera& getView() const { return camera_; }
+    WarpedScreenGrid& getView() { return camera_; }
+    const WarpedScreenGrid& getView() const { return camera_; }
 
     float frame_delta_seconds() const { return last_frame_dt_seconds_; }
 
@@ -109,10 +109,10 @@ public:
     void on_camera_settings_changed();
     void reload_camera_settings();
     void apply_camera_runtime_settings();
+    void set_depth_effects_enabled(bool enabled);
+    bool depth_effects_enabled() const { return depth_effects_enabled_; }
 
     void focus_camera_on_asset(Asset* a, double zoom_factor = 0.8, int duration_steps = 25);
-    void begin_area_edit_for_selected_asset(const std::string& area_name);
-    void begin_room_area_edit(const std::string& area_name);
     // In-world frame editor session for animation frames
     void begin_frame_editor_session(Asset* asset,
                                     std::shared_ptr<animation_editor::AnimationDocument> document,
@@ -137,8 +137,8 @@ public:
     const nlohmann::json& map_info_json() const { return map_info_json_; }
     const std::string& map_path() const { return map_path_; }
     const std::string& map_id() const { return map_id_; }
-    world::Grid& world_grid() { return world_grid_; }
-    const world::Grid& world_grid() const { return world_grid_; }
+    world::WorldGrid& world_grid() { return world_grid_; }
+    const world::WorldGrid& world_grid() const { return world_grid_; }
 
     void persist_map_info_json();
 
@@ -154,10 +154,12 @@ public:
     void refresh_active_asset_lists();
     void refresh_filtered_active_assets();
     void mark_active_assets_dirty();
+    bool rebuild_active_assets_if_needed();
     void initialize_active_assets(SDL_Point center);
+    std::uint64_t dev_active_state_version() const { return dev_active_state_version_; }
 
-    Global_Light_Source* map_light_source();
-    const Global_Light_Source* map_light_source() const;
+    // Global_Light_Source* map_light_source();
+    // const Global_Light_Source* map_light_source() const;
     const LightMap* light_map() const;
     LightMap*       light_map();
     void force_shaded_assets_rerender();
@@ -187,11 +189,12 @@ public:
     void notify_light_map_asset_moved(const Asset* asset);
     void notify_light_map_static_assets_changed();
 
-    std::deque<std::unique_ptr<Asset>> owned_assets;
     std::vector<Asset*> all;
     Asset* player = nullptr;
 
     Asset* spawn_asset(const std::string& name, SDL_Point world_pos);
+    // Rebuilds asset catalogs from the grid, refreshing active lists and filters.
+    void rebuild_from_grid_state();
 
     const std::vector<world::Chunk*>& active_chunks() const { return world_grid_.active_chunks(); }
 
@@ -214,27 +217,18 @@ private:
     int  effective_render_quality_percent() const;
     void sync_dev_controls_current_room(Room* room, bool force_refresh = false);
     void reset_dev_controls_current_room_cache();
-    void update_motion_smoothing_settings(const camera::RealismSettings& settings);
+    void update_motion_smoothing_settings(const WarpedScreenGrid::RealismSettings& settings);
     static TransformSmoothingParams sanitize_smoothing(const TransformSmoothingParams& params);
 
     friend class SceneRenderer;
     friend class Asset;
-
-    TransformSmoothingParams last_camera_motion_params_{};
-    TransformSmoothingParams last_asset_translation_params_{};
-    TransformSmoothingParams last_asset_scale_params_{};
-    TransformSmoothingParams last_asset_alpha_params_{};
-    TransformSmoothingParams cached_enabled_translation_params_{};
-    TransformSmoothingParams cached_enabled_scale_params_{};
-    TransformSmoothingParams cached_enabled_alpha_params_{};
-    bool smoothing_cache_initialized_ = false;
 
     CurrentRoomFinder* finder_ = nullptr;
     Input* input = nullptr;
     DevControls* dev_controls_ = nullptr;
     Room* dev_controls_last_room_ = nullptr;
     std::unique_ptr<QuickTaskPopup> quick_task_popup_;
-    camera camera_;
+    WarpedScreenGrid camera_;
     SceneRenderer* scene = nullptr;
     int screen_width;
     int screen_height;
@@ -253,10 +247,15 @@ private:
     int num_groups_ = 40;
     bool dev_mode = false;
     bool suppress_render_ = false;
+    // Temporarily suppress exposing the SDL_Renderer while wiring dev controls
+    // to avoid triggering texture/animation loads during dev-mode entry.
+    bool suppress_dev_renderer_ = false;
     bool force_high_quality_rendering_ = false;
     bool render_dark_mask_enabled_ = true;
+    bool depth_effects_enabled_ = false;
     bool asset_boundary_box_display_enabled_ = false;
-    world::Grid world_grid_{};
+    world::WorldGrid world_grid_{};
+    std::vector<world::GridPoint*> active_points_;
     std::vector<Asset*> removal_queue;
     std::mutex removal_queue_mutex_;
     std::vector<Asset*> non_player_update_buffer_;
@@ -295,12 +294,19 @@ private:
     void track_asset_for_grid(Asset* asset);
     void untrack_asset_for_grid(Asset* asset);
     void register_pending_static_assets();
+    void rebuild_all_assets_from_grid();
+    void rebuild_active_from_screen_grid();
 
     std::vector<Asset*> moving_assets_for_grid_;
     std::vector<Asset*> pending_static_grid_registration_;
     std::vector<GridMovementCommand> movement_commands_buffer_;
     std::vector<Asset*> grid_registration_buffer_;
     // Legacy tiling caches removed.
+
+    void touch_dev_active_state_version();
+
+    std::uint64_t dev_active_state_version_ = 1;
+    std::uint64_t filtered_active_assets_hash_ = 0;
 
     struct DevNotice {
         using TexturePtr = std::unique_ptr<SDL_Texture, decltype(&SDL_DestroyTexture)>;
@@ -318,7 +324,6 @@ private:
 
     std::optional<DevNotice> dev_notice_;
 
-    bool rebuild_active_assets_if_needed();
     void rebuild_non_player_update_buffer_if_needed();
     void update_active_assets(SDL_Point center);
     bool asset_bounds_in_screen_space(const Asset* asset, SDL_FRect& out_rect) const;

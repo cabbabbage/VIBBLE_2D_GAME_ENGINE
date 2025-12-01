@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <filesystem>
 
 #include <nlohmann/json_fwd.hpp>
 
@@ -21,6 +22,7 @@ class Section_BasicInfo;
 class SearchAssets;
 class Section_Shading;
 class Section_SpawnGroups;
+class Section_AnimationChildren;
 namespace animation_editor {
 class AnimationEditorWindow;
 }
@@ -45,7 +47,7 @@ class AssetInfoUI {
     void update(const Input& input, int screen_w, int screen_h);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r, int screen_w, int screen_h) const;
-    void render_world_overlay(SDL_Renderer* r, const class camera& cam) const;
+    void render_world_overlay(SDL_Renderer* r, const class WarpedScreenGrid& cam) const;
     void pulse_header();
     void set_assets(Assets* a);
     Assets* assets() const { return assets_; }
@@ -64,6 +66,13 @@ class AssetInfoUI {
     void notify_spawn_group_entry_changed(const nlohmann::json& entry);
     void notify_spawn_group_removed(const std::string& spawn_id);
     void regenerate_shadow_masks();
+    void sync_target_shading_settings();
+    void sync_target_spacing_settings();
+    void sync_target_tags();
+    void sync_target_basic_render_settings(bool type_changed);
+    SDL_Texture* mask_preview_texture() const { return mask_preview_texture_; }
+    int mask_preview_width() const { return mask_preview_w_; }
+    int mask_preview_height() const { return mask_preview_h_; }
     // Begin an interactive color sampling flow from the world view
     void begin_color_sampling(const utils::color::RangedColor& current,
                               std::function<void(SDL_Color)> on_sample,
@@ -74,14 +83,14 @@ class AssetInfoUI {
     void rebuild_default_sections();
     void layout_widgets(int screen_w, int screen_h) const;
     void apply_camera_override(bool enable);
-    float compute_player_screen_height(const class camera& cam) const;
+    float compute_player_screen_height(const class WarpedScreenGrid& cam) const;
     void save_now() const;
-    void open_area_editor(const std::string& name);
     bool apply_section_to_assets(AssetInfoSectionId section_id, const std::vector<std::string>& asset_names);
     static const char* section_display_name(AssetInfoSectionId section_id);
     void sync_map_light_panel_visibility(bool want_visible);
     bool validate_target_asset() const;
     bool apply_to_assets_with_info(const std::function<void(Asset*)>& fn);
+    bool asset_matches_current_info(const Asset* asset) const;
     void on_animation_document_saved();
     void refresh_loaded_asset_instances();
     void complete_color_sampling(SDL_Color color);
@@ -90,6 +99,10 @@ class AssetInfoUI {
     void clear_section_focus();
     DockableCollapsible* section_at_point(SDL_Point p) const;
     bool handle_section_focus_event(const SDL_Event& e);
+    bool generate_mask_preview();
+    void destroy_mask_preview_texture();
+    bool load_mask_preview_texture(const std::filesystem::path& png_path);
+    std::filesystem::path resolve_mask_preview_frame_path() const;
 
   private:
     bool visible_ = false;
@@ -104,6 +117,7 @@ class AssetInfoUI {
 
     class Section_Lighting* lighting_section_ = nullptr;
     class Section_Shading* shading_section_ = nullptr;
+    class Section_AnimationChildren* animation_children_section_ = nullptr;
     mutable class Asset* target_asset_ = nullptr;
     mutable SDL_Rect animation_editor_rect_{0,0,0,0};
     int last_screen_w_ = 0;
@@ -158,6 +172,11 @@ class AssetInfoUI {
     bool light_drag_active_ = false;
     int  light_drag_index_ = -1;
     int  hovered_light_index_ = -1;
+
+    // Mask preview cache
+    SDL_Texture* mask_preview_texture_ = nullptr;
+    int mask_preview_w_ = 0;
+    int mask_preview_h_ = 0;
 
     // Color sampling state (used by lighting color picker)
     bool color_sampling_active_ = false;

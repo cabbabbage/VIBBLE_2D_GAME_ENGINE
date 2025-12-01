@@ -73,6 +73,8 @@ public:
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     bool is_editing() const { return editing_; }
+    void start_editing();
+    void stop_editing();
 
     int preferred_height(int width) const;
     static int height() { return 32; }
@@ -198,8 +200,12 @@ public:
     void set_value_formatter(SliderValueFormatter formatter);
     void set_value_parser(std::function<std::optional<int>(const std::string&)> parser);
     void set_tooltip_state(DMWidgetTooltipState* state);
+    void set_on_value_changed(std::function<void(int)> callback);
     void set_enabled(bool enabled);
     bool enabled() const { return enabled_; }
+    int track_center_y() const;
+    SDL_Rect interaction_rect() const;
+    bool is_dragging() const { return dragging_; }
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;
     int preferred_height(int width) const;
@@ -208,6 +214,7 @@ private:
     int clamp_value(int v) const;
     bool apply_interaction_value(int v);
     bool commit_pending_value();
+    void notify_value_changed();
     int display_value() const;
     int label_space() const;
     SDL_Rect content_rect() const;
@@ -242,6 +249,8 @@ private:
     std::function<std::optional<int>(const std::string&)> value_parser_{};
     DMWidgetTooltipState* tooltip_state_ = nullptr;
     bool enabled_ = true;
+    std::function<void(int)> value_changed_callback_{};
+    int last_notified_value_ = 0;
 };
 
 class DMRangeSlider {
@@ -267,6 +276,7 @@ public:
         pending_dirty_ = false;
     }
     bool defer_commit_until_unfocus() const { return defer_commit_until_unfocus_; }
+    bool has_pending_values() const { return pending_dirty_; }
     void set_tooltip_state(DMWidgetTooltipState* state);
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* r) const;

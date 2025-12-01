@@ -46,5 +46,17 @@ Chunk* ChunkManager::from_world(SDL_Point world_px, int r_chunk, SDL_Point origi
     return find(i, j);
 }
 
+int floor_div(int value, int step) {
+    if (step == 0) {
+        return 0;
+    }
+    int quotient = value / step;
+    int remainder = value % step;
+    if (remainder != 0 && ((remainder > 0) != (step > 0))) {
+        --quotient;
+    }
+    return quotient;
+}
+
 }
 

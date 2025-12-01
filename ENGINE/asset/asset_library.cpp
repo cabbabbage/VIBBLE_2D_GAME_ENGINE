@@ -1,7 +1,5 @@
 #include "asset_library.hpp"
-
 #include "core/manifest/manifest_loader.hpp"
-
 #include <algorithm>
 #include <chrono>
 #include <cctype>

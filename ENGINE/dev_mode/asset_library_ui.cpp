@@ -1,4 +1,3 @@
-
 #include "asset_library_ui.hpp"
 #include <algorithm>
 #include <unordered_map>
@@ -257,12 +256,13 @@ namespace {
         return changed;
     }
 
-    bool remove_asset_from_animation_children(nlohmann::json& animation_json, const std::string& asset_name) {
-        if (!animation_json.is_object()) {
+    bool remove_asset_from_animation_children(nlohmann::json& asset_json, const std::string& asset_name) {
+        if (!asset_json.is_object()) {
             return false;
         }
-        auto children_it = animation_json.find("children");
-        if (children_it == animation_json.end() || !children_it->is_array()) {
+
+        auto children_it = asset_json.find("animation_children");
+        if (children_it == asset_json.end() || !children_it->is_array()) {
             return false;
         }
         std::vector<int> removed_indices;
@@ -281,16 +281,36 @@ namespace {
             children.erase(children.begin() + *it);
         }
         if (children.empty()) {
-            animation_json.erase(children_it);
+            asset_json.erase(children_it);
         }
-        auto movement_it = animation_json.find("movement");
-        if (movement_it != animation_json.end()) {
-            adjust_movement_entries(*movement_it, removed_indices);
-        }
-        auto paths_it = animation_json.find("movement_paths");
-        if (paths_it != animation_json.end() && paths_it->is_array()) {
-            for (auto& path : *paths_it) {
-                adjust_movement_entries(path, removed_indices);
+
+        auto animations_it = asset_json.find("animations");
+        if (animations_it != asset_json.end() && animations_it->is_object()) {
+            for (auto anim_it = animations_it->begin(); anim_it != animations_it->end(); ++anim_it) {
+                if (!anim_it.value().is_object()) continue;
+                auto& anim_json = anim_it.value();
+                auto anim_children_it = anim_json.find("children");
+                if (anim_children_it != anim_json.end() && anim_children_it->is_array()) {
+                    auto& child_arr = *anim_children_it;
+                    for (auto it = removed_indices.rbegin(); it != removed_indices.rend(); ++it) {
+                        if (*it >= 0 && *it < static_cast<int>(child_arr.size())) {
+                            child_arr.erase(child_arr.begin() + *it);
+                        }
+                    }
+                    if (child_arr.empty()) {
+                        anim_json.erase(anim_children_it);
+                    }
+                }
+                auto movement_it = anim_json.find("movement");
+                if (movement_it != anim_json.end()) {
+                    adjust_movement_entries(*movement_it, removed_indices);
+                }
+                auto paths_it = anim_json.find("movement_paths");
+                if (paths_it != anim_json.end() && paths_it->is_array()) {
+                    for (auto& path : *paths_it) {
+                        adjust_movement_entries(path, removed_indices);
+                    }
+                }
             }
         }
         return true;
@@ -517,7 +537,7 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
                 auto it = in->animations.find("default");
                 if (it == in->animations.end()) it = in->animations.find("start");
                 if (it == in->animations.end() && !in->animations.empty()) it = in->animations.begin();
-                if (it != in->animations.end() && !it->second.frames.empty()) tex = it->second.frames.front();
+                if (it != in->animations.end() && !it->second.frames.empty() && !it->second.frames.front()->variants.empty()) tex = it->second.frames.front()->variants[0].base_texture;
             }
             if (tex) {
                 int tw = 0;
@@ -675,6 +695,7 @@ struct AssetLibraryUI::HashtagTileWidget : public Widget {
         const int cross_inset = std::max(bevel_depth + 1, button_rect.w / 4);
         SDL_RenderDrawLine(r, button_rect.x + cross_inset, button_rect.y + cross_inset, button_rect.x + button_rect.w - cross_inset, button_rect.y + button_rect.h - cross_inset);
         SDL_RenderDrawLine(r, button_rect.x + button_rect.w - cross_inset, button_rect.y + cross_inset, button_rect.x + cross_inset, button_rect.y + button_rect.h - cross_inset);
+        SDL_RenderDrawLine(r, button_rect.x + cross_inset, button_rect.y + button_rect.h - cross_inset, button_rect.x + button_rect.w - cross_inset, button_rect.y + cross_inset);
 
         int label_left = button_rect.x + button_rect.w + pad;
         int label_right = rect_.x + rect_.w - pad;
@@ -927,7 +948,10 @@ void AssetLibraryUI::toggle() {
         floating_->set_expanded(true);
             // Ensure at least header controls render immediately
         rebuild_rows();
-}
+        if (search_box_) search_box_->start_editing();
+    } else if (search_box_) {
+        search_box_->stop_editing();
+    }
 }
 
 bool AssetLibraryUI::is_visible() const { return floating_ && floating_->is_visible(); }
@@ -939,11 +963,13 @@ void AssetLibraryUI::open() {
         floating_->set_expanded(true);
             // Build initial rows so the body isn't empty before first update()
         rebuild_rows();
-}
+        if (search_box_) search_box_->start_editing();
+    }
 }
 
 void AssetLibraryUI::close() {
     if (floating_) floating_->set_visible(false);
+    if (search_box_) search_box_->stop_editing();
 }
 
 bool AssetLibraryUI::is_input_blocking() const {
@@ -2019,7 +2045,7 @@ SDL_Texture* AssetLibraryUI::get_default_frame_texture(const AssetInfo& info) co
         if (key.empty()) return nullptr;
         auto it = inf.animations.find(key);
         if (it != inf.animations.end() && !it->second.frames.empty()) {
-            return it->second.frames.front();
+            return (!it->second.frames.empty() && !it->second.frames.front()->variants.empty()) ? it->second.frames.front()->variants[0].base_texture : nullptr;
         }
         return nullptr;
 };
@@ -2034,42 +2060,8 @@ SDL_Texture* AssetLibraryUI::get_default_frame_texture(const AssetInfo& info) co
         return tex;
     }
     for (const auto& kv : info.animations) {
-        if (!kv.second.frames.empty()) {
-            return kv.second.frames.front();
-        }
-    }
-
-    if (!assets_owner_) {
-        return nullptr;
-    }
-    SDL_Renderer* renderer = assets_owner_->renderer();
-    if (!renderer) {
-        return nullptr;
-    }
-
-    std::string cache_key = info.name;
-    if (cache_key.empty()) {
-        auto addr = reinterpret_cast<std::uintptr_t>(&info);
-        cache_key = "<unnamed@" + std::to_string(addr) + ">";
-    }
-
-    if (preview_attempted_.insert(cache_key).second) {
-        auto& mutable_info = const_cast<AssetInfo&>(info);
-        mutable_info.loadAnimations(renderer);
-    }
-
-    if (SDL_Texture* tex = find_frame(info, "default")) {
-        return tex;
-    }
-    if (SDL_Texture* tex = find_frame(info, info.start_animation)) {
-        return tex;
-    }
-    if (SDL_Texture* tex = find_frame(info, "start")) {
-        return tex;
-    }
-    for (const auto& kv : info.animations) {
-        if (!kv.second.frames.empty()) {
-            return kv.second.frames.front();
+        if (!kv.second.frames.empty() && !kv.second.frames.front()->variants.empty()) {
+            return kv.second.frames.front()->variants[0].base_texture;
         }
     }
     return nullptr;
@@ -2128,11 +2120,6 @@ void AssetLibraryUI::update(const Input& input,
 
     if (showing_delete_popup_) {
         update_delete_modal_geometry(screen_w, screen_h);
-        SDL_StopTextInput();
-    } else if (search_box_ && search_box_->is_editing()) {
-        SDL_StartTextInput();
-    } else {
-        SDL_StopTextInput();
     }
 }
 
@@ -2267,10 +2254,10 @@ bool AssetLibraryUI::handle_event(const SDL_Event& e) {
             case SDL_MOUSEMOTION:
             case SDL_MOUSEWHEEL:
             case SDL_KEYDOWN:
-            case SDL_TEXTINPUT:
-                return true;
-            default:
-                break;
+        case SDL_TEXTINPUT:
+            return true;
+        default:
+            break;
         }
     }
 
@@ -2278,6 +2265,15 @@ bool AssetLibraryUI::handle_event(const SDL_Event& e) {
 
     if (floating_->handle_event(e)) {
         handled = true;
+    }
+
+    if (!handled && search_widget_ && search_box_ && e.type == SDL_TEXTINPUT) {
+        if (!search_box_->is_editing()) {
+            search_box_->start_editing();
+        }
+        if (search_widget_->handle_event(e)) {
+            handled = true;
+        }
     }
 
     return handled;
@@ -2290,13 +2286,19 @@ std::shared_ptr<AssetInfo> AssetLibraryUI::consume_selection() {
 }
 
 bool AssetLibraryUI::is_input_blocking_at(int mx, int my) const {
-    if (showing_delete_popup_) {
-        return true;
-    }
     if (!floating_ || !floating_->is_visible() || !floating_->is_expanded())
         return false;
     SDL_Point p{ mx, my };
-    return SDL_PointInRect(&p, &floating_->rect());
+    if (showing_delete_popup_) {
+        if (delete_modal_rect_.w > 0 && delete_modal_rect_.h > 0) {
+            if (SDL_PointInRect(&p, &delete_modal_rect_) == SDL_TRUE) {
+                return true;
+            }
+        }
+        // Fallback to panel bounds while the delete modal is anchored to it
+        return SDL_PointInRect(&p, &floating_->rect()) == SDL_TRUE;
+    }
+    return SDL_PointInRect(&p, &floating_->rect()) == SDL_TRUE;
 }
 
 bool AssetLibraryUI::is_dragging_asset() const {

@@ -1,20 +1,39 @@
 #pragma once
 
+#include <SDL.h>
+#include <SDL_image.h>
+
 #include <string>
 #include <vector>
-#include <SDL.h>
+#include <optional>
 #include <nlohmann/json.hpp>
 
-class CacheManager {
+using json = nlohmann::json;
 
-	public:
-    static bool load_metadata(const std::string& meta_file, nlohmann::json& out_meta);
-    static bool save_metadata(const std::string& meta_file, const nlohmann::json& meta);
-    static SDL_Surface* load_surface(const std::string& path);
-    static bool save_surface_as_png(SDL_Surface* surface, const std::string& path);
-    static bool load_surface_sequence(const std::string& folder, int frame_count, std::vector<SDL_Surface*>& surfaces);
-    static bool save_surface_sequence(const std::string& folder, const std::vector<SDL_Surface*>& surfaces);
-    static SDL_Surface* load_and_scale_surface(const std::string& path, float scale, int& out_w, int& out_h);
-    static SDL_Texture* surface_to_texture(SDL_Renderer* renderer, SDL_Surface* surface);
-    static std::vector<SDL_Texture*> surfaces_to_textures(SDL_Renderer* renderer, const std::vector<SDL_Surface*>& surfaces);
-};
+// Minimal stub for CacheManager class that has been migrated to Python.
+// This header only exists to satisfy #includes during the build,
+// but the actual implementation is in tools/cache_manager.py
+
+namespace CacheManager {
+
+    // Surface loading/caching (now handled by Python)
+    bool load_surface_sequence(const std::string& folder, int frame_count, std::vector<SDL_Surface*>& loaded);
+    bool save_surface_sequence(const std::string& folder, const std::vector<SDL_Surface*>& images);
+
+    // Loading methods for asset_info.cpp
+    SDL_Surface* load_surface(const std::string& path);
+
+    // Metadata handling
+    std::optional<json> load_metadata(const std::string& meta_file);
+    bool load_metadata(const std::string& meta_file, json& out_json);
+    bool save_metadata(const std::string& meta_file, const json& meta);
+
+    // PNG saving
+    bool save_png(SDL_Surface* surface, const std::string& path);
+    bool save_png_from_pixels(const uint8_t* rgba_pixels, int width, int height, const std::string& path);
+    bool save_surface_as_png(SDL_Surface* surface, const std::string& path);
+
+    // Texture conversion
+    SDL_Texture* surface_to_texture(SDL_Renderer* renderer, SDL_Surface* surface);
+
+} // namespace CacheManager

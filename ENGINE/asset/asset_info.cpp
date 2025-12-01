@@ -1,13 +1,16 @@
 #include "asset_info.hpp"
-#include "asset_info_methods/animation_loader.hpp"
+
 #include "asset/asset_types.hpp"
+#include "asset/animation_loader.hpp"
 #include "asset_info_methods/asset_child_loader.hpp"
 #include "asset_info_methods/lighting_loader.hpp"
 #include "utils/cache_manager.hpp"
+#include "core/manifest/manifest_loader.hpp"
 #include <algorithm>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <cstdlib>
 #include <random>
 #include <limits>
 #include <cmath>
@@ -16,9 +19,10 @@
 #include <filesystem>
 #include <system_error>
 #include <utility>
+#include <unordered_set>
 
 #include "dev_mode/core/manifest_store.hpp"
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 
 namespace fs = std::filesystem;
 
@@ -46,7 +50,7 @@ std::vector<std::string> parse_string_array(const nlohmann::json& json_value) {
     return values;
 }
 
-constexpr int kLightTextureCacheVersion = 2;
+constexpr int kLightTextureCacheVersion = 3;
 
 std::string light_signature(const LightSource& light) {
     std::ostringstream oss;
@@ -235,6 +239,65 @@ bool build_and_cache_light_textures(const fs::path& cache_dir,
         return false;
     }
     return true;
+}
+
+bool try_load_cached_lights(const fs::path& cache_dir,
+                            SDL_Renderer* renderer,
+                            std::vector<LightSource>& lights,
+                            const std::vector<std::string>& signatures) {
+    const fs::path meta_path = cache_dir / "metadata.json";
+    std::vector<std::string> cached_signatures;
+    if (!load_light_cache_metadata(meta_path, cached_signatures)) {
+        return false;
+    }
+    if (cached_signatures != signatures) {
+        return false;
+    }
+    return load_cached_light_textures(cache_dir, renderer, lights);
+}
+
+bool regenerate_lights_via_python(const std::string& asset_name) {
+    try {
+        const fs::path manifest_path = manifest::manifest_path();
+        const fs::path root          = manifest_path.parent_path();
+        const fs::path script        = root / "tools" / "light_tool.py";
+        const fs::path cache_root    = root / "cache";
+
+        if (!fs::exists(script)) {
+            std::cerr << "[AssetInfo] Cannot regenerate lights for '" << asset_name
+                      << "' because light_tool.py is missing at " << script << "\n";
+            return false;
+        }
+
+        std::string command =
+            "python \"" + script.string() + "\" \"" +
+            manifest_path.string() + "\" \"" + cache_root.string() + "\" \"" +
+            asset_name + "\"";
+
+#if defined(_WIN32)
+        command =
+            "set \"PATH=%PATH%;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.0\\bin\" && " +
+            command;
+#endif
+
+        std::cout << "[AssetInfo] Regenerating lights via light_tool.py for '"
+                  << asset_name << "'\n";
+        const int ret = std::system(command.c_str());
+        if (ret != 0) {
+            std::cerr << "[AssetInfo] light_tool.py exited with code " << ret
+                      << " while rebuilding lights for '" << asset_name << "'\n";
+            return false;
+        }
+        return true;
+    } catch (const std::exception& ex) {
+        std::cerr << "[AssetInfo] Failed to run light_tool.py for '" << asset_name
+                  << "': " << ex.what() << "\n";
+    } catch (...) {
+        std::cerr << "[AssetInfo] Failed to run light_tool.py for '" << asset_name
+                  << "' (unknown error)\n";
+    }
+
+    return false;
 }
 
 float read_float_field(const nlohmann::json& data, const char* key, float fallback) {
@@ -791,18 +854,7 @@ void AssetInfo::clear_light_textures() {
 	destroy_light_textures(light_sources);
 }
 
-void AssetInfo::loadAnimations(SDL_Renderer *renderer) {
-        AnimationLoader::load(*this, renderer);
 
-        const bool has_canvas = original_canvas_width > 0 && original_canvas_height > 0;
-        if (!has_canvas) {
-                areas.clear();
-                return;
-        }
-
-        load_areas(info_json_);
-        AnimationLoader::get_area_textures(*this, renderer);
-}
 
 void AssetInfo::load_base_properties(const nlohmann::json &data) {
         type = asset_types::canonicalize(data.value("asset_type", std::string{asset_types::object}));
@@ -870,20 +922,25 @@ void AssetInfo::generate_lights(SDL_Renderer* renderer) {
 	}
 
 	const fs::path cache_dir = fs::path("cache") / name / "lights";
-	const fs::path meta_path = cache_dir / "metadata.json";
 
-	std::vector<std::string> cached_signatures;
-	bool loaded_from_cache = false;
-	if (load_light_cache_metadata(meta_path, cached_signatures) &&
-	    cached_signatures == signatures) {
-		loaded_from_cache = load_cached_light_textures(cache_dir, renderer, light_sources);
+	auto load_from_cache = [&]() -> bool {
+		return try_load_cached_lights(cache_dir, renderer, light_sources, signatures);
+	};
+
+	bool loaded = load_from_cache();
+	if (!loaded) {
+		if (regenerate_lights_via_python(name)) {
+			loaded = load_from_cache();
+		}
 	}
 
-	if (!loaded_from_cache) {
-		if (!build_and_cache_light_textures(cache_dir, renderer, light_sources, signatures)) {
-			clear_light_textures();
-			std::cerr << "[AssetInfo] Failed to rebuild light texture cache for '" << name << "'\n";
-		}
+	if (loaded) {
+		return;
+	}
+
+	if (!build_and_cache_light_textures(cache_dir, renderer, light_sources, signatures)) {
+		clear_light_textures();
+		std::cerr << "[AssetInfo] Failed to rebuild light texture cache for '" << name << "'\n";
 	}
 }
 
@@ -1040,6 +1097,24 @@ void AssetInfo::add_anti_tag(const std::string &tag) {
 void AssetInfo::remove_anti_tag(const std::string &tag) {
         anti_tags.erase(std::remove(anti_tags.begin(), anti_tags.end(), tag), anti_tags.end());
         set_anti_tags(anti_tags);
+}
+
+void AssetInfo::set_animation_children(const std::vector<std::string>& children) {
+        animation_children.clear();
+        std::unordered_set<std::string> seen;
+        for (const auto& entry : children) {
+                if (entry.empty()) {
+                        continue;
+                }
+                if (seen.insert(entry).second) {
+                        animation_children.push_back(entry);
+                }
+        }
+        nlohmann::json arr = nlohmann::json::array();
+        for (const auto& name : animation_children) {
+                arr.push_back(name);
+        }
+        info_json_["animation_children"] = std::move(arr);
 }
 
 void AssetInfo::rebuild_tag_cache() {
@@ -1326,12 +1401,44 @@ void AssetInfo::initialize_from_json(const nlohmann::json& source) {
         rebuild_tag_cache();
         rebuild_anti_tag_cache();
 
+        animation_children = parse_string_array(data.value("animation_children", nlohmann::json::array()));
+        if (animation_children.empty()) {
+                const nlohmann::json* anim_payloads = nullptr;
+                if (data.contains("animations") && data["animations"].is_object()) {
+                        anim_payloads = &data["animations"];
+                        if (data["animations"].contains("animations") && data["animations"]["animations"].is_object()) {
+                                anim_payloads = &data["animations"]["animations"];
+                        }
+                }
+                if (anim_payloads) {
+                        std::unordered_set<std::string> seen;
+                        for (const auto& item : anim_payloads->items()) {
+                                if (!item.value().is_object()) continue;
+                                auto it_children = item.value().find("children");
+                                if (it_children == item.value().end() || !it_children->is_array()) continue;
+                                for (const auto& entry : *it_children) {
+                                        if (!entry.is_string()) continue;
+                                        std::string name = entry.get<std::string>();
+                                        if (name.empty() || !seen.insert(name).second) continue;
+                                        animation_children.push_back(std::move(name));
+                                }
+                        }
+                }
+        }
+
         if (!info_json_.contains("tags") || !info_json_["tags"].is_array()) {
                 info_json_["tags"] = nlohmann::json::array();
         }
         if (!info_json_.contains("anti_tags") || !info_json_["anti_tags"].is_array()) {
                 info_json_["anti_tags"] = nlohmann::json::array();
         }
+        nlohmann::json animation_children_json = nlohmann::json::array();
+        for (const auto& name : animation_children) {
+                if (!name.empty()) {
+                        animation_children_json.push_back(name);
+                }
+        }
+        info_json_["animation_children"] = std::move(animation_children_json);
 
         load_animations(data);
 
@@ -1661,7 +1768,7 @@ bool AssetInfo::rename_animation(const std::string& old_name, const std::string&
 		anims_json_.erase(old_name);
 		if (start_animation == old_name) {
 			start_animation = new_name;
-			info_json_["start"] = start_animation;
+		 info_json_["start"] = start_animation;
 		}
 		return true;
 	} catch (...) {
@@ -1766,3 +1873,117 @@ bool AssetInfo::update_animation_properties(const std::string& animation_name, c
         return false;
     }
 }
+
+void AssetInfo::loadAnimations(SDL_Renderer* renderer) {
+    if (!anims_json_.is_object()) return;
+
+    SDL_Texture* dummy_base_sprite = nullptr;
+    int dummy_w = 0;
+    int dummy_h = 0;
+
+    // Helper to pull the name of a source animation (if any)
+    auto parse_source_animation = [](const nlohmann::json& payload) -> std::optional<std::string> {
+        if (!payload.contains("source") || !payload["source"].is_object()) {
+            return std::nullopt;
+        }
+        const auto& source = payload["source"];
+        try {
+            const std::string kind = source.value("kind", std::string{});
+            if (kind != "animation") {
+                return std::nullopt;
+            }
+            const std::string name = source.value("name", std::string{});
+            if (name.empty()) {
+                return std::nullopt;
+            }
+            return name;
+        } catch (...) {
+            return std::nullopt;
+        }
+    };
+
+    auto animation_ready = [this](const std::string& name) {
+        auto it = animations.find(name);
+        if (it == animations.end()) {
+            return false;
+        }
+        const Animation& anim = it->second;
+        return anim.number_of_frames > 0 && !anim.frames.empty();
+    };
+
+    // Pre-create animation entries so dependencies can find their sources by name.
+    for (auto it = anims_json_.begin(); it != anims_json_.end(); ++it) {
+        animations[it.key()];
+    }
+
+    std::filesystem::path cache_root = std::filesystem::path("cache") / this->name / "animations";
+    auto load_single = [&](const std::string& name, const nlohmann::json& json) {
+        Animation& anim = animations[name];
+        AnimationLoader::load(anim,
+                              name,
+                              json,
+                              *this,
+                              dir_path_,
+                              cache_root.string(),
+                              scale_factor,
+                              renderer,
+                              dummy_base_sprite,
+                              dummy_w,
+                              dummy_h,
+                              original_canvas_width,
+                              original_canvas_height,
+                              false);
+    };
+
+    std::vector<std::pair<std::string, nlohmann::json>> deferred;
+
+    // First pass: load animations that either don't depend on another animation or whose source is already ready.
+    for (auto it = anims_json_.begin(); it != anims_json_.end(); ++it) {
+        const std::string name = it.key();
+        const auto& json       = it.value();
+
+        auto source_name = parse_source_animation(json);
+        const bool needs_source = source_name.has_value() && *source_name != name;
+        if (needs_source && !animation_ready(*source_name)) {
+            deferred.emplace_back(name, json);
+            continue;
+        }
+
+        load_single(name, json);
+    }
+
+    // Second pass: iteratively try to load deferred animations once their sources have been populated.
+    std::size_t safety_counter = deferred.size() + 1;
+    while (!deferred.empty() && safety_counter-- > 0) {
+        bool progress = false;
+        for (auto it = deferred.begin(); it != deferred.end();) {
+            auto source_name = parse_source_animation(it->second);
+            const bool ready = !source_name || source_name->empty() || *source_name == it->first || animation_ready(*source_name);
+            if (!ready) {
+                ++it;
+                continue;
+            }
+
+            load_single(it->first, it->second);
+            it = deferred.erase(it);
+            progress = true;
+        }
+
+        if (!progress) {
+            break;
+        }
+    }
+
+    // Final fallback: load any remaining animations even if their source could not be resolved, but emit a hint.
+    for (const auto& pending : deferred) {
+        auto source_name = parse_source_animation(pending.second);
+        if (source_name) {
+            std::cout << "[AssetInfo] Loading derived animation '" << pending.first
+                      << "' without ready source '" << *source_name << "'\n";
+        } else {
+            std::cout << "[AssetInfo] Loading animation '" << pending.first << "'\n";
+        }
+        load_single(pending.first, pending.second);
+    }
+}
+

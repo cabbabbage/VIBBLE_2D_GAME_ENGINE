@@ -23,12 +23,12 @@ class Input;
 class Assets;
 class AssetLibraryUI;
 class AssetInfoUI;
-class AreaOverlayEditor;
 class Area;
 class RoomConfigurator;
 class SpawnGroupConfig;
 class AssetInfo;
 class Room;
+class WarpedScreenGrid;
 namespace vibble::grid {
 class Occupancy;
 class Grid;
@@ -48,7 +48,7 @@ public:
 
     void set_input(Input* input);
     void set_player(Asset* player);
-    void set_active_assets(std::vector<Asset*>& actives);
+    void set_active_assets(std::vector<Asset*>& actives, std::uint64_t generation);
     void set_screen_dimensions(int width, int height);
     void set_current_room(Room* room);
     void set_room_config_visible(bool visible);
@@ -66,6 +66,7 @@ public:
     bool handle_sdl_event(const SDL_Event& event);
     bool is_room_panel_blocking_point(int x, int y) const;
     bool is_room_ui_blocking_point(int x, int y) const;
+    bool is_shift_key_down() const;
     void render_overlays(SDL_Renderer* renderer);
 
     void toggle_asset_library();
@@ -96,7 +97,6 @@ public:
     using RoomAssetsSavedCallback = std::function<void()>;
     void set_room_assets_saved_callback(RoomAssetsSavedCallback cb);
 
-    void begin_area_edit_for_selected_asset(const std::string& area_name);
     void focus_camera_on_asset(Asset* asset, double zoom_factor = 0.8, int duration_steps = 0);
     void focus_camera_on_room_center(bool reframe_zoom = true);
 
@@ -158,6 +158,7 @@ private:
     struct DraggedAssetState {
         Asset*     asset     = nullptr;
         SDL_Point  start_pos {0, 0};
+        SDL_Point  last_synced_pos {0, 0};
         SDL_FPoint direction {0.0f, 0.0f};
         bool       active    = false;
         double     edge_length = 0.0;
@@ -172,9 +173,6 @@ private:
     bool should_enable_mouse_controls() const;
     void handle_shortcuts(const Input& input);
     void handle_delete_shortcut(const Input& input);
-    void update_area_editor_focus();
-    void ensure_area_editor();
-    void apply_area_editor_camera_override(bool enable);
     void ensure_room_configurator();
     void ensure_spawn_group_config_ui();
     void update_room_config_bounds();
@@ -183,6 +181,8 @@ private:
     void apply_perimeter_drag(const SDL_Point& world_mouse);
     void apply_edge_drag(const SDL_Point& world_mouse);
     bool snap_dragged_assets_to_grid();
+    void sync_dragged_assets_immediately();
+    void update_spawn_json_during_drag();
     void finalize_drag_session();
     void reset_drag_state();
     nlohmann::json* find_spawn_entry(const std::string& spawn_id);
@@ -200,6 +200,7 @@ private:
     SpawnEntryResolution locate_spawn_entry(const std::string& spawn_id);
     SDL_Point get_room_center() const;
     std::pair<int, int> get_room_dimensions() const;
+    int current_grid_resolution() const;
     void refresh_spawn_group_config_ui();
     void update_spawn_group_config_anchor();
     SDL_Point spawn_groups_anchor_point() const;
@@ -270,23 +271,24 @@ private:
 };
 
     void mark_spatial_index_dirty() const;
-    bool ensure_spatial_index(const camera& cam) const;
-    bool camera_state_changed(const camera& cam) const;
-    float compute_reference_screen_height(const camera& cam, float inv_scale) const;
-    bool compute_asset_screen_bounds(const camera& cam, float reference_height, float inv_scale, Asset* asset, SDL_Rect& out_rect, int& out_screen_y) const;
-    void rebuild_spatial_index(const camera& cam) const;
+    bool ensure_spatial_index(const WarpedScreenGrid& cam) const;
+    bool camera_state_changed(const WarpedScreenGrid& cam) const;
+    float compute_reference_screen_height(const WarpedScreenGrid& cam, float inv_scale) const;
+    bool compute_asset_screen_bounds(const WarpedScreenGrid& cam, float reference_height, float inv_scale, Asset* asset, SDL_Rect& out_rect, int& out_screen_y) const;
+    void rebuild_spatial_index(const WarpedScreenGrid& cam) const;
     void insert_asset_entry(Asset* asset, const SDL_Rect& rect, int screen_y) const;
     void add_asset_to_cell(Asset* asset, int cell_x, int cell_y, std::vector<int64_t>& cell_keys) const;
     void remove_asset_from_spatial_index(Asset* asset) const;
-    void refresh_asset_spatial_entry(const camera& cam, Asset* asset) const;
+    void refresh_asset_spatial_entry(const WarpedScreenGrid& cam, Asset* asset) const;
     void refresh_spatial_entries_for_dragged_assets();
     std::vector<Asset*> gather_candidate_assets_for_point(SDL_Point screen_point) const;
-    Asset* hit_test_asset_fallback(const camera& cam, SDL_Point screen_point) const;
+    Asset* hit_test_asset_fallback(const WarpedScreenGrid& cam, SDL_Point screen_point) const;
 
 private:
     Assets* assets_ = nullptr;
     Input* input_ = nullptr;
     std::vector<Asset*>* active_assets_ = nullptr;
+    std::uint64_t active_assets_version_ = 0;
     Asset* player_ = nullptr;
     Room* current_room_ = nullptr;
 
@@ -298,7 +300,6 @@ private:
     std::unique_ptr<AssetLibraryUI> library_ui_;
     std::unique_ptr<AssetInfoUI> info_ui_;
 
-    std::unique_ptr<AreaOverlayEditor> area_editor_;
     std::unique_ptr<RoomConfigurator> room_cfg_ui_;
     SDL_Rect room_config_bounds_{0, 0, 0, 0};
     DevFooterBar* shared_footer_bar_ = nullptr;
@@ -314,17 +315,13 @@ private:
 
     std::array<bool, static_cast<size_t>(BlockingPanel::Count)> blocking_panel_visible_{};
 
-    bool last_area_editor_active_ = false;
-    bool area_editor_override_active_ = false;
-    bool reopen_info_after_area_edit_ = false;
-    std::shared_ptr<AssetInfo> info_for_reopen_;
-    Asset* info_target_for_reopen_ = nullptr;
-
     Asset* hovered_asset_ = nullptr;
     std::vector<Asset*> selected_assets_;
     std::vector<Asset*> highlighted_assets_;
     bool highlight_dirty_ = true;
-    bool shift_asset_modifier_active_ = false;
+    // Snapped cursor (world coordinates), always aligned to current grid resolution
+    SDL_Point snapped_cursor_world_{0, 0};
+    int cursor_snap_resolution_ = 0;
 
     bool dragging_ = false;
     Asset* drag_anchor_asset_ = nullptr;
@@ -339,6 +336,7 @@ private:
     int drag_perimeter_orig_h_ = 0;
     int drag_perimeter_curr_w_ = 0;
     int drag_resolution_ = 0;
+    // Snap is always enabled during drags; resolution managed by Room/Spawn settings
 
     const Area* drag_edge_area_ = nullptr;
     SDL_Point drag_edge_center_{0, 0};
@@ -399,6 +397,7 @@ private:
 
     RoomAssetsSavedCallback room_assets_saved_callback_;
     std::string rename_active_room(const std::string& old_name, const std::string& desired_name);
+    std::shared_ptr<AssetInfo> last_selected_from_library_;  // Last asset selected from library
 
     friend class DevControls;
 

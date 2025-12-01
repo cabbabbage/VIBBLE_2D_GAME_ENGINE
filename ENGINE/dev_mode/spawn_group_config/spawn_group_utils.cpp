@@ -8,7 +8,7 @@
 #include <nlohmann/json.hpp>
 
 #include "utils/map_grid_settings.hpp"
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 
 namespace devmode::spawn {
 namespace {

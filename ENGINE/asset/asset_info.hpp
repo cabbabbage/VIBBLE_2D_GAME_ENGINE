@@ -41,6 +41,7 @@ using Mapping = std::vector<MappingEntry>;
 class AssetInfo {
 
         public:
+    SDL_Texture* preview_texture = nullptr;
     using ChildInfo = ::ChildInfo;
     AssetInfo(const std::string &asset_folder_name);
     AssetInfo(const std::string &asset_folder_name, const nlohmann::json& metadata);
@@ -48,7 +49,7 @@ class AssetInfo {
     using ManifestStoreProvider = std::function<devmode::core::ManifestStore*()>;
     static void set_manifest_store_provider(ManifestStoreProvider provider);
     ~AssetInfo();
-    void loadAnimations(SDL_Renderer *renderer);
+
     bool has_tag(const std::string &tag) const;
     std::vector<LightSource> light_sources;
     std::string name;
@@ -73,10 +74,11 @@ class AssetInfo {
     bool tillable = false;
     std::vector<std::string> tags;
     std::vector<std::string> anti_tags;
+    // Children that participate in animation frames (shared across all animations for this asset).
+    std::vector<std::string> animation_children;
     bool is_light_source = false;
     bool moving_asset = false;
     std::vector<float>  scale_variants;
-    std::uint64_t       scale_profile_revision = 0;
     struct NamedArea {
         struct RenderFrame {
             int width = 0;
@@ -106,6 +108,7 @@ class AssetInfo {
     std::string custom_controller_key;
 
 	public:
+    void loadAnimations(SDL_Renderer* renderer);
     bool commit_manifest();
     void set_asset_type(const std::string &t);
     void set_z_threshold(int z);
@@ -124,6 +127,7 @@ class AssetInfo {
     void set_anti_tags(const std::vector<std::string> &t);
     void add_anti_tag(const std::string &tag);
     void remove_anti_tag(const std::string &tag);
+    void set_animation_children(const std::vector<std::string>& children);
     void set_passable(bool v);
     void set_tillable(bool v);
     Area* find_area(const std::string& name);

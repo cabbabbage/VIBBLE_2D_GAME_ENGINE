@@ -22,6 +22,7 @@ class TagEditorWidget;
 class SpawnGroupConfig;
 class DropdownWidget;
 class SliderWidget;
+class RangeSliderWidget;
 class CheckboxWidget;
 class TextBoxWidget;
 class ButtonWidget;
@@ -29,6 +30,7 @@ class DockableCollapsible;
 class DMSlider;
 class DMCheckbox;
 class DMTextBox;
+class DMRangeSlider;
 class DMDropdown;
 class DMButton;
 
@@ -135,6 +137,9 @@ private:
     void apply_panel_focus_states();
     DockableCollapsible* panel_at_point(SDL_Point p) const;
     bool handle_panel_focus_event(const SDL_Event& e);
+    void initialize_radius_slider(bool request_layout);
+    void expand_radius_slider_range_if_needed();
+    int compute_radius_slider_initial_range() const;
 
     std::unique_ptr<State> state_;
     std::unique_ptr<SlidingWindowContainer> default_container_;
@@ -150,6 +155,7 @@ private:
     bool rebuild_in_progress_ = false;
     bool pending_rebuild_ = false;
     bool deferred_rebuild_ = false;
+    bool spawn_callbacks_active_ = false;
 
     Room* room_ = nullptr;
     nlohmann::json* external_room_json_ = nullptr;
@@ -174,10 +180,9 @@ private:
     std::unique_ptr<TextBoxWidget> height_min_widget_;
     std::unique_ptr<DMTextBox> height_max_box_;
     std::unique_ptr<TextBoxWidget> height_max_widget_;
-    std::unique_ptr<DMTextBox> radius_min_box_;
-    std::unique_ptr<TextBoxWidget> radius_min_widget_;
-    std::unique_ptr<DMTextBox> radius_max_box_;
-    std::unique_ptr<TextBoxWidget> radius_max_widget_;
+    std::unique_ptr<DMRangeSlider> radius_slider_;
+    std::unique_ptr<RangeSliderWidget> radius_widget_;
+    int radius_slider_max_range_ = 0;
     std::unique_ptr<DMSlider> edge_slider_;
     std::unique_ptr<SliderWidget> edge_widget_;
     std::unique_ptr<DMSlider> curvy_slider_;

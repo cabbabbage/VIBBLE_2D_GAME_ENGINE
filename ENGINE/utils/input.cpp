@@ -144,7 +144,7 @@ void Input::clearClickBuffer() {
 
 void Input::consumeMouseButton(Button b) {
     if (b < 0 || b >= COUNT) return;
-    buttons_[b] = prevButtons_[b];
+    prevButtons_[b] = buttons_[b];
     pressed_[b] = false;
     released_[b] = false;
     clickBuffer_[b] = 0;

@@ -383,7 +383,8 @@ void FrameEditor::ensure_children() {
         children_editor_->set_tools_panel(tools_panel_.get());
     }
     if (movement_editor_ && movement_editor_->canvas()) {
-        movement_editor_->canvas()->set_anchor_follows_movement(active_mode_ == Mode::Movement);
+        movement_editor_->canvas()->set_anchor_follows_movement(active_mode_ == Mode::Movement ||
+                                                                active_mode_ == Mode::Children);
     }
     update_button_styles();
     update_navigation_styles();
@@ -528,7 +529,8 @@ void FrameEditor::set_mode(Mode mode) {
         tools_panel_->set_mode(static_cast<FrameToolsPanel::Mode>(static_cast<int>(active_mode_)));
     }
     if (movement_editor_ && movement_editor_->canvas()) {
-        movement_editor_->canvas()->set_anchor_follows_movement(active_mode_ == Mode::Movement);
+        movement_editor_->canvas()->set_anchor_follows_movement(active_mode_ == Mode::Movement ||
+                                                                active_mode_ == Mode::Children);
     }
 }
 

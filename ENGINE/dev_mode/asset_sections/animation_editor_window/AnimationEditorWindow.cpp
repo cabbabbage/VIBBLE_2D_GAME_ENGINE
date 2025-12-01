@@ -1289,6 +1289,7 @@ void AnimationEditorWindow::open_frame_editor(const std::string& animation_id) {
 
 void AnimationEditorWindow::on_live_frame_editor_closed(const std::string& animation_id) {
     live_frame_editor_session_active_ = false;
+    preview_provider_->invalidate_all();
     set_visible(true);
     if (!animation_id.empty()) {
         focus_animation(animation_id);
@@ -1302,6 +1303,10 @@ void AnimationEditorWindow::create_animation_via_prompt() {
     std::string name = animation_editor::strings::trim_copy(input);
     // If no name was provided (e.g., spurious callback), do not create a default.
     if (name.empty()) {
+        return;
+    }
+    if (animation_editor::strings::is_reserved_animation_name(name)) {
+        set_status_message("Animation name '" + name + "' is reserved.", 240);
         return;
     }
     document_->create_animation(name);

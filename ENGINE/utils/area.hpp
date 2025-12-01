@@ -6,7 +6,7 @@
 #include <optional>
 #include <SDL.h>
 
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 
 class Area {
 
@@ -17,6 +17,7 @@ class Area {
     SDL_Point pos{0, 0};
 
 	public:
+    Area() : Area("default_area", 0) {}
     explicit Area(const std::string& name, int resolution = 0);
     Area(const std::string& name, const std::vector<Point>& pts, int resolution = 0);
     Area(const std::string& name, SDL_Point center, int w, int h, const std::string& geometry, int edge_smoothness, int map_width, int map_height, int resolution = 0);
@@ -77,3 +78,15 @@ class Area {
 
     bool apply_resolution_to_points();
 };
+
+inline int width_from_area(const Area& a) {
+    int minx, miny, maxx, maxy;
+    std::tie(minx, miny, maxx, maxy) = a.get_bounds();
+    return maxx - minx;
+}
+
+inline int height_from_area(const Area& a) {
+    int minx, miny, maxx, maxy;
+    std::tie(minx, miny, maxx, maxy) = a.get_bounds();
+    return maxy - miny;
+}

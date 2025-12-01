@@ -14,7 +14,8 @@
 #include "tiling/grid_tile.hpp"
 #include "utils/map_grid_settings.hpp"
 #include "world/chunk.hpp"
-#include "world/grid.hpp"
+#include "world/world_grid.hpp"
+#include "utils/grid.hpp"
 
 namespace {
 
@@ -189,7 +190,7 @@ static SDL_Rect compute_source_rect(const ChunkTileAsset& ctx, const SDL_Rect& s
 namespace loader_tiles {
 
 void build_grid_tiles(SDL_Renderer* renderer,
-                      world::Grid& grid,
+                      world::WorldGrid& grid,
                       const MapGridSettings& settings,
                       const std::vector<Asset*>& all_assets) {
     if (!renderer) return;

@@ -32,6 +32,9 @@ class AnimationDocument {
     void rename_animation(const std::string& old_id, const std::string& new_id);
     void replace_animation_payload(const std::string& animation_id, const std::string& payload_json);
     std::optional<std::string> animation_payload(const std::string& animation_id) const;
+    std::vector<std::string> animation_children() const;
+    void replace_animation_children(const std::vector<std::string>& children);
+    std::string animation_children_signature() const;
 
     const std::filesystem::path& info_path() const { return info_path_; }
     const std::filesystem::path& asset_root() const { return asset_root_; }

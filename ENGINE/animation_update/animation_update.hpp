@@ -9,6 +9,8 @@
 #include "stride_types.hpp"
 #include "path_sanitizer.hpp"
 #include "get_best_path.hpp"
+#include "render/warped_screen_grid.hpp"
+#include "asset/animation.hpp"
 
 class Area;
 class Asset;
@@ -19,7 +21,32 @@ namespace vibble::grid {
 class Grid;
 }
 
+class Animation; // forward
 class AnimationRuntime; // non-public executor
+
+struct AnimationPlayer {
+    Animation* m_animation = nullptr;
+    int m_fps = 25;
+    int m_start_frame = 0;
+    int m_end_frame = 0;
+    int m_current_frame = 0;
+    int m_variant = 0; // 0 normal, 1 fg, 2 bg
+
+    SDL_Texture* current_texture() const {
+        if (!m_animation || m_current_frame < 0 || m_current_frame >= int(m_animation->frames.size())) {
+            return nullptr;
+        }
+        const auto* frame = m_animation->frames[m_current_frame];
+        if (!frame || frame->variants.empty()) {
+            return nullptr;
+        }
+        int variant_index = m_variant;
+        if (variant_index < 0 || variant_index >= static_cast<int>(frame->variants.size())) {
+            variant_index = 0;
+        }
+        return frame->variants[variant_index].base_texture;
+    }
+};
 
 namespace animation_update::detail {
 
@@ -43,15 +70,23 @@ class AnimationUpdate {
 public:
     AnimationUpdate(Asset* self, Assets* assets);
     AnimationUpdate(Asset* self, Assets* assets, double path_bias);
-
-    // Wire to the executor after both are constructed
-    void set_runtime(AnimationRuntime* runtime) { runtime_ = runtime; }
+    void set_debug_enabled(bool enabled);
+    bool debug_enabled() const;
 
     // Plan a path using relative checkpoints from the controller
     void auto_move(const std::vector<SDL_Point>& rel_checkpoints,
                    int visited_thresh_px,
                    std::optional<int> checkpoint_resolution = std::nullopt,
                    bool override_non_locked = true);
+    void auto_move(SDL_Point rel_checkpoint,
+                   int visited_thresh_px = 0,
+                   std::optional<int> checkpoint_resolution = std::nullopt,
+                   bool override_non_locked = true);
+    void auto_move(Asset* target_asset,
+                   int visited_thresh_px = 0,
+                   bool override_non_locked = true);
+
+    int visit_threshold_px() const { return visited_thresh_; }
 
     // Request an immediate move + animation selection (applied by executor in update)
     void move(SDL_Point delta,
@@ -59,17 +94,13 @@ public:
               bool               resort_z            = true,
               bool               override_non_locked = true);
 
-    // Clear any existing path plan
-    void clear_movement_plan();
+    void set_animation(const std::string& animation_id);
 
-    // Query active movement path index for a given animation (delegates to executor)
-    std::size_t path_index_for(const std::string& anim_id) const;
+    // Read-only access for diagnostics/render overlays
+    const Plan* current_plan() const { return &plan_; }
 
-    // Exposed state for controllers to inspect
-    bool      path_requested = false;
-    SDL_Point final_dest{0, 0};
-
-    // Executor interface (internal)
+private:
+    // Executor interface (used by AnimationRuntime)
     bool has_pending_move() const { return move_pending_; }
     struct MoveRequest {
         SDL_Point    delta{0, 0};
@@ -81,11 +112,18 @@ public:
     bool consume_input_event();
 
 private:
-    vibble::grid::Grid& grid() const;
-    int                 effective_grid_resolution(std::optional<int> override_resolution) const;
-
-private:
     friend class AnimationRuntime;
+    friend class Asset;
+
+    // Wire to the executor after both are constructed
+    void set_runtime(AnimationRuntime* runtime) { runtime_ = runtime; }
+
+    void clear_movement_plan();
+    std::size_t path_index_for(const std::string& anim_id) const;
+    AnimationPlayer& player() { return player_; }
+    SDL_Point final_dest{0, 0};
+
+    AnimationPlayer player_{};
 
     Asset*  self_          = nullptr;
     Assets* assets_owner_  = nullptr;
@@ -104,4 +142,8 @@ private:
     bool        input_event_ = false;
     bool        move_pending_ = false;
     MoveRequest pending_move_{};
+    bool        debug_enabled_ = false;
+    // Internal helpers implemented in .cpp
+    vibble::grid::Grid& grid() const;
+    int effective_grid_resolution(std::optional<int> override_resolution) const;
 };

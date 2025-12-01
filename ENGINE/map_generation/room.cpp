@@ -11,7 +11,7 @@
 #include <cmath>
 #include <optional>
 #include <string>
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 #include "utils/string_utils.hpp"
 #include "utils/ranged_color.hpp"
 using json = nlohmann::json;

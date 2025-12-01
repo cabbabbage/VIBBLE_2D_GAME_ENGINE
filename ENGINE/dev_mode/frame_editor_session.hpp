@@ -30,6 +30,11 @@ class PreviewProvider;
 class AnimationEditorWindow;
 }
 
+struct ChildPreviewContext {
+    SDL_FPoint anchor_world{};
+    float document_scale = 1.0f;
+};
+
 // Lightweight in-world Frame Editor session.
 // Non-modal; anchors panels near the target asset and draws gizmos in world space.
 class FrameEditorSession {
@@ -58,6 +63,7 @@ public:
     void render(SDL_Renderer* renderer) const;
 
     // External helpers
+    void set_snap_resolution(int r);
     void set_grid_overlay_enabled_transient(bool enabled);
 
 private:
@@ -97,6 +103,7 @@ private:
     // Session state
     bool active_ = false;
     std::string animation_id_;
+    std::vector<std::string> edited_animation_ids_;
     int selected_index_ = 0;
     Mode mode_ = Mode::Movement;
     bool show_animation_ = true;
@@ -112,6 +119,9 @@ private:
     bool prev_grid_overlay_enabled_ = false;
     bool prev_asset_hidden_ = false;
 
+    int  snap_resolution_r_ = 0;
+    bool snap_resolution_override_ = false;
+
     // Computed path data (relative positions, anchored at bottom-middle)
     std::vector<MovementFrame> frames_;
     std::vector<SDL_FPoint> rel_positions_;
@@ -124,6 +134,7 @@ private:
     mutable std::unique_ptr<DMButton> btn_hit_geometry_;
     mutable std::unique_ptr<DMButton> btn_prev_;
     mutable std::unique_ptr<DMButton> btn_next_;
+    mutable std::unique_ptr<DMDropdown> dd_animation_select_;
     // Apply-to-all buttons per-mode
     mutable std::unique_ptr<class DMButton> btn_apply_all_movement_;
     mutable std::unique_ptr<class DMButton> btn_apply_all_children_;
@@ -190,7 +201,10 @@ private:
     // Panel rectangles are derived from stored top-left positions to allow dragging.
     mutable SDL_Rect directory_rect_{0,0,0,0};
     mutable SDL_Rect toolbox_rect_{0,0,0,0};
+    mutable SDL_Rect toolbox_drag_rect_{0,0,0,0};
     mutable SDL_Rect nav_rect_{0,0,0,0};
+    mutable SDL_Rect nav_drag_rect_{0,0,0,0};
+    mutable std::vector<SDL_Rect> toolbox_widget_rects_;
     SDL_Point dir_pos_{0, 0};
     SDL_Point toolbox_pos_{0, 0};
     SDL_Point nav_pos_{0, 0};
@@ -218,6 +232,7 @@ private:
     std::string document_payload_cache_;
     std::string document_children_signature_;
     std::unordered_map<Asset*, bool> child_hidden_cache_;
+    mutable std::vector<std::string> animation_dropdown_options_cache_;
     mutable std::vector<std::string> child_dropdown_options_cache_;
     mutable std::vector<std::string> hitbox_type_labels_;
     mutable std::vector<std::string> attack_type_labels_;
@@ -250,7 +265,10 @@ private:
     bool pending_save_ = false;
 
 private:
+    void load_animation_data(const std::string& animation_id);
+    void switch_animation(const std::string& animation_id);
     void ensure_widgets() const;
+    void refresh_animation_dropdown() const;
     void rebuild_layout() const;
     void apply_current_mode_to_all_frames();
     void apply_frame_move_from_base(int index, SDL_FPoint desired_rel, const std::vector<SDL_FPoint>& base_rel);
@@ -309,6 +327,7 @@ private:
         int gap = 0;
         int width = 0;
         int height = 0;
+        int drag_handle_height = 0;
         int row_height = 0;
         int smooth_checkbox_width = 0;
         int curve_checkbox_width = 0;
@@ -322,6 +341,7 @@ private:
         int gap = 0;
         int width = 0;
         int height = 0;
+        int drag_handle_height = 0;
         // Dropdown row
         int dropdown_row_height = 0;
         // Movement controls row (Smooth/Curve + Totals) shared with Movement mode
@@ -363,6 +383,7 @@ private:
     std::string current_hitbox_type() const;
     void refresh_hitbox_form() const;
     void copy_hit_box_to_next_frame();
+    float document_scale_factor() const;
     float asset_local_scale() const;
     SDL_Point asset_anchor_world() const;
     bool screen_to_local(SDL_Point screen, SDL_FPoint& out_local) const;
@@ -378,6 +399,21 @@ private:
     bool begin_attack_drag(SDL_Point mouse);
     void update_attack_drag(SDL_Point mouse);
     void end_attack_drag(bool commit);
+
+private:
+    void render_directory_panel(SDL_Renderer* renderer);
+    void render_navigation_panel(SDL_Renderer* renderer);
+    void render_toolbox(SDL_Renderer* renderer);
+    void render_child_guides(SDL_Renderer* renderer, const WarpedScreenGrid& cam);
+    void render_hitbox_guides(SDL_Renderer* renderer, const WarpedScreenGrid& cam);
+    void render_attack_guides(SDL_Renderer* renderer, const WarpedScreenGrid& cam);
+    ChildPreviewContext build_child_preview_context() const;
+    SDL_FRect child_preview_rect(SDL_FPoint child_world,
+                                 int texture_w,
+                                 int texture_h,
+                                 const ChildPreviewContext& ctx,
+                                 float scale_override) const;
+    float mirrored_child_rotation(bool parent_is_flipped, float degree) const;
 };
 
 inline std::vector<FrameEditorSession::MovementFrame>
@@ -525,8 +561,23 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
             if (!entry.empty() && entry[0].is_number()) f.dx = static_cast<float>(entry[0].get<double>());
             if (entry.size() > 1 && entry[1].is_number()) f.dy = static_cast<float>(entry[1].get<double>());
             if (entry.size() > 2 && entry[2].is_boolean()) f.resort_z = entry[2].get<bool>();
+            // Children can be at index 4 (after optional RGB at 3) or at index 3 when RGB is absent.
+            const nlohmann::json* children_json = nullptr;
             if (entry.size() > 4 && entry[4].is_array()) {
-                for (const auto& child_entry : entry[4]) {
+                children_json = &entry[4];
+            } else if (entry.size() > 3 && entry[3].is_array()) {
+                const auto& maybe_children = entry[3];
+                if (!maybe_children.empty() && maybe_children[0].is_array()) {
+                    children_json = &maybe_children;
+                }
+            } else if (entry.size() > 2 && entry[2].is_array()) {
+                const auto& maybe_children2 = entry[2];
+                if (!maybe_children2.empty() && maybe_children2[0].is_array()) {
+                    children_json = &maybe_children2;
+                }
+            }
+            if (children_json) {
+                for (const auto& child_entry : *children_json) {
                     if (!child_entry.is_array() || child_entry.empty()) continue;
                     ChildFrame child;
                     try { child.child_index = child_entry[0].get<int>(); } catch (...) { child.child_index = -1; }
@@ -568,19 +619,19 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
                         child.child_index = child_entry.value("child_index", -1);
                         child.dx = static_cast<float>(child_entry.value("dx", 0.0));
                         child.dy = static_cast<float>(child_entry.value("dy", 0.0));
-                        if (child_entry.contains("degree") && child_entry["degree"].is_number()) {
-                            child.degree = static_cast<float>(child_entry["degree"].get<double>());
-                        } else if (child_entry.contains("rotation") && child_entry["rotation"].is_number()) {
-                            child.degree = static_cast<float>(child_entry["rotation"].get<double>());
-                        } else {
-                            child.degree = 0.0f;
-                        }
-                        child.visible = child_entry.value("visible", true);
-                        child.render_in_front = child_entry.value("render_in_front", true);
-                    } else if (child_entry.is_array()) {
-                        try { child.child_index = child_entry[0].get<int>(); } catch (...) { child.child_index = -1; }
-                        if (child_entry.size() > 1 && child_entry[1].is_number()) {
-                            child.dx = static_cast<float>(child_entry[1].get<double>());
+                    if (child_entry.contains("degree") && child_entry["degree"].is_number()) {
+                        child.degree = static_cast<float>(child_entry["degree"].get<double>());
+                    } else if (child_entry.contains("rotation") && child_entry["rotation"].is_number()) {
+                        child.degree = static_cast<float>(child_entry["rotation"].get<double>());
+                    } else {
+                        child.degree = 0.0f;
+                    }
+                    child.visible = child_entry.value("visible", true);
+                    child.render_in_front = child_entry.value("render_in_front", true);
+                } else if (child_entry.is_array()) {
+                    try { child.child_index = child_entry[0].get<int>(); } catch (...) { child.child_index = -1; }
+                    if (child_entry.size() > 1 && child_entry[1].is_number()) {
+                        child.dx = static_cast<float>(child_entry[1].get<double>());
                         }
                         if (child_entry.size() > 2 && child_entry[2].is_number()) {
                             child.dy = static_cast<float>(child_entry[2].get<double>());

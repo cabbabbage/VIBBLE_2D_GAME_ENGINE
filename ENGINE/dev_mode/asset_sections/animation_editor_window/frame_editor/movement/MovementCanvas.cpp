@@ -9,7 +9,7 @@
 #include "dm_styles.hpp"
 #include "draw_utils.hpp"
 #include "../../PreviewProvider.hpp"
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 
 namespace animation_editor {
 
@@ -167,7 +167,7 @@ void MovementCanvas::render(SDL_Renderer* renderer) const {
     render_pixel_grid(renderer);
 
     // Optional animation overlay anchored at current frame's bottom-center on the grid
-    if (show_animation_overlay_ && preview_provider_) {
+    if (preview_provider_) {
         SDL_Texture* tex = nullptr;
         if (!animation_id_.empty()) {
             tex = preview_provider_->get_frame_texture(renderer, animation_id_, std::max(0, selected_index_));
@@ -253,8 +253,8 @@ void MovementCanvas::render_background(SDL_Renderer* renderer) const {
 
     render_pixel_grid(renderer);
 
-    // Optionally show animation overlay for context, but no movement points/path
-    if (show_animation_overlay_ && preview_provider_) {
+    // Always show the animation overlay for context, but no movement points/path or gizmos
+    if (preview_provider_) {
         SDL_Texture* tex = nullptr;
         if (!animation_id_.empty()) {
             tex = preview_provider_->get_frame_texture(renderer, animation_id_, std::max(0, selected_index_));
@@ -556,6 +556,14 @@ void MovementCanvas::set_animation_context(std::shared_ptr<PreviewProvider> prov
     preview_provider_ = std::move(provider);
     animation_id_ = animation_id;
     base_scale_percentage_ = std::isfinite(scale_percentage) && scale_percentage > 0.0f ? scale_percentage : 100.0f;
+    // Use the configured scale as the base pixel density so every mode renders the selected frame texture
+    // at the same relative size as in the runtime.
+    const float units = base_scale_percentage_ / 100.0f;
+    if (std::isfinite(units) && units > 0.0f) {
+        pixels_per_unit_ = units;
+    } else {
+        pixels_per_unit_ = 1.0f;
+    }
 }
 
 void MovementCanvas::apply_frame_move_from_base(int index, const SDL_FPoint& new_position,

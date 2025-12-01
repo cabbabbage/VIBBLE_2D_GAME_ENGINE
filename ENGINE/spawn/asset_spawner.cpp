@@ -17,8 +17,8 @@
 #include <sstream>
 #include <cctype>
 #include <nlohmann/json.hpp>
-#include "util/grid.hpp"
-#include "util/grid_occupancy.hpp"
+#include "utils/grid.hpp"
+#include "utils/grid_occupancy.hpp"
 AssetSpawner::AssetSpawner(AssetLibrary* asset_library,
                            std::vector<Area> exclusion_zones)
 : asset_library_(asset_library),

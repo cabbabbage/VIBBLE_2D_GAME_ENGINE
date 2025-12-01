@@ -12,6 +12,7 @@
 #include <nlohmann/json.hpp>
 
 #include "AnimationDocument.hpp"
+#include "asset/asset_info.hpp"
 #include "PanelLayoutConstants.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "dev_mode/dm_styles.hpp"
@@ -84,6 +85,13 @@ void ChildrenPanel::set_document(std::shared_ptr<AnimationDocument> document) {
     refresh_from_document();
 }
 
+void ChildrenPanel::set_info(std::shared_ptr<AssetInfo> info) {
+    info_ = std::move(info);
+    cached_repo_root_.clear();
+    payload_signature_.clear();
+    refresh_from_document();
+}
+
 void ChildrenPanel::set_manifest_store(devmode::core::ManifestStore* store) {
     manifest_store_ = store;
     if (search_assets_) {
@@ -93,10 +101,6 @@ void ChildrenPanel::set_manifest_store(devmode::core::ManifestStore* store) {
 }
 
 void ChildrenPanel::set_animation_id(const std::string& animation_id) {
-    if (animation_id_ == animation_id) {
-        return;
-    }
-    animation_id_ = animation_id;
     payload_signature_.clear();
     refresh_from_document();
 }
@@ -112,19 +116,17 @@ void ChildrenPanel::set_status_callback(StatusCallback callback) { status_callba
 void ChildrenPanel::set_layout_dirty_callback(std::function<void()> callback) { layout_dirty_callback_ = std::move(callback); }
 
 void ChildrenPanel::update() {
-    if (!document_ || animation_id_.empty()) {
-        display_children_.clear();
-        if (!payload_signature_.empty()) {
-            payload_signature_.clear();
-            request_layout();
+    std::string signature;
+    if (info_) {
+        nlohmann::json arr = nlohmann::json::array();
+        for (const auto& name : info_->animation_children) {
+            arr.push_back(name);
         }
-    } else {
-        auto payload_dump = document_->animation_payload(animation_id_);
-        std::string signature = payload_dump.has_value() ? *payload_dump : std::string{};
-        if (signature != payload_signature_) {
-            payload_signature_ = signature;
-            refresh_from_document();
-        }
+        signature = arr.dump();
+    }
+    if (signature != payload_signature_) {
+        payload_signature_ = signature;
+        refresh_from_document();
     }
 
     if (search_assets_ && search_assets_->visible()) {
@@ -420,49 +422,12 @@ void ChildrenPanel::refresh_from_document() {
     inherited_source_id_.clear();
     inherits_children_ = false;
 
-    if (!document_ || animation_id_.empty()) {
+    if (!info_) {
         request_layout();
         return;
     }
-
-    auto payload_dump = document_->animation_payload(animation_id_);
-    if (!payload_dump.has_value()) {
-        request_layout();
-        return;
-    }
-
-    nlohmann::json payload = nlohmann::json::parse(*payload_dump, nullptr, false);
-    if (payload.is_discarded() || !payload.is_object()) {
-        payload = nlohmann::json::object();
-    }
-
-    local_children_ = read_local_children(payload);
-
-    bool derived = false;
-    std::string source_animation;
-    if (payload.contains("source") && payload["source"].is_object()) {
-        const auto& src = payload["source"];
-        derived = strings::to_lower_copy(src.value("kind", std::string{})) == std::string("animation");
-        source_animation = src.value("name", std::string{});
-        if (source_animation.empty()) {
-            source_animation = src.value("path", std::string{});
-        }
-    }
-
-    bool inherit_movement = payload.value("inherit_source_movement", derived);
-
-    if (derived && inherit_movement && !source_animation.empty()) {
-        inherits_children_ = true;
-        inherited_source_id_ = source_animation;
-        inherited_children_ = resolve_inherited_children(payload);
-        display_children_ = inherited_children_;
-        inherited_message_lines_.push_back("Children inherit from animation '" + inherited_source_id_ + "'.");
-        inherited_message_lines_.push_back("Disable 'Inherit Source Movement' to edit.");
-    } else {
-        inherits_children_ = false;
-        display_children_ = local_children_;
-    }
-
+    local_children_ = info_->animation_children;
+    display_children_ = local_children_;
     request_layout();
 }
 
@@ -512,22 +477,16 @@ std::vector<std::string> ChildrenPanel::resolve_inherited_children(const nlohman
 }
 
 void ChildrenPanel::commit_children() {
-    if (!document_ || animation_id_.empty()) {
+    if (!info_) {
         return;
     }
-    nlohmann::json payload = nlohmann::json::object();
-    if (auto payload_dump = document_->animation_payload(animation_id_)) {
-        payload = nlohmann::json::parse(*payload_dump, nullptr, false);
-        if (payload.is_discarded() || !payload.is_object()) {
-            payload = nlohmann::json::object();
-        }
-    }
-    nlohmann::json children = nlohmann::json::array();
+    info_->set_animation_children(local_children_);
+    info_->commit_manifest();
+    nlohmann::json arr = nlohmann::json::array();
     for (const auto& child : local_children_) {
-        children.push_back(child);
+        arr.push_back(child);
     }
-    payload["children"] = std::move(children);
-    document_->replace_animation_payload(animation_id_, payload.dump());
+    payload_signature_ = arr.dump();
 }
 
 void ChildrenPanel::add_child_entry(const std::string& entry) {
@@ -818,7 +777,9 @@ std::filesystem::path ChildrenPanel::detect_repo_root() const {
         return cached_repo_root_;
     }
     std::filesystem::path start;
-    if (document_) {
+    if (info_) {
+        start = std::filesystem::path(info_->asset_dir_path());
+    } else if (document_) {
         start = document_->asset_root();
     }
     if (start.empty()) {

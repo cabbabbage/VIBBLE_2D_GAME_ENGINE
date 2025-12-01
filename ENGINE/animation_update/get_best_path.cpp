@@ -1,6 +1,7 @@
 #include "get_best_path.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <cmath>
 #include <limits>
 #include <string>
@@ -139,11 +140,18 @@ struct CandidateStride {
     std::size_t path_index = 0;
 };
 
+struct SmallestStride {
+    std::string anim_id;
+    std::size_t path_index = 0;
+    SDL_Point   delta{ 0, 0 };
+};
+
 }
 
 Plan GetBestPath::operator()(const Asset& self,
                              const std::vector<SDL_Point>& sanitized_checkpoints,
-                             int visited_thresh_px) const {
+                             int visited_thresh_px,
+                             const vibble::grid::Grid& grid) const {
     Plan plan;
     plan.sanitized_checkpoints = sanitized_checkpoints;
 
@@ -154,12 +162,29 @@ Plan GetBestPath::operator()(const Asset& self,
         return plan;
     }
 
-    vibble::grid::Grid& grid = vibble::grid::global_grid();
     const auto collisions  = gather_collision_entries(self);
     const Assets* assets   = self.get_assets();
     const int visited_sq   = visited_thresh_px * visited_thresh_px;
     auto movement_anims    = gather_movement_animations(self);
 
+    SmallestStride min_stride;
+    int min_sum = std::numeric_limits<int>::max();
+    for (const auto& descriptor : movement_anims) {
+        const auto* frames_path = descriptor.frames;
+        if (!frames_path) {
+            continue;
+        }
+        for (const auto& frame : *frames_path) {
+            SDL_Point delta = animation_update::detail::frame_world_delta(frame, self, grid);
+            int sum = std::abs(delta.x) + std::abs(delta.y);
+            if (sum > 0 && sum < min_sum) {
+                min_sum = sum;
+                min_stride = { descriptor.id, descriptor.path_index, delta };
+            }
+        }
+    }
+
+    bool aborted = false;
     for (const SDL_Point& checkpoint : sanitized_checkpoints) {
         if (visited_sq > 0 && animation_update::detail::distance_sq(cursor, checkpoint) <= visited_sq) {
             continue;
@@ -238,16 +263,34 @@ Plan GetBestPath::operator()(const Asset& self,
             }
 
             if (!best.valid) {
-                break;
+                if (min_sum != std::numeric_limits<int>::max()) {
+                    const SDL_Point fallback_next{ cursor.x + min_stride.delta.x, cursor.y + min_stride.delta.y };
+                    const int       fallback_dist_sq = animation_update::detail::distance_sq(fallback_next, checkpoint);
+                    if (fallback_dist_sq < current_dist_sq) {
+                        plan.strides.push_back(Stride{ min_stride.anim_id, 1, min_stride.path_index });
+                        cursor = fallback_next;
+                        plan.final_dest = cursor;
+                    } else {
+                        aborted = true;
+                        break;
+                    }
+                } else {
+                    aborted = true;
+                    break;
+                }
+            } else {
+                plan.strides.push_back(Stride{ best.animation_id, best.frames, best.path_index });
+                cursor = best.end_position;
+                plan.final_dest = cursor;
             }
-
-            plan.strides.push_back(Stride{ best.animation_id, best.frames, best.path_index });
-            cursor = best.end_position;
-            plan.final_dest = cursor;
 
             if (++safeguard > 256) {
                 break;
             }
+        }
+
+        if (aborted) {
+            break;
         }
     }
 

@@ -38,4 +38,9 @@ inline bool has_numeric_stem(const std::filesystem::path& path) {
     return std::all_of(stem.begin(), stem.end(), [](unsigned char ch) { return std::isdigit(ch) != 0; });
 }
 
+inline bool is_reserved_animation_name(std::string_view value) {
+    std::string lowered = to_lower_copy(value);
+    return lowered == "kill" || lowered == "lock" || lowered == "reverse";
+}
+
 }

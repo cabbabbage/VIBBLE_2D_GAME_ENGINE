@@ -2,16 +2,16 @@
 
 #include <SDL.h>
 
-class camera;
+class WarpedScreenGrid;
 class Input;
 
 class PanAndZoom {
 public:
     void set_zoom_scale_factor(double factor);
 
-    void handle_input(camera& cam, const Input& input, bool pan_blocked);
+    void handle_input(WarpedScreenGrid& cam, const Input& input, bool pan_blocked);
 
-    void cancel(camera& cam);
+    void cancel(WarpedScreenGrid& cam);
 
     bool is_panning() const { return panning_; }
 

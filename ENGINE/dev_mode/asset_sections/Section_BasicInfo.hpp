@@ -5,8 +5,8 @@
 #include "asset/Asset.hpp"
 #include "asset/asset_info.hpp"
 #include "asset/asset_types.hpp"
-#include "render/camera.hpp"
-#include "render_pipeline/ScalingLogic.hpp"
+#include "render/warped_screen_grid.hpp"
+#include "render/render.hpp"
 #include "widgets.hpp"
 #include "dev_mode/asset_info_sections.hpp"
 #include "dm_styles.hpp"
@@ -28,7 +28,7 @@ class Section_BasicInfo : public DockableCollapsible {
     void layout() override { DockableCollapsible::layout(); }
     bool handle_event(const SDL_Event& e) override;
     void render_content(SDL_Renderer* r) const override {}
-    void render_world_overlay(SDL_Renderer* r, const camera& cam, const Asset* target, float reference_screen_height) const;
+    void render_world_overlay(SDL_Renderer* r, const WarpedScreenGrid& cam, const Asset* target, float reference_screen_height) const;
 
   private:
     static int find_index(const std::vector<std::string>& opts, const std::string& value);
@@ -44,6 +44,7 @@ class Section_BasicInfo : public DockableCollapsible {
     std::vector<std::unique_ptr<Widget>> widgets_;
     std::vector<std::string> type_options_;
     AssetInfoUI* ui_ = nullptr;
+    void on_scale_slider_value_changed(int new_value);
 
   protected:
     std::string_view lock_settings_namespace() const override { return "asset_info"; }
@@ -93,6 +94,7 @@ inline void Section_BasicInfo::build() {
     dd_type_ = std::make_unique<DMDropdown>("Type", type_options_, find_index(type_options_, info_->type));
     int pct = std::max(0, static_cast<int>(std::lround(info_->scale_factor * 100.0f)));
     s_scale_pct_ = std::make_unique<DMSlider>("Scale (%)", 1, 400, pct);
+    s_scale_pct_->set_on_value_changed([this](int value) { this->on_scale_slider_value_changed(value); });
     s_zindex_    = std::make_unique<DMSlider>("Z Index Offset", -1000, 1000, info_->z_threshold);
     if (!is_tiled_asset) {
         c_flipable_  = std::make_unique<DMCheckbox>("Flipable (can invert)", info_->flipable);
@@ -167,9 +169,10 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
 
     bool changed = false;
     bool rebuild_needed = false;
-    bool scale_changed = false;
     bool z_changed = false;
     bool tile_changed = false;
+    bool render_settings_changed = false;
+    bool type_changed = false;
     if (dd_type_ && !type_options_.empty()) {
         int idx = std::clamp(dd_type_->selected(), 0, static_cast<int>(type_options_.size()) - 1);
         std::string selected = asset_types::canonicalize(type_options_[idx]);
@@ -180,14 +183,9 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
         if (!(is_area_asset && !selecting_area) && !(!is_area_asset && selecting_area) && current != selected) {
             info_->set_asset_type(selected);
             changed = true;
+            render_settings_changed = true;
+            type_changed = true;
         }
-    }
-
-    int pct = std::max(0, static_cast<int>(std::lround(info_->scale_factor * 100.0f)));
-    if (s_scale_pct_ && pct != s_scale_pct_->value()) {
-        info_->set_scale_percentage(static_cast<float>(s_scale_pct_->value()));
-        changed = true;
-        scale_changed = true;
     }
 
     if (s_zindex_ && info_->z_threshold != s_zindex_->value()) {
@@ -199,16 +197,19 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
     if (c_flipable_ && info_->flipable != c_flipable_->value()) {
         info_->set_flipable(c_flipable_->value());
         changed = true;
+        render_settings_changed = true;
     }
 
     if (c_apply_distance_scaling_ && info_->apply_distance_scaling != c_apply_distance_scaling_->value()) {
         info_->set_apply_distance_scaling(c_apply_distance_scaling_->value());
         changed = true;
+        render_settings_changed = true;
     }
 
     if (c_apply_vertical_scaling_ && info_->apply_vertical_scaling != c_apply_vertical_scaling_->value()) {
         info_->set_apply_vertical_scaling(c_apply_vertical_scaling_->value());
         changed = true;
+        render_settings_changed = true;
     }
 
     if (c_tillable_ && info_->tillable != c_tillable_->value()) {
@@ -221,9 +222,9 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
     if (changed) {
         (void)info_->commit_manifest();
         if (ui_) {
-            if (scale_changed) ui_->refresh_target_asset_scale();
             if (z_changed) ui_->sync_target_z_threshold();
             if (tile_changed) ui_->sync_target_tiling_state();
+            if (render_settings_changed) ui_->sync_target_basic_render_settings(type_changed);
         }
     }
     if (rebuild_needed) {
@@ -233,7 +234,7 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
 }
 
 inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
-                                                    const camera& cam,
+                                                    const WarpedScreenGrid& cam,
                                                     const Asset* target,
                                                     float reference_screen_height) const {
     if (!is_expanded() || !target || !target->info) return;
@@ -265,7 +266,7 @@ inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
         SDL_Point{target->pos.x, target->pos.y},
         base_sh,
         reference_screen_height <= 0.0f ? 1.0f : reference_screen_height,
-        reinterpret_cast<camera::RenderSmoothingKey>(target));
+        WarpedScreenGrid::RenderSmoothingKey(target));
 
     float scaled_sw = base_sw * effects.distance_scale;
     float scaled_sh = base_sh * effects.distance_scale;
@@ -280,7 +281,7 @@ inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
         if (assets) {
             // Do not apply grid parallax to the player asset
             if (!(assets->player == target)) {
-                center_x = assets->world_grid().parallax_adjusted_screen_x(world_point, effects.screen_position.x);
+                // parallax_adjusted_screen_x is now handled internally by compute_render_effects
             }
         }
         const int   left     = static_cast<int>(std::lround(center_x - static_cast<float>(sw) * 0.5f));
@@ -295,4 +296,13 @@ inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
     const SDL_Color accent = DMStyles::DeleteButton().hover_bg;
     SDL_SetRenderDrawColor(r, accent.r, accent.g, accent.b, 200);
     SDL_RenderDrawLine(r, bounds.x, z_line_y, bounds.x + bounds.w, z_line_y);
+}
+
+inline void Section_BasicInfo::on_scale_slider_value_changed(int new_value) {
+    if (!info_) return;
+    info_->set_scale_percentage(static_cast<float>(new_value));
+    (void)info_->commit_manifest();
+    if (ui_) {
+        ui_->refresh_target_asset_scale();
+    }
 }

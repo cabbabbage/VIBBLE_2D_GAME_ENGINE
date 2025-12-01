@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include <functional>
+#include <iostream>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -11,6 +13,7 @@
 #include "DockableCollapsible.hpp"
 #include "dev_mode/float_slider_widget.hpp"
 #include "render/image_effect_settings.hpp"
+#include <nlohmann/json.hpp>
 
 class Assets;
 class AssetInfo;
@@ -70,6 +73,21 @@ private:
     void apply_and_regenerate();
     void restore_defaults();
     void purge_mismatched_caches(std::uint64_t fg_hash, std::uint64_t bg_hash, bool force_purge = false);
+    void request_preview_rebuild();
+    bool can_render_preview() const;
+
+    // Manifest-based loading/saving
+    void save_depth_cue_settings_to_manifest();
+    bool load_depth_cue_settings_from_manifest();
+    void update_preview_and_manifest();
+    void generate_preview_with_python(const std::string& image_path, const camera_effects::ImageEffectSettings& settings);
+    void load_preview_texture(const std::string& image_path);
+    bool settings_equal(const camera_effects::ImageEffectSettings& a,
+                        const camera_effects::ImageEffectSettings& b,
+                        float epsilon = 1e-5f) const;
+    bool should_skip_preview(const std::string& source_path,
+                             EffectMode mode,
+                             const camera_effects::ImageEffectSettings& settings) const;
 
 private:
     Assets* assets_ = nullptr;
@@ -93,7 +111,6 @@ private:
 
     // Single set of controls for current mode
     std::unique_ptr<Widget> preview_;
-    std::unique_ptr<FloatSliderWidget> rgb_boost_;
     std::unique_ptr<FloatSliderWidget> contrast_;
     std::unique_ptr<FloatSliderWidget> brightness_;
     std::unique_ptr<FloatSliderWidget> blur_;
@@ -119,6 +136,10 @@ private:
     camera_effects::ImageEffectSettings saved_fg_{};
     camera_effects::ImageEffectSettings saved_bg_{};
     camera_effects::ImageEffectSettings current_settings_{};
+    camera_effects::ImageEffectSettings last_preview_settings_{};
+    EffectMode last_preview_mode_ = EffectMode::Foreground;
+    std::string last_preview_asset_;
+    std::string last_preview_source_path_;
 
     bool preview_dirty_ = true;
     bool has_unsaved_changes_ = false;

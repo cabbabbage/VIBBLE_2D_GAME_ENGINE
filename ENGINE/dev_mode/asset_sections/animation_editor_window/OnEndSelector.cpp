@@ -3,9 +3,12 @@
 #include <SDL.h>
 
 #include <algorithm>
+#include <array>
 #include <nlohmann/json.hpp>
+#include <unordered_set>
 
 #include "AnimationDocument.hpp"
+#include "string_utils.hpp"
 #include "PanelLayoutConstants.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
@@ -14,6 +17,8 @@
 namespace {
 
 using animation_editor::kPanelPadding;
+
+constexpr std::array<const char*, 3> kSpecialOnEndOptions = {"kill", "lock", "reverse"};
 
 std::string payload_signature(const std::optional<std::string>& payload) {
     if (!payload.has_value()) {
@@ -131,13 +136,19 @@ bool OnEndSelector::handle_event(const SDL_Event& e) {
 
 void OnEndSelector::rebuild_options() {
     options_.clear();
+    std::unordered_set<std::string> seen;
     options_.push_back("default");
+    seen.insert("default");
+    for (const char* value : kSpecialOnEndOptions) {
+        options_.emplace_back(value);
+        seen.insert(options_.back());
+    }
 
     if (document_) {
         auto ids = document_->animation_ids();
         std::sort(ids.begin(), ids.end());
         for (const auto& id : ids) {
-            if (std::find(options_.begin(), options_.end(), id) == options_.end()) {
+            if (seen.insert(id).second) {
                 options_.push_back(id);
             }
         }
@@ -159,6 +170,9 @@ void OnEndSelector::sync_from_document() {
     std::string on_end = parse_on_end(payload);
     if (on_end.empty()) {
         on_end = "default";
+    }
+    if (strings::is_reserved_animation_name(on_end)) {
+        on_end = strings::to_lower_copy(on_end);
     }
     // Only allow values that are valid options (default + animation IDs).
     if (std::find(options_.begin(), options_.end(), on_end) == options_.end()) {

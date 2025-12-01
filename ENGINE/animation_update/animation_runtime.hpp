@@ -7,6 +7,7 @@
 
 #include <SDL.h>
 
+#include "asset/Asset.hpp"
 #include "stride_types.hpp"
 #include "path_sanitizer.hpp"
 #include "get_best_path.hpp"
@@ -52,6 +53,7 @@ public:
 
     // Planner notifications
     void reset_plan_progress();
+    void set_debug_enabled(bool enabled);
 
 private:
     int        effective_grid_resolution(std::optional<int> override_resolution) const;
@@ -65,6 +67,9 @@ private:
     void       ensure_child_slots(Animation& anim);
     void       advance_child_frames(float dt);
     void       apply_child_frame_data(const AnimationFrame* frame);
+    void       sync_child_assets();
+    Asset*     spawn_child_asset(Asset::AnimationChildAttachment& slot);
+    void       destroy_child_assets();
 
     // Apply a pending one-shot move from the planner
     void       apply_pending_move();
@@ -91,5 +96,6 @@ private:
     std::unordered_map<std::string, std::size_t> active_paths_{};
 
     // Controller input tracking for on-end redirection
+    bool debug_enabled_ = false;
     bool just_applied_controller_move_ = false;
 };

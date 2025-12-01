@@ -71,6 +71,7 @@ public:
   static const DMButtonStyle &FooterToggleButton();
   static const DMButtonStyle &WarnButton();
   static const DMButtonStyle &ListButton();
+  static const DMButtonStyle &SecondaryButton();
   static const DMButtonStyle &CreateButton();
   static const DMButtonStyle &DeleteButton();
   static const DMTextBoxStyle &TextBox();

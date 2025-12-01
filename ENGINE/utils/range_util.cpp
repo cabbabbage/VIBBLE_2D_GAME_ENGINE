@@ -4,7 +4,7 @@
 #include <limits>
 
 #include "asset/Asset.hpp"
-#include "util/grid.hpp"
+#include "utils/grid.hpp"
 
 namespace {
 bool is_within_radius(long long ax, long long ay, long long bx, long long by, int radius) {

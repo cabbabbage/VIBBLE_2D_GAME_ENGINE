@@ -94,6 +94,8 @@ void FrameChildrenEditor::set_document(std::shared_ptr<AnimationDocument> docume
     }
     document_ = std::move(document);
     payload_signature_.clear();
+    payload_cache_.clear();
+    children_signature_cache_.clear();
     invalidate_child_caches();
     reload_from_document();
 }
@@ -104,6 +106,8 @@ void FrameChildrenEditor::set_animation_id(const std::string& animation_id) {
     }
     animation_id_ = animation_id;
     payload_signature_.clear();
+    payload_cache_.clear();
+    children_signature_cache_.clear();
     invalidate_child_caches();
     reload_from_document();
 }
@@ -145,9 +149,14 @@ void FrameChildrenEditor::update() {
         return;
     }
     auto payload_dump = document_->animation_payload(animation_id_);
-    std::string signature = payload_dump.has_value() ? *payload_dump : std::string{};
+    std::string payload = payload_dump.has_value() ? *payload_dump : std::string{};
+    std::string children_sig = document_->animation_children_signature();
+    std::string signature = payload;
+    signature += "|" + children_sig;
     if (payload_signature_ != signature) {
         payload_signature_ = signature;
+        payload_cache_ = std::move(payload);
+        children_signature_cache_ = std::move(children_sig);
         reload_from_document();
     }
     refresh_tools_panel();
@@ -165,6 +174,7 @@ void FrameChildrenEditor::render(SDL_Renderer* renderer) const {
     if (!std::isfinite(pixels_per_unit) || pixels_per_unit <= 0.0f) {
         pixels_per_unit = 1.0f;
     }
+    const SDL_FPoint anchor = frame_anchor(selected_frame_index_);
 
     for (std::size_t i = 0; i < child_ids_.size() && i < frame->children.size(); ++i) {
         const auto& child = frame->children[i];
@@ -185,7 +195,7 @@ void FrameChildrenEditor::render(SDL_Renderer* renderer) const {
         if (!std::isfinite(sprite_scale) || sprite_scale <= 0.0f) {
             continue;
         }
-        SDL_FPoint screen = world_to_screen(SDL_FPoint{child.dx, child.dy});
+        SDL_FPoint screen = world_to_screen(SDL_FPoint{anchor.x + child.dx, anchor.y + child.dy});
         const float dst_w = sprite_scale * static_cast<float>(tex_w);
         const float dst_h = sprite_scale * static_cast<float>(tex_h);
         if (!(std::isfinite(dst_w) && std::isfinite(dst_h)) || dst_w <= 0.0f || dst_h <= 0.0f) {
@@ -204,7 +214,7 @@ void FrameChildrenEditor::render(SDL_Renderer* renderer) const {
 
     for (std::size_t i = 0; i < child_ids_.size() && i < frame->children.size(); ++i) {
         const auto& child = frame->children[i];
-        SDL_FPoint screen = world_to_screen(SDL_FPoint{child.dx, child.dy});
+        SDL_FPoint screen = world_to_screen(SDL_FPoint{anchor.x + child.dx, anchor.y + child.dy});
         SDL_Point center = round_point(screen);
         const bool is_selected = static_cast<int>(i) == selected_child_index_;
         const int radius = is_selected ? kMarkerRadius + 1 : kMarkerRadius - 1;
@@ -251,9 +261,10 @@ bool FrameChildrenEditor::handle_event(const SDL_Event& e) {
             }
             SDL_Point screen{e.motion.x, e.motion.y};
             SDL_FPoint world = screen_to_world(screen);
+            const SDL_FPoint anchor = frame_anchor(selected_frame_index_);
             if (auto* child = current_child()) {
-                child->dx = static_cast<float>(std::round(world.x));
-                child->dy = static_cast<float>(std::round(world.y));
+                child->dx = static_cast<float>(std::round(world.x - anchor.x));
+                child->dy = static_cast<float>(std::round(world.y - anchor.y));
                 persist_changes();
                 refresh_tools_panel();
             }
@@ -301,24 +312,36 @@ void FrameChildrenEditor::reload_from_document() {
     frames_.clear();
     child_ids_.clear();
     selected_child_index_ = 0;
+    if (document_) {
+        child_ids_ = document_->animation_children();
+        if (children_signature_cache_.empty()) {
+            children_signature_cache_ = document_->animation_children_signature();
+        }
+    }
+
+    if (payload_cache_.empty() && document_ && !animation_id_.empty()) {
+        auto payload_dump = document_->animation_payload(animation_id_);
+        payload_cache_ = payload_dump.has_value() ? *payload_dump : std::string{};
+    }
 
     if (payload_signature_.empty()) {
+        payload_signature_ = payload_cache_;
+        if (!children_signature_cache_.empty()) {
+            payload_signature_ += "|" + children_signature_cache_;
+        }
+    }
+
+    if (payload_cache_.empty()) {
         frames_.push_back(MovementFrame{});
         refresh_tools_panel();
         return;
     }
 
-    nlohmann::json payload = nlohmann::json::parse(payload_signature_, nullptr, false);
-    if (!payload.is_object()) {
-        payload = nlohmann::json::object();
-    }
-
-    if (payload.contains("children") && payload["children"].is_array()) {
-        for (const auto& entry : payload["children"]) {
-            if (!entry.is_string()) continue;
-            std::string name = entry.get<std::string>();
-            if (name.empty()) continue;
-            child_ids_.push_back(std::move(name));
+    nlohmann::json payload = nlohmann::json::object();
+    {
+        nlohmann::json parsed = nlohmann::json::parse(payload_cache_, nullptr, false);
+        if (parsed.is_object()) {
+            payload = parsed;
         }
     }
 
@@ -336,8 +359,27 @@ void FrameChildrenEditor::reload_from_document() {
                 if (!entry.empty() && entry[0].is_number()) frame.dx = static_cast<float>(entry[0].get<double>());
                 if (entry.size() > 1 && entry[1].is_number()) frame.dy = static_cast<float>(entry[1].get<double>());
                 if (entry.size() > 2 && entry[2].is_boolean()) frame.resort_z = entry[2].get<bool>();
-                if (entry.size() > 4 && entry[4].is_array()) {
-                    for (const auto& child_entry : entry[4]) {
+                auto find_children_array = [](const nlohmann::json& arr) -> const nlohmann::json* {
+                    if (!arr.is_array()) {
+                        return nullptr;
+                    }
+                    for (std::size_t idx = 2; idx < arr.size(); ++idx) {
+                        const auto& candidate = arr[idx];
+                        if (!candidate.is_array()) {
+                            continue;
+                        }
+                        if (candidate.empty()) {
+                            return &candidate;
+                        }
+                        const auto& first = candidate.front();
+                        if (first.is_array() || first.is_object()) {
+                            return &candidate;
+                        }
+                    }
+                    return nullptr;
+                };
+                if (const nlohmann::json* children = find_children_array(entry)) {
+                    for (const auto& child_entry : *children) {
                         if (!child_entry.is_array() || child_entry.empty()) continue;
                         ChildFrame child;
                         try { child.child_index = child_entry[0].get<int>(); } catch (...) { child.child_index = -1; }
@@ -371,7 +413,8 @@ void FrameChildrenEditor::reload_from_document() {
                             child.child_index = child_entry.value("child_index", -1);
                             child.dx = static_cast<float>(child_entry.value("dx", 0.0));
                             child.dy = static_cast<float>(child_entry.value("dy", 0.0));
-                            child.rotation = static_cast<float>(child_entry.value("rotation", 0.0));
+                            double deg = child_entry.value("degree", child_entry.value("rotation", 0.0));
+                            child.rotation = static_cast<float>(deg);
                             child.visible = child_entry.value("visible", true);
                             child.render_in_front = child_entry.value("render_in_front", true);
                         } else if (child_entry.is_array()) {
@@ -428,7 +471,7 @@ void FrameChildrenEditor::ensure_child_vectors() {
         std::vector<ChildFrame> normalized(child_ids_.size());
         for (std::size_t i = 0; i < normalized.size(); ++i) {
             normalized[i].child_index = static_cast<int>(i);
-            normalized[i].visible = true;
+            normalized[i].visible = false;
             normalized[i].render_in_front = true;
         }
         for (const auto& existing : frame.children) {
@@ -512,19 +555,19 @@ void FrameChildrenEditor::persist_changes() {
         return;
     }
     nlohmann::json payload = nlohmann::json::object();
-    if (!payload_signature_.empty()) {
-        nlohmann::json parsed = nlohmann::json::parse(payload_signature_, nullptr, false);
+    if (!payload_cache_.empty()) {
+        nlohmann::json parsed = nlohmann::json::parse(payload_cache_, nullptr, false);
         if (parsed.is_object()) {
             payload = parsed;
         }
     }
-
-    nlohmann::json children_json = nlohmann::json::array();
-    for (const auto& child_name : child_ids_) {
-        children_json.push_back(child_name);
-    }
-    if (!children_json.empty()) {
-        payload["children"] = std::move(children_json);
+    if (document_) {
+        document_->replace_animation_children(child_ids_);
+        if (child_ids_.empty()) {
+            payload.erase("children");
+        } else {
+            payload["children"] = child_ids_;
+        }
     }
 
     nlohmann::json movement_json = nlohmann::json::array();
@@ -537,6 +580,9 @@ void FrameChildrenEditor::persist_changes() {
             entry.push_back(frame.resort_z);
         }
         if (!child_ids_.empty()) {
+            while (entry.size() < 4) {
+                entry.push_back(nlohmann::json());
+            }
             nlohmann::json child_entries = nlohmann::json::array();
             if (!frame.children.empty()) {
                 for (const auto& child : frame.children) {
@@ -574,10 +620,17 @@ void FrameChildrenEditor::persist_changes() {
     }
     payload["movement_total"] = nlohmann::json{{"dx", total_dx}, {"dy", total_dy}};
 
-    document_->replace_animation_payload(animation_id_, payload.dump());
+    const std::string updated_payload_dump = payload.dump();
+    document_->replace_animation_payload(animation_id_, updated_payload_dump);
     document_->save_to_file();
     auto refreshed = document_->animation_payload(animation_id_);
-    payload_signature_ = refreshed.has_value() ? *refreshed : std::string{};
+    payload_cache_ = refreshed.has_value() ? *refreshed : updated_payload_dump;
+    children_signature_cache_ = document_ ? document_->animation_children_signature() : std::string{};
+    payload_signature_.clear();
+    payload_signature_ = payload_cache_;
+    if (!children_signature_cache_.empty()) {
+        payload_signature_ += "|" + children_signature_cache_;
+    }
 }
 
 void FrameChildrenEditor::invalidate_child_caches() {
@@ -638,6 +691,19 @@ const FrameChildrenEditor::ChildFrame* FrameChildrenEditor::current_child() cons
     return &frame->children[selected_child_index_];
 }
 
+SDL_FPoint FrameChildrenEditor::frame_anchor(int frame_index) const {
+    SDL_FPoint anchor{0.0f, 0.0f};
+    if (frames_.empty()) {
+        return anchor;
+    }
+    int idx = std::clamp(frame_index, 0, static_cast<int>(frames_.size()) - 1);
+    for (int i = 1; i <= idx; ++i) {
+        anchor.x += frames_[i].dx;
+        anchor.y += frames_[i].dy;
+    }
+    return anchor;
+}
+
 bool FrameChildrenEditor::point_in_canvas(int x, int y) const {
     if (!canvas_) {
         return false;
@@ -669,9 +735,10 @@ int FrameChildrenEditor::hit_test_child(int x, int y) const {
     if (!frame) {
         return -1;
     }
+    const SDL_FPoint anchor = frame_anchor(selected_frame_index_);
     SDL_Point pt{x, y};
     for (std::size_t i = 0; i < child_ids_.size() && i < frame->children.size(); ++i) {
-        SDL_FPoint screen = world_to_screen(SDL_FPoint{frame->children[i].dx, frame->children[i].dy});
+        SDL_FPoint screen = world_to_screen(SDL_FPoint{anchor.x + frame->children[i].dx, anchor.y + frame->children[i].dy});
         SDL_Point center = round_point(screen);
         const bool is_selected = static_cast<int>(i) == selected_child_index_;
         const int radius = is_selected ? kMarkerRadius + 1 : kMarkerRadius - 1;

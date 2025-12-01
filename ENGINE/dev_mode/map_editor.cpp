@@ -7,7 +7,7 @@
 #include "dev_mode/dev_mode_utils.hpp"
 #include "dev_mode_color_utils.hpp"
 #include "room_overlay_renderer.hpp"
-#include "render/camera.hpp"
+#include "render/warped_screen_grid.hpp"
 #include "map_generation/room.hpp"
 #include "utils/area.hpp"
 #include "utils/input.hpp"
@@ -53,7 +53,7 @@ void MapEditor::set_label_safe_area_provider(std::function<SDL_Rect()> provider)
     label_safe_area_provider_ = std::move(provider);
 }
 
-void MapEditor::set_camera_override_for_testing(camera* camera_override) {
+void MapEditor::set_camera_override_for_testing(WarpedScreenGrid* camera_override) {
     camera_override_for_testing_ = camera_override;
 }
 
@@ -72,7 +72,7 @@ void MapEditor::enter() {
     pending_selection_ = nullptr;
     has_entry_center_ = false;
 
-    if (camera* cam = active_camera()) {
+    if (WarpedScreenGrid* cam = active_camera()) {
         prev_manual_override_ = cam->is_manual_zoom_override();
         prev_focus_override_ = cam->has_focus_override();
         if (prev_focus_override_) {
@@ -101,7 +101,7 @@ void MapEditor::exit(bool focus_player, bool restore_previous_state) {
 
 void MapEditor::update(const Input& input) {
     if (!enabled_) return;
-    camera* cam = active_camera();
+    WarpedScreenGrid* cam = active_camera();
     if (!cam) return;
 
     SDL_Point screen_pt{input.getX(), input.getY()};
@@ -177,7 +177,7 @@ void MapEditor::render(SDL_Renderer* renderer) {
     const float bounds_center_y = static_cast<float>(active_label_bounds_.y) + static_cast<float>(active_label_bounds_.h) * 0.5f;
     SDL_FPoint screen_center{bounds_center_x, bounds_center_y};
 
-    camera& view = assets_->getView();
+    WarpedScreenGrid& view = assets_->getView();
 
     for (Room* room : *rooms_) {
         if (!room || !room->room_area) continue;
@@ -218,7 +218,7 @@ Room* MapEditor::consume_selected_room() {
 
 void MapEditor::focus_on_room(Room* room) {
     if (!room || !room->room_area) return;
-    camera* cam = active_camera();
+    WarpedScreenGrid* cam = active_camera();
     if (!cam) return;
 
     Area adjusted = cam->convert_area_to_aspect(*room->room_area);
@@ -275,7 +275,7 @@ bool MapEditor::compute_bounds() {
 }
 
 void MapEditor::apply_camera_to_bounds() {
-    camera* cam = active_camera();
+    WarpedScreenGrid* cam = active_camera();
     if (!cam) return;
     cam->set_manual_zoom_override(true);
 
@@ -341,7 +341,7 @@ Room* MapEditor::find_spawn_room() const {
 }
 
 void MapEditor::restore_camera_state(bool focus_player, bool restore_previous_state) {
-    camera* cam = active_camera();
+    WarpedScreenGrid* cam = active_camera();
     if (!cam) return;
 
     if (focus_player) {
@@ -362,7 +362,7 @@ void MapEditor::restore_camera_state(bool focus_player, bool restore_previous_st
     }
 }
 
-camera* MapEditor::active_camera() const {
+WarpedScreenGrid* MapEditor::active_camera() const {
     if (camera_override_for_testing_) {
         return camera_override_for_testing_;
     }

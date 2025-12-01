@@ -3,6 +3,7 @@
 #include <SDL.h>
 
 #include <functional>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -21,7 +22,7 @@
 class Asset;
 class Input;
 class Assets;
-class camera;
+class WarpedScreenGrid;
 class AssetInfo;
 class Room;
 class RoomEditor;
@@ -49,7 +50,7 @@ public:
 
     void set_input(Input* input);
     void set_player(Asset* player);
-    void set_active_assets(std::vector<Asset*>& actives);
+    void set_active_assets(std::vector<Asset*>& actives, std::uint64_t version);
     void set_screen_dimensions(int width, int height);
     void set_current_room(Room* room, bool force_refresh = false);
     void set_rooms(std::vector<Room*>* rooms, std::size_t generation = 0);
@@ -93,7 +94,7 @@ public:
     bool is_enabled() const { return enabled_; }
     Mode mode() const { return mode_; }
 
-    void set_camera_override_for_testing(camera* camera_override);
+    void set_camera_override_for_testing(WarpedScreenGrid* camera_override);
 
     void update(const Input& input);
     void update_ui(const Input& input);
@@ -126,15 +127,11 @@ public:
     void set_map_light_panel_visible(bool visible);
     bool is_map_light_panel_visible() const;
 
-    void begin_area_edit_for_selected_asset(const std::string& area_name);
-    void begin_room_area_edit(const std::string& area_name);
     void focus_camera_on_asset(Asset* asset, double zoom_factor = 0.8, int duration_steps = 0);
 
     void reset_click_state();
     void clear_selection();
     void purge_asset(Asset* asset);
-
-    void create_room_area();
 
     void notify_spawn_group_config_changed(const nlohmann::json& entry);
     void notify_spawn_group_removed(const std::string& spawn_id);
@@ -197,7 +194,7 @@ private:
     void apply_camera_area_render_flag();
     void set_mode_from_header(int header_mode);
     void set_mode(Mode new_mode);
-    std::string generate_unique_room_area_name(const std::string& base) const;
+    void apply_overlay_grid_resolution(int resolution, bool user_override, bool update_stepper, bool update_footer);
     void restore_filter_hidden_assets() const;
     void apply_dark_mask_visibility();
     bool lighting_section_forces_dark_mask() const;
@@ -219,6 +216,7 @@ private:
     Assets* assets_ = nullptr;
     Input* input_ = nullptr;
     std::vector<Asset*>* active_assets_ = nullptr;
+    std::uint64_t active_assets_version_ = 0;
     Asset* player_ = nullptr;
     Room* current_room_ = nullptr;
     Room* detected_room_ = nullptr;
@@ -252,12 +250,10 @@ private:
     devmode::core::ManifestStore manifest_store_;
     AssetFilterBar asset_filter_;
 
-    camera* camera_override_for_testing_ = nullptr;
+    WarpedScreenGrid* camera_override_for_testing_ = nullptr;
 
     std::unique_ptr<SingleSpawnGroupModal> map_assets_modal_;
     std::unique_ptr<SingleSpawnGroupModal> boundary_assets_modal_;
-
-    std::unique_ptr<class AreaOverlayEditor>   asset_area_editor_;
     std::optional<std::string> selected_room_area_name_;
     std::optional<std::string> hovered_room_area_name_;
 
@@ -266,7 +262,13 @@ private:
     // Grid header state
     bool grid_overlay_enabled_ = false;
     bool snap_to_grid_enabled_ = false;
-    int  grid_cell_size_px_ = 8; // pixels per cell
+    int  grid_overlay_resolution_r_ = 0;
+    bool grid_overlay_resolution_user_override_ = false;
+    int  grid_cell_size_px_ = 1; // pixels per cell
+
+    // Footer depth toggle may temporarily disable camera realism.
+    bool depth_effects_forced_realism_disabled_ = false;
+    bool depth_effects_prev_realism_enabled_ = true;
 
     // Grid header controls
     // Standard ticker for grid resolution (r)

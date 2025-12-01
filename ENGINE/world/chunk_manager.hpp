@@ -24,6 +24,11 @@ public:
     const std::vector<Chunk*>& active() const { return active_; }
 
     void clear_active() { active_.clear(); }
+    void reset() {
+        lookup_.clear();
+        storage_.clear();
+        active_.clear();
+    }
 
 private:
     static std::uint64_t key(int i, int j);
