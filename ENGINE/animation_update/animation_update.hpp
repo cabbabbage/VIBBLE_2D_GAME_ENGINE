@@ -73,6 +73,8 @@ public:
 
     // Wire to the executor after both are constructed
     void set_runtime(AnimationRuntime* runtime) { runtime_ = runtime; }
+    void set_debug_enabled(bool enabled);
+    bool debug_enabled() const;
 
     // Plan a path using relative checkpoints from the controller
     void auto_move(const std::vector<SDL_Point>& rel_checkpoints,
@@ -139,4 +141,5 @@ private:
     bool        input_event_ = false;
     bool        move_pending_ = false;
     MoveRequest pending_move_{};
+    bool        debug_enabled_ = false;
 };

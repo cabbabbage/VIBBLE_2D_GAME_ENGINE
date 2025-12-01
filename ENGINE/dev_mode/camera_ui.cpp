@@ -734,9 +734,6 @@ class ZoomKeyPointWidget : public Widget {
 public:
     struct Values {
         float zoom = 1.0f;
-        float pitch_degrees = 0.0f;
-        float depth_offset_px = 0.0f;
-        float base_height = 720.0f;
     };
 
     ZoomKeyPointWidget(std::string label, const Values& values, bool expanded, float zoom_min, float zoom_max)
@@ -762,26 +759,6 @@ public:
             zoom_slider_->set_tooltip("Zoom anchor for this key point.");
             zoom_slider_->set_on_value_changed([this](float) { notify_change(); });
         }
-
-        tilt_widget_ = std::make_unique<PitchDialWidget>("Tilt (Pitch)", pitch_to_angle_deg(values.pitch_degrees), WarpedScreenGrid::kMinPitchDegrees, WarpedScreenGrid::kMaxPitchDegrees);
-        if (tilt_widget_) {
-            tilt_widget_->set_tooltip("Camera pitch at this zoom level.");
-            tilt_widget_->set_on_angle_changed([this](float) { notify_change(); });
-        }
-
-        depth_offset_slider_ = std::make_unique<FloatSliderWidget>(
-            "Depth Offset (px)", -4000.0f, 4000.0f, 5.0f, values.depth_offset_px, 0);
-        if (depth_offset_slider_) {
-            depth_offset_slider_->set_tooltip("Offsets the virtual ground plane for parallax at this zoom.");
-            depth_offset_slider_->set_on_value_changed([this](float) { notify_change(); });
-        }
-
-        base_height_slider_ = std::make_unique<FloatSliderWidget>(
-            "Base Height (px)", -8000.0f, 8000.0f, 5.0f, values.base_height, 0);
-        if (base_height_slider_) {
-            base_height_slider_->set_tooltip("Reference camera height for parallax depth at this zoom level.");
-            base_height_slider_->set_on_value_changed([this](float) { notify_change(); });
-        }
     }
 
     void set_on_value_changed(std::function<void()> cb) { on_change_ = std::move(cb); }
@@ -789,20 +766,13 @@ public:
     void set_on_set_zoom(std::function<void(float)> cb) { on_set_zoom_ = std::move(cb); }
 
     void set_values(const Values& values) {
-        const float preferred_angle = tilt_widget_ ? tilt_widget_->angle_degrees() : 0.0f;
         if (zoom_slider_) zoom_slider_->set_value(values.zoom);
-        if (tilt_widget_) tilt_widget_->set_angle_degrees(pitch_to_angle_deg(values.pitch_degrees, preferred_angle));
-        if (depth_offset_slider_) depth_offset_slider_->set_value(values.depth_offset_px);
-        if (base_height_slider_) base_height_slider_->set_value(values.base_height);
         layout_children();
     }
 
     Values values() const {
         Values v{};
         v.zoom = zoom_slider_ ? zoom_slider_->value() : 1.0f;
-        v.pitch_degrees = tilt_widget_ ? angle_to_pitch_deg(tilt_widget_->angle_degrees()) : 0.0f;
-        v.depth_offset_px = depth_offset_slider_ ? depth_offset_slider_->value() : 0.0f;
-        v.base_height = base_height_slider_ ? base_height_slider_->value() : 720.0f;
         return v;
     }
 
@@ -836,9 +806,6 @@ public:
                 height += wgt->height_for_width(width) + gap;
             };
             add_height(zoom_slider_.get());
-            add_height(tilt_widget_.get());
-            add_height(depth_offset_slider_.get());
-            add_height(base_height_slider_.get());
         }
         return height;
     }
@@ -869,9 +836,6 @@ public:
             return w->handle_event(e);
         };
         used = handle_child(zoom_slider_.get()) || used;
-        used = handle_child(tilt_widget_.get()) || used;
-        used = handle_child(depth_offset_slider_.get()) || used;
-        used = handle_child(base_height_slider_.get()) || used;
         return used;
     }
 
@@ -880,9 +844,6 @@ public:
         if (set_zoom_button_) set_zoom_button_->render(renderer);
         if (!expanded_) return;
         if (zoom_slider_) zoom_slider_->render(renderer);
-        if (tilt_widget_) tilt_widget_->render(renderer);
-        if (depth_offset_slider_) depth_offset_slider_->render(renderer);
-        if (base_height_slider_) base_height_slider_->render(renderer);
     }
 
     bool wants_full_row() const override { return true; }
@@ -928,9 +889,6 @@ private:
         };
 
         place_child(zoom_slider_.get());
-        place_child(tilt_widget_.get());
-        place_child(depth_offset_slider_.get());
-        place_child(base_height_slider_.get());
     }
 
 private:
@@ -943,9 +901,6 @@ private:
     std::unique_ptr<SectionToggleWidget> header_toggle_;
     std::unique_ptr<DMButton> set_zoom_button_;
     std::unique_ptr<FloatSliderWidget> zoom_slider_;
-    std::unique_ptr<PitchDialWidget> tilt_widget_;
-    std::unique_ptr<FloatSliderWidget> depth_offset_slider_;
-    std::unique_ptr<FloatSliderWidget> base_height_slider_;
 
     std::function<void()> on_change_{};
     std::function<void(bool)> on_expanded_changed_{};
@@ -1077,18 +1032,12 @@ void CameraUIPanel::sync_from_camera() {
     if (zoom_in_keypoint_ || zoom_out_keypoint_) {
         ZoomKeyPointWidget::Values min_values;
         min_values.zoom = last_settings_.zoom_low;
-        min_values.pitch_degrees = last_settings_.tilt_zoom_in_degrees;
-        min_values.depth_offset_px = last_settings_.depth_offset_at_zoom_low;
-        min_values.base_height = last_settings_.base_height_at_zoom_low;
         if (zoom_in_keypoint_) {
             zoom_in_keypoint_->set_values(min_values);
         }
 
         ZoomKeyPointWidget::Values max_values;
         max_values.zoom = last_settings_.zoom_high;
-        max_values.pitch_degrees = last_settings_.tilt_zoom_out_degrees;
-        max_values.depth_offset_px = last_settings_.depth_offset_at_zoom_high;
-        max_values.base_height = last_settings_.base_height_at_zoom_high;
         if (zoom_out_keypoint_) {
             zoom_out_keypoint_->set_values(max_values);
         }
@@ -1191,9 +1140,6 @@ void CameraUIPanel::build_ui() {
 
     ZoomKeyPointWidget::Values zoom_in_defaults;
     zoom_in_defaults.zoom = defaults.zoom_low;
-    zoom_in_defaults.pitch_degrees = defaults.tilt_zoom_in_degrees;
-    zoom_in_defaults.depth_offset_px = defaults.depth_offset_at_zoom_low;
-    zoom_in_defaults.base_height = defaults.base_height_at_zoom_low;
     zoom_in_keypoint_ = std::make_unique<ZoomKeyPointWidget>(
         "Zoomed In Settings",
         zoom_in_defaults,
@@ -1213,9 +1159,6 @@ void CameraUIPanel::build_ui() {
 
     ZoomKeyPointWidget::Values zoom_out_defaults;
     zoom_out_defaults.zoom = defaults.zoom_high;
-    zoom_out_defaults.pitch_degrees = defaults.tilt_zoom_out_degrees;
-    zoom_out_defaults.depth_offset_px = defaults.depth_offset_at_zoom_high;
-    zoom_out_defaults.base_height = defaults.base_height_at_zoom_high;
     zoom_out_keypoint_ = std::make_unique<ZoomKeyPointWidget>(
         "Zoomed Out Settings",
         zoom_out_defaults,
@@ -1337,10 +1280,19 @@ void CameraUIPanel::apply_settings_if_needed() {
         ~ScopedApplyingGuard() { flag = false; }
     } guard(applying_settings_);
     WarpedScreenGrid::RealismSettings settings = read_settings_from_ui();
-    const bool effects_enabled = realism_enabled_checkbox_
+    const bool reported_effects_enabled = realism_enabled_checkbox_
         ? realism_enabled_checkbox_->value()
         : last_realism_enabled_;
-    const bool depthcue_enabled = depthcue_checkbox_ ? depthcue_checkbox_->value() : last_depthcue_enabled_;
+    const bool reported_depthcue_enabled = depthcue_checkbox_
+        ? depthcue_checkbox_->value()
+        : last_depthcue_enabled_;
+    // Temporarily keep depth perspective/depth cue toggles off while warping is removed.
+    const bool effects_enabled = WarpedScreenGrid::kForceDepthPerspectiveDisabled
+        ? false
+        : reported_effects_enabled;
+    const bool depthcue_enabled = WarpedScreenGrid::kForceDepthPerspectiveDisabled
+        ? false
+        : reported_depthcue_enabled;
 
     auto differs = [](float a, float b) {
         return std::fabs(a - b) > 0.0001f;
@@ -1348,11 +1300,6 @@ void CameraUIPanel::apply_settings_if_needed() {
     bool changed = (effects_enabled != last_realism_enabled_) || (depthcue_enabled != last_depthcue_enabled_);
     const WarpedScreenGrid::RealismSettings& prev = last_settings_;
     changed = changed || differs(settings.zoom_low, prev.zoom_low) || differs(settings.zoom_high, prev.zoom_high);
-    changed = changed || differs(settings.base_height_px, prev.base_height_px);
-    changed = changed || differs(settings.tilt_zoom_in_degrees, prev.tilt_zoom_in_degrees) ||
-        differs(settings.tilt_zoom_out_degrees, prev.tilt_zoom_out_degrees);
-    changed = changed || differs(settings.depth_offset_at_zoom_low, prev.depth_offset_at_zoom_low) ||
-        differs(settings.depth_offset_at_zoom_high, prev.depth_offset_at_zoom_high);
     changed = changed || differs(settings.min_visible_screen_ratio, prev.min_visible_screen_ratio);
     changed = changed || differs(settings.extra_cull_margin, prev.extra_cull_margin);
     changed = changed || differs(settings.perspective_distance_at_scale_zero, prev.perspective_distance_at_scale_zero);
@@ -1440,12 +1387,10 @@ WarpedScreenGrid::RealismSettings CameraUIPanel::read_settings_from_ui() const {
     if (zoom_in_keypoint_) {
         min_values = zoom_in_keypoint_->values();
         settings.zoom_low = min_values.zoom;
-        settings.tilt_zoom_in_degrees = min_values.pitch_degrees;
     }
     if (zoom_out_keypoint_) {
         max_values = zoom_out_keypoint_->values();
         settings.zoom_high = max_values.zoom;
-        settings.tilt_zoom_out_degrees = max_values.pitch_degrees;
     }
 
     settings.zoom_low = std::clamp(settings.zoom_low,
@@ -1453,15 +1398,6 @@ WarpedScreenGrid::RealismSettings CameraUIPanel::read_settings_from_ui() const {
                                    WarpedScreenGrid::kMaxZoomAnchors);
     const float min_high = std::min(WarpedScreenGrid::kMaxZoomAnchors, settings.zoom_low + 0.0001f);
     settings.zoom_high = std::clamp(settings.zoom_high, min_high, WarpedScreenGrid::kMaxZoomAnchors);
-
-    if (zoom_in_keypoint_) {
-        settings.depth_offset_at_zoom_low = std::clamp(min_values.depth_offset_px, 0.0f, 20000.0f);
-        settings.base_height_at_zoom_low = min_values.base_height;
-    }
-    if (zoom_out_keypoint_) {
-        settings.depth_offset_at_zoom_high = std::clamp(max_values.depth_offset_px, 0.0f, 20000.0f);
-        settings.base_height_at_zoom_high = max_values.base_height;
-    }
     if (perspective_zero_distance_slider_) {
         settings.perspective_distance_at_scale_zero = std::clamp(
             perspective_zero_distance_slider_->value(), -5000.0f, 5000.0f);
@@ -1470,13 +1406,6 @@ WarpedScreenGrid::RealismSettings CameraUIPanel::read_settings_from_ui() const {
         settings.perspective_distance_at_scale_hundred = std::clamp(
             perspective_hundred_distance_slider_->value(), -5000.0f, 5000.0f);
     }
-    settings.tilt_zoom_in_degrees  = std::clamp(settings.tilt_zoom_in_degrees, WarpedScreenGrid::kMinPitchDegrees, WarpedScreenGrid::kMaxPitchDegrees);
-    settings.tilt_zoom_out_degrees = std::clamp(settings.tilt_zoom_out_degrees, WarpedScreenGrid::kMinPitchDegrees, WarpedScreenGrid::kMaxPitchDegrees);
-
-    settings.grid_depth_offset_px =
-        0.5f * (settings.depth_offset_at_zoom_low + settings.depth_offset_at_zoom_high);
-    settings.base_height_px =
-        0.5f * (settings.base_height_at_zoom_low + settings.base_height_at_zoom_high);
     // Depth cue texture settings
     auto slider_to_opacity = [](const FloatSliderWidget* slider) -> int {
         if (!slider) return 0;

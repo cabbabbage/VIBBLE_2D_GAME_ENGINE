@@ -26,6 +26,7 @@ public:
     static constexpr float kMaxZoomAnchors = 4.0f;
     static constexpr float kMinPitchDegrees = 0.0f;
     static constexpr float kMaxPitchDegrees = 150.0f;
+    static constexpr bool kForceDepthPerspectiveDisabled = true; // Toggle to false once perspective effects are restored.
 
     // Nested enums
     enum class BlurFalloffMethod {
@@ -46,7 +47,7 @@ public:
         float zoom_high                    = 3.0f;
 
         // The camera's height in world units when zoom is 1.0.
-        float base_height_at_zoom_1        = 1000.0f;
+        float base_height_px               = 1000.0f;
 
         int   render_quality_percent       = 100;
 
@@ -203,6 +204,7 @@ public:
 
     // View and world space queries
     double view_height_world() const;
+    double view_height_for_scale(double scale_value) const;
     double anchor_world_y() const;
     double zoom_lerp_t_for_scale(double scale_value) const;
     float depth_offset_for_scale(double scale_value) const;
@@ -230,11 +232,18 @@ public:
     RealismSettings& get_settings() { return settings_; }
     const RealismSettings& realism_settings() const { return settings_; }
     RealismSettings& realism_settings() { return settings_; }
-    bool is_realism_enabled() const { return realism_enabled_; }
-    bool realism_enabled() const { return realism_enabled_; }
-    bool parallax_enabled() const { return realism_enabled_; }
-    void set_realism_enabled(bool enabled) { realism_enabled_ = enabled; }
-    void set_parallax_enabled(bool enabled) { realism_enabled_ = enabled; }
+    bool is_realism_enabled() const { return !kForceDepthPerspectiveDisabled && realism_enabled_; }
+    bool realism_enabled() const { return is_realism_enabled(); }
+    bool parallax_enabled() const { return is_realism_enabled(); }
+    void set_realism_enabled(bool enabled) {
+        if (kForceDepthPerspectiveDisabled) {
+            (void)enabled;
+            realism_enabled_ = false;
+        } else {
+            realism_enabled_ = enabled;
+        }
+    }
+    void set_parallax_enabled(bool enabled) { set_realism_enabled(enabled); }
     void set_render_areas_enabled(bool enabled) { render_areas_enabled_ = enabled; }
     const Area& get_current_view() const { return current_view_; }
     const Area& get_camera_area() const { return current_view_; }

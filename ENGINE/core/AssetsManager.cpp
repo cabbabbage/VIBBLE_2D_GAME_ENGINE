@@ -898,6 +898,8 @@ void Assets::update(const Input& input)
     std::vector<Asset*> prev_static_lights = active_static_light_assets_;
     std::vector<Asset*> prev_moving_lights = active_moving_light_assets_;
     camera_.rebuild_grid(world_grid_, last_frame_dt_seconds_);
+    // Refresh the active chunk cache so grid tiles stay visible during rendering.
+    world_grid_.update_active_chunks(screen_world_rect(), 0);
     rebuild_active_from_screen_grid();
 
     const bool static_changed = (prev_static_lights != active_static_light_assets_);
@@ -942,6 +944,17 @@ void Assets::update(const Input& input)
         // Update dev-mode UI panels (e.g., asset library, camera panel) after world state
         // has been processed so their layouts and button states stay in sync.
         dev_controls_->update_ui(input);
+
+        // When using the Room Editor in dev mode, tools like the spawn-group
+        // drag editor can move assets after the main grid/visibility pass.
+        // Rebuild the warped grid and active lists a second time so the main
+        // scene render reflects those edits immediately (not one frame later).
+        if (dev_mode && dev_controls_->mode() == DevControls::Mode::RoomEditor) {
+            camera_.rebuild_grid(world_grid_, last_frame_dt_seconds_);
+            rebuild_active_from_screen_grid();
+            update_filtered_active_assets();
+            dev_controls_->set_active_assets(filtered_active_assets, dev_active_state_version_);
+        }
     }
 
     // Apply pending static registrations/removals before querying the grid.

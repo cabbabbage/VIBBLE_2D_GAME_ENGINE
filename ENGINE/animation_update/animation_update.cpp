@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdint>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -20,6 +21,7 @@
 #include "map_generation/room.hpp"
 #include "utils/grid.hpp"
 #include "utils/area.hpp"
+#include "utils/log.hpp"
 
 namespace {
 
@@ -248,6 +250,7 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
     if (!self_) {
         return;
     }
+    const std::string asset_name = self_->info ? self_->info->name : std::string{"<unknown>"};
     const int resolution = effective_grid_resolution(checkpoint_resolution);
     visited_thresh_      = std::max(0, visited_thresh_px);
     if (resolution > 0) {
@@ -257,6 +260,15 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
         }
     }
     path_requested = false;
+    const bool debug_logging = debug_enabled_;
+    if (debug_logging) {
+        std::ostringstream oss;
+        oss << "[AnimationUpdate] auto_move asset=" << asset_name
+            << " rel_checkpoints=" << rel_checkpoints.size()
+            << " visited_thresh=" << visited_thresh_
+            << " override_non_locked=" << std::boolalpha << override_non_locked;
+        vibble::log::info(oss.str());
+    }
 
     std::vector<SDL_Point> absolute;
     absolute.reserve(rel_checkpoints.size());
@@ -273,10 +285,21 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
     plan_      = planner_(*self_, sanitizer_.sanitize(*self_, absolute, visited_thresh_), visited_thresh_, grid());
     final_dest = plan_.final_dest;
     plan_.override_non_locked = override_non_locked;
+    if (debug_logging) {
+        std::ostringstream oss;
+        oss << "[AnimationUpdate] auto_move plan asset=" << asset_name
+            << " final_dest=(" << final_dest.x << "," << final_dest.y << ")"
+            << " sanitized_points=" << plan_.sanitized_checkpoints.size()
+            << " strides=" << plan_.strides.size();
+        vibble::log::info(oss.str());
+    }
 
     // If no viable strides were produced, immediately request another plan so controllers
     // can try alternative inputs instead of getting stuck with a cleared request flag.
     if (plan_.strides.empty()) {
+        if (debug_logging) {
+            vibble::log::info("[AnimationUpdate] auto_move plan produced no strides for asset=" + asset_name);
+        }
         path_requested = true;
         return;
     }
@@ -306,6 +329,8 @@ void AnimationUpdate::move(SDL_Point delta,
 }
 
 void AnimationUpdate::clear_movement_plan() {
+    const std::string asset_name = self_ && self_->info ? self_->info->name : std::string{"<unknown>"};
+    const bool debug_logging = debug_enabled_;
     plan_.strides.clear();
     plan_.sanitized_checkpoints.clear();
     plan_.final_dest = self_ ? self_->pos : SDL_Point{ 0, 0 };
@@ -313,6 +338,13 @@ void AnimationUpdate::clear_movement_plan() {
     final_dest       = plan_.final_dest;
     path_requested   = false;
     input_event_     = true;
+
+    if (debug_logging) {
+        std::ostringstream oss;
+        oss << "[AnimationUpdate] clear_movement_plan asset=" << asset_name
+            << " final_dest=(" << final_dest.x << "," << final_dest.y << ")";
+        vibble::log::info(oss.str());
+    }
 
     if (runtime_) {
         runtime_->reset_plan_progress();
@@ -335,6 +367,14 @@ bool AnimationUpdate::consume_input_event() {
     const bool had = input_event_;
     input_event_ = false;
     return had;
+}
+
+void AnimationUpdate::set_debug_enabled(bool enabled) {
+    debug_enabled_ = enabled;
+}
+
+bool AnimationUpdate::debug_enabled() const {
+    return debug_enabled_;
 }
 
 vibble::grid::Grid& AnimationUpdate::grid() const {

@@ -34,7 +34,6 @@ namespace {
     constexpr double kHalfFovY  = PI_D / 4.0;
     constexpr double kBottomAngleLimit = (PI_D * 0.5) - 1e-3;
     constexpr float  kDefaultPitchDegrees   = 60.0f;
-    constexpr float  kFixedDepthOffsetPx    = 4000.0f;
     constexpr double kMinZoomRange = 1e-4;
     constexpr double kMinPerspectiveScale   = 0.35;
     constexpr double kMaxPerspectiveScale   = 1.65;
@@ -167,29 +166,8 @@ namespace {
     }
 
     double camera_height_from_scale(const WarpedScreenGrid::RealismSettings& settings, double scale_value) {
-        ZoomInterpolator zoom(settings, scale_value);
-        const double base_height_low = std::isfinite(settings.base_height_at_zoom_low)
-            ? std::max(0.0, static_cast<double>(settings.base_height_at_zoom_low))
-            : std::max(1.0, static_cast<double>(settings.base_height_px));
-        const double base_height_high = std::isfinite(settings.base_height_at_zoom_high)
-            ? std::max(0.0, static_cast<double>(settings.base_height_at_zoom_high))
-            : std::max(1.0, static_cast<double>(settings.base_height_px));
-        const double base_height = zoom.lerp(base_height_low, base_height_high);
+        const double base_height = std::max(1.0, static_cast<double>(settings.base_height_px));
         return std::max(0.0, base_height * scale_value);
-    }
-
-    double pitch_from_scale(const WarpedScreenGrid::RealismSettings& settings, double scale_value) {
-        ZoomInterpolator zoom(settings, scale_value);
-        const double pitch_in_deg  = static_cast<double>(sanitize_pitch_degrees(settings.tilt_zoom_in_degrees));
-        const double pitch_out_deg = static_cast<double>(sanitize_pitch_degrees(settings.tilt_zoom_out_degrees));
-        return lerp_angle(pitch_in_deg, pitch_out_deg, zoom.t);
-    }
-
-    double depth_world_for_scale(const WarpedScreenGrid::RealismSettings& settings, double scale_value) {
-        ZoomInterpolator zoom(settings, scale_value);
-        const double depth_low = std::max(0.0, static_cast<double>(settings.depth_offset_at_zoom_low));
-        const double depth_high = std::max(0.0, static_cast<double>(settings.depth_offset_at_zoom_high));
-        return zoom.lerp(depth_low, depth_high);
     }
 
     double solve_pitch_for_fixed_depth(double camera_height,
@@ -262,6 +240,7 @@ namespace {
     WarpedScreenGrid::CameraGeometry build_geometry(const WarpedScreenGrid::RealismSettings& settings,
                                                double scale_value,
                                                double anchor_world_y,
+                                               double desired_depth_world,
                                                bool realism_enabled) {
         WarpedScreenGrid::CameraGeometry g{};
         if (!realism_enabled) {
@@ -274,8 +253,7 @@ namespace {
             return g;
         }
 
-        const double desired_depth_world = depth_world_for_scale(settings, clamped_scale);
-        const double default_pitch_deg = pitch_from_scale(settings, clamped_scale);
+        const double default_pitch_deg = kDefaultPitchDegrees;
         const double default_pitch_rad = signed_radians_from_degrees(default_pitch_deg);
         const double solved_pitch_rad = solve_pitch_for_fixed_depth(
             g.camera_height,
@@ -551,7 +529,10 @@ namespace {
 }
 
 WarpedScreenGrid::CameraGeometry WarpedScreenGrid::compute_geometry_for_scale(double scale_value) const {
-    return build_geometry(settings_, scale_value, anchor_world_y(), realism_enabled_);
+    const double clamped_scale = std::max(0.0001, scale_value);
+    const double view_height = view_height_for_scale(clamped_scale);
+    const double desired_depth_world = std::max(0.0, view_height * 0.5);
+    return build_geometry(settings_, clamped_scale, anchor_world_y(), desired_depth_world, realism_enabled_);
 }
 
 WarpedScreenGrid::CameraGeometry WarpedScreenGrid::compute_geometry() const {
@@ -629,8 +610,6 @@ void WarpedScreenGrid::set_realism_settings(const RealismSettings& settings) {
     if (!std::isfinite(settings_.base_height_px) || settings_.base_height_px <= 0.0f) {
         settings_.base_height_px = 720.0f;
     }
-    settings_.tilt_zoom_in_degrees  = sanitize_pitch_degrees(settings_.tilt_zoom_in_degrees);
-    settings_.tilt_zoom_out_degrees = sanitize_pitch_degrees(settings_.tilt_zoom_out_degrees);
     settings_.parallax_smoothing = sanitize_params(settings_.parallax_smoothing);
     if (settings_.parallax_smoothing.method == TransformSmoothingMethod::Lerp &&
         settings_.parallax_smoothing.lerp_rate <= 0.0f) {
@@ -639,23 +618,6 @@ void WarpedScreenGrid::set_realism_settings(const RealismSettings& settings) {
                settings_.parallax_smoothing.spring_frequency <= 0.0f) {
         settings_.parallax_smoothing.spring_frequency = 10.0f;
     }
-
-
-
-    const auto sanitize_depth = [](float raw) -> float {
-        if (!std::isfinite(raw) || raw < 0.0f) {
-            return kFixedDepthOffsetPx;
-        }
-        return raw;
-    };
-
-    settings_.depth_offset_at_zoom_low  = sanitize_depth(settings_.depth_offset_at_zoom_low);
-    settings_.depth_offset_at_zoom_high = sanitize_depth(settings_.depth_offset_at_zoom_high);
-    if (settings_.depth_offset_at_zoom_low < 1e-3f && settings_.depth_offset_at_zoom_high < 1e-3f) {
-        settings_.depth_offset_at_zoom_low  = kFixedDepthOffsetPx;
-        settings_.depth_offset_at_zoom_high = kFixedDepthOffsetPx;
-    }
-    settings_.grid_depth_offset_px = 0.5f * (settings_.depth_offset_at_zoom_low + settings_.depth_offset_at_zoom_high);
 
     update_geometry_cache(compute_geometry());
 }
@@ -1085,7 +1047,7 @@ SDL_FPoint WarpedScreenGrid::screen_to_map(SDL_Point screen) const {
     // Apply inverse of player centering offset to screen Y before converting to world coordinates
     const double adjusted_screen_y = static_cast<double>(screen.y) - static_cast<double>(player_center_offset_y_);
     double wx = static_cast<double>(minx) + static_cast<double>(screen.x) * s;
-    double wy = static_cast<double>(maxy) - adjusted_screen_y * s;
+    double wy = static_cast<double>(miny) + adjusted_screen_y * s;
     const double safe_wx = std::isfinite(wx) ? wx : static_cast<double>(minx);
     const double safe_wy = std::isfinite(wy) ? wy : static_cast<double>(maxy);
     const float out_wx = static_cast<float>(std::clamp(safe_wx, -1e8, 1e8));
@@ -1094,14 +1056,23 @@ SDL_FPoint WarpedScreenGrid::screen_to_map(SDL_Point screen) const {
 }
 WarpedScreenGrid::RenderEffects WarpedScreenGrid::compute_render_effects(
     SDL_Point world,
-    float asset_screen_height,
-    float reference_screen_height,
+    float /*asset_screen_height*/,
+    float /*reference_screen_height*/,
     RenderSmoothingKey /*smoothing_key*/) const
 {
     RenderEffects result;
 
     SDL_FPoint world_f{ static_cast<float>(world.x), static_cast<float>(world.y) };
     SDL_FPoint linear_screen = map_to_screen_f(world_f);
+
+    // Perspective/warping is temporarily disabled; return straight screen metrics.
+    result.screen_position = linear_screen;
+    result.vertical_scale  = 1.0f;
+    result.distance_scale  = 1.0f;
+    result.horizon_fade_alpha = 1.0f;
+
+    // TODO: bring back the NDC/parallax/distance-scaling block once depth perspective is reimplemented.
+#if 0
     SDL_FPoint warped_screen = linear_screen;
 
     if (realism_enabled_) {
@@ -1243,6 +1214,7 @@ WarpedScreenGrid::RenderEffects WarpedScreenGrid::compute_render_effects(
     if (!std::isfinite(result.screen_position.x) || !std::isfinite(result.screen_position.y)) {
         result.screen_position = linear_screen;
     }
+#endif
 
     return result;
 }
@@ -1297,19 +1269,12 @@ void WarpedScreenGrid::apply_camera_settings(const nlohmann::json& data) {
 
     try_read_bool("realism_enabled", realism_enabled_);
 
-    const std::array<std::pair<const char*, float*>, 23> float_fields{ {
-        { "base_height_at_zoom_low", &settings_.base_height_at_zoom_low },
-        { "base_height_at_zoom_high", &settings_.base_height_at_zoom_high },
+    const std::array<std::pair<const char*, float*>, 15> float_fields{ {
         { "extra_cull_margin", &settings_.extra_cull_margin },
         { "zoom_low", &settings_.zoom_low },
         { "zoom_high", &settings_.zoom_high },
         { "base_height_px", &settings_.base_height_px },
         { "min_visible_screen_ratio", &settings_.min_visible_screen_ratio },
-        { "tilt_zoom_in_degrees", &settings_.tilt_zoom_in_degrees },
-        { "tilt_zoom_out_degrees", &settings_.tilt_zoom_out_degrees },
-        { "grid_depth_offset_px", &settings_.grid_depth_offset_px },
-        { "depth_offset_at_zoom_low", &settings_.depth_offset_at_zoom_low },
-        { "depth_offset_at_zoom_high", &settings_.depth_offset_at_zoom_high },
         { "parallax_smoothing_lerp_rate", &settings_.parallax_smoothing.lerp_rate },
         { "parallax_smoothing_spring_frequency", &settings_.parallax_smoothing.spring_frequency },
         { "parallax_smoothing_max_step", &settings_.parallax_smoothing.max_step },
@@ -1320,7 +1285,6 @@ void WarpedScreenGrid::apply_camera_settings(const nlohmann::json& data) {
         { "perspective_distance_at_scale_zero", &settings_.perspective_distance_at_scale_zero },
         { "perspective_distance_at_scale_hundred", &settings_.perspective_distance_at_scale_hundred },
         { "horizon_fade_band_px", &settings_.horizon_fade_band_px },
-        { "perspective_scale_gamma", &settings_.perspective_scale_gamma }
     } };
     for (const auto& [key, field] : float_fields) {
         try_read_number(key, *field);
@@ -1359,22 +1323,6 @@ void WarpedScreenGrid::apply_camera_settings(const nlohmann::json& data) {
             std::clamp(settings_.background_plane_screen_y, 0.0f, 4000.0f);
     }
 
-    const auto sanitize_depth = [](float raw) -> float {
-        if (!std::isfinite(raw) || raw < 0.0f) {
-            return kFixedDepthOffsetPx;
-        }
-        return raw;
-    };
-
-    settings_.depth_offset_at_zoom_low  = sanitize_depth(settings_.depth_offset_at_zoom_low);
-    settings_.depth_offset_at_zoom_high = sanitize_depth(settings_.depth_offset_at_zoom_high);
-    if (settings_.depth_offset_at_zoom_low < 1e-3f && settings_.depth_offset_at_zoom_high < 1e-3f) {
-        settings_.depth_offset_at_zoom_low  = kFixedDepthOffsetPx;
-        settings_.depth_offset_at_zoom_high = kFixedDepthOffsetPx;
-    }
-    settings_.grid_depth_offset_px =
-        0.5f * (settings_.depth_offset_at_zoom_low + settings_.depth_offset_at_zoom_high);
-
     if (!std::isfinite(settings_.zoom_low)) {
         settings_.zoom_low = 0.75f;
     }
@@ -1388,15 +1336,6 @@ void WarpedScreenGrid::apply_camera_settings(const nlohmann::json& data) {
         settings_.base_height_px = 720.0f;
     }
 
-
-    if (!std::isfinite(settings_.tilt_zoom_in_degrees )) {
-        settings_.tilt_zoom_in_degrees  = 345.0f;
-    }
-    if (!std::isfinite(settings_.tilt_zoom_out_degrees)) {
-        settings_.tilt_zoom_out_degrees = 310.0f;
-    }
-    settings_.tilt_zoom_in_degrees   = sanitize_pitch_degrees(settings_.tilt_zoom_in_degrees );
-    settings_.tilt_zoom_out_degrees = sanitize_pitch_degrees(settings_.tilt_zoom_out_degrees);
 
     if (!std::isfinite(settings_.min_visible_screen_ratio) ||
         settings_.min_visible_screen_ratio < 0.0f) {
@@ -1443,17 +1382,11 @@ nlohmann::json WarpedScreenGrid::camera_settings_to_json() const {
 
     const std::pair<const char*, float> float_fields[] = {
         { "extra_cull_margin", settings_.extra_cull_margin },
-        { "depth_offset_at_zoom_low", settings_.depth_offset_at_zoom_low },
-        { "depth_offset_at_zoom_high", settings_.depth_offset_at_zoom_high },
-        { "base_height_at_zoom_low", settings_.base_height_at_zoom_low },
-        { "base_height_at_zoom_high", settings_.base_height_at_zoom_high },
         { "zoom_low", settings_.zoom_low },
         { "zoom_high", settings_.zoom_high },
         { "perspective_distance_at_scale_zero", settings_.perspective_distance_at_scale_zero },
         { "perspective_distance_at_scale_hundred", settings_.perspective_distance_at_scale_hundred },
         { "base_height_px", settings_.base_height_px },
-        { "tilt_zoom_in_degrees", settings_.tilt_zoom_in_degrees },
-        { "tilt_zoom_out_degrees", settings_.tilt_zoom_out_degrees },
         { "min_visible_screen_ratio", settings_.min_visible_screen_ratio },
         { "scale_hysteresis_margin", settings_.scale_variant_hysteresis_margin },
         { "parallax_smoothing_lerp_rate", settings_.parallax_smoothing.lerp_rate },
@@ -1462,7 +1395,6 @@ nlohmann::json WarpedScreenGrid::camera_settings_to_json() const {
         { "parallax_smoothing_snap_threshold", settings_.parallax_smoothing.snap_threshold },
         { "foreground_plane_screen_y", settings_.foreground_plane_screen_y },
         { "background_plane_screen_y", settings_.background_plane_screen_y },
-        { "grid_depth_offset_px", settings_.grid_depth_offset_px },
         { "horizon_fade_band_px", settings_.horizon_fade_band_px },
         { "perspective_scale_gamma", settings_.perspective_scale_gamma }
     };
@@ -1512,17 +1444,21 @@ WarpedScreenGrid::FloorDepthParams WarpedScreenGrid::compute_floor_depth_params(
 }
 
 float WarpedScreenGrid::warp_floor_screen_y(float world_y, float linear_screen_y) const {
-    FloorDepthParams p = runtime_floor_params_;
-    if (!p.enabled) {
-        p = compute_floor_depth_params();
-    }
-    return warp_floor_screen_y_internal(world_y, linear_screen_y, p, screen_height_);
+    (void)world_y;
+    // Disable warping/parallax; return the linear screen Y directly.
+    return std::isfinite(linear_screen_y) ? linear_screen_y : 0.0f;
 }
 
 double WarpedScreenGrid::view_height_world() const {
     int minx = 0, miny = 0, maxx = 0, maxy = 0;
     std::tie(minx, miny, maxx, maxy) = current_view_.get_bounds();
     return static_cast<double>(std::max(0, maxy - miny));
+}
+
+double WarpedScreenGrid::view_height_for_scale(double scale_value) const {
+    const int base_h = std::max(1, height_from_area(base_zoom_));
+    const double clamped_scale = std::max(0.0001, scale_value);
+    return static_cast<double>(base_h) * clamped_scale;
 }
 
 double WarpedScreenGrid::anchor_world_y() const {
@@ -1536,10 +1472,10 @@ double WarpedScreenGrid::zoom_lerp_t_for_scale(double scale_value) const {
 
 float WarpedScreenGrid::depth_offset_for_scale(double scale_value) const {
     const double safe_scale = std::max(0.0001, scale_value);
-    const double depth_world = depth_world_for_scale(settings_, safe_scale);
+    const double depth_world = std::max(0.0, view_height_for_scale(safe_scale) * 0.5);
     const double depth_px = depth_world / safe_scale;
     if (!std::isfinite(depth_px)) {
-        return kFixedDepthOffsetPx;
+        return 0.0f;
     }
     return static_cast<float>(std::clamp(depth_px, 0.0, 1e6));
 }
@@ -1644,24 +1580,28 @@ void WarpedScreenGrid::rebuild_grid(world::WorldGrid& world_grid, float dt_secon
     }
     
     if (player_asset) {
-        // Temporarily compute player's screen Y without offset to determine what offset is needed
-        const float old_offset = player_center_offset_y_;
         player_center_offset_y_ = 0.0f;
         
         SDL_Point player_world{ player_asset->pos.x, player_asset->pos.y };
         SDL_FPoint player_screen_base = map_to_screen(player_world);
         
-        // Apply warping to get the final Y position
+#if 0
+        // TODO: restore depth warping once perspective is re-enabled.
         const float player_world_y_f = static_cast<float>(player_world.y);
         const float player_warped_y = warp_floor_screen_y(player_world_y_f, player_screen_base.y);
         const float player_final_y = std::isfinite(player_warped_y) ? player_warped_y : player_screen_base.y;
+#else
+        const float player_final_y = player_screen_base.y;
+#endif
         
-        // Calculate offset to center player vertically at screen center
         const float screen_center_y = screen_h * 0.5f;
         player_center_offset_y_ = screen_center_y - player_final_y;
     }
     
-    const float horizon_y   = static_cast<float>(horizon_screen_y_for_scale());
+    const float horizon_y = WarpedScreenGrid::kForceDepthPerspectiveDisabled
+        ? 0.0f
+        : static_cast<float>(horizon_screen_y_for_scale());
+    // Treat the top of the screen as the horizon while perspective features are disabled.
     const float margin_px   = std::max(0.0f, settings_.extra_cull_margin);
     const float depth_pad_px = std::max(0.0f, current_depth_offset_px());
     const float bottom_pad  = std::max(depth_pad_px, margin_px);
@@ -1676,8 +1616,10 @@ void WarpedScreenGrid::rebuild_grid(world::WorldGrid& world_grid, float dt_secon
         screen_h * std::clamp(settings_.min_visible_screen_ratio, 0.0f, 0.5f);
 
     // ------------------------------------------------------------------
-    // Distance-based perspective context
+    // Distance-based perspective context (disabled for now)
     // ------------------------------------------------------------------
+    // NDC, parallax, depth cueing, and distance scaling are temporarily removed.
+#if 0
     // Use current floor depth params to derive two reference distances
     // (far and near) that map to perspective scales 0 and 100.
     // We approximate distance along the floor using NDC depth.
@@ -1713,6 +1655,7 @@ void WarpedScreenGrid::rebuild_grid(world::WorldGrid& world_grid, float dt_secon
         bottom_screen_y, depth_params, perspective_range, zoom_factor);
 
     // ------------------------------------------------------------------
+#endif
 
     auto rects_intersect = [](const SDL_FRect& a, const SDL_FRect& b) -> bool {
         const float ax1 = a.x + a.w;
@@ -1730,7 +1673,11 @@ void WarpedScreenGrid::rebuild_grid(world::WorldGrid& world_grid, float dt_secon
         const SDL_Point world_pos{ gp->world.x, gp->world.y };
 
         SDL_FPoint linear_screen = map_to_screen(world_pos);
-        float warped_y = warp_floor_screen_y(static_cast<float>(world_pos.y), linear_screen.y);
+        float warped_y = linear_screen.y;
+#if 0
+        // TODO: re-enable warping once depth perspective returns.
+        warped_y = warp_floor_screen_y(static_cast<float>(world_pos.y), linear_screen.y);
+#endif
         SDL_FPoint screen_pos{linear_screen.x, warped_y};
 
         if (!std::isfinite(screen_pos.x) || !std::isfinite(screen_pos.y)) {
@@ -1777,6 +1724,12 @@ void WarpedScreenGrid::rebuild_grid(world::WorldGrid& world_grid, float dt_secon
         gp->parallax_dx        = parallax_dx;
         gp->vertical_scale     = effects.vertical_scale;
 
+        gp->perspective_scale  = 1.0f;
+        gp->distance_to_camera = 0.0f;
+        gp->tilt_radians       = 0.0f;
+        gp->on_screen          = on_screen;
+
+#if 0
         // Interpolate perspective scale based on screen Y position between horizon and bottom
         const double perspective_scale_value = interpolate_perspective_scale(
             static_cast<double>(screen_pos.y),
@@ -1789,7 +1742,6 @@ void WarpedScreenGrid::rebuild_grid(world::WorldGrid& world_grid, float dt_secon
         const double distance_measure = compute_floor_distance_measure(screen_pos.y, depth_params);
         gp->distance_to_camera = static_cast<float>(distance_measure);
         gp->tilt_radians       = runtime_pitch_rad_;
-        gp->on_screen          = on_screen;
 
         // Calculate depth cue opacities
         float fg_opacity = 0.0f;
@@ -1822,6 +1774,7 @@ void WarpedScreenGrid::rebuild_grid(world::WorldGrid& world_grid, float dt_secon
         
         // gp->depth_cue_foreground_opacity = fg_opacity;
         // gp->depth_cue_background_opacity = bg_opacity;
+#endif
 
         id_to_index_[gp->id] = warped_points_.size();
         warped_points_.push_back(gp);

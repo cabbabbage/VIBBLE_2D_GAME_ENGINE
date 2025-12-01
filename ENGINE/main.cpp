@@ -612,8 +612,6 @@ nlohmann::json build_default_map_manifest(const std::string& map_name) {
         {"zoom_low", 0.75},
         {"zoom_high", 3.0},
         {"base_height_px", 720.0},
-        {"tilt_zoom_in_degrees", 345.0},
-        {"tilt_zoom_out_degrees", 310.0},
         {"motion_smoothing_method", 1},
         {"motion_smoothing_max_step", 8000.0},
         {"motion_smoothing_snap_threshold", 0.25},

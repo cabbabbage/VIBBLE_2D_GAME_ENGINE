@@ -246,6 +246,7 @@ void SceneRenderer::render() {
     }
 
     const float flicker_time_seconds = ticks_to_seconds(SDL_GetTicks64());
+    const float inv_scale = 1.0f / std::max(0.000001f, cam.get_scale());
 
     const auto& active_assets = assets_->getActive();
     for (Asset* asset : active_assets) {
@@ -253,32 +254,17 @@ void SceneRenderer::render() {
             continue;
         }
 
-        world::GridPoint* gp = cam.grid_point_for_asset(asset);
-        composite_renderer_.update(asset, gp, flicker_time_seconds);
+        // Skip stored grid projections; render assets directly using the current camera without parallax/warp.
+        composite_renderer_.update(asset, nullptr, flicker_time_seconds);
 
-        SDL_FPoint screen_base{};
-        bool       has_screen_base = false;
-        float      perspective_scale = 1.0f;
-        float      vertical_scale    = 1.0f;
-
-        if (gp) {
-            screen_base       = gp->screen;
-            has_screen_base   = std::isfinite(screen_base.x) && std::isfinite(screen_base.y);
-            perspective_scale = std::max(0.0001f, gp->perspective_scale);
-            vertical_scale    = std::max(0.0001f, gp->vertical_scale);
-        }
-
-        if (!has_screen_base) {
-            SDL_Point world_pos{ asset->pos.x, asset->pos.y };
-            screen_base     = cam.map_to_screen(world_pos);
-            has_screen_base = std::isfinite(screen_base.x) && std::isfinite(screen_base.y);
-            perspective_scale = std::max(0.0001f, cam.get_scale());
-            vertical_scale    = 1.0f;
-        }
-
-        if (!has_screen_base) {
+        SDL_Point world_pos{ asset->pos.x, asset->pos.y };
+        SDL_FPoint screen_base = cam.map_to_screen(world_pos);
+        if (!std::isfinite(screen_base.x) || !std::isfinite(screen_base.y)) {
             continue;
         }
+
+        const float perspective_scale = 1.0f;
+        const float vertical_scale    = 1.0f;
 
         const int asset_world_x = asset->pos.x;
         const int asset_world_y = asset->pos.y;
@@ -297,13 +283,14 @@ void SceneRenderer::render() {
             const int offset_x = obj.screen_rect.x - asset_world_x;
             const int offset_y = obj.screen_rect.y - asset_world_y;
 
-            const double scaled_width  = static_cast<double>(raw_width)  * static_cast<double>(perspective_scale);
-            const double scaled_height = static_cast<double>(raw_height) * static_cast<double>(perspective_scale) * static_cast<double>(vertical_scale);
+            // Convert world-space dimensions to screen space using the current camera scale.
+            const double scaled_width  = static_cast<double>(raw_width)  * static_cast<double>(inv_scale);
+            const double scaled_height = static_cast<double>(raw_height) * static_cast<double>(inv_scale);
             const int    screen_w      = std::max(1, static_cast<int>(std::lround(scaled_width)));
             const int    screen_h      = std::max(1, static_cast<int>(std::lround(scaled_height)));
 
-            const double scaled_offset_x = static_cast<double>(offset_x) * static_cast<double>(perspective_scale);
-            const double scaled_offset_y = static_cast<double>(offset_y) * static_cast<double>(perspective_scale) * static_cast<double>(vertical_scale);
+            const double scaled_offset_x = static_cast<double>(offset_x) * static_cast<double>(inv_scale);
+            const double scaled_offset_y = static_cast<double>(offset_y) * static_cast<double>(inv_scale);
 
             SDL_Rect screen_rect{
                 static_cast<int>(std::lround(screen_base.x + scaled_offset_x - static_cast<double>(screen_w) * 0.5)),
@@ -315,10 +302,6 @@ void SceneRenderer::render() {
             SDL_SetTextureBlendMode(obj.texture, obj.blend_mode);
             // Apply horizon fade to alpha
             Uint8 final_alpha = obj.color_mod.a;
-            if (gp && gp->horizon_fade_alpha < 1.0f) {
-                final_alpha = static_cast<Uint8>(std::lround(
-                    static_cast<float>(final_alpha) * gp->horizon_fade_alpha));
-            }
             
             SDL_SetTextureColorMod(obj.texture, obj.color_mod.r, obj.color_mod.g, obj.color_mod.b);
             SDL_SetTextureAlphaMod(obj.texture, final_alpha);
@@ -326,8 +309,8 @@ void SceneRenderer::render() {
             if (obj.angle != 0.0 || obj.use_custom_center || obj.flip != SDL_FLIP_NONE) {
                 SDL_Point final_center = obj.center;
                 if (obj.use_custom_center) {
-                    final_center.x = static_cast<int>(std::lround(static_cast<double>(final_center.x) * perspective_scale));
-                    final_center.y = static_cast<int>(std::lround(static_cast<double>(final_center.y) * perspective_scale * vertical_scale));
+                    final_center.x = static_cast<int>(std::lround(static_cast<double>(final_center.x) * static_cast<double>(inv_scale)));
+                    final_center.y = static_cast<int>(std::lround(static_cast<double>(final_center.y) * static_cast<double>(inv_scale)));
                 }
                 const SDL_Point* center_ptr = obj.use_custom_center ? &final_center : nullptr;
                 SDL_RenderCopyEx(renderer_, obj.texture, nullptr, &screen_rect, obj.angle, center_ptr, obj.flip);

@@ -1860,6 +1860,7 @@
         }
       },
       "anti_tags": [],
+      "custom_controller_key": "Bomb_controller",
       "asset_directory": "SRC/assets/bomb",
       "asset_name": "bomb",
       "asset_type": "object",
