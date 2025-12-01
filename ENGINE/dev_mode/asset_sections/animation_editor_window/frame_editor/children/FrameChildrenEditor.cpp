@@ -357,8 +357,27 @@ void FrameChildrenEditor::reload_from_document() {
                 if (!entry.empty() && entry[0].is_number()) frame.dx = static_cast<float>(entry[0].get<double>());
                 if (entry.size() > 1 && entry[1].is_number()) frame.dy = static_cast<float>(entry[1].get<double>());
                 if (entry.size() > 2 && entry[2].is_boolean()) frame.resort_z = entry[2].get<bool>();
-                if (entry.size() > 4 && entry[4].is_array()) {
-                    for (const auto& child_entry : entry[4]) {
+                auto find_children_array = [](const nlohmann::json& arr) -> const nlohmann::json* {
+                    if (!arr.is_array()) {
+                        return nullptr;
+                    }
+                    for (std::size_t idx = 2; idx < arr.size(); ++idx) {
+                        const auto& candidate = arr[idx];
+                        if (!candidate.is_array()) {
+                            continue;
+                        }
+                        if (candidate.empty()) {
+                            return &candidate;
+                        }
+                        const auto& first = candidate.front();
+                        if (first.is_array() || first.is_object()) {
+                            return &candidate;
+                        }
+                    }
+                    return nullptr;
+                };
+                if (const nlohmann::json* children = find_children_array(entry)) {
+                    for (const auto& child_entry : *children) {
                         if (!child_entry.is_array() || child_entry.empty()) continue;
                         ChildFrame child;
                         try { child.child_index = child_entry[0].get<int>(); } catch (...) { child.child_index = -1; }

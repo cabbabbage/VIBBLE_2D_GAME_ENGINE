@@ -906,10 +906,10 @@
               [
                 [
                   0,
-                  0,
-                  0,
+                  30,
+                  9,
                   0.0,
-                  false,
+                  true,
                   true
                 ]
               ]
@@ -920,10 +920,10 @@
               [
                 [
                   0,
-                  0,
-                  0,
+                  30,
+                  9,
                   0.0,
-                  false,
+                  true,
                   true
                 ]
               ]
@@ -934,10 +934,10 @@
               [
                 [
                   0,
-                  0,
-                  0,
+                  30,
+                  9,
                   0.0,
-                  false,
+                  true,
                   true
                 ]
               ]
@@ -948,10 +948,10 @@
               [
                 [
                   0,
-                  0,
-                  0,
+                  30,
+                  9,
                   0.0,
-                  false,
+                  true,
                   true
                 ]
               ]
@@ -962,10 +962,10 @@
               [
                 [
                   0,
-                  0,
-                  0,
+                  30,
+                  9,
                   0.0,
-                  false,
+                  true,
                   true
                 ]
               ]
@@ -976,10 +976,10 @@
               [
                 [
                   0,
-                  0,
-                  0,
+                  30,
+                  9,
                   0.0,
-                  false,
+                  true,
                   true
                 ]
               ]
@@ -990,10 +990,10 @@
               [
                 [
                   0,
-                  0,
-                  0,
+                  30,
+                  9,
                   0.0,
-                  false,
+                  true,
                   true
                 ]
               ]
@@ -1535,13 +1535,14 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 74.0
+        "scale_percentage": 46.0
       },
       "spawn_groups": [],
       "start": "default",
       "tags": [],
       "tillable": false,
-      "update_radius": 0
+      "update_radius": 0,
+      "z_threshold": 0
     },
     "bomb": {
       "animation_children": [],

@@ -154,6 +154,7 @@ public:
     void refresh_active_asset_lists();
     void refresh_filtered_active_assets();
     void mark_active_assets_dirty();
+    bool rebuild_active_assets_if_needed();
     void initialize_active_assets(SDL_Point center);
     std::uint64_t dev_active_state_version() const { return dev_active_state_version_; }
 
@@ -323,7 +324,6 @@ private:
 
     std::optional<DevNotice> dev_notice_;
 
-    bool rebuild_active_assets_if_needed();
     void rebuild_non_player_update_buffer_if_needed();
     void update_active_assets(SDL_Point center);
     bool asset_bounds_in_screen_space(const Asset* asset, SDL_FRect& out_rect) const;
