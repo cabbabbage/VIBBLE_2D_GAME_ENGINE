@@ -2055,11 +2055,11 @@
           "derived_modifiers": {
             "flipMovementX": false,
             "flipMovementY": false,
-            "flipX": false,
+            "flipX": true,
             "flipY": false,
             "reverse": false
           },
-          "flipped_source": false,
+          "flipped_source": true,
           "hit_geometry": [
             {
               "explosion": null,
@@ -2300,6 +2300,7 @@
       "update_radius": 0
     },
     "church": {
+      "animation_children": [],
       "animations": {
         "default": {
           "flipped_source": false,
@@ -2340,12 +2341,25 @@
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
       "render_radius": 0,
-      "size_settings": {
-        "scale_percentage": 100.0
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
       },
+      "size_settings": {
+        "scale_percentage": 200.0
+      },
+      "spawn_groups": [],
       "start": "default",
       "tags": [],
-      "update_radius": 0
+      "tillable": false,
+      "update_radius": 0,
+      "z_threshold": 4
     },
     "grass_3": {
       "animations": {
@@ -3214,9 +3228,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            242,
-            36,
-            131,
+            31,
+            115,
+            204,
             255
           ],
           "edge_smoothness": 43,
@@ -3267,9 +3281,9 @@
         "rnd": {
           "curvyness": 2,
           "display_color": [
-            36,
-            133,
             242,
+            36,
+            152,
             255
           ],
           "edge_smoothness": 2,
@@ -3287,9 +3301,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            91,
-            242,
-            36,
+            204,
+            31,
+            31,
             255
           ],
           "edge_smoothness": 101,
@@ -3421,6 +3435,64 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-70f01d74d7e7"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "trail"
+                }
+              ],
+              "display_name": "trail",
+              "dx": -156,
+              "dy": 2916,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 6904,
+              "origional_width": 6904,
+              "position": "Exact",
+              "priority": 4,
+              "resolution": 7,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-87cd16bad95b"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "church"
+                }
+              ],
+              "display_name": "church",
+              "dx": -1756,
+              "dy": -1276,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 6904,
+              "origional_width": 6904,
+              "position": "Exact",
+              "priority": 5,
+              "resolution": 8,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-0feef2a44e33"
             }
           ]
         }

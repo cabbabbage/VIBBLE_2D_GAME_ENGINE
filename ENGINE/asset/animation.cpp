@@ -186,6 +186,7 @@ bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool fl
     variant_steps_ = source.variant_steps_;
     locked = source.locked;
     playback_fps = source.playback_fps;
+    inherit_source_movement = source.inherit_source_movement;
 
     const std::size_t frame_count = source.frame_cache_.size();
     const std::size_t variant_count = variant_steps_.size();
@@ -349,6 +350,9 @@ void Animation::inherit_movement_from(const Animation& source) {
         for (auto& path : movement_paths_) {
             for (auto& frame : path) {
                 frame.dx = -frame.dx;
+                for (auto& child : frame.children) {
+                    child.dx = -child.dx;
+                }
             }
         }
     }
@@ -356,6 +360,9 @@ void Animation::inherit_movement_from(const Animation& source) {
         for (auto& path : movement_paths_) {
             for (auto& frame : path) {
                 frame.dy = -frame.dy;
+                for (auto& child : frame.children) {
+                    child.dy = -child.dy;
+                }
             }
         }
     }

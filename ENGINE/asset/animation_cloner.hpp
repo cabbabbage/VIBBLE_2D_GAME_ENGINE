@@ -14,6 +14,8 @@ public:
         bool flip_horizontal = false;
         bool flip_vertical   = false;
         bool reverse_frames  = false;
+        bool flip_movement_horizontal = false;
+        bool flip_movement_vertical   = false;
     };
 
     // Clone |source| into |dest| applying flips/reverse as requested.

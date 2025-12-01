@@ -181,8 +181,8 @@ bool AnimationCloner::Clone(const Animation& source,
             AnimationFrame& dst_frame = dst_path[dst_idx];
 
             if (src_frame) {
-                dst_frame.dx       = opts.flip_horizontal ? -src_frame->dx : src_frame->dx;
-                dst_frame.dy       = opts.flip_vertical   ? -src_frame->dy : src_frame->dy;
+                dst_frame.dx       = opts.flip_movement_horizontal ? -src_frame->dx : src_frame->dx;
+                dst_frame.dy       = opts.flip_movement_vertical   ? -src_frame->dy : src_frame->dy;
                 dst_frame.z_resort = src_frame->z_resort;
                 dst_frame.rgb      = src_frame->rgb;
             } else {
@@ -220,7 +220,7 @@ bool AnimationCloner::Clone(const Animation& source,
 
             dst_frame.children.clear();
             if (src_frame) {
-                copy_children(src_frame->children, dst_frame.children, opts.flip_horizontal, opts.flip_vertical);
+                copy_children(src_frame->children, dst_frame.children, opts.flip_movement_horizontal, opts.flip_movement_vertical);
             }
 
             if (path_idx == 0) {

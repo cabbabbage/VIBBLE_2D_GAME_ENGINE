@@ -32,15 +32,22 @@ namespace {
 
 void resolve_inherited_movements(AssetInfo& info) {
         for (auto& [name, anim] : info.animations) {
-                if (anim.source.kind != "animation" || anim.source.name.empty()) {
+                if (!anim.inherit_source_movement || anim.source.kind != "animation" || anim.source.name.empty()) {
                         continue;
                 }
-                if (!anim.movement_path_count()) {
-                        auto it = info.animations.find(anim.source.name);
-                        if (it != info.animations.end()) {
-                                anim.inherit_movement_from(it->second);
+                auto it = info.animations.find(anim.source.name);
+                if (it == info.animations.end()) continue;
+
+                bool has_frames = false;
+                for (std::size_t path_idx = 0; path_idx < anim.movement_path_count(); ++path_idx) {
+                        const auto& path = anim.movement_path(path_idx);
+                        if (!path.empty()) {
+                                has_frames = true;
+                                break;
                         }
                 }
+                if (has_frames) continue;
+                anim.inherit_movement_from(it->second);
         }
 }
 
@@ -287,6 +294,7 @@ void AnimationLoader::load(Animation& animation,
                 animation.flip_movement_horizontal = false;
                 animation.flip_movement_vertical = false;
         }
+        animation.inherit_source_movement = (animation.source.kind == "animation") && inherit_source_movement;
 
         animation.locked         = anim_json.value("locked", false);
 
@@ -456,21 +464,25 @@ void AnimationLoader::load(Animation& animation,
                 parsed_paths.emplace_back();
         }
 
+        std::vector<std::vector<AnimationFrame>> authored_movement_paths = parsed_paths;
         animation.movement_paths_ = std::move(parsed_paths);
         if (animation.source.kind == "animation" && !animation.source.name.empty()) {
                 auto it = info.animations.find(animation.source.name);
                 if (it != info.animations.end()) {
                         const Animation& src_anim = it->second;
                         if (!src_anim.frames.empty()) {
-                                AnimationCloner::Options opts{
-                                        animation.flipped_source,
-                                        animation.flip_vertical_source,
-                                        animation.reverse_source
-                                };
+                                AnimationCloner::Options opts{};
+                                opts.flip_horizontal           = animation.flipped_source;
+                                opts.flip_vertical             = animation.flip_vertical_source;
+                                opts.reverse_frames            = animation.reverse_source;
+                                opts.flip_movement_horizontal  = animation.flip_movement_horizontal;
+                                opts.flip_movement_vertical    = animation.flip_movement_vertical;
                                 std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                           << " cloning from source animation '" << animation.source.name << "'"
                                           << " (flipH=" << opts.flip_horizontal
                                           << ", flipV=" << opts.flip_vertical
+                                          << ", flipMoveH=" << opts.flip_movement_horizontal
+                                          << ", flipMoveV=" << opts.flip_movement_vertical
                                           << ", reverse=" << opts.reverse_frames << ")\n";
 
                                 if (!AnimationCloner::Clone(src_anim, animation, opts, renderer, info)) {
@@ -778,15 +790,18 @@ void AnimationLoader::load(Animation& animation,
             !animation.source.name.empty()) {
                 auto src_it = info.animations.find(animation.source.name);
                 if (src_it != info.animations.end() && !src_it->second.frame_cache_.empty()) {
-                        AnimationCloner::Options opts{
-                                animation.flipped_source,
-                                animation.flip_vertical_source,
-                                animation.reverse_source
-                        };
+                        AnimationCloner::Options opts{};
+                        opts.flip_horizontal           = animation.flipped_source;
+                        opts.flip_vertical             = animation.flip_vertical_source;
+                        opts.reverse_frames            = animation.reverse_source;
+                        opts.flip_movement_horizontal  = animation.flip_movement_horizontal;
+                        opts.flip_movement_vertical    = animation.flip_movement_vertical;
                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                   << " late-cloning from source animation '" << animation.source.name
                                   << "' (flipH=" << opts.flip_horizontal
                                   << ", flipV=" << opts.flip_vertical
+                                  << ", flipMoveH=" << opts.flip_movement_horizontal
+                                  << ", flipMoveV=" << opts.flip_movement_vertical
                                   << ", reverse=" << opts.reverse_frames << ")\n";
                         if (AnimationCloner::Clone(src_it->second, animation, opts, renderer, info)) {
                                 reused_animation = true;
@@ -797,36 +812,57 @@ void AnimationLoader::load(Animation& animation,
 
 
 
-        if (!reused_animation) {
-                if (!movement_specified && animation.source.kind == "animation" && inherit_source_movement && !animation.source.name.empty()) {
-                        auto it = info.animations.find(animation.source.name);
-                        if (it != info.animations.end()) {
-                                animation.inherit_movement_from(it->second);
-                                movement_specified = animation.movement_path_count() > 0;
+        // Apply movement-only transforms; texture flips are handled by the cloner.
+        auto apply_movement_transforms = [&](std::vector<std::vector<AnimationFrame>>& paths) {
+                if (animation.reverse_source) {
+                        for (auto& path : paths) {
+                                std::reverse(path.begin(), path.end());
                         }
                 }
-                // If movement is explicitly specified for a derived animation, still apply requested transforms
-                if (movement_specified && animation.source.kind == "animation") {
-                        if (animation.reverse_source) {
-                                for (auto& path : animation.movement_paths_) {
-                                        std::reverse(path.begin(), path.end());
-                                }
-                        }
-                        if (animation.flip_movement_horizontal) {
-                                for (auto& path : animation.movement_paths_) {
-                                        for (auto& frame : path) {
-                                                frame.dx = -frame.dx;
-                                        }
-                                }
-                        }
-                        if (animation.flip_movement_vertical) {
-                                for (auto& path : animation.movement_paths_) {
-                                        for (auto& frame : path) {
-                                                frame.dy = -frame.dy;
+                if (animation.flip_movement_horizontal) {
+                        for (auto& path : paths) {
+                                for (auto& frame : path) {
+                                        frame.dx = -frame.dx;
+                                        for (auto& child : frame.children) {
+                                                child.dx = -child.dx;
                                         }
                                 }
                         }
                 }
+                if (animation.flip_movement_vertical) {
+                        for (auto& path : paths) {
+                                for (auto& frame : path) {
+                                        frame.dy = -frame.dy;
+                                        for (auto& child : frame.children) {
+                                                child.dy = -child.dy;
+                                        }
+                                }
+                        }
+                }
+        };
+
+        const bool derive_from_animation = (animation.source.kind == "animation" && !animation.source.name.empty());
+        const bool use_inherited_movement = derive_from_animation && animation.inherit_source_movement;
+        bool       movement_from_source = false;
+        if (use_inherited_movement) {
+                auto it = info.animations.find(animation.source.name);
+                if (it != info.animations.end()) {
+                        animation.movement_paths_ = it->second.movement_paths_;
+                        movement_from_source = true;
+                } else if (!movement_specified) {
+                        // Leave an empty path so we can safely bind frames without forcing movement flips.
+                        animation.movement_paths_.assign(1, {});
+                } else {
+                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                  << " source animation '" << animation.source.name
+                                  << "' not available; keeping authored movement\n";
+                }
+        }
+        if (!movement_from_source) {
+                animation.movement_paths_ = authored_movement_paths;
+        }
+        if (derive_from_animation) {
+                apply_movement_transforms(animation.movement_paths_);
         }
         const bool has_audio_json = anim_json.contains("audio") && anim_json["audio"].is_object();
         const nlohmann::json* audio_json = has_audio_json ? &anim_json["audio"] : nullptr;

@@ -77,6 +77,7 @@ public:
     bool flip_movement_horizontal = false;
     bool flip_movement_vertical = false;
     bool reverse_source = false;
+    bool inherit_source_movement = false;
     bool locked = false;
     int   playback_fps = 24;   // desired playback FPS (>=1). 24 is the engine base.
     int number_of_frames = 0;
