@@ -1223,6 +1223,13 @@ bool RoomEditor::is_room_ui_blocking_point(int x, int y) const {
     return false;
 }
 
+bool RoomEditor::is_shift_key_down() const {
+    if (!input_) {
+        return false;
+    }
+    return input_->isScancodeDown(SDL_SCANCODE_LSHIFT) || input_->isScancodeDown(SDL_SCANCODE_RSHIFT);
+}
+
 void RoomEditor::invalidate_label_cache(Room* room) {
     if (!room) {
         return;
@@ -1711,44 +1718,46 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
             SDL_RenderDrawLine(renderer, screen.x, screen.y - cross, screen.x, screen.y + cross);
         }
 
-        // Draw hover/selection outlines for highlighted assets
-        auto fetch_bounds = [&](Asset* asset, SDL_Rect& out_rect) -> bool {
-            if (!asset) return false;
-            // Prefer cached bounds from the spatial index
-            auto it = asset_bounds_cache_.find(asset);
-            if (it != asset_bounds_cache_.end()) {
-                out_rect = it->second.bounds;
-                return true;
-            }
-            // Fallback to on-the-fly computation
-            const float scale = std::max(kCameraScaleEpsilon, cam.get_scale());
-            const float inv_scale = 1.0f / scale;
-            const float ref_h = compute_reference_screen_height(cam, inv_scale);
-            int screen_y = 0;
-            return compute_asset_screen_bounds(cam, ref_h, inv_scale, asset, out_rect, screen_y);
-        };
+        // Draw hover/selection outlines for highlighted assets (only when shift is held)
+        if (is_shift_key_down()) {
+            auto fetch_bounds = [&](Asset* asset, SDL_Rect& out_rect) -> bool {
+                if (!asset) return false;
+                // Prefer cached bounds from the spatial index
+                auto it = asset_bounds_cache_.find(asset);
+                if (it != asset_bounds_cache_.end()) {
+                    out_rect = it->second.bounds;
+                    return true;
+                }
+                // Fallback to on-the-fly computation
+                const float scale = std::max(kCameraScaleEpsilon, cam.get_scale());
+                const float inv_scale = 1.0f / scale;
+                const float ref_h = compute_reference_screen_height(cam, inv_scale);
+                int screen_y = 0;
+                return compute_asset_screen_bounds(cam, ref_h, inv_scale, asset, out_rect, screen_y);
+            };
 
-        ensure_spatial_index(cam);
-        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-        const int outline_thickness = 2;
-        for (Asset* asset : highlighted_assets_) {
-            if (!asset_belongs_to_room(asset)) continue;
-            SDL_Rect bounds{};
-            if (!fetch_bounds(asset, bounds)) {
-                continue;
-            }
-            const bool is_selected = std::find(selected_assets_.begin(), selected_assets_.end(), asset) != selected_assets_.end();
-            SDL_Color color = is_selected ? DMStyles::AccentButton().hover_bg
-                                          : DMStyles::HighlightColor();
-            SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, 210);
-            for (int i = 0; i < outline_thickness; ++i) {
-                SDL_Rect r{
-                    bounds.x - i,
-                    bounds.y - i,
-                    bounds.w + i * 2,
-                    bounds.h + i * 2
-                };
-                SDL_RenderDrawRect(renderer, &r);
+            ensure_spatial_index(cam);
+            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+            const int outline_thickness = 2;
+            for (Asset* asset : highlighted_assets_) {
+                if (!asset_belongs_to_room(asset)) continue;
+                SDL_Rect bounds{};
+                if (!fetch_bounds(asset, bounds)) {
+                    continue;
+                }
+                const bool is_selected = std::find(selected_assets_.begin(), selected_assets_.end(), asset) != selected_assets_.end();
+                SDL_Color color = is_selected ? DMStyles::AccentButton().hover_bg
+                                              : DMStyles::HighlightColor();
+                SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, 210);
+                for (int i = 0; i < outline_thickness; ++i) {
+                    SDL_Rect r{
+                        bounds.x - i,
+                        bounds.y - i,
+                        bounds.w + i * 2,
+                        bounds.h + i * 2
+                    };
+                    SDL_RenderDrawRect(renderer, &r);
+                }
             }
         }
     }
@@ -3101,35 +3110,32 @@ void RoomEditor::handle_click(const Input& input) {
         }
         rclick_buffer_frames_ = 2;
 
-        // Shift modifier required for "add asset" with right click
+        // Shift modifier required for opening asset info
         const bool shift_modifier =
             input.isScancodeDown(SDL_SCANCODE_LSHIFT) || input.isScancodeDown(SDL_SCANCODE_RSHIFT);
+        auto open_library_at = [&](const SDL_Point& point) {
+            pending_spawn_world_pos_ = point;
+            open_asset_library();
+            if (!is_asset_library_open()) {
+                pending_spawn_world_pos_.reset();
+            }
+        };
 
         if (hovered_asset_) {
-            // Right Click on an existing asset -> open Asset Info UI for that asset
-            // Shift+Right Click on an existing asset -> open Asset Library at point (add on top)
             if (shift_modifier) {
-                pending_spawn_world_pos_ = world_mouse;
-                open_asset_library();
-                if (!is_asset_library_open()) {
-                    pending_spawn_world_pos_.reset();
-                }
-            } else {
                 open_asset_info_editor_for_asset(hovered_asset_);
+            } else {
+                open_library_at(world_mouse);
             }
         } else {
             bool inside_room = true;
             if (current_room_ && current_room_->room_area) {
                 inside_room = current_room_->room_area->contains_point(world_mouse);
             }
-            // Only open asset library to add when Shift is held
-            if (inside_room && shift_modifier) {
-                pending_spawn_world_pos_ = world_mouse;
-                open_asset_library();
-                if (!is_asset_library_open()) {
-                    pending_spawn_world_pos_.reset();
-                }
+            if (inside_room) {
+                open_library_at(world_mouse);
             } else {
+                pending_spawn_world_pos_.reset();
                 open_asset_library();
             }
         }

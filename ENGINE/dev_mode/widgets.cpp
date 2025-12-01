@@ -1124,11 +1124,17 @@ bool DMSlider::apply_interaction_value(int v) {
         value_ = clamped;
         pending_value_ = value_;
         has_pending_value_ = false;
+        if (value_ != prev) {
+            notify_value_changed();
+        }
         return value_ != prev;
     }
     int prev_display = pending_value_;
     pending_value_ = clamped;
     has_pending_value_ = (pending_value_ != value_);
+    if (pending_value_ != prev_display) {
+        notify_value_changed();
+    }
     return pending_value_ != prev_display;
 }
 
@@ -1141,6 +1147,7 @@ bool DMSlider::commit_pending_value() {
         return false;
     }
     value_ = pending_value_;
+    notify_value_changed();
     return true;
 }
 
@@ -1199,6 +1206,23 @@ void DMSlider::set_tooltip_state(DMWidgetTooltipState* state) {
     }
 }
 
+void DMSlider::set_on_value_changed(std::function<void(int)> callback) {
+    value_changed_callback_ = std::move(callback);
+    last_notified_value_ = display_value();
+}
+
+void DMSlider::notify_value_changed() {
+    if (!value_changed_callback_) {
+        return;
+    }
+    int current = display_value();
+    if (current == last_notified_value_) {
+        return;
+    }
+    last_notified_value_ = current;
+    value_changed_callback_(current);
+}
+
 void DMSlider::set_enabled(bool enabled) {
     if (enabled_ == enabled) {
         return;
@@ -1222,6 +1246,7 @@ void DMSlider::set_value(int v) {
     value_ = clamped;
     pending_value_ = clamped;
     has_pending_value_ = false;
+    last_notified_value_ = value_;
 }
 
 int DMSlider::displayed_value() const {

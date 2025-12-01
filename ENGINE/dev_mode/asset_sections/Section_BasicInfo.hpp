@@ -44,6 +44,7 @@ class Section_BasicInfo : public DockableCollapsible {
     std::vector<std::unique_ptr<Widget>> widgets_;
     std::vector<std::string> type_options_;
     AssetInfoUI* ui_ = nullptr;
+    void on_scale_slider_value_changed(int new_value);
 
   protected:
     std::string_view lock_settings_namespace() const override { return "asset_info"; }
@@ -93,6 +94,7 @@ inline void Section_BasicInfo::build() {
     dd_type_ = std::make_unique<DMDropdown>("Type", type_options_, find_index(type_options_, info_->type));
     int pct = std::max(0, static_cast<int>(std::lround(info_->scale_factor * 100.0f)));
     s_scale_pct_ = std::make_unique<DMSlider>("Scale (%)", 1, 400, pct);
+    s_scale_pct_->set_on_value_changed([this](int value) { this->on_scale_slider_value_changed(value); });
     s_zindex_    = std::make_unique<DMSlider>("Z Index Offset", -1000, 1000, info_->z_threshold);
     if (!is_tiled_asset) {
         c_flipable_  = std::make_unique<DMCheckbox>("Flipable (can invert)", info_->flipable);
@@ -167,7 +169,6 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
 
     bool changed = false;
     bool rebuild_needed = false;
-    bool scale_changed = false;
     bool z_changed = false;
     bool tile_changed = false;
     bool render_settings_changed = false;
@@ -185,13 +186,6 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
             render_settings_changed = true;
             type_changed = true;
         }
-    }
-
-    int pct = std::max(0, static_cast<int>(std::lround(info_->scale_factor * 100.0f)));
-    if (s_scale_pct_ && pct != s_scale_pct_->value()) {
-        info_->set_scale_percentage(static_cast<float>(s_scale_pct_->value()));
-        changed = true;
-        scale_changed = true;
     }
 
     if (s_zindex_ && info_->z_threshold != s_zindex_->value()) {
@@ -228,7 +222,6 @@ inline bool Section_BasicInfo::handle_event(const SDL_Event& e) {
     if (changed) {
         (void)info_->commit_manifest();
         if (ui_) {
-            if (scale_changed) ui_->refresh_target_asset_scale();
             if (z_changed) ui_->sync_target_z_threshold();
             if (tile_changed) ui_->sync_target_tiling_state();
             if (render_settings_changed) ui_->sync_target_basic_render_settings(type_changed);
@@ -303,4 +296,13 @@ inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
     const SDL_Color accent = DMStyles::DeleteButton().hover_bg;
     SDL_SetRenderDrawColor(r, accent.r, accent.g, accent.b, 200);
     SDL_RenderDrawLine(r, bounds.x, z_line_y, bounds.x + bounds.w, z_line_y);
+}
+
+inline void Section_BasicInfo::on_scale_slider_value_changed(int new_value) {
+    if (!info_) return;
+    info_->set_scale_percentage(static_cast<float>(new_value));
+    (void)info_->commit_manifest();
+    if (ui_) {
+        ui_->refresh_target_asset_scale();
+    }
 }

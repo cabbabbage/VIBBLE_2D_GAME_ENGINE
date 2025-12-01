@@ -1343,6 +1343,7 @@ void AssetInfoUI::refresh_target_asset_scale() {
 
     if (refreshed_any && assets_) {
         assets_->mark_active_assets_dirty();
+        assets_->rebuild_active_assets_if_needed();
     }
 }
 
