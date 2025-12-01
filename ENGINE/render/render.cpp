@@ -12,13 +12,17 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <array>
 
 #include <SDL_image.h>
 
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
 #include "render/warped_screen_grid.hpp"
+#include "animation_update/animation_update.hpp"
 #include "tiling/grid_tile.hpp"
+#include "asset/animation.hpp"
+#include "asset/animation_frame.hpp"
 #include "utils/log.hpp"
 #include "world/chunk.hpp"
 #include "world/world_grid.hpp"
@@ -316,6 +320,105 @@ void SceneRenderer::render() {
                 SDL_RenderCopyEx(renderer_, obj.texture, nullptr, &screen_rect, obj.angle, center_ptr, obj.flip);
             } else {
                 SDL_RenderCopy(renderer_, obj.texture, nullptr, &screen_rect);
+            }
+        }
+    }
+
+    if (debug_auto_paths_) {
+        static const std::array<SDL_Color, 6> kPathColors{{
+            SDL_Color{255, 99, 71, 255},
+            SDL_Color{50, 205, 50, 255},
+            SDL_Color{65, 105, 225, 255},
+            SDL_Color{255, 215, 0, 255},
+            SDL_Color{199, 21, 133, 255},
+            SDL_Color{0, 206, 209, 255},
+        }};
+
+        SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
+        for (Asset* asset : active_assets) {
+            if (!asset || asset->is_hidden() || !asset->info || !asset->anim_) {
+                continue;
+            }
+            const Plan* plan = asset->anim_->current_plan();
+            if (!plan || plan->sanitized_checkpoints.empty()) {
+                continue;
+            }
+
+            SDL_Point prev = asset->pos;
+            for (std::size_t idx = 0; idx < plan->sanitized_checkpoints.size(); ++idx) {
+                const SDL_Point wp = plan->sanitized_checkpoints[idx];
+                const SDL_Color color = kPathColors[idx % kPathColors.size()];
+                SDL_FPoint screen_prev = cam.map_to_screen(prev);
+                SDL_FPoint screen_wp   = cam.map_to_screen(wp);
+                SDL_SetRenderDrawColor(renderer_, color.r, color.g, color.b, 220);
+                SDL_RenderDrawLine(renderer_,
+                                   static_cast<int>(std::lround(screen_prev.x)),
+                                   static_cast<int>(std::lround(screen_prev.y)),
+                                   static_cast<int>(std::lround(screen_wp.x)),
+                                   static_cast<int>(std::lround(screen_wp.y)));
+                SDL_Rect marker{
+                    static_cast<int>(std::lround(screen_wp.x)) - 2,
+                    static_cast<int>(std::lround(screen_wp.y)) - 2,
+                    4,
+                    4
+                };
+                SDL_RenderFillRect(renderer_, &marker);
+                prev = wp;
+            }
+
+            const int visit_r = asset->anim_->visit_threshold_px();
+            if (visit_r > 0) {
+                const SDL_Point center = plan->final_dest;
+                const int segments = 24;
+                std::vector<SDL_FPoint> ring;
+                ring.reserve(static_cast<std::size_t>(segments) + 1);
+                for (int i = 0; i <= segments; ++i) {
+                    const double angle = (6.28318530717958647692 * static_cast<double>(i)) / static_cast<double>(segments);
+                    SDL_Point pt{
+                        center.x + static_cast<int>(std::lround(static_cast<double>(visit_r) * std::cos(angle))),
+                        center.y + static_cast<int>(std::lround(static_cast<double>(visit_r) * std::sin(angle)))
+                    };
+                    ring.push_back(cam.map_to_screen(pt));
+                }
+                SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 180);
+                for (std::size_t i = 1; i < ring.size(); ++i) {
+                    SDL_RenderDrawLine(renderer_,
+                                       static_cast<int>(std::lround(ring[i - 1].x)),
+                                       static_cast<int>(std::lround(ring[i - 1].y)),
+                                       static_cast<int>(std::lround(ring[i].x)),
+                                       static_cast<int>(std::lround(ring[i].y)));
+                }
+            }
+
+            // Draw stride deltas for all movement paths on each animation from the asset center
+            SDL_FPoint center = cam.map_to_screen(asset->pos);
+            SDL_SetRenderDrawColor(renderer_, 160, 32, 240, 200); // purple
+            if (asset->info) {
+                for (const auto& [anim_id, anim] : asset->info->animations) {
+                    const std::size_t paths = anim.movement_path_count();
+                    for (std::size_t path_idx = 0; path_idx < paths; ++path_idx) {
+                        const auto& path = anim.movement_path(path_idx);
+                        SDL_Point cursor = asset->pos;
+                        for (const AnimationFrame& frame : path) {
+                            SDL_Point next{ cursor.x + frame.dx, cursor.y + frame.dy };
+                            SDL_FPoint screen_cur = cam.map_to_screen(cursor);
+                            SDL_FPoint screen_next = cam.map_to_screen(next);
+                            SDL_RenderDrawLine(renderer_,
+                                               static_cast<int>(std::lround(screen_cur.x)),
+                                               static_cast<int>(std::lround(screen_cur.y)),
+                                               static_cast<int>(std::lround(screen_next.x)),
+                                               static_cast<int>(std::lround(screen_next.y)));
+                            SDL_Rect dot{
+                                static_cast<int>(std::lround(screen_next.x)) - 2,
+                                static_cast<int>(std::lround(screen_next.y)) - 2,
+                                4,
+                                4
+                            };
+                            SDL_RenderFillRect(renderer_, &dot);
+                            cursor = next;
+                        }
+                    }
+                }
             }
         }
     }

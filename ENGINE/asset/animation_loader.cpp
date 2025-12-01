@@ -461,7 +461,14 @@ void AnimationLoader::load(Animation& animation,
                                         flush_diagnostics();
                                         return;
                                 }
+                        } else {
+                                std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                          << " source animation '" << animation.source.name
+                                          << "' is not loaded yet; skipping copy for now\n";
                         }
+                } else {
+                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                  << " missing source animation '" << animation.source.name << "'\n";
                 }
         } else if (animation.source.kind == "folder") {
                 // Simplified cache loading - assume PNGs exist and load them directly

@@ -1881,14 +1881,109 @@ void AssetInfo::loadAnimations(SDL_Renderer* renderer) {
     int dummy_w = 0;
     int dummy_h = 0;
 
+    // Helper to pull the name of a source animation (if any)
+    auto parse_source_animation = [](const nlohmann::json& payload) -> std::optional<std::string> {
+        if (!payload.contains("source") || !payload["source"].is_object()) {
+            return std::nullopt;
+        }
+        const auto& source = payload["source"];
+        try {
+            const std::string kind = source.value("kind", std::string{});
+            if (kind != "animation") {
+                return std::nullopt;
+            }
+            const std::string name = source.value("name", std::string{});
+            if (name.empty()) {
+                return std::nullopt;
+            }
+            return name;
+        } catch (...) {
+            return std::nullopt;
+        }
+    };
+
+    auto animation_ready = [this](const std::string& name) {
+        auto it = animations.find(name);
+        if (it == animations.end()) {
+            return false;
+        }
+        const Animation& anim = it->second;
+        return anim.number_of_frames > 0 && !anim.frames.empty();
+    };
+
+    // Pre-create animation entries so dependencies can find their sources by name.
     for (auto it = anims_json_.begin(); it != anims_json_.end(); ++it) {
-        const std::string& name = it.key();
-        const auto& json = it.value();
-        
+        animations[it.key()];
+    }
+
+    std::filesystem::path cache_root = std::filesystem::path("cache") / this->name / "animations";
+    auto load_single = [&](const std::string& name, const nlohmann::json& json) {
         Animation& anim = animations[name];
-        std::filesystem::path cache_root = std::filesystem::path("cache") / this->name / "animations";
-             
-        AnimationLoader::load(anim, name, json, *this, dir_path_, cache_root.string(), scale_factor, renderer, dummy_base_sprite, dummy_w, dummy_h, original_canvas_width, original_canvas_height, false);
+        AnimationLoader::load(anim,
+                              name,
+                              json,
+                              *this,
+                              dir_path_,
+                              cache_root.string(),
+                              scale_factor,
+                              renderer,
+                              dummy_base_sprite,
+                              dummy_w,
+                              dummy_h,
+                              original_canvas_width,
+                              original_canvas_height,
+                              false);
+    };
+
+    std::vector<std::pair<std::string, nlohmann::json>> deferred;
+
+    // First pass: load animations that either don't depend on another animation or whose source is already ready.
+    for (auto it = anims_json_.begin(); it != anims_json_.end(); ++it) {
+        const std::string name = it.key();
+        const auto& json       = it.value();
+
+        auto source_name = parse_source_animation(json);
+        const bool needs_source = source_name.has_value() && *source_name != name;
+        if (needs_source && !animation_ready(*source_name)) {
+            deferred.emplace_back(name, json);
+            continue;
+        }
+
+        load_single(name, json);
+    }
+
+    // Second pass: iteratively try to load deferred animations once their sources have been populated.
+    std::size_t safety_counter = deferred.size() + 1;
+    while (!deferred.empty() && safety_counter-- > 0) {
+        bool progress = false;
+        for (auto it = deferred.begin(); it != deferred.end();) {
+            auto source_name = parse_source_animation(it->second);
+            const bool ready = !source_name || source_name->empty() || *source_name == it->first || animation_ready(*source_name);
+            if (!ready) {
+                ++it;
+                continue;
+            }
+
+            load_single(it->first, it->second);
+            it = deferred.erase(it);
+            progress = true;
+        }
+
+        if (!progress) {
+            break;
+        }
+    }
+
+    // Final fallback: load any remaining animations even if their source could not be resolved, but emit a hint.
+    for (const auto& pending : deferred) {
+        auto source_name = parse_source_animation(pending.second);
+        if (source_name) {
+            std::cout << "[AssetInfo] Loading derived animation '" << pending.first
+                      << "' without ready source '" << *source_name << "'\n";
+        } else {
+            std::cout << "[AssetInfo] Loading animation '" << pending.first << "'\n";
+        }
+        load_single(pending.first, pending.second);
     }
 }
 

@@ -106,6 +106,7 @@ private:
     int          darkness_overlay_width_   = 0;
     int          darkness_overlay_height_  = 0;
     SDL_Color    map_clear_color_{0, 128, 0, 255};  // Green for debugging
+    bool         debug_auto_paths_ = true;
 
     CompositeAssetRenderer composite_renderer_;
 

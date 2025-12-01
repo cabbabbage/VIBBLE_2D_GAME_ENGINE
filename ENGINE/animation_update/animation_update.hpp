@@ -89,6 +89,9 @@ public:
                    int visited_thresh_px = 0,
                    bool override_non_locked = true);
 
+    const Plan* current_plan() const { return &plan_; }
+    int         visit_threshold_px() const { return visited_thresh_; }
+
     // Request an immediate move + animation selection (applied by executor in update)
     void move(SDL_Point delta,
               const std::string& animation,

@@ -10,7 +10,7 @@
                 "childrandom": false,
                 "edge": true,
                 "exact": true,
-                "exact_position": true,
+                "exact_position": false,
                 "percent": false,
                 "perimeter": true,
                 "random": true
@@ -27,10 +27,10 @@
             }
         },
         "grid": {
-            "cell_size_px": 128.0,
+            "cell_size_px": 16.0,
             "overlay": {
                 "enabled": true,
-                "r": 7.0
+                "r": 4.0
             },
             "snap": {
                 "enabled": true
