@@ -314,7 +314,8 @@ void AnimationLoader::load(Animation& animation,
 	animation.loop      = anim_json.value("loop", true);
 	animation.randomize = anim_json.value("randomize", false);
 	animation.rnd_start = anim_json.value("rnd_start", false);
-	animation.on_end_animation = anim_json.value("on_end", std::string{"default"});
+        animation.on_end_animation = anim_json.value("on_end", std::string{"default"});
+        animation.on_end_behavior = Animation::classify_on_end(animation.on_end_animation);
         animation.child_asset_names_.clear();
         if (!info.animation_children.empty()) {
                 animation.child_asset_names_ = info.animation_children;
@@ -357,58 +358,105 @@ void AnimationLoader::load(Animation& animation,
                 if (!seq.is_array()) return specified;
                 auto clamp = [](int v) { return (v < 0) ? 0 : (v > 255 ? 255 : v); };
                 for (const auto& mv : seq) {
-                        if (!mv.is_array() || mv.size() < 2) continue;
                         AnimationFrame fm;
+
+                        // Object-form support: { dx, dy, resort_z, children: [...] }
+                        if (mv.is_object()) {
+                                try { fm.dx = static_cast<int>(mv.value("dx", 0)); } catch (...) { fm.dx = 0; }
+                                try { fm.dy = static_cast<int>(mv.value("dy", 0)); } catch (...) { fm.dy = 0; }
+                                fm.z_resort = mv.value("resort_z", false);
+
+                                fm.children.clear();
+                                if (mv.contains("children") && mv["children"].is_array()) {
+                                        for (const auto& child_entry : mv["children"]) {
+                                                AnimationChildFrameData child_data;
+                                                if (child_entry.is_object()) {
+                                                        child_data.child_index = child_entry.value("child_index", -1);
+                                                        try { child_data.dx = static_cast<int>(child_entry.value("dx", 0)); } catch (...) { child_data.dx = 0; }
+                                                        try { child_data.dy = static_cast<int>(child_entry.value("dy", 0)); } catch (...) { child_data.dy = 0; }
+                                                        if (child_entry.contains("degree") && child_entry["degree"].is_number()) {
+                                                                try { child_data.degree = static_cast<float>(child_entry["degree"].get<double>()); } catch (...) { child_data.degree = 0.0f; }
+                                                        } else if (child_entry.contains("rotation") && child_entry["rotation"].is_number()) {
+                                                                try { child_data.degree = static_cast<float>(child_entry["rotation"].get<double>()); } catch (...) { child_data.degree = 0.0f; }
+                                                        }
+                                                        child_data.visible = child_entry.value("visible", true);
+                                                        child_data.render_in_front = child_entry.value("render_in_front", true);
+                                                } else if (child_entry.is_array() && !child_entry.empty()) {
+                                                        try { child_data.child_index = child_entry[0].get<int>(); } catch (...) { child_data.child_index = -1; }
+                                                        if (child_entry.size() >= 2 && child_entry[1].is_number()) { try { child_data.dx = child_entry[1].get<int>(); } catch (...) { child_data.dx = 0; } }
+                                                        if (child_entry.size() >= 3 && child_entry[2].is_number()) { try { child_data.dy = child_entry[2].get<int>(); } catch (...) { child_data.dy = 0; } }
+                                                        if (child_entry.size() >= 4 && child_entry[3].is_number()) { try { child_data.degree = static_cast<float>(child_entry[3].get<double>()); } catch (...) { child_data.degree = 0.0f; } }
+                                                        if (child_entry.size() >= 5) {
+                                                                if (child_entry[4].is_boolean()) child_data.visible = child_entry[4].get<bool>();
+                                                                else if (child_entry[4].is_number_integer()) child_data.visible = child_entry[4].get<int>() != 0;
+                                                        }
+                                                        if (child_entry.size() >= 6) {
+                                                                if (child_entry[5].is_boolean()) child_data.render_in_front = child_entry[5].get<bool>();
+                                                                else if (child_entry[5].is_number_integer()) child_data.render_in_front = child_entry[5].get<int>() != 0;
+                                                        }
+                                                } else {
+                                                        continue;
+                                                }
+                                                if (child_data.child_index < 0 || child_data.child_index >= static_cast<int>(animation.child_asset_names_.size())) {
+                                                        std::cout << "[AnimationLoader] Ignoring child entry with invalid index " << child_data.child_index << " for asset list size " << animation.child_asset_names_.size() << "\n";
+                                                        continue;
+                                                }
+                                                fm.children.push_back(child_data);
+                                        }
+                                }
+                                if (fm.dx != 0 || fm.dy != 0 || mv.contains("resort_z")) specified = true;
+                                dest.push_back(std::move(fm));
+                                continue;
+                        }
+
+                        // Array-form support
+                        if (!mv.is_array() || mv.size() < 2) continue;
                         try { fm.dx = mv[0].get<int>(); } catch (...) { fm.dx = 0; }
                         try { fm.dy = mv[1].get<int>(); } catch (...) { fm.dy = 0; }
                         if (mv.size() >= 3 && mv[2].is_boolean()) {
                                 fm.z_resort = mv[2].get<bool>();
                         }
-                        if (mv.size() >= 4 && mv[3].is_array() && mv[3].size() >= 3) {
-                                int r = 255, g = 255, b = 255;
-                                try { r = clamp(mv[3][0].get<int>()); } catch (...) { r = 255; }
-                                try { g = clamp(mv[3][1].get<int>()); } catch (...) { g = 255; }
-                                try { b = clamp(mv[3][2].get<int>()); } catch (...) { b = 255; }
-                                fm.rgb = SDL_Color{ static_cast<Uint8>(r), static_cast<Uint8>(g), static_cast<Uint8>(b), 255 };
+                        // Optional color at index 3: only when exactly 3 numeric entries
+                        bool color_consumed = false;
+                        if (mv.size() >= 4 && mv[3].is_array()) {
+                                const auto& c = mv[3];
+                                const bool looks_color = (c.size() == 3) && c[0].is_number() && c[1].is_number() && c[2].is_number();
+                                if (looks_color) {
+                                        int r = 255, g = 255, b = 255;
+                                        try { r = clamp(c[0].get<int>()); } catch (...) { r = 255; }
+                                        try { g = clamp(c[1].get<int>()); } catch (...) { g = 255; }
+                                        try { b = clamp(c[2].get<int>()); } catch (...) { b = 255; }
+                                        fm.rgb = SDL_Color{ static_cast<Uint8>(r), static_cast<Uint8>(g), static_cast<Uint8>(b), 255 };
+                                        color_consumed = true;
+                                }
                         }
                         fm.children.clear();
+                        const nlohmann::json* children_json = nullptr;
                         if (mv.size() >= 5 && mv[4].is_array()) {
-                                for (const auto& child_entry : mv[4]) {
-                                        if (!child_entry.is_array() || child_entry.empty()) {
-                                                continue;
-                                        }
+                                children_json = &mv[4];
+                        } else if (mv.size() >= 4 && mv[3].is_array() && !color_consumed) {
+                                children_json = &mv[3];
+                        } else if (mv.size() >= 3 && mv[2].is_array() && !(mv.size() >= 3 && mv[2].is_boolean())) {
+                                // Legacy: children immediately after dx,dy when no resort_z/color present
+                                children_json = &mv[2];
+                        }
+                        if (children_json) {
+                                for (const auto& child_entry : *children_json) {
+                                        if (!child_entry.is_array() || child_entry.empty()) continue;
                                         AnimationChildFrameData child_data;
-                                        try {
-                                                child_data.child_index = child_entry[0].get<int>();
-                                        } catch (...) {
-                                                child_data.child_index = -1;
-                                        }
-                                        if (child_entry.size() >= 2 && child_entry[1].is_number()) {
-                                                try { child_data.dx = child_entry[1].get<int>(); } catch (...) { child_data.dx = 0; }
-                                        }
-                                        if (child_entry.size() >= 3 && child_entry[2].is_number()) {
-                                                try { child_data.dy = child_entry[2].get<int>(); } catch (...) { child_data.dy = 0; }
-                                        }
-                                        if (child_entry.size() >= 4 && child_entry[3].is_number()) {
-                                                try { child_data.degree = static_cast<float>(child_entry[3].get<double>()); } catch (...) { child_data.degree = 0.0f; }
-                                        }
+                                        try { child_data.child_index = child_entry[0].get<int>(); } catch (...) { child_data.child_index = -1; }
+                                        if (child_entry.size() >= 2 && child_entry[1].is_number()) { try { child_data.dx = child_entry[1].get<int>(); } catch (...) { child_data.dx = 0; } }
+                                        if (child_entry.size() >= 3 && child_entry[2].is_number()) { try { child_data.dy = child_entry[2].get<int>(); } catch (...) { child_data.dy = 0; } }
+                                        if (child_entry.size() >= 4 && child_entry[3].is_number()) { try { child_data.degree = static_cast<float>(child_entry[3].get<double>()); } catch (...) { child_data.degree = 0.0f; } }
                                         if (child_entry.size() >= 5) {
-                                                if (child_entry[4].is_boolean()) {
-                                                        child_data.visible = child_entry[4].get<bool>();
-                                                } else if (child_entry[4].is_number_integer()) {
-                                                        child_data.visible = child_entry[4].get<int>() != 0;
-                                                }
-                                                // Non-boolean legacy entries are ignored so defaults stay visible.
+                                                if (child_entry[4].is_boolean()) child_data.visible = child_entry[4].get<bool>();
+                                                else if (child_entry[4].is_number_integer()) child_data.visible = child_entry[4].get<int>() != 0;
                                         }
                                         if (child_entry.size() >= 6) {
-                                                if (child_entry[5].is_boolean()) {
-                                                        child_data.render_in_front = child_entry[5].get<bool>();
-                                                } else if (child_entry[5].is_number_integer()) {
-                                                        child_data.render_in_front = child_entry[5].get<int>() != 0;
-                                                }
+                                                if (child_entry[5].is_boolean()) child_data.render_in_front = child_entry[5].get<bool>();
+                                                else if (child_entry[5].is_number_integer()) child_data.render_in_front = child_entry[5].get<int>() != 0;
                                         }
-                                        if (child_data.child_index < 0 ||
-                                            child_data.child_index >= static_cast<int>(animation.child_asset_names_.size())) {
+                                        if (child_data.child_index < 0 || child_data.child_index >= static_cast<int>(animation.child_asset_names_.size())) {
                                                 std::cout << "[AnimationLoader] Ignoring child entry with invalid index " << child_data.child_index << " for asset list size " << animation.child_asset_names_.size() << "\n";
                                                 continue;
                                         }
@@ -416,7 +464,6 @@ void AnimationLoader::load(Animation& animation,
                                 }
                         }
                         if (!fm.children.empty()) {
-                                // Debug: print mapping of child indices -> asset names for this frame
                                 std::cout << "[AnimationLoader] Parsed frame children: ";
                                 for (const auto& cd : fm.children) {
                                         std::cout << "(idx=" << cd.child_index << ", dx=" << cd.dx << ", dy=" << cd.dy << ")";

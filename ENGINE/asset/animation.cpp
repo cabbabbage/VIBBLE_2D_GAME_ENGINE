@@ -10,6 +10,7 @@
 #include <SDL_mixer.h>
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -27,6 +28,27 @@
 namespace fs = std::filesystem;
 
 Animation::Animation() = default;
+
+Animation::OnEndDirective Animation::classify_on_end(std::string_view value) {
+    std::string lowered;
+    lowered.reserve(value.size());
+    for (char ch : value) {
+        lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    }
+    if (lowered.empty() || lowered == "default") {
+        return OnEndDirective::Default;
+    }
+    if (lowered == "kill") {
+        return OnEndDirective::Kill;
+    }
+    if (lowered == "lock") {
+        return OnEndDirective::Lock;
+    }
+    if (lowered == "reverse") {
+        return OnEndDirective::Reverse;
+    }
+    return OnEndDirective::Animation;
+}
 
 void Animation::clear_texture_cache() {
     for (auto& cache_entry : frame_cache_) {

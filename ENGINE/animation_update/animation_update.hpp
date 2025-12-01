@@ -70,9 +70,6 @@ class AnimationUpdate {
 public:
     AnimationUpdate(Asset* self, Assets* assets);
     AnimationUpdate(Asset* self, Assets* assets, double path_bias);
-
-    // Wire to the executor after both are constructed
-    void set_runtime(AnimationRuntime* runtime) { runtime_ = runtime; }
     void set_debug_enabled(bool enabled);
     bool debug_enabled() const;
 
@@ -89,8 +86,7 @@ public:
                    int visited_thresh_px = 0,
                    bool override_non_locked = true);
 
-    const Plan* current_plan() const { return &plan_; }
-    int         visit_threshold_px() const { return visited_thresh_; }
+    int visit_threshold_px() const { return visited_thresh_; }
 
     // Request an immediate move + animation selection (applied by executor in update)
     void move(SDL_Point delta,
@@ -98,22 +94,13 @@ public:
               bool               resort_z            = true,
               bool               override_non_locked = true);
 
-    // Clear any existing path plan
-    void clear_movement_plan();
+    void set_animation(const std::string& animation_id);
 
-    // Query active movement path index for a given animation (delegates to executor)
-    std::size_t path_index_for(const std::string& anim_id) const;
+    // Read-only access for diagnostics/render overlays
+    const Plan* current_plan() const { return &plan_; }
 
-    AnimationPlayer& player() { return player_; }
-    void set_animation(Animation* anim, int fps) {
-        player_.m_animation = anim;
-        player_.m_fps = fps;
-    }
-
-    // Exposed state for controllers to inspect
-    SDL_Point final_dest{0, 0};
-
-    // Executor interface (internal)
+private:
+    // Executor interface (used by AnimationRuntime)
     bool has_pending_move() const { return move_pending_; }
     struct MoveRequest {
         SDL_Point    delta{0, 0};
@@ -125,11 +112,16 @@ public:
     bool consume_input_event();
 
 private:
-    vibble::grid::Grid& grid() const;
-    int                 effective_grid_resolution(std::optional<int> override_resolution) const;
-
-private:
     friend class AnimationRuntime;
+    friend class Asset;
+
+    // Wire to the executor after both are constructed
+    void set_runtime(AnimationRuntime* runtime) { runtime_ = runtime; }
+
+    void clear_movement_plan();
+    std::size_t path_index_for(const std::string& anim_id) const;
+    AnimationPlayer& player() { return player_; }
+    SDL_Point final_dest{0, 0};
 
     AnimationPlayer player_{};
 
@@ -151,4 +143,7 @@ private:
     bool        move_pending_ = false;
     MoveRequest pending_move_{};
     bool        debug_enabled_ = false;
+    // Internal helpers implemented in .cpp
+    vibble::grid::Grid& grid() const;
+    int effective_grid_resolution(std::optional<int> override_resolution) const;
 };

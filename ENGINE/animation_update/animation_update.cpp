@@ -257,10 +257,14 @@ void AnimationUpdate::auto_move(Asset* target_asset,
     if (!self_ || !target_asset) {
         return;
     }
+    if (self_) {
+        self_->target_reached = false;
+    }
     SDL_Point delta{ target_asset->pos.x - self_->pos.x, target_asset->pos.y - self_->pos.y };
     if (delta.x == 0 && delta.y == 0) {
         if (self_) {
-            self_->needs_target = false;
+            self_->target_reached = true;
+            self_->needs_target = true;
         }
         return;
     }
@@ -307,6 +311,7 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
 
     plan_      = planner_(*self_, sanitizer_.sanitize(*self_, absolute, visited_thresh_), visited_thresh_, grid());
     final_dest = plan_.final_dest;
+    plan_.world_start = self_->pos;
     plan_.override_non_locked = override_non_locked;
     if (debug_logging) {
         std::ostringstream oss;
@@ -401,6 +406,9 @@ bool AnimationUpdate::consume_input_event() {
 
 void AnimationUpdate::set_debug_enabled(bool enabled) {
     debug_enabled_ = enabled;
+    if (runtime_) {
+        runtime_->set_debug_enabled(enabled);
+    }
 }
 
 bool AnimationUpdate::debug_enabled() const {
@@ -418,4 +426,13 @@ int AnimationUpdate::effective_grid_resolution(std::optional<int> override_resol
     (void)override_resolution;
     // Force pixel-level precision for all animation updates.
     return 0;
+}
+
+void AnimationUpdate::set_animation(const std::string& animation_id) {
+    if (!self_ || !self_->info) return;
+    auto it = self_->info->animations.find(animation_id);
+    if (it == self_->info->animations.end()) return;
+    const Animation& anim = it->second;
+    player_.m_animation = const_cast<Animation*>(&anim);
+    player_.m_fps = (anim.playback_fps > 0) ? anim.playback_fps : 24;
 }

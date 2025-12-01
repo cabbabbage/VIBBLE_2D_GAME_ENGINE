@@ -1305,6 +1305,10 @@ void AnimationEditorWindow::create_animation_via_prompt() {
     if (name.empty()) {
         return;
     }
+    if (animation_editor::strings::is_reserved_animation_name(name)) {
+        set_status_message("Animation name '" + name + "' is reserved.", 240);
+        return;
+    }
     document_->create_animation(name);
     preview_provider_->invalidate_all();
     select_animation(std::make_optional(name), false);

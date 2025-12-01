@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 #include <array>
+#include <iostream>
 
 #include <SDL_image.h>
 
@@ -202,6 +203,7 @@ SceneRenderer::SceneRenderer(PrevalidatedTag,
             depthcue_warmup_frames_ = static_cast<std::uint32_t>(v);
         }
     }
+    std::cout<<"[SceneRenderer] Init complete. Depth-cue warmup frames: "<<depthcue_warmup_frames_<<std::endl;
 }
 
 SceneRenderer::~SceneRenderer() {
@@ -374,51 +376,63 @@ void SceneRenderer::render() {
                 }
             }
 
-            SDL_Point prev = asset->pos;
-            for (std::size_t idx = 0; idx < plan->sanitized_checkpoints.size(); ++idx) {
-                const SDL_Point wp = plan->sanitized_checkpoints[idx];
-                const SDL_Color color = kPathColors[idx % kPathColors.size()];
-                SDL_FPoint screen_prev = cam.map_to_screen(prev);
-                SDL_FPoint screen_wp   = cam.map_to_screen(wp);
-                SDL_SetRenderDrawColor(renderer_, color.r, color.g, color.b, 220);
-                SDL_RenderDrawLine(renderer_,
-                                   static_cast<int>(std::lround(screen_prev.x)),
-                                   static_cast<int>(std::lround(screen_prev.y)),
-                                   static_cast<int>(std::lround(screen_wp.x)),
-                                   static_cast<int>(std::lround(screen_wp.y)));
-                SDL_Rect marker{
-                    static_cast<int>(std::lround(screen_wp.x)) - 2,
-                    static_cast<int>(std::lround(screen_wp.y)) - 2,
-                    4,
-                    4
-                };
-                SDL_RenderFillRect(renderer_, &marker);
-                prev = wp;
+            // Draw the current plan's per-frame path in blue
+            if (!plan->strides.empty()) {
+                SDL_SetRenderDrawColor(renderer_, 0, 0, 255, 160);  // Blue for plan
+                SDL_Point cursor = plan->world_start;
+                for (const auto& stride : plan->strides) {
+                    auto it = asset->info->animations.find(stride.animation_id);
+                    if (it != asset->info->animations.end()) {
+                        const auto& anim = it->second;
+                        const auto& path_frames = anim.movement_path(stride.path_index);
+                        int count = std::min(static_cast<int>(path_frames.size()), stride.frames);
+                        for (int i = 0; i < count; ++i) {
+                            const AnimationFrame& frame = path_frames[i];
+                            SDL_Point next{ cursor.x + frame.dx, cursor.y + frame.dy };
+                            SDL_FPoint screen_cur = cam.map_to_screen(cursor);
+                            SDL_FPoint screen_next = cam.map_to_screen(next);
+                            SDL_RenderDrawLine(renderer_, 
+                                               static_cast<int>(std::lround(screen_cur.x)), 
+                                               static_cast<int>(std::lround(screen_cur.y)),
+                                               static_cast<int>(std::lround(screen_next.x)), 
+                                               static_cast<int>(std::lround(screen_next.y)));
+                            cursor = next;
+                        }
+                    }
+                }
             }
 
-            const int visit_r = asset->anim_->visit_threshold_px();
-            if (visit_r > 0) {
-                const SDL_Point center = plan->final_dest;
+            // Draw threshold circles around each waypoint
+            if (!plan->sanitized_checkpoints.empty()) {
+                const int visit_threshold = asset->anim_->visit_threshold_px();
+                int threshold = visit_threshold;
+                if (visit_threshold == 0) threshold = 32;
                 const int segments = 24;
                 std::vector<SDL_FPoint> ring;
                 ring.reserve(static_cast<std::size_t>(segments) + 1);
-                for (int i = 0; i <= segments; ++i) {
-                    const double angle = (6.28318530717958647692 * static_cast<double>(i)) / static_cast<double>(segments);
-                    SDL_Point pt{
-                        center.x + static_cast<int>(std::lround(static_cast<double>(visit_r) * std::cos(angle))),
-                        center.y + static_cast<int>(std::lround(static_cast<double>(visit_r) * std::sin(angle)))
-                    };
-                    ring.push_back(cam.map_to_screen(pt));
-                }
-                SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 180);
-                for (std::size_t i = 1; i < ring.size(); ++i) {
-                    SDL_RenderDrawLine(renderer_,
-                                       static_cast<int>(std::lround(ring[i - 1].x)),
-                                       static_cast<int>(std::lround(ring[i - 1].y)),
-                                       static_cast<int>(std::lround(ring[i].x)),
-                                       static_cast<int>(std::lround(ring[i].y)));
+                SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 180);  // White circles
+                for (std::size_t idx = 0; idx < plan->sanitized_checkpoints.size(); ++idx) {
+                    const SDL_Point wp = plan->sanitized_checkpoints[idx];
+                    ring.clear();
+                    for (int i = 0; i <= segments; ++i) {
+                        const double angle = (6.28318530717958647692 * static_cast<double>(i)) / static_cast<double>(segments);
+                        SDL_Point pt{
+                            wp.x + static_cast<int>(std::lround(static_cast<double>(threshold) * std::cos(angle))),
+                            wp.y + static_cast<int>(std::lround(static_cast<double>(threshold) * std::sin(angle)))
+                        };
+                        ring.push_back(cam.map_to_screen(pt));
+                    }
+                    for (std::size_t i = 1; i < ring.size(); ++i) {
+                        SDL_RenderDrawLine(renderer_,
+                                           static_cast<int>(std::lround(ring[i - 1].x)),
+                                           static_cast<int>(std::lround(ring[i - 1].y)),
+                                           static_cast<int>(std::lround(ring[i].x)),
+                                           static_cast<int>(std::lround(ring[i].y)));
+                    }
                 }
             }
+
+
 
         }
     }

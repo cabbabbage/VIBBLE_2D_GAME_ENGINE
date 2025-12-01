@@ -10,6 +10,7 @@
 #include "asset/asset_types.hpp"
 #include "utils/grid.hpp"
 #include "utils/transform_smoothing_settings.hpp"
+#include "utils/log.hpp"
 #include <iostream>
 #include <random>
 #include <mutex>
@@ -337,29 +338,40 @@ void Asset::finalize_setup() {
 }
 
 void Asset::update_scale_values() {
-    float base_scale = (info && std::isfinite(info->scale_factor) && info->scale_factor > 0.0f) ? info->scale_factor : 1.0f;
-        // Assets do not know about zoom explicitly; they rely solely on
-        // their base percentage scale and the precomputed perspective_scale
-        // from the grid point when distance scaling is enabled.
+    const float base_scale =
+        (info && std::isfinite(info->scale_factor) && info->scale_factor > 0.0f)
+            ? info->scale_factor
+            : 1.0f;
 
-        if (window) {
-                if (auto* gp = window->grid_point_for_asset(this)) {
-                        current_scale = base_scale * gp->perspective_scale;
-                } else {
-                        current_scale = base_scale;
-                }
-        } else {
-                current_scale = base_scale;
+    float perspective_scale = 1.0f;
+    if (window) {
+        if (auto* gp = window->grid_point_for_asset(this)) {
+            perspective_scale = std::max(0.0001f, gp->perspective_scale);
         }
+    }
 
-    const auto& steps = (info && !info->scale_variants.empty()) 
-                        ? static_cast<const std::vector<float>&>(info->scale_variants) 
+    current_scale = base_scale * perspective_scale;
+
+    float camera_scale = 1.0f;
+    if (assets_) {
+        camera_scale = std::max(0.0001f, assets_->getView().get_scale());
+    } else if (window) {
+        camera_scale = std::max(0.0001f, window->get_scale());
+    }
+
+    float desired_variant_scale = current_scale / camera_scale;
+    if (!std::isfinite(desired_variant_scale) || desired_variant_scale <= 0.0f) {
+        desired_variant_scale = current_scale;
+    }
+
+    const auto& steps = (info && !info->scale_variants.empty())
+                        ? static_cast<const std::vector<float>&>(info->scale_variants)
                         : render_pipeline::ScalingLogic::DefaultScaleSteps();
 
-    auto selection = render_pipeline::ScalingLogic::Choose(current_scale, steps);
+    auto selection = render_pipeline::ScalingLogic::Choose(desired_variant_scale, steps);
     current_nearest_variant_scale = selection.stored_scale;
     current_variant_index = selection.index;
-    
+
     if (current_nearest_variant_scale > 0.0f) {
         current_remaining_scale_adjustment = current_scale / current_nearest_variant_scale;
     } else {
@@ -573,6 +585,12 @@ void Asset::rebuild_animation_runtime() {
     ensure_animation_runtime(true);
 }
 
+void Asset::initialize_animation_children_recursive() {
+        // Disable animation child initialization during load to avoid re-entrancy loops.
+        animation_children_initialized_ = true;
+        initializing_animation_children_ = false;
+}
+
 void Asset::ensure_animation_runtime(bool force_recreate) {
     if (!assets_) {
         return;
@@ -582,6 +600,10 @@ void Asset::ensure_animation_runtime(bool force_recreate) {
     }
     anim_runtime_.reset();
     anim_.reset();
+    if (force_recreate) {
+        animation_children_initialized_ = false;
+        initializing_animation_children_ = false;
+    }
     anim_runtime_ = std::make_unique<AnimationRuntime>(this, assets_);
     anim_ = std::make_unique<AnimationUpdate>(this, assets_);
     if (anim_runtime_) anim_runtime_->set_planner(anim_.get());

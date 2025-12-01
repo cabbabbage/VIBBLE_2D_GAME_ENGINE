@@ -184,6 +184,7 @@ Plan GetBestPath::operator()(const Asset& self,
         }
     }
 
+    bool aborted = false;
     for (const SDL_Point& checkpoint : sanitized_checkpoints) {
         if (visited_sq > 0 && animation_update::detail::distance_sq(cursor, checkpoint) <= visited_sq) {
             continue;
@@ -262,16 +263,19 @@ Plan GetBestPath::operator()(const Asset& self,
             }
 
             if (!best.valid) {
-                fprintf(stderr,
-                        "No valid stride towards checkpoint (%d,%d), using smallest fallback\n",
-                        checkpoint.x,
-                        checkpoint.y);
                 if (min_sum != std::numeric_limits<int>::max()) {
-                    plan.strides.push_back(Stride{ min_stride.anim_id, 1, min_stride.path_index });
-                    cursor.x += min_stride.delta.x;
-                    cursor.y += min_stride.delta.y;
-                    plan.final_dest = cursor;
+                    const SDL_Point fallback_next{ cursor.x + min_stride.delta.x, cursor.y + min_stride.delta.y };
+                    const int       fallback_dist_sq = animation_update::detail::distance_sq(fallback_next, checkpoint);
+                    if (fallback_dist_sq < current_dist_sq) {
+                        plan.strides.push_back(Stride{ min_stride.anim_id, 1, min_stride.path_index });
+                        cursor = fallback_next;
+                        plan.final_dest = cursor;
+                    } else {
+                        aborted = true;
+                        break;
+                    }
                 } else {
+                    aborted = true;
                     break;
                 }
             } else {
@@ -283,6 +287,10 @@ Plan GetBestPath::operator()(const Asset& self,
             if (++safeguard > 256) {
                 break;
             }
+        }
+
+        if (aborted) {
+            break;
         }
     }
 

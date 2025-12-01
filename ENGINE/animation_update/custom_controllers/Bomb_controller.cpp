@@ -21,14 +21,20 @@ void BombController::update(const Input&) {
     }
     Asset* player = assets_->player;
 
-    // Always drive pursuit; planner handles pathing and will clear needs_target on success.
-    if (self_->anim_->debug_enabled()) {
-        vibble::log::info("[BombController] pursuing player via auto_move (needs_target="
-                          + std::string(self_->needs_target ? "true" : "false") + ")");
-        std::cout << "[BombController] pursuing player via auto_move (needs_target="
-                  << (self_->needs_target ? "true" : "false") << ")" << std::endl;
+
+    if (self_->target_reached) {
+        std::cout << "[BombController] target reached" << std::endl;
+        if (self_->info && self_->info->animations.count("explode")) {
+            std::cout << "[BombController] triggering explode animation." << std::endl;
+            self_->anim_->set_animation("explode");
+        }
+        else {
+            std::cout << "[BombController] no explode animation found." << std::endl;
+        }
     }
-    if(self_->needs_target){
-        self_->anim_->auto_move(player);
+    else {
+        if(self_->needs_target){
+            self_->anim_->auto_move(player);
+        }
     }
 }

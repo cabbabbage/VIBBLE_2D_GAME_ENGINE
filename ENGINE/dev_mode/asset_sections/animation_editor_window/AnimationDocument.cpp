@@ -386,6 +386,15 @@ void AnimationDocument::save_to_file() const {
         if (!root.is_object()) {
             root = nlohmann::json::object();
         }
+        if (base_data_.is_object()) {
+            // Keep any top-level metadata (animation_children, size_settings, etc.) in sync before overwriting "animations".
+            for (auto it = base_data_.begin(); it != base_data_.end(); ++it) {
+                if (it.key() == "animations" || it.key() == "start") {
+                    continue;
+                }
+                root[it.key()] = it.value();
+            }
+        }
     }
 
     nlohmann::json animations_json = nlohmann::json::object();

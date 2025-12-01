@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 #include <SDL.h>
@@ -19,6 +20,14 @@ class Animation {
     friend class AnimationLoader;
     friend class AnimationCloner;
 public:
+    enum class OnEndDirective {
+        Default,
+        Kill,
+        Lock,
+        Reverse,
+        Animation,
+    };
+
     struct FrameCache {
         std::vector<SDL_Texture*> textures;
         std::vector<int> widths;
@@ -67,6 +76,7 @@ public:
     void clear_texture_cache();
     void adopt_prebuilt_frames(std::vector<FrameCache> caches, std::vector<SDL_Texture*> base_frames, std::vector<SDL_Texture*> base_masks, std::vector<float> variant_steps);
     bool copy_from(const Animation& source, bool flip_horizontal, bool flip_vertical, bool reverse_frames, SDL_Renderer* renderer, class AssetInfo& info);
+    static OnEndDirective classify_on_end(std::string_view value);
     struct Source {
         std::string kind;
         std::string path;
@@ -86,6 +96,7 @@ public:
     bool movment = false;
     bool rnd_start = false;
     std::string on_end_animation;
+    OnEndDirective on_end_behavior = OnEndDirective::Default;
     std::vector<AnimationFrame*> frames;
     bool randomize = false;
     bool loop = true;

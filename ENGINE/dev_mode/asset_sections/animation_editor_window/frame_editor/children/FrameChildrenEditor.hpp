@@ -61,6 +61,7 @@ class FrameChildrenEditor {
     const MovementFrame* current_frame() const;
     ChildFrame* current_child();
     const ChildFrame* current_child() const;
+    SDL_FPoint frame_anchor(int frame_index) const;
     bool point_in_canvas(int x, int y) const;
     SDL_FPoint screen_to_world(SDL_Point screen) const;
     SDL_FPoint world_to_screen(const SDL_FPoint& world) const;

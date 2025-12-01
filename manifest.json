@@ -903,6 +903,7 @@
             [
               0,
               0,
+              false,
               [
                 [
                   0,
@@ -917,6 +918,7 @@
             [
               0,
               0,
+              false,
               [
                 [
                   0,
@@ -931,6 +933,7 @@
             [
               0,
               0,
+              false,
               [
                 [
                   0,
@@ -945,6 +948,7 @@
             [
               0,
               0,
+              false,
               [
                 [
                   0,
@@ -959,6 +963,7 @@
             [
               0,
               0,
+              false,
               [
                 [
                   0,
@@ -973,6 +978,7 @@
             [
               0,
               0,
+              false,
               [
                 [
                   0,
@@ -987,6 +993,7 @@
             [
               0,
               0,
+              false,
               [
                 [
                   0,
@@ -2353,7 +2360,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 200.0
+        "scale_percentage": 276.0
       },
       "spawn_groups": [],
       "start": "default",

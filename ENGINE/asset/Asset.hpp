@@ -143,6 +143,8 @@ class Asset {
     ~Asset();
     void finalize_setup();
     void rebuild_animation_runtime();
+    // Initialize animation child attachments immediately and recursively
+    void initialize_animation_children_recursive();
     bool is_finalized() const { return finalized_; }
     void on_scale_factor_changed();
 
@@ -260,6 +262,7 @@ class Asset {
     bool dead = false;
     bool static_frame = true;
     bool needs_target = false;
+    bool target_reached = false;
     int cached_w = 0;
     int cached_h = 0;
     std::uint64_t last_render_frame_id = 0;
@@ -310,6 +313,8 @@ private:
     std::unique_ptr<AssetList> neighbors;
     AssetList* impassable_naighbors = nullptr;
     std::vector<AnimationChildAttachment> animation_children_;
+    bool animation_children_initialized_ = false;
+    bool initializing_animation_children_ = false;
     std::optional<TilingInfo> tiling_info_{};
     SDL_Point last_neighbor_origin_{ std::numeric_limits<int>::min(), std::numeric_limits<int>::min() };
     bool neighbor_lists_initialized_ = false;

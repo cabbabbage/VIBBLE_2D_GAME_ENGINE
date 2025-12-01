@@ -47,6 +47,14 @@ void InitializeAssets::initialize(Assets& assets,
                     vibble::log::debug("[InitializeAssets] Asset '" + (raw->info ? raw->info->name : std::string{"<null>"}) + "' not finalized by loader; finalizing now.");
                     raw->finalize_setup();
                 }
+                // Ensure animation children are initialized (and do so recursively)
+                if (raw->info && !raw->info->asset_children.empty()) {
+                    try {
+                        raw->initialize_animation_children_recursive();
+                    } catch (...) {
+                        // Fail-safe: continue initialization even if children init fails
+                    }
+                }
                 // Initialize tiling for tileable assets on load
                 try {
                     if (raw->info && raw->info->tillable) {

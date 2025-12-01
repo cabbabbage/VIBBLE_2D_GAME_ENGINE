@@ -230,3 +230,34 @@ target_link_libraries(engine_tests
 if (WIN32)
     target_link_libraries(engine_tests PRIVATE Ole32 Shell32)
 endif()
+
+# ------------------------------------------
+# Isolated WorldGrid tests (lightweight target)
+# ------------------------------------------
+add_executable(engine_world_tests
+    TESTS/test_main.cpp
+    TESTS/test_world_grid_same_chunk_move.cpp
+    ENGINE/world/world_grid.cpp
+    ENGINE/world/chunk_manager.cpp
+    ENGINE/utils/grid_math.cpp
+    ENGINE/utils/log.cpp
+    TESTS/stubs/chunk_stubs.cpp
+)
+
+target_include_directories(engine_world_tests
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/TESTS/stubs
+        ${CMAKE_SOURCE_DIR}/ENGINE
+    ${CMAKE_SOURCE_DIR}/external
+)
+
+target_compile_definitions(engine_world_tests PRIVATE
+    PROJECT_ROOT="${TEST_ROOT}"
+)
+
+# No heavy libs needed; these sources don't call into SDL functions
+# or OpenGL, they only use SDL types.
+target_link_libraries(engine_world_tests
+    PRIVATE
+        SDL2::SDL2 ${_SDL2MAIN_TARGET}
+)

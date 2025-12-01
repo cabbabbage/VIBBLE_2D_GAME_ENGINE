@@ -124,6 +124,43 @@ Tests cover core systems like asset loading, manifest parsing, and rendering pre
 
 MIT License - see [LICENSE](LICENSE) for details.
 
+## AnimationUpdate Public API Documentation
+
+The `AnimationUpdate` class provides the restricted public interface for custom controllers. Access is limited to core planning, movement, and animation setting methods to maintain internal engine state isolation.
+
+### Constructors
+- **AnimationUpdate(Asset* self, Assets* assets)**  
+  Creates an `AnimationUpdate` instance tied to a specific asset and assets manager.
+
+- **AnimationUpdate(Asset* self, Assets* assets, double path_bias)**  
+  Alternative constructor (path_bias parameter is unused; legacy support only).
+
+### Debug Control
+- **void set_debug_enabled(bool enabled)**  
+  Enables or disables debug logging for movement planning and pathing. Useful for development and troubleshooting AI behaviors.
+
+### Path Planning
+- **void auto_move(const std::vector<SDL_Point>& rel_checkpoints, int visited_thresh_px, std::optional<int> checkpoint_resolution, bool override_non_locked)**  
+  Plans a multi-point path relative to the asset's current position. Checkpoints are visited in order; `visited_thresh_px` is the pixel radius considered "reached" (e.g., 5). `checkpoint_resolution` can override grid resolution for planning (default uses pixel-level precision). `override_non_locked` allows movement during locked animations if true.
+
+- **void auto_move(SDL_Point rel_checkpoint, int visited_thresh_px, std::optional<int> checkpoint_resolution, bool override_non_locked)**  
+  Plans a single-point move to a relative checkpoint. Otherwise same as above.
+
+- **void auto_move(Asset* target_asset, int visited_thresh_px, bool override_non_locked)**  
+  Plans a path to follow and catch up to a moving target asset (e.g., enemy pursuing player). Target is checked at planning time only—use in update loop for continuous pursuit.
+
+### Plan Inspection
+- **int visit_threshold_px() const**  
+  Returns the current visit threshold in pixels used for path planning (how close the asset needs to get to consider a checkpoint reached).
+
+### Immediate Movement
+- **void move(SDL_Point delta, const std::string& animation, bool resort_z, bool override_non_locked)**  
+  Requests an immediate one-shot movement by `delta` (pixel offset) and switches to the specified animation. `resort_z` re-sorts the asset in depth order if true. Useful for instant jumps or teleports.
+
+### Animation Control
+- **void set_animation(const std::string& animation_id)**  
+  Looks up and sets the animation from the asset's info by ID, using the animation's own `playback_fps` (defaults to 24 if invalid).
+
 ---
 
 This engine is designed for 2D game development with an emphasis on content-driven workflows and rapid prototyping.

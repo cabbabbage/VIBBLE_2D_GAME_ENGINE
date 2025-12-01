@@ -561,8 +561,23 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
             if (!entry.empty() && entry[0].is_number()) f.dx = static_cast<float>(entry[0].get<double>());
             if (entry.size() > 1 && entry[1].is_number()) f.dy = static_cast<float>(entry[1].get<double>());
             if (entry.size() > 2 && entry[2].is_boolean()) f.resort_z = entry[2].get<bool>();
+            // Children can be at index 4 (after optional RGB at 3) or at index 3 when RGB is absent.
+            const nlohmann::json* children_json = nullptr;
             if (entry.size() > 4 && entry[4].is_array()) {
-                for (const auto& child_entry : entry[4]) {
+                children_json = &entry[4];
+            } else if (entry.size() > 3 && entry[3].is_array()) {
+                const auto& maybe_children = entry[3];
+                if (!maybe_children.empty() && maybe_children[0].is_array()) {
+                    children_json = &maybe_children;
+                }
+            } else if (entry.size() > 2 && entry[2].is_array()) {
+                const auto& maybe_children2 = entry[2];
+                if (!maybe_children2.empty() && maybe_children2[0].is_array()) {
+                    children_json = &maybe_children2;
+                }
+            }
+            if (children_json) {
+                for (const auto& child_entry : *children_json) {
                     if (!child_entry.is_array() || child_entry.empty()) continue;
                     ChildFrame child;
                     try { child.child_index = child_entry[0].get<int>(); } catch (...) { child.child_index = -1; }

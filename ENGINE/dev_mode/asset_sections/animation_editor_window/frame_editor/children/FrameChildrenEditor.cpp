@@ -174,6 +174,7 @@ void FrameChildrenEditor::render(SDL_Renderer* renderer) const {
     if (!std::isfinite(pixels_per_unit) || pixels_per_unit <= 0.0f) {
         pixels_per_unit = 1.0f;
     }
+    const SDL_FPoint anchor = frame_anchor(selected_frame_index_);
 
     for (std::size_t i = 0; i < child_ids_.size() && i < frame->children.size(); ++i) {
         const auto& child = frame->children[i];
@@ -194,7 +195,7 @@ void FrameChildrenEditor::render(SDL_Renderer* renderer) const {
         if (!std::isfinite(sprite_scale) || sprite_scale <= 0.0f) {
             continue;
         }
-        SDL_FPoint screen = world_to_screen(SDL_FPoint{child.dx, child.dy});
+        SDL_FPoint screen = world_to_screen(SDL_FPoint{anchor.x + child.dx, anchor.y + child.dy});
         const float dst_w = sprite_scale * static_cast<float>(tex_w);
         const float dst_h = sprite_scale * static_cast<float>(tex_h);
         if (!(std::isfinite(dst_w) && std::isfinite(dst_h)) || dst_w <= 0.0f || dst_h <= 0.0f) {
@@ -213,7 +214,7 @@ void FrameChildrenEditor::render(SDL_Renderer* renderer) const {
 
     for (std::size_t i = 0; i < child_ids_.size() && i < frame->children.size(); ++i) {
         const auto& child = frame->children[i];
-        SDL_FPoint screen = world_to_screen(SDL_FPoint{child.dx, child.dy});
+        SDL_FPoint screen = world_to_screen(SDL_FPoint{anchor.x + child.dx, anchor.y + child.dy});
         SDL_Point center = round_point(screen);
         const bool is_selected = static_cast<int>(i) == selected_child_index_;
         const int radius = is_selected ? kMarkerRadius + 1 : kMarkerRadius - 1;
@@ -260,9 +261,10 @@ bool FrameChildrenEditor::handle_event(const SDL_Event& e) {
             }
             SDL_Point screen{e.motion.x, e.motion.y};
             SDL_FPoint world = screen_to_world(screen);
+            const SDL_FPoint anchor = frame_anchor(selected_frame_index_);
             if (auto* child = current_child()) {
-                child->dx = static_cast<float>(std::round(world.x));
-                child->dy = static_cast<float>(std::round(world.y));
+                child->dx = static_cast<float>(std::round(world.x - anchor.x));
+                child->dy = static_cast<float>(std::round(world.y - anchor.y));
                 persist_changes();
                 refresh_tools_panel();
             }
@@ -411,7 +413,8 @@ void FrameChildrenEditor::reload_from_document() {
                             child.child_index = child_entry.value("child_index", -1);
                             child.dx = static_cast<float>(child_entry.value("dx", 0.0));
                             child.dy = static_cast<float>(child_entry.value("dy", 0.0));
-                            child.rotation = static_cast<float>(child_entry.value("rotation", 0.0));
+                            double deg = child_entry.value("degree", child_entry.value("rotation", 0.0));
+                            child.rotation = static_cast<float>(deg);
                             child.visible = child_entry.value("visible", true);
                             child.render_in_front = child_entry.value("render_in_front", true);
                         } else if (child_entry.is_array()) {
@@ -577,6 +580,9 @@ void FrameChildrenEditor::persist_changes() {
             entry.push_back(frame.resort_z);
         }
         if (!child_ids_.empty()) {
+            while (entry.size() < 4) {
+                entry.push_back(nlohmann::json());
+            }
             nlohmann::json child_entries = nlohmann::json::array();
             if (!frame.children.empty()) {
                 for (const auto& child : frame.children) {
@@ -685,6 +691,19 @@ const FrameChildrenEditor::ChildFrame* FrameChildrenEditor::current_child() cons
     return &frame->children[selected_child_index_];
 }
 
+SDL_FPoint FrameChildrenEditor::frame_anchor(int frame_index) const {
+    SDL_FPoint anchor{0.0f, 0.0f};
+    if (frames_.empty()) {
+        return anchor;
+    }
+    int idx = std::clamp(frame_index, 0, static_cast<int>(frames_.size()) - 1);
+    for (int i = 1; i <= idx; ++i) {
+        anchor.x += frames_[i].dx;
+        anchor.y += frames_[i].dy;
+    }
+    return anchor;
+}
+
 bool FrameChildrenEditor::point_in_canvas(int x, int y) const {
     if (!canvas_) {
         return false;
@@ -716,9 +735,10 @@ int FrameChildrenEditor::hit_test_child(int x, int y) const {
     if (!frame) {
         return -1;
     }
+    const SDL_FPoint anchor = frame_anchor(selected_frame_index_);
     SDL_Point pt{x, y};
     for (std::size_t i = 0; i < child_ids_.size() && i < frame->children.size(); ++i) {
-        SDL_FPoint screen = world_to_screen(SDL_FPoint{frame->children[i].dx, frame->children[i].dy});
+        SDL_FPoint screen = world_to_screen(SDL_FPoint{anchor.x + frame->children[i].dx, anchor.y + frame->children[i].dy});
         SDL_Point center = round_point(screen);
         const bool is_selected = static_cast<int>(i) == selected_child_index_;
         const int radius = is_selected ? kMarkerRadius + 1 : kMarkerRadius - 1;

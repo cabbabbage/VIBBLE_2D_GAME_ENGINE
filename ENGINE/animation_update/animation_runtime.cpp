@@ -76,6 +76,10 @@ bool same_point(SDL_Point lhs, SDL_Point rhs) {
 AnimationRuntime::AnimationRuntime(Asset* self, Assets* assets)
     : self_(self), assets_owner_(assets), grid_service_(&vibble::grid::global_grid()) {}
 
+void AnimationRuntime::set_debug_enabled(bool enabled) {
+    debug_enabled_ = enabled;
+}
+
 void AnimationRuntime::update() {
     if (!self_ || !self_->info || !planner_iface_) {
         return;

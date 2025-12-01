@@ -53,6 +53,7 @@ public:
 
     // Planner notifications
     void reset_plan_progress();
+    void set_debug_enabled(bool enabled);
 
 private:
     int        effective_grid_resolution(std::optional<int> override_resolution) const;
@@ -95,5 +96,6 @@ private:
     std::unordered_map<std::string, std::size_t> active_paths_{};
 
     // Controller input tracking for on-end redirection
+    bool debug_enabled_ = false;
     bool just_applied_controller_move_ = false;
 };

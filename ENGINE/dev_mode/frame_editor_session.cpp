@@ -3717,8 +3717,12 @@ void FrameEditorSession::persist_changes() {
         int dx = static_cast<int>(std::lround(i == 0 ? 0.0f : f.dx));
         int dy = static_cast<int>(std::lround(i == 0 ? 0.0f : f.dy));
         nlohmann::json entry = nlohmann::json::array({dx, dy});
-        if (f.resort_z) entry.push_back(f.resort_z);
+        // Always include resort_z boolean slot to keep schema stable
+        entry.push_back(f.resort_z);
         if (!child_assets_.empty()) {
+            while (entry.size() < 4) {
+                entry.push_back(nlohmann::json());
+            }
             nlohmann::json child_entries = nlohmann::json::array();
             if (!f.children.empty()) {
                 for (const auto& child : f.children) {

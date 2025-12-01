@@ -1573,6 +1573,14 @@ void AnimationInspectorPanel::commit_rename() {
         rename_pending_ = false;
         return;
     }
+    if (strings::is_reserved_animation_name(desired)) {
+        name_box_->set_value(animation_id_);
+        rename_pending_ = false;
+        if (status_callback_) {
+            status_callback_("Animation name '" + desired + "' is reserved.");
+        }
+        return;
+    }
 
     const std::string old_id = animation_id_;
     auto before = document_->animation_ids();

@@ -373,9 +373,6 @@ Asset* WorldGrid::move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos) {
     const int old_j = grid_floor_div(old_pos.y - origin_.y, chunk_step);
     const int new_i = grid_floor_div(new_pos.x - origin_.x, chunk_step);
     const int new_j = grid_floor_div(new_pos.y - origin_.y, chunk_step);
-    if (old_i == new_i && old_j == new_j) {
-        return a;
-    }
 
     Chunk* previous = nullptr;
     auto existing = residency_.find(a);
@@ -384,15 +381,17 @@ Asset* WorldGrid::move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos) {
     } else {
         previous = chunks_.find(old_i, old_j);
     }
-    if (previous) {
-        remove_from_chunk(a, previous);
-    }
-
     Chunk& target = chunks_.ensure(new_i, new_j, r_chunk_, origin_);
-    if (std::find(target.assets.begin(), target.assets.end(), a) == target.assets.end()) {
-        target.assets.push_back(a);
+    // Only update chunk residency if the asset actually changed chunks
+    if (previous != &target) {
+        if (previous) {
+            remove_from_chunk(a, previous);
+        }
+        if (std::find(target.assets.begin(), target.assets.end(), a) == target.assets.end()) {
+            target.assets.push_back(a);
+        }
+        residency_[a] = &target;
     }
-    residency_[a] = &target;
 
     const SDL_Point old_index = grid_index_from_world(old_pos);
     const SDL_Point new_index = grid_index_from_world(new_pos);
@@ -400,7 +399,8 @@ Asset* WorldGrid::move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos) {
     const GridId    old_point_id = make_point_id(old_index.x, old_index.y);
 
     std::unique_ptr<Asset> owned;
-    if (new_point_id != old_point_id) {
+    const bool point_changed = (new_point_id != old_point_id);
+    if (point_changed) {
         auto old_point_it = points_.find(old_point_id);
         if (old_point_it != points_.end()) {
             owned = extract_from_point(a, old_point_it->second);
@@ -415,10 +415,17 @@ Asset* WorldGrid::move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos) {
 
     GridPoint& point = ensure_point(new_index);
     bind_asset_to_point(a, point, new_pos, &target, SDL_Point{new_i, new_j});
-    if (owned) {
-        point.occupants.push_back(std::move(owned));
+    // If the asset moved to a different grid point, transfer ownership; otherwise just rebind.
+    if (point_changed) {
+        if (owned) {
+            point.occupants.push_back(std::move(owned));
+        } else {
+            // Asset was not previously owned by a point (unlikely), adopt ownership now.
+            point.occupants.push_back(std::unique_ptr<Asset>(a));
+        }
     } else {
-        point.occupants.push_back(std::unique_ptr<Asset>(a));
+        // Same grid point: ensure screen data will be recomputed for the new world position.
+        point.invalidate_screen_data();
     }
     prune_empty_points();
 
