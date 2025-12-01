@@ -1579,9 +1579,7 @@ void WarpedScreenGrid::rebuild_grid(world::WorldGrid& world_grid, float dt_secon
         }
     }
     
-    if (player_asset) {
-        player_center_offset_y_ = 0.0f;
-        
+    if (!manual_zoom_override_ && player_asset) {
         SDL_Point player_world{ player_asset->pos.x, player_asset->pos.y };
         SDL_FPoint player_screen_base = map_to_screen(player_world);
         
@@ -1598,18 +1596,30 @@ void WarpedScreenGrid::rebuild_grid(world::WorldGrid& world_grid, float dt_secon
         player_center_offset_y_ = screen_center_y - player_final_y;
     }
     
-    const float horizon_y = WarpedScreenGrid::kForceDepthPerspectiveDisabled
-        ? 0.0f
+    const bool perspective_disabled = WarpedScreenGrid::kForceDepthPerspectiveDisabled;
+    const float horizon_y = perspective_disabled
+        ? -screen_h  // push horizon well above the visible area when perspective is off
         : static_cast<float>(horizon_screen_y_for_scale());
-    // Treat the top of the screen as the horizon while perspective features are disabled.
-    const float margin_px   = std::max(0.0f, settings_.extra_cull_margin);
+
+    const float margin_px    = std::max(0.0f, settings_.extra_cull_margin);
     const float depth_pad_px = std::max(0.0f, current_depth_offset_px());
-    const float bottom_pad  = std::max(depth_pad_px, margin_px);
-    const float cull_top    = std::max(0.0f, horizon_y - margin_px);
+
+    float side_pad = margin_px;
+    float bottom_pad = std::max(depth_pad_px, margin_px);
+    float cull_top = perspective_disabled
+        ? horizon_y
+        : std::max(0.0f, horizon_y - margin_px);
+
+    if (perspective_disabled) {
+        const float expansion_factor = 2.0f; // approximate doubling of cull area
+        side_pad   *= expansion_factor;
+        bottom_pad *= expansion_factor;
+    }
+
     const SDL_FRect cull_rect{
-        -margin_px,
+        -side_pad,
         cull_top,
-        screen_w + margin_px * 2.0f,
+        screen_w + side_pad * 2.0f,
         (screen_h + bottom_pad) - cull_top
     };
     const float min_visible_px =

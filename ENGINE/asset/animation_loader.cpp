@@ -1,5 +1,6 @@
 #include "animation_loader.hpp"
 #include "animation.hpp"
+#include "animation_cloner.hpp"
 #include "asset/asset_info.hpp"
 #include "asset/asset_types.hpp"
 #include "asset/surface_utils.hpp"
@@ -28,6 +29,20 @@
 namespace fs = std::filesystem;
 
 namespace {
+
+void resolve_inherited_movements(AssetInfo& info) {
+        for (auto& [name, anim] : info.animations) {
+                if (anim.source.kind != "animation" || anim.source.name.empty()) {
+                        continue;
+                }
+                if (!anim.movement_path_count()) {
+                        auto it = info.animations.find(anim.source.name);
+                        if (it != info.animations.end()) {
+                                anim.inherit_movement_from(it->second);
+                        }
+                }
+        }
+}
 
 // Count PNG files (0.png, 1.png, 2.png, etc.) in a folder
 int count_png_files(const std::string& folder) {
@@ -447,20 +462,24 @@ void AnimationLoader::load(Animation& animation,
                 if (it != info.animations.end()) {
                         const Animation& src_anim = it->second;
                         if (!src_anim.frames.empty()) {
-                                // Use copy constructor to create derived animation with all modifiers applied
-                                reused_animation = true;
+                                AnimationCloner::Options opts{
+                                        animation.flipped_source,
+                                        animation.flip_vertical_source,
+                                        animation.reverse_source
+                                };
                                 std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                          << " copying from source animation '" << animation.source.name << "'"
-                                          << " (flipH=" << animation.flipped_source
-                                          << ", flipV=" << animation.flip_vertical_source
-                                          << ", reverse=" << animation.reverse_source << ")\n";
-                                
-                                if (!animation.copy_from(src_anim, animation.flipped_source, animation.flip_vertical_source, animation.reverse_source, renderer, info)) {
+                                          << " cloning from source animation '" << animation.source.name << "'"
+                                          << " (flipH=" << opts.flip_horizontal
+                                          << ", flipV=" << opts.flip_vertical
+                                          << ", reverse=" << opts.reverse_frames << ")\n";
+
+                                if (!AnimationCloner::Clone(src_anim, animation, opts, renderer, info)) {
                                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                  << " failed to copy from source animation\n";
+                                                  << " failed to clone from source animation\n";
                                         flush_diagnostics();
                                         return;
                                 }
+                                reused_animation = true;
                         } else {
                                 std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                           << " source animation '" << animation.source.name
@@ -753,56 +772,58 @@ void AnimationLoader::load(Animation& animation,
                 loaded_from_cache = true;
         }
 
-
-
-
-        if (!movement_specified && animation.source.kind == "animation" && inherit_source_movement && !animation.source.name.empty()) {
-                auto it = info.animations.find(animation.source.name);
-                if (it != info.animations.end()) {
-                        const Animation& src_anim = it->second;
-                        animation.movement_paths_           = src_anim.movement_paths_;
-                        if (!animation.movement_paths_.empty()) {
-                                if (animation.reverse_source) {
-                                        for (auto& path : animation.movement_paths_) {
-                                                std::reverse(path.begin(), path.end());
-                                        }
-                                }
-                                if (animation.flip_movement_horizontal) {
-                                        for (auto& path : animation.movement_paths_) {
-                                                for (auto& frame : path) {
-                                                        frame.dx = -frame.dx;
-                                                }
-                                        }
-                                }
-                                if (animation.flip_movement_vertical) {
-                                        for (auto& path : animation.movement_paths_) {
-                                                for (auto& frame : path) {
-                                                        frame.dy = -frame.dy;
-                                                }
-                                        }
-                                }
-                                movement_specified = true;
+        // If we still lack frames but the source animation finished loading elsewhere, clone it now.
+        if (animation.frame_cache_.empty() &&
+            animation.source.kind == "animation" &&
+            !animation.source.name.empty()) {
+                auto src_it = info.animations.find(animation.source.name);
+                if (src_it != info.animations.end() && !src_it->second.frame_cache_.empty()) {
+                        AnimationCloner::Options opts{
+                                animation.flipped_source,
+                                animation.flip_vertical_source,
+                                animation.reverse_source
+                        };
+                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                  << " late-cloning from source animation '" << animation.source.name
+                                  << "' (flipH=" << opts.flip_horizontal
+                                  << ", flipV=" << opts.flip_vertical
+                                  << ", reverse=" << opts.reverse_frames << ")\n";
+                        if (AnimationCloner::Clone(src_it->second, animation, opts, renderer, info)) {
+                                reused_animation = true;
                         }
                 }
         }
-        // If movement is explicitly specified for a derived animation, still apply requested transforms
-        if (movement_specified && animation.source.kind == "animation") {
-                if (animation.reverse_source) {
-                        for (auto& path : animation.movement_paths_) {
-                                std::reverse(path.begin(), path.end());
+
+
+
+
+        if (!reused_animation) {
+                if (!movement_specified && animation.source.kind == "animation" && inherit_source_movement && !animation.source.name.empty()) {
+                        auto it = info.animations.find(animation.source.name);
+                        if (it != info.animations.end()) {
+                                animation.inherit_movement_from(it->second);
+                                movement_specified = animation.movement_path_count() > 0;
                         }
                 }
-                if (animation.flip_movement_horizontal) {
-                        for (auto& path : animation.movement_paths_) {
-                                for (auto& frame : path) {
-                                        frame.dx = -frame.dx;
+                // If movement is explicitly specified for a derived animation, still apply requested transforms
+                if (movement_specified && animation.source.kind == "animation") {
+                        if (animation.reverse_source) {
+                                for (auto& path : animation.movement_paths_) {
+                                        std::reverse(path.begin(), path.end());
                                 }
                         }
-                }
-                if (animation.flip_movement_vertical) {
-                        for (auto& path : animation.movement_paths_) {
-                                for (auto& frame : path) {
-                                        frame.dy = -frame.dy;
+                        if (animation.flip_movement_horizontal) {
+                                for (auto& path : animation.movement_paths_) {
+                                        for (auto& frame : path) {
+                                                frame.dx = -frame.dx;
+                                        }
+                                }
+                        }
+                        if (animation.flip_movement_vertical) {
+                                for (auto& path : animation.movement_paths_) {
+                                        for (auto& frame : path) {
+                                                frame.dy = -frame.dy;
+                                        }
                                 }
                         }
                 }
@@ -874,6 +895,8 @@ void AnimationLoader::load(Animation& animation,
                                 if (v < cache.foreground_textures.size()) variant.foreground_texture = cache.foreground_textures[v];
                                 if (v < cache.background_textures.size()) variant.background_texture = cache.background_textures[v];
                                 if (v < cache.mask_textures.size()) variant.shadow_mask_texture = cache.mask_textures[v];
+                                if (v < cache.depthcue_foreground_textures.size()) variant.depthcue_foreground_texture = cache.depthcue_foreground_textures[v];
+                                if (v < cache.depthcue_background_textures.size()) variant.depthcue_background_texture = cache.depthcue_background_textures[v];
                                 f.variants.push_back(variant);
                             }
                         }
@@ -942,5 +965,7 @@ void AnimationLoader::load(Animation& animation,
                 oss << " from " << origin_label << " in " << std::fixed << std::setprecision(3) << elapsed_secs << "s";
                 vibble::log::debug(oss.str());
         }
+        // Refresh inherited movement paths for any earlier animations whose sources were not yet loaded.
+        resolve_inherited_movements(info);
         flush_diagnostics();
 }

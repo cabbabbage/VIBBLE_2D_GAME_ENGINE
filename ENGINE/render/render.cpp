@@ -344,6 +344,36 @@ void SceneRenderer::render() {
                 continue;
             }
 
+            // First, draw every movement stride for all animations (purple) from asset center
+            SDL_SetRenderDrawColor(renderer_, 160, 32, 240, 160);
+            if (asset->info) {
+                for (const auto& [anim_id, anim] : asset->info->animations) {
+                    const std::size_t paths = anim.movement_path_count();
+                    for (std::size_t path_idx = 0; path_idx < paths; ++path_idx) {
+                        const auto& path_frames = anim.movement_path(path_idx);
+                        SDL_Point cursor = asset->pos;
+                        for (const AnimationFrame& frame : path_frames) {
+                            SDL_Point next{ cursor.x + frame.dx, cursor.y + frame.dy };
+                            SDL_FPoint screen_cur  = cam.map_to_screen(cursor);
+                            SDL_FPoint screen_next = cam.map_to_screen(next);
+                            SDL_RenderDrawLine(renderer_,
+                                               static_cast<int>(std::lround(screen_cur.x)),
+                                               static_cast<int>(std::lround(screen_cur.y)),
+                                               static_cast<int>(std::lround(screen_next.x)),
+                                               static_cast<int>(std::lround(screen_next.y)));
+                            SDL_Rect dot{
+                                static_cast<int>(std::lround(screen_next.x)) - 2,
+                                static_cast<int>(std::lround(screen_next.y)) - 2,
+                                4,
+                                4
+                            };
+                            SDL_RenderFillRect(renderer_, &dot);
+                            cursor = next;
+                        }
+                    }
+                }
+            }
+
             SDL_Point prev = asset->pos;
             for (std::size_t idx = 0; idx < plan->sanitized_checkpoints.size(); ++idx) {
                 const SDL_Point wp = plan->sanitized_checkpoints[idx];
@@ -390,36 +420,6 @@ void SceneRenderer::render() {
                 }
             }
 
-            // Draw stride deltas for all movement paths on each animation from the asset center
-            SDL_FPoint center = cam.map_to_screen(asset->pos);
-            SDL_SetRenderDrawColor(renderer_, 160, 32, 240, 200); // purple
-            if (asset->info) {
-                for (const auto& [anim_id, anim] : asset->info->animations) {
-                    const std::size_t paths = anim.movement_path_count();
-                    for (std::size_t path_idx = 0; path_idx < paths; ++path_idx) {
-                        const auto& path = anim.movement_path(path_idx);
-                        SDL_Point cursor = asset->pos;
-                        for (const AnimationFrame& frame : path) {
-                            SDL_Point next{ cursor.x + frame.dx, cursor.y + frame.dy };
-                            SDL_FPoint screen_cur = cam.map_to_screen(cursor);
-                            SDL_FPoint screen_next = cam.map_to_screen(next);
-                            SDL_RenderDrawLine(renderer_,
-                                               static_cast<int>(std::lround(screen_cur.x)),
-                                               static_cast<int>(std::lround(screen_cur.y)),
-                                               static_cast<int>(std::lround(screen_next.x)),
-                                               static_cast<int>(std::lround(screen_next.y)));
-                            SDL_Rect dot{
-                                static_cast<int>(std::lround(screen_next.x)) - 2,
-                                static_cast<int>(std::lround(screen_next.y)) - 2,
-                                4,
-                                4
-                            };
-                            SDL_RenderFillRect(renderer_, &dot);
-                            cursor = next;
-                        }
-                    }
-                }
-            }
         }
     }
 

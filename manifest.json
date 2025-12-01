@@ -552,7 +552,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 22.0
+        "scale_percentage": 10.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -1329,23 +1329,23 @@
       "can_invert": false,
       "lighting_info": [
         {
-          "behind": false,
-          "falloff": 49,
+          "behind": true,
+          "falloff": 50,
           "flare": 0,
           "flicker": 0,
           "flicker_smoothness": 100,
           "flicker_speed": 0,
           "has_light_source": true,
-          "in_front": false,
+          "in_front": true,
           "light_color": [
             255,
             255,
             255
           ],
           "light_intensity": 141,
-          "offset_x": -1,
-          "offset_y": 0,
-          "radius": 409,
+          "offset_x": 0,
+          "offset_y": -78,
+          "radius": 1074,
           "render_front_and_back_to_asset_alpha_mask": false,
           "render_to_dark_mask": true
         }
@@ -1439,7 +1439,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 255.0
+        "scale_percentage": 65.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -2055,11 +2055,11 @@
           "derived_modifiers": {
             "flipMovementX": false,
             "flipMovementY": false,
-            "flipX": true,
+            "flipX": false,
             "flipY": false,
             "reverse": false
           },
-          "flipped_source": true,
+          "flipped_source": false,
           "hit_geometry": [
             {
               "explosion": null,
@@ -3194,9 +3194,9 @@
         "bar": {
           "curvyness": 2,
           "display_color": [
-            242,
-            36,
-            152,
+            31,
+            204,
+            31,
             255
           ],
           "edge_smoothness": 19,
@@ -3214,9 +3214,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            36,
-            137,
             242,
+            36,
+            131,
             255
           ],
           "edge_smoothness": 43,
@@ -3267,9 +3267,9 @@
         "rnd": {
           "curvyness": 2,
           "display_color": [
+            36,
+            133,
             242,
-            207,
-            85,
             255
           ],
           "edge_smoothness": 2,
@@ -3287,9 +3287,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            240,
+            91,
             242,
-            85,
+            36,
             255
           ],
           "edge_smoothness": 101,
@@ -3376,8 +3376,8 @@
                 }
               ],
               "display_name": "barrel",
-              "dx": 484,
-              "dy": -796,
+              "dx": 228,
+              "dy": -1308,
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
@@ -3388,7 +3388,7 @@
               "origional_width": 6904,
               "position": "Exact",
               "priority": 2,
-              "resolution": 7,
+              "resolution": 4,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-ea8ff615b43e"
@@ -3405,8 +3405,8 @@
                 }
               ],
               "display_name": "Davey",
-              "dx": -188,
-              "dy": -1452,
+              "dx": 740,
+              "dy": -1052,
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
@@ -3416,7 +3416,8 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "resolution": 7,
+              "priority": 3,
+              "resolution": 4,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-70f01d74d7e7"

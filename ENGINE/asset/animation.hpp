@@ -17,6 +17,7 @@ struct Mix_Chunk;
 class Animation {
 
     friend class AnimationLoader;
+    friend class AnimationCloner;
 public:
     struct FrameCache {
         std::vector<SDL_Texture*> textures;
@@ -92,6 +93,7 @@ public:
     std::size_t movement_path_count() const;
     const std::vector<AnimationFrame>& movement_path(std::size_t index) const;
     std::vector<AnimationFrame>& movement_path(std::size_t index);
+    void inherit_movement_from(const Animation& source);
     std::size_t default_movement_path_index() const { return 0; }
     std::size_t clamp_path_index(std::size_t index) const;
     std::size_t variant_count() const { return variant_steps_.size(); }

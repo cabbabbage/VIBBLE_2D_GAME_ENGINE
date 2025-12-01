@@ -125,6 +125,60 @@ bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool fl
         return false;
     }
 
+    // Helper to apply scale mode
+    auto apply_scale_mode = [&info](SDL_Texture* tex) {
+        if (!tex) return;
+#if SDL_VERSION_ATLEAST(2, 0, 12)
+        if (info.smooth_scaling) {
+            SDL_SetTextureScaleMode(tex, SDL_ScaleModeBest);
+        } else {
+            SDL_SetTextureScaleMode(tex, SDL_ScaleModeNearest);
+        }
+#endif
+    };
+
+    // Helper to duplicate a texture (respecting flip) so derived animations own their assets
+    auto clone_texture = [&](SDL_Texture* src, int width_hint, int height_hint, SDL_RendererFlip flip_flags, int* out_w = nullptr, int* out_h = nullptr) -> SDL_Texture* {
+        if (!src) return nullptr;
+
+        Uint32 fmt = SDL_PIXELFORMAT_RGBA8888;
+        int access = 0;
+        int tex_w = width_hint;
+        int tex_h = height_hint;
+
+        const bool need_dims = tex_w <= 0 || tex_h <= 0;
+        if (SDL_QueryTexture(src, &fmt, &access, need_dims ? &tex_w : nullptr, need_dims ? &tex_h : nullptr) != 0 ||
+            tex_w <= 0 || tex_h <= 0) {
+            tex_w = std::max(1, tex_w);
+            tex_h = std::max(1, tex_h);
+        }
+
+        SDL_Texture* dst = SDL_CreateTexture(renderer, fmt, SDL_TEXTUREACCESS_TARGET, tex_w, tex_h);
+        if (!dst) {
+            return nullptr;
+        }
+
+        SDL_SetTextureBlendMode(dst, SDL_BLENDMODE_BLEND);
+        apply_scale_mode(dst);
+
+        SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
+        SDL_SetRenderTarget(renderer, dst);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+        SDL_RenderClear(renderer);
+
+        SDL_Rect rect{ 0, 0, tex_w, tex_h };
+        if (flip_flags != SDL_FLIP_NONE) {
+            SDL_RenderCopyEx(renderer, src, nullptr, &rect, 0.0, nullptr, flip_flags);
+        } else {
+            SDL_RenderCopy(renderer, src, nullptr, &rect);
+        }
+
+        SDL_SetRenderTarget(renderer, prev_target);
+        if (out_w) *out_w = tex_w;
+        if (out_h) *out_h = tex_h;
+        return dst;
+    };
+
     // Clear existing cache
     clear_texture_cache();
 
@@ -149,18 +203,6 @@ bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool fl
         flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_VERTICAL);
     }
 
-    // Helper to apply scale mode
-    auto apply_scale_mode = [&info](SDL_Texture* tex) {
-        if (!tex) return;
-#if SDL_VERSION_ATLEAST(2, 0, 12)
-        if (info.smooth_scaling) {
-            SDL_SetTextureScaleMode(tex, SDL_ScaleModeBest);
-        } else {
-            SDL_SetTextureScaleMode(tex, SDL_ScaleModeNearest);
-        }
-#endif
-    };
-
     // Copy all frames
     frame_cache_.reserve(frame_count);
     for (std::size_t frame_idx = 0; frame_idx < frame_count; ++frame_idx) {
@@ -175,48 +217,13 @@ bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool fl
             }
 
             SDL_Texture* src_tex = src_cache.textures[variant_idx];
-            if (!src_tex) {
-                continue;
-            }
-
-            // Get source texture dimensions
-            Uint32 fmt = SDL_PIXELFORMAT_RGBA8888;
-            int access = 0;
             int tex_w = src_cache.widths[variant_idx];
             int tex_h = src_cache.heights[variant_idx];
-            
-            if (tex_w <= 0 || tex_h <= 0) {
-                if (SDL_QueryTexture(src_tex, &fmt, &access, &tex_w, &tex_h) != 0 || tex_w <= 0 || tex_h <= 0) {
-                    continue;
-                }
-            } else if (SDL_QueryTexture(src_tex, &fmt, &access, nullptr, nullptr) != 0) {
-                fmt = SDL_PIXELFORMAT_RGBA8888;
-            }
 
-            // Create destination texture
-            SDL_Texture* dst_tex = SDL_CreateTexture(renderer, fmt, SDL_TEXTUREACCESS_TARGET, tex_w, tex_h);
+            SDL_Texture* dst_tex = clone_texture(src_tex, tex_w, tex_h, flip_flags, &tex_w, &tex_h);
             if (!dst_tex) {
                 continue;
             }
-
-            SDL_SetTextureBlendMode(dst_tex, SDL_BLENDMODE_BLEND);
-            apply_scale_mode(dst_tex);
-
-            // Render source to destination with flip if needed
-            SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
-            SDL_SetRenderTarget(renderer, dst_tex);
-            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-            SDL_RenderClear(renderer);
-
-            SDL_Rect rect{0, 0, tex_w, tex_h};
-            if (flip_flags != SDL_FLIP_NONE) {
-                SDL_RenderCopyEx(renderer, src_tex, nullptr, &rect, 0.0, nullptr, flip_flags);
-            } else {
-                SDL_RenderCopy(renderer, src_tex, nullptr, &rect);
-            }
-
-            SDL_SetRenderTarget(renderer, prev_target);
-
             dst_cache.textures[variant_idx] = dst_tex;
             dst_cache.widths[variant_idx] = tex_w;
             dst_cache.heights[variant_idx] = tex_h;
@@ -227,46 +234,22 @@ bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool fl
                 int mask_w = src_cache.mask_widths[variant_idx];
                 int mask_h = src_cache.mask_heights[variant_idx];
 
-                if (mask_w <= 0 || mask_h <= 0) {
-                    Uint32 mask_fmt = SDL_PIXELFORMAT_RGBA8888;
-                    int mask_access = 0;
-                    if (SDL_QueryTexture(src_mask, &mask_fmt, &mask_access, &mask_w, &mask_h) != 0 || mask_w <= 0 || mask_h <= 0) {
-                        mask_w = 0;
-                        mask_h = 0;
-                    }
-                }
-
-                if (mask_w > 0 && mask_h > 0) {
-                    Uint32 mask_fmt = SDL_PIXELFORMAT_RGBA8888;
-                    SDL_QueryTexture(src_mask, &mask_fmt, nullptr, nullptr, nullptr);
-                    
-                    SDL_Texture* dst_mask = SDL_CreateTexture(renderer, mask_fmt, SDL_TEXTUREACCESS_TARGET, mask_w, mask_h);
-                    if (dst_mask) {
-                        SDL_SetTextureBlendMode(dst_mask, SDL_BLENDMODE_BLEND);
-                        apply_scale_mode(dst_mask);
-
-                        SDL_Texture* prev_target_mask = SDL_GetRenderTarget(renderer);
-                        SDL_SetRenderTarget(renderer, dst_mask);
-                        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-                        SDL_RenderClear(renderer);
-
-                        SDL_Rect mask_rect{0, 0, mask_w, mask_h};
-                        if (flip_flags != SDL_FLIP_NONE) {
-                            SDL_RenderCopyEx(renderer, src_mask, nullptr, &mask_rect, 0.0, nullptr, flip_flags);
-                        } else {
-                            SDL_RenderCopy(renderer, src_mask, nullptr, &mask_rect);
-                        }
-
-                        SDL_SetRenderTarget(renderer, prev_target_mask);
-
-                        dst_cache.mask_textures[variant_idx] = dst_mask;
-                        dst_cache.mask_widths[variant_idx] = mask_w;
-                        dst_cache.mask_heights[variant_idx] = mask_h;
-                    }
-                }
+                SDL_Texture* dst_mask = clone_texture(src_mask, mask_w, mask_h, flip_flags, &mask_w, &mask_h);
+                dst_cache.mask_textures[variant_idx] = dst_mask;
+                dst_cache.mask_widths[variant_idx] = mask_w;
+                dst_cache.mask_heights[variant_idx] = mask_h;
             }
 
-            // Note: Foreground/background/depthcue textures are not copied as they're not generated at runtime
+            // Copy foreground/background/depthcue overlays so derived animations keep effects
+            SDL_Texture* src_fg = (variant_idx < src_cache.foreground_textures.size()) ? src_cache.foreground_textures[variant_idx] : nullptr;
+            SDL_Texture* src_bg = (variant_idx < src_cache.background_textures.size()) ? src_cache.background_textures[variant_idx] : nullptr;
+            SDL_Texture* src_dfg = (variant_idx < src_cache.depthcue_foreground_textures.size()) ? src_cache.depthcue_foreground_textures[variant_idx] : nullptr;
+            SDL_Texture* src_dbg = (variant_idx < src_cache.depthcue_background_textures.size()) ? src_cache.depthcue_background_textures[variant_idx] : nullptr;
+
+            dst_cache.foreground_textures[variant_idx] = clone_texture(src_fg, tex_w, tex_h, flip_flags);
+            dst_cache.background_textures[variant_idx] = clone_texture(src_bg, tex_w, tex_h, flip_flags);
+            dst_cache.depthcue_foreground_textures[variant_idx] = clone_texture(src_dfg, tex_w, tex_h, flip_flags);
+            dst_cache.depthcue_background_textures[variant_idx] = clone_texture(src_dbg, tex_w, tex_h, flip_flags);
         }
 
         frame_cache_.push_back(std::move(dst_cache));
@@ -350,6 +333,32 @@ std::vector<AnimationFrame>& Animation::movement_path(std::size_t index) {
     if (movement_paths_.empty()) movement_paths_.emplace_back();
     if (index >= movement_paths_.size()) index = 0;
     return movement_paths_[index];
+}
+
+void Animation::inherit_movement_from(const Animation& source) {
+    movement_paths_ = source.movement_paths_;
+    if (movement_paths_.empty()) {
+        return;
+    }
+    if (reverse_source) {
+        for (auto& path : movement_paths_) {
+            std::reverse(path.begin(), path.end());
+        }
+    }
+    if (flip_movement_horizontal) {
+        for (auto& path : movement_paths_) {
+            for (auto& frame : path) {
+                frame.dx = -frame.dx;
+            }
+        }
+    }
+    if (flip_movement_vertical) {
+        for (auto& path : movement_paths_) {
+            for (auto& frame : path) {
+                frame.dy = -frame.dy;
+            }
+        }
+    }
 }
 
 std::size_t Animation::clamp_path_index(std::size_t index) const {
