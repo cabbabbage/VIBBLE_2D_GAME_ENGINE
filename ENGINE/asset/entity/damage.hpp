@@ -1,6 +1,6 @@
 #ifndef DAMAGE_H
 #define DAMAGE_H
-#include "ENGINE/asset/Asset.hpp"
+#include "asset/Asset.hpp"
 
 struct Damage {
     int damage_amt_per_frame = 1;
