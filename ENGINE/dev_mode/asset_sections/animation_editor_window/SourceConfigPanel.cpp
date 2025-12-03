@@ -27,6 +27,7 @@
 #include "dev_mode/widgets.hpp"
 #include "string_utils.hpp"
 #include "utils/string_utils.hpp"
+#include "asset/animation.hpp"
 
 // For GIF decoding and PNG writing
 #include "utils/stb_image.h"
@@ -1130,21 +1131,8 @@ void SourceConfigPanel::render_animation_preview(SDL_Renderer* renderer) const {
     }
 
     // Get animation parameters
-    int fps = 24;
-    try {
-        if (payload.contains("fps")) {
-            const auto& v = payload["fps"];
-            if (v.is_number_integer()) fps = v.get<int>();
-            else if (v.is_number()) fps = static_cast<int>(v.get<double>());
-        }
-    } catch (...) { fps = 24; }
-    if (fps <= 0) {
-        // Legacy fallback from speed_factor
-        int sf = safe_to_int(payload.value("speed_factor", nlohmann::json(1)), 1);
-        if (sf == 0) sf = 1;
-        fps = std::max(1, static_cast<int>(std::lround(24.0 * std::abs(sf))));
-    }
-
+    constexpr float effective_fps = static_cast<float>(kBaseAnimationFps);
+    const float frame_time_ms = 1000.0f / effective_fps;
     bool reverse = payload.value("reverse_source", false);
     bool flip_x = payload.value("flipped_source", false);
     bool flip_y = false; // Default
@@ -1166,14 +1154,8 @@ void SourceConfigPanel::render_animation_preview(SDL_Renderer* renderer) const {
         animation_start_time_ = SDL_GetTicks();
     }
 
-    // Calculate frame timing (explicit FPS)
-    float effective_fps = static_cast<float>(fps);
-    if (effective_fps < 0.1f) effective_fps = 0.1f; // Minimum frame rate
-    float frame_time_ms = 1000.0f / effective_fps;
-
     // Calculate elapsed time since start
     Uint32 elapsed_ms = SDL_GetTicks() - animation_start_time_;
-    int total_cycles = static_cast<int>(elapsed_ms / (frame_time_ms * num_frames));
 
     // Direction reversal handled by reverse flag alone.
 

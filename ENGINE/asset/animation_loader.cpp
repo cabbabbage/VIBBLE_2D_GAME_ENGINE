@@ -297,20 +297,6 @@ void AnimationLoader::load(Animation& animation,
         animation.inherit_source_movement = (animation.source.kind == "animation") && inherit_source_movement;
 
         animation.locked         = anim_json.value("locked", false);
-
-	// New explicit playback FPS; prefer this when present
-	int parsed_fps = 0;
-	try {
-		if (anim_json.contains("fps")) {
-			if (anim_json["fps"].is_number_integer()) parsed_fps = anim_json["fps"].get<int>();
-			else if (anim_json["fps"].is_number()) parsed_fps = static_cast<int>(anim_json["fps"].get<double>());
-		}
-	} catch (...) { parsed_fps = 0; }
-	if (parsed_fps <= 0) {
-
-			parsed_fps = 24;
-		}
-	animation.playback_fps = parsed_fps;
 	animation.loop      = anim_json.value("loop", true);
 	animation.randomize = anim_json.value("randomize", false);
 	animation.rnd_start = anim_json.value("rnd_start", false);

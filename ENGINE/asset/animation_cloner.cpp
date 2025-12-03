@@ -98,7 +98,6 @@ bool AnimationCloner::Clone(const Animation& source,
     // Copy scalar metadata
     dest.variant_steps_   = source.variant_steps_;
     dest.locked           = source.locked;
-    dest.playback_fps     = source.playback_fps;
     dest.on_end_animation = source.on_end_animation;
     dest.randomize        = source.randomize;
     dest.loop             = source.loop;

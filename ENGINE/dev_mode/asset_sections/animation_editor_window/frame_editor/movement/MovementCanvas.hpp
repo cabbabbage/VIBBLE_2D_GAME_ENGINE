@@ -49,6 +49,11 @@ class MovementCanvas {
     const SDL_Rect& bounds() const { return bounds_; }
     SDL_FPoint world_to_screen(const SDL_FPoint& world) const;
     SDL_FPoint screen_to_world(SDL_Point screen) const;
+    float screen_pixels_per_unit() const;
+    float document_scale_factor() const;
+    SDL_FPoint frame_position_world(int frame_index) const;
+    SDL_FPoint frame_anchor_world(int frame_index) const;
+    SDL_FPoint frame_anchor_screen(int frame_index) const;
 
   private:
     void render_pixel_grid(SDL_Renderer* renderer) const;

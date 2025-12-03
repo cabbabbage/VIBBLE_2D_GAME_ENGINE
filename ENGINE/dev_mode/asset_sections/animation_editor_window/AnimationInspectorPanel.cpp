@@ -24,6 +24,7 @@
 #include "dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/widgets.hpp"
+#include "asset/animation.hpp"
 #include <nlohmann/json.hpp>
 
 namespace animation_editor {
@@ -1016,7 +1017,7 @@ void AnimationInspectorPanel::ensure_preview_controls() {
         preview_timeline_ = std::make_unique<PreviewTimeline>();
     }
     preview_timeline_->set_frame_count(std::max(1, frame_count_));
-    preview_timeline_->set_fps(static_cast<float>(std::max(1, current_fps_)));
+    preview_timeline_->set_fps(static_cast<float>(kBaseAnimationFps));
 
     const int desired_max = std::max(0, frame_count_ - 1);
     if (!preview_scrub_slider_ || preview_slider_max_frame_ != desired_max) {
@@ -1039,7 +1040,7 @@ void AnimationInspectorPanel::update_preview_playback() {
     }
 
     preview_timeline_->set_frame_count(std::max(1, frame_count_));
-    preview_timeline_->set_fps(static_cast<float>(std::max(1, current_fps_)));
+    preview_timeline_->set_fps(static_cast<float>(kBaseAnimationFps));
 
     if (scrub_mode_) {
         preview_timeline_->pause();
@@ -1367,7 +1368,6 @@ void AnimationInspectorPanel::refresh_preview_metadata() const {
     self->preview_flip_y_ = false;
     self->preview_flip_movement_x_ = false;
     self->preview_flip_movement_y_ = false;
-    self->current_fps_ = 24;
     self->frame_count_ = 1;
 
     if (!payload_dump.has_value()) {
@@ -1416,15 +1416,6 @@ void AnimationInspectorPanel::refresh_preview_metadata() const {
         self->preview_flip_movement_x_ = false;
         self->preview_flip_movement_y_ = false;
     }
-
-    // Extract playback FPS (fallback to legacy speed_factor)
-    int fps = parse_int_field(payload, "fps", 24);
-    if (fps <= 0) {
-        int speed = parse_int_field(payload, "speed_factor", 1);
-        if (speed == 0) speed = 1;
-        fps = std::max(1, static_cast<int>(std::lround(24.0 * std::abs(speed))));
-    }
-    self->current_fps_ = fps;
 
     // Extract frame count
     if (payload.contains("number_of_frames")) {

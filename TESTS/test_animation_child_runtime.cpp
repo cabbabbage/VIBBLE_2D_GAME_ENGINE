@@ -8,7 +8,6 @@
 TEST_CASE("Hidden child attachments restart from frame zero when revealed") {
     Animation child_anim;
     child_anim.loop = false;
-    child_anim.playback_fps = 12;
     auto& child_path = child_anim.movement_path(0);
     child_path.resize(2);
     child_path[0].frame_index = 0;
@@ -56,8 +55,10 @@ TEST_CASE("Hidden child attachments restart from frame zero when revealed") {
     frame_visible_again.frame_index = 2;
     frame_visible_again.children.push_back(visible);
 
+    const float frame_dt = 1.0f / static_cast<float>(kBaseAnimationFps);
+
     auto step = [&](AnimationFrame* frame) {
-        animation_update::child_attachments::advance_frames(slots, parent_state, 1.0f / 12.0f);
+        animation_update::child_attachments::advance_frames(slots, parent_state, frame_dt);
         animation_update::child_attachments::apply_frame_data(slots, parent_state, frame);
     };
 

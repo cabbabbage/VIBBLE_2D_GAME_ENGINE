@@ -12,6 +12,8 @@
 #include "render/render.hpp"
 #include "animation_frame_variant.hpp"
 
+inline constexpr int kBaseAnimationFps = 24;
+
 class AssetInfo;
 struct Mix_Chunk;
 
@@ -89,7 +91,6 @@ public:
     bool reverse_source = false;
     bool inherit_source_movement = false;
     bool locked = false;
-    int   playback_fps = 24;   // desired playback FPS (>=1). 24 is the engine base.
     int number_of_frames = 0;
     int total_dx = 0;
     int total_dy = 0;

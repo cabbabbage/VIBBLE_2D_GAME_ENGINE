@@ -26,7 +26,6 @@ class AnimationRuntime; // non-public executor
 
 struct AnimationPlayer {
     Animation* m_animation = nullptr;
-    int m_fps = 25;
     int m_start_frame = 0;
     int m_end_frame = 0;
     int m_current_frame = 0;
@@ -98,6 +97,8 @@ public:
 
     // Read-only access for diagnostics/render overlays
     const Plan* current_plan() const { return &plan_; }
+
+    void cancel_all_movement();
 
 private:
     // Executor interface (used by AnimationRuntime)

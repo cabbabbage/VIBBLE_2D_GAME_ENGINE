@@ -8,7 +8,7 @@
 BombController::BombController(Assets* assets, Asset* self)
     : assets_(assets), self_(self) {
     if (self_ && self_->anim_) {
-        self_->anim_->set_debug_enabled(true);
+        self_->anim_->set_debug_enabled(false);
         self_->needs_target = true; // kick off first pursuit
         vibble::log::info("[BombController] initialized (needs_target=true)");
         std::cout << "[BombController] initialized (needs_target=true)" << std::endl;

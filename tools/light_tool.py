@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 """
-Light cache generation tool.
+Light cache generation tool driven by tools/rebuild_requests.json.
 
-Usage:
-    python light_tool.py <manifest_path> <cache_root> [asset_list]
-
-Behavior:
-    - Mirrors the caching/regeneration flow used by asset_tool.py:
-        * Stores a normalized lighting snippet per asset inside
-          <cache_root>/.light_cache/<AssetName>.json using cache_helper.
-        * If asset_list is omitted, only regenerates assets whose snippets
-          changed (or have no cache yet).
-        * If asset_list is provided, regenerates exactly those assets even if
-          their cache is up to date.
-    - Emits PNG light textures into:
-          <cache_root>/<AssetName>/lights/light_<index>.png
-      plus a metadata.json file containing version/signatures.
+Behavior summary:
+        - Reads tools/rebuild_requests.json via rebuild_queue.RebuildQueue to
+            determine which assets require light regeneration. When the JSON contains
+            an empty "lights" list it signals a full rebuild; a populated list limits
+            regeneration to those assets; and when the field is null the tool falls
+            back to its historical "only regen when snippets changed" behavior.
+        - Stores normalized lighting snippets per asset inside
+            <cache_root>/.light_cache and skips regeneration when cached signatures
+            match unless the queue explicitly requested the asset.
+        - Emits PNG light textures plus metadata into
+            <cache_root>/<AssetName>/lights/.
+        - Successfully processed assets are removed from the queue so repeated
+            invocations only touch remaining requests.
 """
 
 import json
@@ -31,6 +30,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from PIL import Image
 
 from cache_helper import compare_and_update_json
+from rebuild_queue import QueueMode, RebuildQueue
 
 
 def _configure_logger() -> logging.Logger:
@@ -252,10 +252,17 @@ class LightAsset:
 
 
 class LightTool:
-    def __init__(self, manifest_path: str, cache_root: str):
+    def __init__(self,
+                 manifest_path: str,
+                 cache_root: str,
+                 queue: Optional[RebuildQueue] = None) -> None:
         self.manifest_path = Path(manifest_path).absolute()
         self.cache_root = Path(cache_root).absolute()
         self.manifest = self._load_manifest()
+        self.queue = queue
+        self.light_mode = queue.light_mode() if queue else QueueMode.FULL
+        self.requested_assets = set(queue.light_requests()) if queue else set()
+        self.any_failures = False
 
     def _load_manifest(self) -> Dict[str, Any]:
         try:
@@ -265,7 +272,7 @@ class LightTool:
             LOGGER.error("Failed to read manifest '%s': %s", self.manifest_path, exc)
             sys.exit(1)
 
-    def _collect_assets(self, asset_list_str: Optional[str]) -> List[LightAsset]:
+    def _collect_assets(self) -> List[LightAsset]:
         assets_block = self.manifest.get("assets", {})
         if not isinstance(assets_block, dict):
             LOGGER.error("Manifest 'assets' block missing or invalid.")
@@ -273,15 +280,14 @@ class LightTool:
 
         selected: List[str]
         explicit = False
-        if asset_list_str is None:
-            selected = list(assets_block.keys())
-        else:
+        if self.light_mode == QueueMode.PARTIAL and self.requested_assets:
+            selected = sorted(self.requested_assets)
             explicit = True
-            selected = [
-                name.strip()
-                for name in asset_list_str.split(",")
-                if name.strip()
-            ]
+        elif self.light_mode == QueueMode.FULL:
+            selected = list(assets_block.keys())
+            explicit = True
+        else:
+            selected = list(assets_block.keys())
 
         light_assets: List[LightAsset] = []
         for name in selected:
@@ -289,12 +295,20 @@ class LightTool:
             if not isinstance(entry, dict):
                 if explicit:
                     LOGGER.warning("Requested asset '%s' not found; skipping.", name)
+                    if self.queue and self.light_mode == QueueMode.PARTIAL:
+                        self.queue.mark_light_complete(name)
                 continue
             light_asset = LightAsset(name, entry, self.cache_root)
+            if self.light_mode == QueueMode.PARTIAL:
+                light_assets.append(light_asset)
+                continue
+            if self.light_mode == QueueMode.FULL:
+                light_assets.append(light_asset)
+                continue
             if light_asset.light_defs or explicit or light_asset.needs_regen:
                 light_assets.append(light_asset)
 
-        if asset_list_str is None:
+        if self.light_mode == QueueMode.NONE:
             light_assets = [a for a in light_assets if a.needs_regen]
 
         return light_assets
@@ -306,7 +320,7 @@ class LightTool:
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(meta, f, indent=2)
 
-    def generate_for_asset(self, asset: LightAsset) -> None:
+    def generate_for_asset(self, asset: LightAsset) -> bool:
         cache_dir = self.cache_root / asset.name / "lights"
         if cache_dir.exists():
             shutil.rmtree(cache_dir)
@@ -314,7 +328,7 @@ class LightTool:
 
         if not asset.light_defs:
             LOGGER.info("[LightTool] %s has no lights; cleared cache directory.", asset.name)
-            return
+            return True
 
         LOGGER.info(
             "[LightTool] Regenerating %s (%d light source%s)",
@@ -331,31 +345,39 @@ class LightTool:
             signatures.append(light.signature())
 
         self._write_metadata(cache_dir, signatures)
+        return True
 
-    def run(self, asset_list: Optional[str]) -> None:
-        assets = self._collect_assets(asset_list)
+    def run(self) -> None:
+        assets = self._collect_assets()
         if not assets:
             print("No light assets need regeneration.")
+            if self.queue and self.light_mode == QueueMode.FULL:
+                self.queue.mark_full_light_rebuild_complete()
             return
 
         for asset in assets:
-            self.generate_for_asset(asset)
+            success = self.generate_for_asset(asset)
+            if not success:
+                self.any_failures = True
+            if success and self.queue and self.light_mode == QueueMode.PARTIAL:
+                self.queue.mark_light_complete(asset.name)
+
+        if self.queue and self.light_mode == QueueMode.FULL and not self.any_failures:
+            self.queue.mark_full_light_rebuild_complete()
 
 
 def main() -> None:
-    if len(sys.argv) < 3:
-        print(
-            "Usage: python light_tool.py <manifest_path> <cache_root> [asset_list]",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    queue = RebuildQueue()
+    mode = queue.light_mode()
+    if mode == QueueMode.NONE:
+        LOGGER.info("No pending light rebuild requests; exiting.")
+        return
 
-    manifest_path = sys.argv[1]
-    cache_root = sys.argv[2]
-    asset_list = sys.argv[3] if len(sys.argv) > 3 else None
+    manifest_path = str(queue.manifest_path)
+    cache_root = str(queue.cache_root)
 
-    tool = LightTool(manifest_path, cache_root)
-    tool.run(asset_list)
+    tool = LightTool(manifest_path, cache_root, queue)
+    tool.run()
 
 
 if __name__ == "__main__":

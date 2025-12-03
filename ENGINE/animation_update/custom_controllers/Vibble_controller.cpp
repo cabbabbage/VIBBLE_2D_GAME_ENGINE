@@ -52,14 +52,27 @@ void VibbleController::movement(const Input& input) {
     const float velocity_y = static_cast<float>(raw_y) * speedMultiplier * stride_count;
 
     // Accumulate subpixel movement so rounding does not drop motion on uneven frame times
+    auto consume_axis = [](float& accumulator) -> int {
+        int whole = 0;
+        if (accumulator >= 1.0f) {
+            whole = static_cast<int>(std::floor(accumulator));
+            accumulator -= static_cast<float>(whole);
+        } else if (accumulator <= -1.0f) {
+            whole = static_cast<int>(std::ceil(accumulator));
+            accumulator -= static_cast<float>(whole);
+        }
+        return whole;
+    };
+
     subpixel_x_ += velocity_x * dt;
     subpixel_y_ += velocity_y * dt;
 
-    dx_ = static_cast<int>(std::round(subpixel_x_));
-    dy_ = static_cast<int>(std::round(subpixel_y_));
+    dx_ = consume_axis(subpixel_x_);
+    dy_ = consume_axis(subpixel_y_);
 
-    subpixel_x_ -= static_cast<float>(dx_);
-    subpixel_y_ -= static_cast<float>(dy_);
+    constexpr float kResidualClamp = 8.0f;
+    subpixel_x_ = std::clamp(subpixel_x_, -kResidualClamp, kResidualClamp);
+    subpixel_y_ = std::clamp(subpixel_y_, -kResidualClamp, kResidualClamp);
 
     std::string animation_id = animation_for_direction(raw_x, raw_y);
     if (isDashing && player_->info) {

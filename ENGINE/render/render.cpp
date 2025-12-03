@@ -260,6 +260,11 @@ void SceneRenderer::render() {
             continue;
         }
 
+        if (const auto& tiling = asset->tiling_info(); tiling && tiling->is_valid()) {
+            // Tile assets are drawn by GridTileRenderer already, so skip the base sprite render.
+            continue;
+        }
+
         // Skip stored grid projections; render assets directly using the current camera without parallax/warp.
         composite_renderer_.update(asset, nullptr, flicker_time_seconds);
 

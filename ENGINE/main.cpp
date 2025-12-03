@@ -16,6 +16,7 @@
 #include "audio/audio_engine.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "utils/loading_status_notifier.hpp"
+#include "utils/rebuild_queue.hpp"
 #include "world/world_grid.hpp"
 #include <SDL.h>
 #include <SDL_image.h>
@@ -872,57 +873,33 @@ int main(int argc, char* argv[]) {
         const bool rebuild_cache =
                 (argc > 1 && argv[1] && std::string(argv[1]) == "-r");
 
-        // Very first step: regenerate assets via Python asset_tool
-        try {
-                std::string manifest_path_str = manifest::manifest_path();
-                vibble::log::info("[Main] Regenerating assets from manifest via asset_tool.py...");
-        #if defined(_WIN32)
-                std::string cmd = "python tools\\asset_tool.py \"" +
-                                  manifest_path_str + "\" cache";
-        #else
-                std::string cmd = "python tools/asset_tool.py \"" +
-                                  manifest_path_str + "\" cache";
-        #endif
-                int ret = std::system(cmd.c_str());
-                if (ret != 0) {
-                        vibble::log::warn(
-                                std::string("[Main] Asset regeneration script returned non-zero: ") +
-                                std::to_string(ret));
-                } else {
-                        vibble::log::info("[Main] Asset regeneration complete.");
-                }
-        } catch (const std::exception& ex) {
-                vibble::log::error(
-                        std::string("[Main] Exception while regenerating assets: ") +
-                        ex.what());
-                // Keep going so the engine can still start even if this fails
+        vibble::RebuildQueueCoordinator rebuild_queue;
+        if (rebuild_cache) {
+                vibble::log::info("[Main] -r detected; queueing full asset/light rebuild.");
+                rebuild_queue.request_full_asset_rebuild();
+                rebuild_queue.request_full_light_rebuild();
         }
 
-        // Regenerate light caches using the same manifest-driven flow
-        try {
-                std::string manifest_path_str = manifest::manifest_path();
-                vibble::log::info("[Main] Regenerating lights via light_tool.py...");
-#if defined(_WIN32)
-                std::string light_cmd = "python tools\\light_tool.py \"" +
-                                        manifest_path_str + "\" cache";
-#else
-                std::string light_cmd = "python tools/light_tool.py \"" +
-                                        manifest_path_str + "\" cache";
-#endif
-                int light_ret = std::system(light_cmd.c_str());
-                if (light_ret != 0) {
-                        vibble::log::warn(
-                                std::string("[Main] Light regeneration script returned non-zero: ") +
-                                std::to_string(light_ret));
+        if (rebuild_queue.has_pending_asset_work()) {
+                vibble::log::info("[Main] Processing queued asset rebuilds via asset_tool.py...");
+                if (rebuild_queue.run_asset_tool()) {
+                        vibble::log::info("[Main] Asset rebuilds completed.");
                 } else {
-                        vibble::log::info("[Main] Light regeneration complete.");
+                        vibble::log::warn("[Main] asset_tool.py reported an error.");
                 }
-        } catch (const std::exception& ex) {
-                vibble::log::warn(
-                        std::string("[Main] Exception while running light_tool.py: ") +
-                        ex.what());
-        } catch (...) {
-                vibble::log::warn("[Main] Unknown exception while running light_tool.py");
+        } else {
+                vibble::log::info("[Main] No queued asset rebuilds detected.");
+        }
+
+        if (rebuild_queue.has_pending_light_work()) {
+                vibble::log::info("[Main] Processing queued light rebuilds via light_tool.py...");
+                if (rebuild_queue.run_light_tool()) {
+                        vibble::log::info("[Main] Light rebuilds completed.");
+                } else {
+                        vibble::log::warn("[Main] light_tool.py reported an error.");
+                }
+        } else {
+                vibble::log::info("[Main] No queued light rebuilds detected.");
         }
 
         if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {

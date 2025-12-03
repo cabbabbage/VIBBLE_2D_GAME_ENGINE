@@ -6,6 +6,8 @@
 #include "render/warped_screen_grid.hpp"
 #include "render/render.hpp"
 #include "animation_update/animation_runtime.hpp"
+#include "animation_update/child_attachment_controller.hpp"
+#include "animation_update/animation_update.hpp"
 #include "utils/area_helpers.hpp"
 #include "asset/asset_types.hpp"
 #include "utils/grid.hpp"
@@ -17,6 +19,8 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <unordered_map>
+#include <unordered_set>
 #include <SDL.h>
 static std::mt19937& asset_rng()
 {
@@ -28,6 +32,32 @@ static std::mutex& asset_rng_mutex()
 {
         static std::mutex mutex;
         return mutex;
+}
+
+// Collect the unique set of animation child asset ids across the asset and its animations.
+static std::vector<std::string> collect_animation_child_names(const AssetInfo& info) {
+        std::vector<std::string> names;
+        std::unordered_set<std::string> seen;
+        auto add = [&](const std::string& name) {
+                if (name.empty()) {
+                        return;
+                }
+                if (seen.insert(name).second) {
+                        names.push_back(name);
+                }
+        };
+
+        for (const auto& name : info.animation_children) {
+                add(name);
+        }
+
+        for (const auto& entry : info.animations) {
+                for (const auto& child_name : entry.second.child_assets()) {
+                        add(child_name);
+                }
+        }
+
+        return names;
 }
 
 // Static storage for per-spawn-group flip overrides
@@ -206,6 +236,8 @@ Asset::Asset(const Asset& o)
 , composite_texture_(nullptr)
 , composite_dirty_(true)
 , composite_rect_({0, 0, 0, 0})
+, animation_children_initialized_(o.animation_children_initialized_)
+, initializing_animation_children_(false)
 {
         // clear_downscale_cache();
         clear_render_caches();
@@ -281,6 +313,8 @@ Asset& Asset::operator=(const Asset& o) {
         finalized_                = o.finalized_;
         base_bounds_local_        = o.base_bounds_local_;
         grid_id_                  = o.grid_id_;
+        animation_children_initialized_ = o.animation_children_initialized_;
+        initializing_animation_children_ = false;
         return *this;
 }
 
@@ -328,6 +362,9 @@ void Asset::finalize_setup() {
         }
 #endif
         ensure_animation_runtime(false);
+        if (!animation_children_initialized_) {
+                initialize_animation_children_recursive();
+        }
         if (assets_ && !controller_) {
                 ControllerFactory cf(assets_);
                 controller_ = cf.create_for_asset(this);
@@ -481,23 +518,17 @@ void Asset::update() {
         }
     }
 
-    const float dt = assets_ ? assets_->frame_delta_seconds() : (1.0f / 60.0f);
-    translation_smoothing_x_.target = static_cast<float>(pos.x);
-    translation_smoothing_y_.target = static_cast<float>(pos.y);
+    translation_smoothing_x_.reset(static_cast<float>(pos.x));
+    translation_smoothing_y_.reset(static_cast<float>(pos.y));
 
     float scale_target = 1.0f;
     if (info && std::isfinite(info->scale_factor) && info->scale_factor > 0.0f) {
         scale_target = info->scale_factor;
     }
-    scale_smoothing_.target = scale_target;
+    scale_smoothing_.reset(scale_target);
 
     const float alpha_target = hidden ? 0.0f : 1.0f;
-    alpha_smoothing_.target  = alpha_target;
-
-    translation_smoothing_x_.advance(dt);
-    translation_smoothing_y_.advance(dt);
-    scale_smoothing_.advance(dt);
-    alpha_smoothing_.advance(dt);
+    alpha_smoothing_.reset(alpha_target);
 }
 
 std::string Asset::get_current_animation() const { return current_animation; }
@@ -586,7 +617,130 @@ void Asset::rebuild_animation_runtime() {
 }
 
 void Asset::initialize_animation_children_recursive() {
-        // Disable animation child initialization during load to avoid re-entrancy loops.
+        if (animation_children_initialized_ || initializing_animation_children_) {
+                return;
+        }
+        initializing_animation_children_ = true;
+
+        if (!info || !assets_) {
+                initializing_animation_children_ = false;
+                animation_children_initialized_ = false;
+                return;
+        }
+
+        const auto child_names = collect_animation_child_names(*info);
+        if (child_names.empty()) {
+                animation_children_initialized_ = true;
+                initializing_animation_children_ = false;
+                return;
+        }
+
+        // Preserve existing slots by name to avoid respawning children.
+        std::unordered_map<std::string, std::size_t> existing;
+        existing.reserve(animation_children_.size());
+        for (std::size_t i = 0; i < animation_children_.size(); ++i) {
+                const auto& name = animation_children_[i].asset_name;
+                if (!name.empty() && existing.find(name) == existing.end()) {
+                        existing[name] = i;
+                }
+        }
+
+        // Ensure there is a slot per requested child id.
+        for (const auto& name : child_names) {
+                if (existing.find(name) != existing.end()) {
+                        continue;
+                }
+                animation_children_.emplace_back();
+                auto& slot = animation_children_.back();
+                slot.child_index = -1;
+                slot.asset_name = name;
+                slot.visible = false;
+                slot.was_visible = false;
+                slot.last_parent_frame_index = -1;
+                existing[name] = animation_children_.size() - 1;
+        }
+
+        // Reorder slots to match canonical child name order for deterministic indexing.
+        for (std::size_t i = 0; i < child_names.size(); ++i) {
+                const std::string& desired = child_names[i];
+                auto it = existing.find(desired);
+                if (it == existing.end()) {
+                        continue;
+                }
+                std::size_t current = it->second;
+                if (current != i) {
+                        std::swap(animation_children_[i], animation_children_[current]);
+                        existing[animation_children_[current].asset_name] = current;
+                        existing[desired] = i;
+                }
+        }
+
+        AssetLibrary* library = assets_ ? &assets_->library() : nullptr;
+        auto bind_child_animation = [&](Asset::AnimationChildAttachment& slot) {
+                if (slot.animation || !slot.info) return;
+                auto child_anim_it =
+                        slot.info->animations.find(animation_update::detail::kDefaultAnimation);
+                if (child_anim_it == slot.info->animations.end() && !slot.info->animations.empty()) {
+                        child_anim_it = slot.info->animations.begin();
+                }
+                if (child_anim_it != slot.info->animations.end()) {
+                        slot.animation = &child_anim_it->second;
+                        slot.current_frame = nullptr;
+                        slot.frame_progress = 0.0f;
+                        slot.last_parent_frame_index = -1;
+                }
+        };
+
+        // Initialize slots, spawn children, and keep them hidden until animation data drives them.
+        for (std::size_t i = 0; i < child_names.size(); ++i) {
+                auto& slot = animation_children_[i];
+                slot.child_index = static_cast<int>(i);
+                slot.visible = false;
+                slot.was_visible = false;
+                slot.render_in_front = true;
+                slot.last_parent_frame_index = -1;
+                if (!slot.info && library && !slot.asset_name.empty()) {
+                        slot.info = library->get(slot.asset_name);
+                }
+                bind_child_animation(slot);
+                if (slot.animation && !slot.current_frame) {
+                        animation_update::child_attachments::restart(slot);
+                }
+                if (!slot.spawned_asset && slot.info) {
+                        SDL_Point spawn_pos{
+                                static_cast<int>(std::lround(smoothed_translation_x())),
+                                static_cast<int>(std::lround(smoothed_translation_y()))
+                        };
+                        Asset* child = assets_->spawn_asset(slot.asset_name, spawn_pos);
+                        if (child) {
+                                child->parent = this;
+                                child->depth = depth;
+                                child->grid_resolution = grid_resolution;
+                                child->set_z_offset(z_offset);
+                                child->set_z_index();
+                                child->set_hidden(true);
+                                if (std::find(asset_children.begin(), asset_children.end(), child) ==
+                                    asset_children.end()) {
+                                        add_child(child);
+                                }
+                                slot.spawned_asset = child;
+                                child->initialize_animation_children_recursive();
+                        }
+                }
+        }
+
+        // Park any extra slots as inactive.
+        for (std::size_t i = child_names.size(); i < animation_children_.size(); ++i) {
+                auto& slot = animation_children_[i];
+                slot.child_index = -1;
+                slot.visible = false;
+                slot.was_visible = false;
+                slot.last_parent_frame_index = -1;
+                if (slot.spawned_asset) {
+                        slot.spawned_asset->set_hidden(true);
+                }
+        }
+
         animation_children_initialized_ = true;
         initializing_animation_children_ = false;
 }

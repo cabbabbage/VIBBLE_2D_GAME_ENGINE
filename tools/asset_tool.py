@@ -1,44 +1,23 @@
 #!/usr/bin/env python3
-"""
-VIBBLE 2D Game Engine Asset Generation Tool.
+"""Asset cache generation tool driven by tools/rebuild_requests.json.
 
-New usage:
+Behavior overview:
 
-    python asset_tool.py <manifest_path> <cache_root> [asset_list] [animation_list]
-
-    <manifest_path>   path to manifest.json
-    <cache_root>      directory where cache will be written and where cache_helper
-                      will store its json snippets
-    [asset_list]      optional comma separated list of asset names to regenerate
-    [animation_list]  optional comma separated list of animation ids to regenerate
-                      for the selected assets
-
-Behavior:
-
-    - Always parses foreground and background effects via EffectsParser using a
-      cache file inside <cache_root>.
-
-    - If asset_list is provided:
-        * Regenerate exactly those assets, even if effects changed.
-        * When animation_list is provided, only regenerate the listed
-          animations for those assets.
-
-    - If asset_list is omitted:
-        * If effects changed: regenerate all assets in the manifest.
-        * If effects did not change: regenerate only assets whose snippets
-          changed according to basic_asset_info.Asset and cache_helper.
-
-    - For each asset to regenerate:
-        * Load frames from its source directory.
-        * For each animation and each size variant:
-            - Generate normal, foreground, and background variants.
-            - If the asset has shading enabled, also generate shadow masks.
-            - Save to:
-                  <cache_root>/<AssetName>/animations/<anim_id>/scale_<pct>/
-                      normal/<frame_idx>.png
-                      foreground/<frame_idx>.png
-                      background/<frame_idx>.png
-                      mask/<frame_idx>.png   (only when has_shading is true)
+        - Reads tools/rebuild_requests.json (via rebuild_queue.RebuildQueue) to
+            determine which assets/animations require work. When the JSON contains an
+            empty "assets" list it means "process every asset"; when it contains a
+            list of asset objects, each entry may also include an "animations" list to
+            target specific animations.
+        - Foreground/background effects are still parsed via EffectsParser using a
+            cache file under <cache_root>.
+        - When no explicit asset list is queued, fall back to the historical
+            behavior: regenerate everything if the global effects changed, otherwise
+            only regenerate assets whose basic_asset_info snippets changed.
+        - For each asset/animation we still honor the cached animation signature to
+            skip unchanged content even if the queue requested it explicitly.
+        - Finished animations are removed from the JSON queue; when all animations
+            for an asset (or a full rebuild) complete successfully, the corresponding
+            asset entry is cleared as well.
 """
 
 import json
@@ -59,6 +38,7 @@ from basic_asset_info import Asset
 from apply_color_effects import ApplyEffects
 from effects import Effects, EffectsParser
 from cache_helper import compare_and_update_json, stable_hash
+from rebuild_queue import QueueMode, RebuildQueue
 from shadow_mask import ShadowMaskGenerator, ShadowMaskSettings
 
 
@@ -81,6 +61,8 @@ LOGGER = _configure_logger()
 
 # Global per worker to avoid constructing ApplyEffects for every frame
 _APPLY_EFFECTS: Optional[ApplyEffects] = None
+
+_ALL_ANIMATIONS = object()
 
 
 def scan_animation_frames(src_folder: Path) -> Tuple[int, int, int]:
@@ -176,17 +158,35 @@ def process_frame_task(task):
 
 
 class AssetTool:
-    """
-    Main class for asset generation tool.
-    """
+    """Main class for asset generation tool."""
 
-    def __init__(self, manifest_path: str, cache_root: str, animation_filter: Optional[Set[str]] = None):
+    def __init__(self,
+                 manifest_path: str,
+                 cache_root: str,
+                 queue: Optional[RebuildQueue] = None) -> None:
         self.manifest_path = os.path.abspath(manifest_path)
         self.cache_root = Path(os.path.abspath(cache_root))
         self.manifest = self.load_manifest()
-        self.animation_filter: Optional[Set[str]] = (
-            set(animation_filter) if animation_filter else None
-        )
+        self.queue = queue
+        self.asset_mode = queue.asset_mode() if queue else QueueMode.FULL
+
+        self.asset_animation_filters: Optional[Dict[str, object]] = None
+        if queue and self.asset_mode == QueueMode.PARTIAL:
+            requests = queue.asset_requests()
+            if requests:
+                filters: Dict[str, object] = {}
+                for name, animations in requests.items():
+                    if animations is None:
+                        filters[name] = _ALL_ANIMATIONS
+                    else:
+                        filters[name] = set(animations)
+                self.asset_animation_filters = filters
+            else:
+                self.asset_animation_filters = {}
+        else:
+            self.asset_animation_filters = None
+
+        self.any_asset_errors = False
 
         # Parse effects with cache located in cache_root
         effects_cache = self.cache_root / "effects_cache.json"
@@ -308,21 +308,8 @@ class AssetTool:
         signature_payload["digest"] = stable_hash(signature_payload)
         return signature_payload
 
-    def collect_assets_to_regen(self, asset_list_str: Optional[str]) -> List[Asset]:
-        """
-        Decide which assets to regenerate based on effects changes and optional
-        user provided list.
-
-        If effects changed, regenerate all assets regardless of asset_list_str.
-        Otherwise, if asset_list_str is provided, regenerate only those.
-        Otherwise, regenerate only assets whose snippet changed.
-
-        asset_list_str is either:
-            None                -> auto mode
-            "AssetA,AssetB"     -> explicit list
-
-        Returns a list of Asset objects.
-        """
+    def collect_assets_to_regen(self) -> List[Asset]:
+        """Decide which assets need regeneration for this invocation."""
         assets_block = self.manifest.get("assets", {})
         if not isinstance(assets_block, dict):
             LOGGER.error("Manifest 'assets' block is missing or invalid.")
@@ -331,24 +318,16 @@ class AssetTool:
         all_asset_names = list(assets_block.keys())
 
         result: List[Asset] = []
-
-        # Honor explicit asset list first, regardless of effects changes
-        if asset_list_str is not None:
-            # User explicitly requested a set of assets
-            requested_names = [
-                name.strip()
-                for name in asset_list_str.split(",")
-                if name.strip()
-            ]
-            if not requested_names:
-                LOGGER.warning("Asset list was provided but empty after parsing.")
-                return []
-
+        if self.asset_mode == QueueMode.PARTIAL and self.asset_animation_filters is not None:
+            requested_names = list(self.asset_animation_filters.keys())
             for name in requested_names:
                 if name not in assets_block:
                     LOGGER.warning(
-                        "Requested asset '%s' is not in manifest. Skipping.", name
+                        "Requested asset '%s' is not in manifest; dropping request.",
+                        name,
                     )
+                    if self.queue:
+                        self.queue.drop_unknown_asset(name)
                     continue
                 asset = Asset(
                     name=name,
@@ -356,10 +335,19 @@ class AssetTool:
                     cache_dir=str(self.cache_root / ".asset_cache"),
                 )
                 result.append(asset)
-
             return result
 
-        # No explicit list; if effects changed, regenerate everything
+        if self.asset_mode == QueueMode.FULL:
+            LOGGER.info("Queue requested full asset rebuild.")
+            for name in all_asset_names:
+                asset = Asset(
+                    name=name,
+                    manifest_path=self.manifest_path,
+                    cache_dir=str(self.cache_root / ".asset_cache"),
+                )
+                result.append(asset)
+            return result
+
         if self.effects_changed:
             LOGGER.info("Effects changed. Regenerating all assets.")
             for name in all_asset_names:
@@ -371,7 +359,6 @@ class AssetTool:
                 result.append(asset)
             return result
 
-        # Auto mode: regenerate only assets whose snippet changed
         LOGGER.info("Effects unchanged. Regenerating only assets that need regen.")
         for name in all_asset_names:
             asset = Asset(
@@ -385,12 +372,7 @@ class AssetTool:
         return result
 
     def generate_animation_cache_for_asset(self, asset: Asset) -> None:
-        """
-        Generate cache for a single asset:
-          - all animations under its source dir
-          - all size variants from asset.size_variants
-          - normal, foreground, background for each frame
-        """
+        """Generate cache for a single asset/animation set."""
         start_time = time.time()
         asset_src_dir = self._resolve_asset_src_dir(asset)
 
@@ -402,31 +384,46 @@ class AssetTool:
             )
             return
 
-        # Root in cache for this asset
         asset_cache_root = self.cache_root / asset.name / "animations"
-
-        # Effects passed directly as objects so they are pickled once per worker
         fg_cfg = self.fg_effects
         bg_cfg = self.bg_effects
 
-        # Detect animations: either subdirectories or frames in root
         subdirs = [d for d in sorted(asset_src_dir.iterdir()) if d.is_dir()]
         if subdirs:
             animations = [(d, d.name) for d in subdirs]
         else:
             animations = [(asset_src_dir, "default")]
 
-        if self.animation_filter:
+        requested_filter: Optional[Set[str]] = None
+        full_asset_request = False
+        if self.asset_mode == QueueMode.PARTIAL and self.asset_animation_filters is not None:
+            filter_value = self.asset_animation_filters.get(asset.name)
+            if filter_value is None:
+                LOGGER.debug("Asset '%s' not present in filter map; skipping.", asset.name)
+                return
+            if filter_value is _ALL_ANIMATIONS:
+                requested_filter = None
+                full_asset_request = True
+            else:
+                requested_filter = set(filter_value)
+
+        if requested_filter is not None:
             animations = [
                 (path, anim_id)
                 for path, anim_id in animations
-                if anim_id in self.animation_filter
+                if anim_id in requested_filter
             ]
             if not animations:
-                print(
-                    f"[AssetTool] Asset '{asset.name}' has no animations matching filter "
-                    f"{sorted(self.animation_filter)}. Skipping."
+                LOGGER.warning(
+                    "Asset '%s' has no animations matching queue filter %s.",
+                    asset.name,
+                    sorted(requested_filter),
                 )
+                if self.queue:
+                    for anim_id in requested_filter:
+                        self.queue.mark_animation_complete(asset.name, anim_id)
+                    if full_asset_request:
+                        self.queue.mark_asset_complete(asset.name)
                 return
 
         print(f"[AssetTool] Regenerating asset '{asset.name}' from {asset_src_dir}")
@@ -439,6 +436,21 @@ class AssetTool:
         steps = self.get_normalized_steps_for_asset(asset.name)
         scale_pcts = [round(s * 100) for s in steps]
         scale_pcts = sorted(set(scale_pcts), reverse=True)
+
+        processed_any = False
+        asset_had_errors = False
+        existing_anim_ids = {anim_id for _, anim_id in animations}
+        if requested_filter is not None:
+            missing = requested_filter - existing_anim_ids
+            if missing:
+                LOGGER.warning(
+                    "Asset '%s' missing animations requested in queue: %s",
+                    asset.name,
+                    sorted(missing),
+                )
+                if self.queue:
+                    for anim_id in missing:
+                        self.queue.mark_animation_complete(asset.name, anim_id)
 
         for anim_dir, anim_id in animations:
             frame_count, orig_w, orig_h = scan_animation_frames(anim_dir)
@@ -479,6 +491,9 @@ class AssetTool:
                 print(
                     f"  Animation '{anim_id}': no changes detected, skipping regeneration."
                 )
+                processed_any = True
+                if self.queue and requested_filter is not None:
+                    self.queue.mark_animation_complete(asset.name, anim_id)
                 continue
 
             if anim_cache_root.exists():
@@ -501,7 +516,6 @@ class AssetTool:
                 bg_dir = scale_dir / "background"
                 mask_dir = scale_dir / "mask"
 
-                # Create directories once, not per frame
                 os.makedirs(normal_dir, exist_ok=True)
                 os.makedirs(fg_dir, exist_ok=True)
                 os.makedirs(bg_dir, exist_ok=True)
@@ -511,7 +525,6 @@ class AssetTool:
                     if mask_dir.exists():
                         shutil.rmtree(mask_dir, ignore_errors=True)
 
-                # Prepare tasks
                 tasks = []
                 for frame_idx in range(frame_count):
                     src_path = str(anim_dir / f"{frame_idx}.png")
@@ -536,7 +549,6 @@ class AssetTool:
                         )
                     )
 
-                # Submit tasks to shared executor
                 futures = [self.executor.submit(process_frame_task, t) for t in tasks]
                 for fut in as_completed(futures):
                     result = fut.result()
@@ -546,7 +558,11 @@ class AssetTool:
 
             if not had_errors:
                 compare_and_update_json(anim_signature, str(anim_meta_path))
+                processed_any = True
+                if self.queue and requested_filter is not None:
+                    self.queue.mark_animation_complete(asset.name, anim_id)
             else:
+                asset_had_errors = True
                 LOGGER.warning(
                     "Animation '%s' had errors during processing; cache fingerprint not updated.",
                     anim_id,
@@ -554,53 +570,48 @@ class AssetTool:
 
         elapsed = time.time() - start_time
         print(f"[AssetTool] Finished asset '{asset.name}' in {elapsed:.2f} seconds")
+        if asset_had_errors:
+            self.any_asset_errors = True
+
+        if self.queue and self.asset_mode == QueueMode.PARTIAL:
+            if full_asset_request and not asset_had_errors:
+                self.queue.mark_asset_complete(asset.name)
+            elif requested_filter is None and not processed_any:
+                self.queue.mark_asset_complete(asset.name)
+        elif self.queue and self.asset_mode == QueueMode.FULL and not asset_had_errors:
+            # Processed per animation; handled after loop via mark_full_asset_rebuild_complete.
+            pass
 
     def process_assets(self, assets: List[Asset]) -> None:
         """Regenerate cache for all assets in list."""
         if not assets:
             print("No assets need regeneration.")
+            if self.queue and self.asset_mode == QueueMode.FULL:
+                self.queue.mark_full_asset_rebuild_complete()
             return
 
         try:
             for asset in assets:
                 self.generate_animation_cache_for_asset(asset)
         finally:
-            # Clean shutdown of process pool
             self.executor.shutdown(wait=True)
+
+        if self.queue and self.asset_mode == QueueMode.FULL and not self.any_asset_errors:
+            self.queue.mark_full_asset_rebuild_complete()
 
 
 def main():
-    if len(sys.argv) < 3:
-        print(
-            "Usage: python asset_tool.py <manifest_path> <cache_root> [asset_list] [animation_list]",
-            file=sys.stderr,
-        )
-        print("  <manifest_path>  path to manifest.json", file=sys.stderr)
-        print("  <cache_root>     cache directory root", file=sys.stderr)
-        print(
-            "  [asset_list]     optional comma separated asset names to regen",
-            file=sys.stderr,
-        )
-        print(
-            "  [animation_list] optional comma separated animation ids to regen for selected assets",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    queue = RebuildQueue()
+    mode = queue.asset_mode()
+    if mode == QueueMode.NONE:
+        LOGGER.info("No pending asset rebuild requests; exiting.")
+        return
 
-    manifest_path = sys.argv[1]
-    cache_root = sys.argv[2]
-    asset_list_str = sys.argv[3] if len(sys.argv) > 3 else None
-    animation_list_str = sys.argv[4] if len(sys.argv) > 4 else None
-    animation_filter = None
-    if animation_list_str:
-        animation_filter = [
-            name.strip()
-            for name in animation_list_str.split(",")
-            if name.strip()
-        ] or None
+    manifest_path = str(queue.manifest_path)
+    cache_root = str(queue.cache_root)
 
-    tool = AssetTool(manifest_path, cache_root, set(animation_filter) if animation_filter else None)
-    assets_to_regen = tool.collect_assets_to_regen(asset_list_str)
+    tool = AssetTool(manifest_path, cache_root, queue)
+    assets_to_regen = tool.collect_assets_to_regen()
     tool.process_assets(assets_to_regen)
 
 

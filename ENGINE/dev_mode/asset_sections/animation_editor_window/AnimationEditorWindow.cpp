@@ -25,10 +25,12 @@
 #include "EditorUIPrimitives.hpp"
 #include "AsyncTaskQueue.hpp"
 #include "AudioImporter.hpp"
+#include "core/manifest/manifest_loader.hpp"
 #include "CroppingService.hpp"
 #include "PreviewProvider.hpp"
 #include "string_utils.hpp"
 #include "ui/tinyfiledialogs.h"
+#include "utils/rebuild_queue.hpp"
 #ifdef _WIN32
 #  ifndef NOMINMAX
 #    define NOMINMAX
@@ -46,6 +48,7 @@
 #include "dev_mode/widgets.hpp"
 #include "core/AssetsManager.hpp"
 #include "dev_mode/asset_paths.hpp"
+#include "dev_mode/rebuildAnimation.hpp"
 
 namespace {
 
@@ -257,7 +260,6 @@ nlohmann::json build_folder_payload(const std::filesystem::path& folder) {
                     // Use empty string for name to avoid UI code expecting a string throwing on null
                     {"name", ""},
                 }},
-            {"speed_factor", 1.0},
         };
         payload["number_of_frames"] = frame_count;
         return payload;
@@ -404,6 +406,8 @@ AnimationEditorWindow::AnimationEditorWindow() {
 
     add_button_ = std::make_unique<DMButton>("Add Animation", &DMStyles::CreateButton(), 160, DMButton::height());
     controller_button_ = std::make_unique<DMButton>("Add Controller", &DMStyles::CreateButton(), 140, DMButton::height());
+    half_speed_button_ = std::make_unique<DMButton>("0.5x Speed", &DMStyles::HeaderButton(), 110, DMButton::height());
+    double_speed_button_ = std::make_unique<DMButton>("2x Speed", &DMStyles::HeaderButton(), 110, DMButton::height());
     layout_dirty_ = true;
 }
 
@@ -659,6 +663,16 @@ void AnimationEditorWindow::layout_children() {
 
     if (controller_button_) {
         controller_button_->set_rect(SDL_Rect{left_x, y, controller_button_->rect().w, DMButton::height()});
+        left_x += controller_button_->rect().w + button_gap;
+    }
+
+    if (half_speed_button_) {
+        half_speed_button_->set_rect(SDL_Rect{left_x, y, half_speed_button_->rect().w, DMButton::height()});
+        left_x += half_speed_button_->rect().w + button_gap;
+    }
+
+    if (double_speed_button_) {
+        double_speed_button_->set_rect(SDL_Rect{left_x, y, double_speed_button_->rect().w, DMButton::height()});
     }
 
     const int status_padding = DMSpacing::panel_padding();
@@ -1157,6 +1171,8 @@ void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
 
     if (add_button_) add_button_->render(renderer);
     if (controller_button_) controller_button_->render(renderer);
+    if (half_speed_button_) half_speed_button_->render(renderer);
+    if (double_speed_button_) double_speed_button_->render(renderer);
 
     int label_x = header_rect_.x + DMSpacing::panel_padding();
     if (add_button_) {
@@ -1164,6 +1180,12 @@ void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
     }
     if (controller_button_) {
         label_x = std::max(label_x, controller_button_->rect().x + controller_button_->rect().w + DMSpacing::small_gap());
+    }
+    if (half_speed_button_) {
+        label_x = std::max(label_x, half_speed_button_->rect().x + half_speed_button_->rect().w + DMSpacing::small_gap());
+    }
+    if (double_speed_button_) {
+        label_x = std::max(label_x, double_speed_button_->rect().x + double_speed_button_->rect().w + DMSpacing::small_gap());
     }
     render_label(renderer, title, label_x, header_rect_.y + DMSpacing::small_gap());
 }
@@ -1212,6 +1234,8 @@ bool AnimationEditorWindow::handle_header_event(const SDL_Event& e) {
 
     handle_button(add_button_, [this]() { create_animation_via_prompt(); });
     handle_button(controller_button_, [this]() { handle_controller_button_click(); });
+    handle_button(half_speed_button_, [this]() { retime_selected_animation(false); });
+    handle_button(double_speed_button_, [this]() { retime_selected_animation(true); });
     return consumed;
 }
 
@@ -1752,6 +1776,130 @@ void AnimationEditorWindow::open_controller() {
         set_status_message("Failed to open controller file.", 180);
     } else {
         set_status_message("Opened controller file.", 120);
+    }
+}
+
+void AnimationEditorWindow::clear_animation_cache(const std::filesystem::path& cache_root,
+                                                  const std::string& asset_name,
+                                                  const std::string& animation_id) {
+    if (asset_name.empty() || animation_id.empty()) {
+        return;
+    }
+    std::error_code ec;
+    const auto anim_dir = cache_root / asset_name / "animations" / animation_id;
+    std::filesystem::remove_all(anim_dir, ec);
+    ec.clear();
+    const auto meta_file =
+        cache_root / ".asset_cache" / "animations" / asset_name / (animation_id + ".json");
+    std::filesystem::remove(meta_file, ec);
+}
+
+bool AnimationEditorWindow::run_retime_script(const std::string& asset_name,
+                                              const std::string& animation_id,
+                                              bool double_speed) {
+    const std::filesystem::path project_root = std::filesystem::current_path();
+    std::filesystem::path script_path = project_root / "tools" / "retime_animation.py";
+    if (!std::filesystem::exists(script_path)) {
+        set_status_message("Missing tools/retime_animation.py.", 240);
+        return false;
+    }
+    const std::string mode = double_speed ? "double" : "half";
+    std::ostringstream cmd;
+    cmd << "python \"" << script_path.generic_string() << "\" "
+        << "\"" << asset_name << "\" "
+        << "\"" << animation_id << "\" "
+        << "--mode " << mode;
+
+    const int rc = std::system(cmd.str().c_str());
+    if (rc != 0) {
+        set_status_message("Failed to retime frames for '" + animation_id + "'.", 300);
+        return false;
+    }
+    return true;
+}
+
+bool AnimationEditorWindow::regenerate_via_asset_tool(const std::shared_ptr<AssetInfo>& info,
+                                                      const std::string& animation_id) {
+    if (!info) {
+        return false;
+    }
+    const std::string asset_name = info->name;
+    if (asset_name.empty()) {
+        return false;
+    }
+
+    const std::filesystem::path project_root = std::filesystem::path(manifest::manifest_path()).parent_path();
+    const std::filesystem::path cache_root = project_root / "cache";
+    clear_animation_cache(cache_root, asset_name, animation_id);
+
+    vibble::RebuildQueueCoordinator coordinator;
+    coordinator.request_animation(asset_name, animation_id);
+    if (!coordinator.run_asset_tool()) {
+        set_status_message("asset_tool.py failed; see logs for details.", 240);
+        return false;
+    }
+
+    bool reloaded = false;
+    try {
+        reloaded = info->reload_animations_from_disk();
+    } catch (const std::exception& ex) {
+        std::cerr << "[AnimationEditor] reload_animations_from_disk failed for '" << asset_name
+                  << "': " << ex.what() << "\n";
+        reloaded = false;
+    }
+
+    SDL_Renderer* renderer = assets_ ? assets_->renderer() : nullptr;
+    if (renderer && reloaded) {
+        info->loadAnimations(renderer);
+        devmode::AnimationRegenerator::refresh_loaded_instances(assets_, info);
+    }
+
+    return reloaded;
+}
+
+bool AnimationEditorWindow::rebuild_animation_from_sources(const std::shared_ptr<AssetInfo>& info,
+                                                           const std::string& animation_id) {
+    if (!info) {
+        return false;
+    }
+    if (assets_) {
+        auto result = devmode::AnimationRegenerator::regenerate_animation(assets_, info, animation_id);
+        return result.python_success && (result.reloaded || result.refreshed_instances);
+    }
+    return regenerate_via_asset_tool(info, animation_id);
+}
+
+void AnimationEditorWindow::retime_selected_animation(bool double_speed) {
+    auto info_ptr = info_.lock();
+    if (!info_ptr) {
+        set_status_message("Select an asset before retiming.", 200);
+        return;
+    }
+    if (!selected_animation_id_) {
+        set_status_message("Select an animation to retime.", 200);
+        return;
+    }
+    if (info_ptr->name.empty()) {
+        set_status_message("Asset name is missing.", 200);
+        return;
+    }
+
+    const std::string animation_id = *selected_animation_id_;
+    const std::string action_label = double_speed ? "Doubling" : "Halving";
+    set_status_message(action_label + " speed for '" + animation_id + "'...", 120);
+
+    if (!run_retime_script(info_ptr->name, animation_id, double_speed)) {
+        return;
+    }
+
+    const bool regenerated = rebuild_animation_from_sources(info_ptr, animation_id);
+    if (preview_provider_) {
+        preview_provider_->invalidate(animation_id);
+    }
+    if (regenerated) {
+        set_status_message(std::string(double_speed ? "Doubled" : "Halved") + " speed for '" + animation_id + "'.", 240);
+    } else {
+        set_status_message("Frames updated, but failed to rebuild '" + animation_id + "'.", 300);
     }
 }
 

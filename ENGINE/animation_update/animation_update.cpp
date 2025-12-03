@@ -386,6 +386,11 @@ void AnimationUpdate::clear_movement_plan() {
     }
 }
 
+void AnimationUpdate::cancel_all_movement() {
+    clear_movement_plan();
+    move(SDL_Point{0, 0}, animation_update::detail::kDefaultAnimation, true, true);
+}
+
 std::size_t AnimationUpdate::path_index_for(const std::string& anim_id) const {
     if (runtime_) {
         return runtime_->path_index_for(anim_id);
@@ -434,5 +439,4 @@ void AnimationUpdate::set_animation(const std::string& animation_id) {
     if (it == self_->info->animations.end()) return;
     const Animation& anim = it->second;
     player_.m_animation = const_cast<Animation*>(&anim);
-    player_.m_fps = (anim.playback_fps > 0) ? anim.playback_fps : 24;
 }

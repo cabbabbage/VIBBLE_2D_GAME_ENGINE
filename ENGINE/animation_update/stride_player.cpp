@@ -73,7 +73,10 @@ bool StridePlayer::tick(AnimationRuntime& up, Plan& plan,
 
     AnimationFrame* frame = self->current_frame;
     SDL_Point        from  = self->pos;
-    SDL_Point        delta = animation_update::detail::frame_world_delta(*frame, *self, up.grid());
+    SDL_Point        delta{0, 0};
+    if (!up.suppress_root_motion_active()) {
+        delta = animation_update::detail::frame_world_delta(*frame, *self, up.grid());
+    }
     SDL_Point        to{ from.x + delta.x, from.y + delta.y };
 
     if (delta.x != 0 || delta.y != 0) {

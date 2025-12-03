@@ -23,7 +23,7 @@ class WarpedScreenGrid {
 public:
     // Public constants
     static constexpr float kMinZoomAnchors = 0.5f;
-    static constexpr float kMaxZoomAnchors = 4.0f;
+    static constexpr float kMaxZoomAnchors = 20.0f;
     static constexpr float kMinPitchDegrees = 0.0f;
     static constexpr float kMaxPitchDegrees = 150.0f;
     static constexpr bool kForceDepthPerspectiveDisabled = true; // Toggle to false once perspective effects are restored.
@@ -166,7 +166,7 @@ public:
 
     // Settings and configuration
     void set_realism_settings(const RealismSettings& settings);
-    void set_screen_center(SDL_Point p);
+    void set_screen_center(SDL_Point p, bool snap_immediately = true);
     void set_up_rooms(CurrentRoomFinder* finder);
     void apply_camera_settings(const nlohmann::json& data);
     nlohmann::json camera_settings_to_json() const;

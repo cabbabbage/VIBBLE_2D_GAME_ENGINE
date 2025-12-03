@@ -347,38 +347,32 @@ private:
             }
         }
 
-        int   chosen_index = -1;
-        float chosen_scale = steps.front();
+        int   chosen_index    = -1;
+        float chosen_scale    = ::std::numeric_limits<float>::max();
+        int   fallback_index  = -1;
+        float fallback_scale  = -::std::numeric_limits<float>::max();
         for (::std::size_t i = 0; i < steps.size(); ++i) {
             const float candidate = steps[i];
             if (enforce_cap && has_allowed && candidate > quality_cap + 1e-4f) {
                 continue;
             }
-            if (candidate + 1e-4f >= sanitized) {
+            if (candidate + 1e-4f >= sanitized && candidate < chosen_scale - 1e-6f) {
                 chosen_index = static_cast<int>(i);
                 chosen_scale = candidate;
-                break;
+            }
+            if (candidate > fallback_scale + 1e-6f) {
+                fallback_index = static_cast<int>(i);
+                fallback_scale = candidate;
             }
         }
 
         if (chosen_index < 0) {
-            for (::std::size_t i = 0; i < steps.size(); ++i) {
-                const float candidate = steps[i];
-                if (enforce_cap && has_allowed && candidate > quality_cap + 1e-4f) {
-                    continue;
-                }
-                chosen_index = static_cast<int>(i);
-                chosen_scale = candidate;
-                break;
-            }
-            if (chosen_index < 0) {
-                chosen_index = 0;
-                chosen_scale = steps.front();
-            }
+            chosen_index = (fallback_index >= 0) ? fallback_index : 0;
+            chosen_scale = (fallback_index >= 0) ? fallback_scale : steps.front();
         }
 
         result.index           = chosen_index;
-        result.stored_scale    = chosen_scale;
+        result.stored_scale    = (chosen_scale > 0.0f) ? chosen_scale : 1.0f;
         result.remainder_scale = (chosen_scale > 0.0f) ? (sanitized / chosen_scale) : 1.0f;
         return result;
     }

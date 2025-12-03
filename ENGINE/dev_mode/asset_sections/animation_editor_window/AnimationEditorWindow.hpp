@@ -108,6 +108,13 @@ class AnimationEditorWindow {
     std::string generate_class_name(const std::string& asset_name) const;
     void add_controller();
     void open_controller();
+    void retime_selected_animation(bool double_speed);
+    bool run_retime_script(const std::string& asset_name, const std::string& animation_id, bool double_speed);
+    bool rebuild_animation_from_sources(const std::shared_ptr<AssetInfo>& info, const std::string& animation_id);
+    bool regenerate_via_asset_tool(const std::shared_ptr<AssetInfo>& info, const std::string& animation_id);
+    void clear_animation_cache(const std::filesystem::path& cache_root,
+                               const std::string& asset_name,
+                               const std::string& animation_id);
 
   private:
     bool visible_ = false;
@@ -124,6 +131,8 @@ class AnimationEditorWindow {
     std::unique_ptr<AnimationListContextMenu> list_context_menu_;
     std::unique_ptr<DMButton> add_button_;
     std::unique_ptr<DMButton> controller_button_;
+    std::unique_ptr<DMButton> half_speed_button_;
+    std::unique_ptr<DMButton> double_speed_button_;
     SDL_Rect header_rect_{0, 0, 0, 0};
     SDL_Rect list_rect_{0, 0, 0, 0};
     SDL_Rect inspector_rect_{0, 0, 0, 0};

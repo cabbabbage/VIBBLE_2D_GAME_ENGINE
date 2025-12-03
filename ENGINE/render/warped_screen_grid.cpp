@@ -4,7 +4,6 @@
 #include "utils/area.hpp"
 #include "map_generation/room.hpp"
 #include "core/find_current_room.hpp"
-#include "utils/transform_smoothing_settings.hpp"
 #include "utils/log.hpp"
 #include "world/world_grid.hpp"
 
@@ -37,7 +36,6 @@ namespace {
     constexpr double kMinZoomRange = 1e-4;
     constexpr double kMinPerspectiveScale   = 0.35;
     constexpr double kMaxPerspectiveScale   = 1.65;
-
     struct ZoomInterpolator {
         double t = 0.0;
         ZoomInterpolator(const WarpedScreenGrid::RealismSettings& settings, double scale_value) {
@@ -622,7 +620,7 @@ void WarpedScreenGrid::set_realism_settings(const RealismSettings& settings) {
     update_geometry_cache(compute_geometry());
 }
 
-void WarpedScreenGrid::set_screen_center(SDL_Point p) {
+void WarpedScreenGrid::set_screen_center(SDL_Point p, bool snap_immediately) {
     if (!screen_center_initialized_) {
         screen_center_              = p;
         screen_center_initialized_  = true;
@@ -638,8 +636,10 @@ void WarpedScreenGrid::set_screen_center(SDL_Point p) {
     pan_offset_x_ += dx;
     pan_offset_y_ += dy;
     screen_center_ = p;
-    smoothed_center_.x = static_cast<float>(screen_center_.x);
-    smoothed_center_.y = static_cast<float>(screen_center_.y);
+    if (snap_immediately) {
+        smoothed_center_.x = static_cast<float>(screen_center_.x);
+        smoothed_center_.y = static_cast<float>(screen_center_.y);
+    }
 }
 
 void WarpedScreenGrid::set_scale(float s) {
@@ -733,11 +733,11 @@ void WarpedScreenGrid::update(float dt) {
     const float safe_sy = static_cast<float>(screen_center_.y);
     const float safe_ss = std::max(0.0001f, scale_);
 
-    const float clamped_ss = static_cast<float>(std::clamp(static_cast<double>(safe_ss), 0.0001, static_cast<double>(WarpedScreenGrid::kMaxZoomAnchors)));
-
     smoothed_center_.x = std::clamp(safe_sx, -1e8f, 1e8f);
     smoothed_center_.y = std::clamp(safe_sy, -1e8f, 1e8f);
-    smoothed_scale_    = clamped_ss;
+    smoothed_scale_ = static_cast<float>(std::clamp(static_cast<double>(safe_ss),
+                                                    0.0001,
+                                                    static_cast<double>(WarpedScreenGrid::kMaxZoomAnchors)));
 
     recompute_current_view();
 }
@@ -788,7 +788,7 @@ void WarpedScreenGrid::update_zoom(Room* cur,
         // In dev mode we intentionally avoid forcing the camera to follow
         // the player so panning/zooming can be used to inspect the scene.
         if (player && !dev_mode) {
-            set_screen_center(SDL_Point{ player->pos.x, player->pos.y });
+            set_screen_center(SDL_Point{ player->pos.x, player->pos.y }, false);
         } else if (focus_override_) {
             set_screen_center(focus_point_);
         } else if (cur && cur->room_area) {
@@ -1070,6 +1070,25 @@ WarpedScreenGrid::RenderEffects WarpedScreenGrid::compute_render_effects(
     result.vertical_scale  = 1.0f;
     result.distance_scale  = 1.0f;
     result.horizon_fade_alpha = 1.0f;
+
+    // When the horizon is within the visible screen, fade sprites out near it to
+    // avoid popping as they approach the top of the view.
+    const double horizon_y_raw = horizon_screen_y_for_scale();
+    if (std::isfinite(horizon_y_raw)) {
+        const float horizon_y = static_cast<float>(horizon_y_raw);
+        const bool horizon_in_view =
+            horizon_y > 0.0f && horizon_y < static_cast<float>(screen_height_);
+        if (horizon_in_view) {
+            const float fade_band_px = std::max(1.0f, settings_.horizon_fade_band_px);
+            const float dist_from_horizon = result.screen_position.y - horizon_y;
+            if (dist_from_horizon <= 0.0f) {
+                result.horizon_fade_alpha = 0.0f;
+            } else if (dist_from_horizon < fade_band_px) {
+                const float t = dist_from_horizon / fade_band_px;
+                result.horizon_fade_alpha = std::clamp(t * t * t, 0.0f, 1.0f);
+            }
+        }
+    }
 
     // TODO: bring back the NDC/parallax/distance-scaling block once depth perspective is reimplemented.
 #if 0
@@ -1597,18 +1616,16 @@ void WarpedScreenGrid::rebuild_grid(world::WorldGrid& world_grid, float dt_secon
     }
     
     const bool perspective_disabled = WarpedScreenGrid::kForceDepthPerspectiveDisabled;
-    const float horizon_y = perspective_disabled
-        ? -screen_h  // push horizon well above the visible area when perspective is off
-        : static_cast<float>(horizon_screen_y_for_scale());
+    const double raw_horizon_y = horizon_screen_y_for_scale();
+    const bool horizon_valid = std::isfinite(raw_horizon_y);
+    const float horizon_y = horizon_valid ? static_cast<float>(raw_horizon_y) : -screen_h;
+    const bool horizon_at_or_above_top = !horizon_valid || horizon_y <= 0.0f;
 
     const float margin_px    = std::max(0.0f, settings_.extra_cull_margin);
     const float depth_pad_px = std::max(0.0f, current_depth_offset_px());
 
     float side_pad = margin_px;
     float bottom_pad = std::max(depth_pad_px, margin_px);
-    float cull_top = perspective_disabled
-        ? horizon_y
-        : std::max(0.0f, horizon_y - margin_px);
 
     if (perspective_disabled) {
         const float expansion_factor = 2.0f; // approximate doubling of cull area
@@ -1616,11 +1633,18 @@ void WarpedScreenGrid::rebuild_grid(world::WorldGrid& world_grid, float dt_secon
         bottom_pad *= expansion_factor;
     }
 
+    const float spawn_top = horizon_at_or_above_top
+        ? 0.0f
+        : std::max(0.0f, horizon_y - margin_px);
+    const float screen_bottom = screen_h + bottom_pad;
+    const float cull_top = std::clamp(spawn_top, 0.0f, screen_bottom);
+    const float cull_height = std::max(1.0f, screen_bottom - cull_top);
+
     const SDL_FRect cull_rect{
         -side_pad,
         cull_top,
         screen_w + side_pad * 2.0f,
-        (screen_h + bottom_pad) - cull_top
+        cull_height
     };
     const float min_visible_px =
         screen_h * std::clamp(settings_.min_visible_screen_ratio, 0.0f, 0.5f);
@@ -1723,16 +1747,15 @@ void WarpedScreenGrid::rebuild_grid(world::WorldGrid& world_grid, float dt_secon
             approx_w,
             approx_h
         };
-        
-        // Check if asset's top edge extends above horizon - if so, it should not be rendered
-        // screen_pos.y is the bottom anchor, so top is at (screen_pos.y - approx_h)
-        const float asset_top_y = screen_pos.y - approx_h;
-        const bool above_horizon = (asset_top_y < horizon_y);
-        const bool on_screen = !above_horizon && rects_intersect(bounds, cull_rect);
+
+        const bool intersects = rects_intersect(bounds, cull_rect);
+        const bool has_alpha  = horizon_at_or_above_top || effects.horizon_fade_alpha > 0.001f;
+        const bool on_screen  = intersects && has_alpha;
 
         gp->screen             = screen_pos;
         gp->parallax_dx        = parallax_dx;
         gp->vertical_scale     = effects.vertical_scale;
+        gp->horizon_fade_alpha = effects.horizon_fade_alpha;
 
         gp->perspective_scale  = 1.0f;
         gp->distance_to_camera = 0.0f;
