@@ -22,6 +22,7 @@
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/rebuildAnimation.hpp"
+#include "render/scaling_logic.hpp"
 #include "dev_mode/widgets.hpp"
 #include "render/warped_screen_grid.hpp"
 #include "utils/grid.hpp"
@@ -1458,11 +1459,8 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
             const auto& child = frame.children[i];
             if (!child.visible) continue;
             const auto& slot = child_preview_slots_[i];
-            SDL_Texture* tex = slot.texture;
-            if (!tex) continue;
-            const int tw = slot.width;
-            const int th = slot.height;
-            if (tw <= 0 || th <= 0) continue;
+            const Animation* preview_anim = slot.animation;
+            const AnimationFrame* preview_frame = slot.frame;
 
             // Child offsets are in pixels relative to the parent's base (bottom-middle),
             // mirroring dx when the parent is flipped (see AnimationRuntime::apply_child_frame_data).
@@ -1471,31 +1469,37 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
                 static_cast<float>(parent_base.x) + dx_world,
                 static_cast<float>(parent_base.y) + static_cast<float>(child.dy)
             };
-
-            SDL_FRect base_rect = child_preview_rect(child_world, tw, th, preview_ctx, scale_override_base);
-            if (base_rect.w <= 0.0f || base_rect.h <= 0.0f) continue;
-
-            const int target_w = std::max(1, static_cast<int>(std::lround(base_rect.w)));
-            const int target_h = std::max(1, static_cast<int>(std::lround(base_rect.h)));
             const auto& scale_steps = (slot.info && !slot.info->scale_variants.empty())
-                ? slot.info->scale_variants
-                : render_pipeline::ScalingLogic::DefaultScaleSteps();
-            const float desired_scale = render_pipeline::ScalingLogic::ComputeScale(tw, th, target_w, target_h);
-            const auto selection = render_pipeline::ScalingLogic::Choose(desired_scale, scale_steps);
+                                          ? slot.info->scale_variants
+                                          : render_pipeline::ScalingLogic::DefaultScaleSteps();
+            const float requested_variant_scale = std::max(0.0001f, scale_override_base);
+            const auto selection = render_pipeline::ScalingLogic::Choose(requested_variant_scale, scale_steps);
 
-            float variant_texture_scale = selection.stored_scale;
-            if (!std::isfinite(variant_texture_scale) || variant_texture_scale <= 0.0f) {
-                variant_texture_scale = 1.0f;
-            }
-            float remainder_scale = selection.remainder_scale;
-            if (!std::isfinite(remainder_scale) || remainder_scale <= 0.0f) {
-                remainder_scale = desired_scale;
-            }
-            const int variant_tw = std::max(1, static_cast<int>(std::lround(static_cast<double>(tw) * variant_texture_scale)));
-            const int variant_th = std::max(1, static_cast<int>(std::lround(static_cast<double>(th) * variant_texture_scale)));
+            const FrameVariant* variant = (preview_anim && preview_frame)
+                                              ? preview_anim->get_frame(preview_frame, requested_variant_scale)
+                                              : nullptr;
+            SDL_Texture* tex = variant ? variant->get_base_texture() : slot.texture;
+            if (!tex) continue;
 
-            const float scale_override_final = scale_override_base * remainder_scale;
-            SDL_FRect dst = child_preview_rect(child_world, variant_tw, variant_th, preview_ctx, scale_override_final);
+            int tex_w = slot.width;
+            int tex_h = slot.height;
+            if (!variant && tex && (tex_w <= 0 || tex_h <= 0)) {
+                SDL_QueryTexture(tex, nullptr, nullptr, &tex_w, &tex_h);
+            } else if (variant) {
+                SDL_QueryTexture(tex, nullptr, nullptr, &tex_w, &tex_h);
+            }
+            if (tex_w <= 0 || tex_h <= 0) continue;
+
+            float stored_scale = selection.stored_scale;
+            if (!std::isfinite(stored_scale) || stored_scale <= 0.0f) {
+                stored_scale = 1.0f;
+            }
+            float final_scale = requested_variant_scale / stored_scale;
+            if (!std::isfinite(final_scale) || final_scale <= 0.0f) {
+                final_scale = requested_variant_scale;
+            }
+
+            SDL_FRect dst = child_preview_rect(child_world, tex_w, tex_h, preview_ctx, final_scale);
             if (dst.w <= 0.0f || dst.h <= 0.0f) continue;
             SDL_FPoint pivot{ dst.w * 0.5f, dst.h }; // bottom-middle pivot
             // Apply rotation around bottom-middle if any
@@ -3549,23 +3553,18 @@ void FrameEditorSession::rebuild_child_preview_cache() {
                 if (renderer) {
                     slot.info->loadAnimations(renderer);
                 }
-                if (const Animation* anim = pick_preview_animation(slot.info)) {
-                    const AnimationFrame* frame = anim->get_first_frame();
-                    if (frame) {
-                        SDL_Texture* tex = nullptr;
-                        const FrameVariant* variant = anim->get_frame(frame, 1.0f);
-                        if (variant) {
-                            tex = variant->get_base_texture();
-                        }
-                        if (!tex && !frame->variants.empty()) {
-                            tex = frame->variants[0].get_base_texture();
-                        }
-                        slot.texture = tex;
-                        if (slot.texture) {
-                            if (SDL_QueryTexture(slot.texture, nullptr, nullptr, &slot.width, &slot.height) != 0) {
-                                slot.width = 0;
-                                slot.height = 0;
-                            }
+                slot.animation = pick_preview_animation(slot.info);
+                slot.frame = slot.animation ? slot.animation->get_first_frame() : nullptr;
+                if (slot.frame) {
+                    const FrameVariant* variant = slot.animation->get_frame(slot.frame, 1.0f);
+                    slot.texture = variant ? variant->get_base_texture() : nullptr;
+                    if (!slot.texture && !slot.frame->variants.empty()) {
+                        slot.texture = slot.frame->variants[0].get_base_texture();
+                    }
+                    if (slot.texture) {
+                        if (SDL_QueryTexture(slot.texture, nullptr, nullptr, &slot.width, &slot.height) != 0) {
+                            slot.width = 0;
+                            slot.height = 0;
                         }
                     }
                 }
@@ -3806,8 +3805,9 @@ void FrameEditorSession::persist_changes() {
     } else {
         document_payload_cache_ = serialized;
     }
-    document_->save_to_file();
-    pending_save_ = false;
+    // Save without firing document callbacks so we do not trigger live rebuilds
+    // (which can invalidate textures) while the frame editor session is running.
+    document_->save_to_file(false);
 }
 
 ChildPreviewContext FrameEditorSession::build_child_preview_context() const {

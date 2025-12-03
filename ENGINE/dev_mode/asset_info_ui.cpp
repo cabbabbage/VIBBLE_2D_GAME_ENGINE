@@ -1342,7 +1342,16 @@ void AssetInfoUI::refresh_target_asset_scale() {
         }
     }
 
-    if (refreshed_any && assets_) {
+    if (assets_ && refreshed_any) {
+        if (SDL_Renderer* renderer = assets_->renderer()) {
+            last_renderer_ = renderer;
+            // Reload animations so cached frames pick up the new base scale immediately.
+            info_->loadAnimations(renderer);
+        }
+
+        // Force all loaded instances (including dependents) to rebuild using the updated scale.
+        refresh_loaded_asset_instances();
+
         assets_->mark_active_assets_dirty();
         assets_->rebuild_active_assets_if_needed();
     }

@@ -19,6 +19,8 @@
 class Assets;
 class Asset;
 class AssetInfo;
+class Animation;
+struct AnimationFrame;
 class Input;
 struct SDL_Renderer;
 class DMButton;
@@ -87,6 +89,8 @@ private:
     struct ChildPreviewSlot {
         std::string asset_name;
         std::shared_ptr<AssetInfo> info;
+        const Animation* animation = nullptr;
+        const AnimationFrame* frame = nullptr;
         SDL_Texture* texture = nullptr;
         int width = 0;
         int height = 0;

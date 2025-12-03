@@ -347,7 +347,7 @@ void AnimationDocument::load_from_json_object(const nlohmann::json& root) {
     ensure_document_initialized();
 }
 
-void AnimationDocument::save_to_file() const {
+void AnimationDocument::save_to_file(bool fire_callback) const {
     nlohmann::json root;
     if (persist_callback_) {
         root = base_data_.is_object() ? base_data_ : nlohmann::json::object();
@@ -418,7 +418,7 @@ void AnimationDocument::save_to_file() const {
         base_data_ = root;
     }
     dirty_ = false;
-    if (on_saved_callback_) {
+    if (fire_callback && on_saved_callback_) {
         on_saved_callback_();
     }
 }

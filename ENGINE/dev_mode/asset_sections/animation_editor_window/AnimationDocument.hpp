@@ -18,7 +18,7 @@ class AnimationDocument {
 
     void load_from_file(const std::filesystem::path& info_path);
     void load_from_manifest(const nlohmann::json& asset_json, const std::filesystem::path& asset_root, std::function<void(const nlohmann::json&)> persist_callback);
-    void save_to_file() const;
+    void save_to_file(bool fire_callback = true) const;
 
     bool consume_dirty_flag() const;
 

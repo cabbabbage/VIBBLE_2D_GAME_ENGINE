@@ -15,6 +15,7 @@
 #include "../movement/MovementCanvas.hpp"
 #include "../../../../dm_styles.hpp"
 #include "../../../../draw_utils.hpp"
+#include "../../../../../render/scaling_logic.hpp"
 
 namespace fs = std::filesystem;
 
@@ -170,11 +171,18 @@ void FrameChildrenEditor::render(SDL_Renderer* renderer) const {
     if (!frame) {
         return;
     }
-    float pixels_per_unit = canvas_pixels_per_unit();
-    if (!std::isfinite(pixels_per_unit) || pixels_per_unit <= 0.0f) {
-        pixels_per_unit = 1.0f;
+    float parent_scale = canvas_pixels_per_unit();
+    if (!std::isfinite(parent_scale) || parent_scale <= 0.0f) {
+        parent_scale = 1.0f;
     }
-    const SDL_FPoint anchor = frame_anchor(selected_frame_index_);
+    float doc_scale = document_scale_factor();
+    if (!std::isfinite(doc_scale) || doc_scale <= 0.0f) {
+        doc_scale = 1.0f;
+    }
+    const float offset_scale = parent_scale;
+    const float sprite_scale_base = parent_scale * doc_scale;
+    SDL_FPoint anchor_screen = canvas_ ? canvas_->frame_anchor_screen(selected_frame_index_)
+                                       : world_to_screen(frame_anchor(selected_frame_index_));
 
     for (std::size_t i = 0; i < child_ids_.size() && i < frame->children.size(); ++i) {
         const auto& child = frame->children[i];
@@ -187,17 +195,12 @@ void FrameChildrenEditor::render(SDL_Renderer* renderer) const {
         if (!texture || tex_w <= 0 || tex_h <= 0) {
             continue;
         }
-        float child_scale_pct = child_scale_percentage(child_ids_[i]);
-        if (!std::isfinite(child_scale_pct) || child_scale_pct <= 0.0f) {
+        if (!std::isfinite(sprite_scale_base) || sprite_scale_base <= 0.0f) {
             continue;
         }
-        const float sprite_scale = (child_scale_pct / 100.0f) * pixels_per_unit;
-        if (!std::isfinite(sprite_scale) || sprite_scale <= 0.0f) {
-            continue;
-        }
-        SDL_FPoint screen = world_to_screen(SDL_FPoint{anchor.x + child.dx, anchor.y + child.dy});
-        const float dst_w = sprite_scale * static_cast<float>(tex_w);
-        const float dst_h = sprite_scale * static_cast<float>(tex_h);
+        SDL_FPoint screen = child_screen_position(child, anchor_screen, offset_scale);
+        const float dst_w = sprite_scale_base * static_cast<float>(tex_w);
+        const float dst_h = sprite_scale_base * static_cast<float>(tex_h);
         if (!(std::isfinite(dst_w) && std::isfinite(dst_h)) || dst_w <= 0.0f || dst_h <= 0.0f) {
             continue;
         }
@@ -214,7 +217,7 @@ void FrameChildrenEditor::render(SDL_Renderer* renderer) const {
 
     for (std::size_t i = 0; i < child_ids_.size() && i < frame->children.size(); ++i) {
         const auto& child = frame->children[i];
-        SDL_FPoint screen = world_to_screen(SDL_FPoint{anchor.x + child.dx, anchor.y + child.dy});
+        SDL_FPoint screen = child_screen_position(child, anchor_screen, offset_scale);
         SDL_Point center = round_point(screen);
         const bool is_selected = static_cast<int>(i) == selected_child_index_;
         const int radius = is_selected ? kMarkerRadius + 1 : kMarkerRadius - 1;
@@ -247,7 +250,6 @@ bool FrameChildrenEditor::handle_event(const SDL_Event& e) {
                 select_child(hit);
                 dragging_child_ = true;
                 drag_start_screen_ = SDL_Point{e.button.x, e.button.y};
-                drag_start_world_ = screen_to_world(drag_start_screen_);
                 if (auto* child = current_child()) {
                     drag_snapshot_ = *child;
                 }
@@ -260,11 +262,17 @@ bool FrameChildrenEditor::handle_event(const SDL_Event& e) {
                 break;
             }
             SDL_Point screen{e.motion.x, e.motion.y};
-            SDL_FPoint world = screen_to_world(screen);
-            const SDL_FPoint anchor = frame_anchor(selected_frame_index_);
+            float parent_scale = canvas_pixels_per_unit();
+            if (!std::isfinite(parent_scale) || parent_scale <= 0.0f) {
+                parent_scale = 1.0f;
+            }
+            const float offset_scale = parent_scale;
+            SDL_FPoint anchor_screen = canvas_ ? canvas_->frame_anchor_screen(selected_frame_index_)
+                                               : world_to_screen(frame_anchor(selected_frame_index_));
             if (auto* child = current_child()) {
-                child->dx = static_cast<float>(std::round(world.x - anchor.x));
-                child->dy = static_cast<float>(std::round(world.y - anchor.y));
+                float denom = (std::isfinite(offset_scale) && offset_scale > 0.0f) ? offset_scale : 1.0f;
+                child->dx = static_cast<float>(std::round((static_cast<float>(screen.x) - anchor_screen.x) / denom));
+                child->dy = static_cast<float>(std::round((static_cast<float>(screen.y) - anchor_screen.y) / denom));
                 persist_changes();
                 refresh_tools_panel();
             }
@@ -692,6 +700,9 @@ const FrameChildrenEditor::ChildFrame* FrameChildrenEditor::current_child() cons
 }
 
 SDL_FPoint FrameChildrenEditor::frame_anchor(int frame_index) const {
+    if (canvas_) {
+        return canvas_->frame_anchor_world(frame_index);
+    }
     SDL_FPoint anchor{0.0f, 0.0f};
     if (frames_.empty()) {
         return anchor;
@@ -730,15 +741,29 @@ SDL_FPoint FrameChildrenEditor::world_to_screen(const SDL_FPoint& world) const {
     return world;
 }
 
+SDL_FPoint FrameChildrenEditor::child_screen_position(const ChildFrame& child,
+                                                      const SDL_FPoint& anchor_screen,
+                                                      float offset_scale) const {
+    float scale = (std::isfinite(offset_scale) && offset_scale > 0.0f) ? offset_scale : 1.0f;
+    return SDL_FPoint{anchor_screen.x + child.dx * scale,
+                      anchor_screen.y + child.dy * scale};
+}
+
 int FrameChildrenEditor::hit_test_child(int x, int y) const {
     const MovementFrame* frame = current_frame();
     if (!frame) {
         return -1;
     }
-    const SDL_FPoint anchor = frame_anchor(selected_frame_index_);
+    float parent_scale = canvas_pixels_per_unit();
+    if (!std::isfinite(parent_scale) || parent_scale <= 0.0f) {
+        parent_scale = 1.0f;
+    }
+    const float offset_scale = parent_scale;
+    SDL_FPoint anchor_screen = canvas_ ? canvas_->frame_anchor_screen(selected_frame_index_)
+                                       : world_to_screen(frame_anchor(selected_frame_index_));
     SDL_Point pt{x, y};
     for (std::size_t i = 0; i < child_ids_.size() && i < frame->children.size(); ++i) {
-        SDL_FPoint screen = world_to_screen(SDL_FPoint{anchor.x + frame->children[i].dx, anchor.y + frame->children[i].dy});
+        SDL_FPoint screen = child_screen_position(frame->children[i], anchor_screen, offset_scale);
         SDL_Point center = round_point(screen);
         const bool is_selected = static_cast<int>(i) == selected_child_index_;
         const int radius = is_selected ? kMarkerRadius + 1 : kMarkerRadius - 1;
@@ -751,31 +776,44 @@ int FrameChildrenEditor::hit_test_child(int x, int y) const {
 }
 
 float FrameChildrenEditor::canvas_pixels_per_unit() const {
-    if (!canvas_) {
-        return 1.0f;
+    if (canvas_) {
+        float direct = canvas_->screen_pixels_per_unit();
+        if (std::isfinite(direct) && direct > 0.0f) {
+            return direct;
+        }
+        SDL_FPoint origin = canvas_->world_to_screen(SDL_FPoint{0.0f, 0.0f});
+        SDL_FPoint offset_x = canvas_->world_to_screen(SDL_FPoint{1.0f, 0.0f});
+        float dx = std::fabs(offset_x.x - origin.x);
+        if (std::isfinite(dx) && dx > 0.001f) {
+            return dx;
+        }
+        SDL_FPoint offset_y = canvas_->world_to_screen(SDL_FPoint{0.0f, 1.0f});
+        float dy = std::fabs(offset_y.y - origin.y);
+        if (std::isfinite(dy) && dy > 0.001f) {
+            return dy;
+        }
     }
-    SDL_FPoint origin = canvas_->world_to_screen(SDL_FPoint{0.0f, 0.0f});
-    SDL_FPoint offset_x = canvas_->world_to_screen(SDL_FPoint{1.0f, 0.0f});
-    float dx = std::fabs(offset_x.x - origin.x);
-    if (std::isfinite(dx) && dx > 0.001f) {
-        return dx;
+    return 1.0f;
+}
+
+float FrameChildrenEditor::document_scale_factor() const {
+    if (canvas_) {
+        float scale = canvas_->document_scale_factor();
+        if (std::isfinite(scale) && scale > 0.0f) {
+            return scale;
+        }
     }
-    SDL_FPoint offset_y = canvas_->world_to_screen(SDL_FPoint{0.0f, 1.0f});
-    float dy = std::fabs(offset_y.y - origin.y);
-    if (std::isfinite(dy) && dy > 0.001f) {
-        return dy;
+    if (document_) {
+        float pct = static_cast<float>(document_->scale_percentage());
+        if (std::isfinite(pct) && pct > 0.0f) {
+            return pct / 100.0f;
+        }
     }
     return 1.0f;
 }
 
 float FrameChildrenEditor::child_scale_percentage(const std::string& child_id) const {
     float fallback = 100.0f;
-    if (document_) {
-        float pct = static_cast<float>(document_->scale_percentage());
-        if (std::isfinite(pct) && pct > 0.0f) {
-            fallback = pct;
-        }
-    }
     if (child_id.empty()) {
         return fallback;
     }
@@ -1141,10 +1179,24 @@ SDL_Texture* FrameChildrenEditor::acquire_child_texture(SDL_Renderer* renderer,
         child_previews_.erase(child_id);
         return nullptr;
     }
-    SDL_Texture* raw = SDL_CreateTextureFromSurface(renderer, converted);
-    int width = converted->w;
-    int height = converted->h;
-    SDL_FreeSurface(converted);
+    SDL_Surface* scaled_surface = nullptr;
+    float child_scale = child_scale_percentage(child_id) / 100.0f;
+    if (!std::isfinite(child_scale) || child_scale <= 0.0f) {
+        child_scale = 1.0f;
+    }
+    if (std::fabs(child_scale - 1.0f) > 1e-4f) {
+        scaled_surface = render_pipeline::CreateScaledSurface(converted, child_scale);
+        if (scaled_surface) {
+            SDL_FreeSurface(converted);
+        } else {
+            scaled_surface = nullptr;
+        }
+    }
+    SDL_Surface* working = scaled_surface ? scaled_surface : converted;
+    SDL_Texture* raw = SDL_CreateTextureFromSurface(renderer, working);
+    int width = working ? working->w : 0;
+    int height = working ? working->h : 0;
+    SDL_FreeSurface(working);
     if (!raw) {
         child_previews_.erase(child_id);
         return nullptr;

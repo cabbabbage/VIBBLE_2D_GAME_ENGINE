@@ -556,14 +556,9 @@ void MovementCanvas::set_animation_context(std::shared_ptr<PreviewProvider> prov
     preview_provider_ = std::move(provider);
     animation_id_ = animation_id;
     base_scale_percentage_ = std::isfinite(scale_percentage) && scale_percentage > 0.0f ? scale_percentage : 100.0f;
-    // Use the configured scale as the base pixel density so every mode renders the selected frame texture
-    // at the same relative size as in the runtime.
-    const float units = base_scale_percentage_ / 100.0f;
-    if (std::isfinite(units) && units > 0.0f) {
-        pixels_per_unit_ = units;
-    } else {
-        pixels_per_unit_ = 1.0f;
-    }
+    // Keep world units as raw pixels; apply document scale explicitly when rendering the preview texture
+    // so positions (movement and child offsets) stay 1:1 with runtime.
+    pixels_per_unit_ = 1.0f;
 }
 
 void MovementCanvas::apply_frame_move_from_base(int index, const SDL_FPoint& new_position,
@@ -740,6 +735,40 @@ SDL_FPoint MovementCanvas::screen_to_world(SDL_Point screen) const {
     }
     return SDL_FPoint{(static_cast<float>(screen.x) - center_px.x) / scale + center_world_.x,
                       -(static_cast<float>(screen.y) - center_px.y) / scale + center_world_.y};
+}
+
+float MovementCanvas::screen_pixels_per_unit() const {
+    const float scale = pixels_per_unit_ * zoom_;
+    if (!std::isfinite(scale) || scale <= 0.0f) {
+        return 1.0f;
+    }
+    return scale;
+}
+
+float MovementCanvas::document_scale_factor() const {
+    if (!std::isfinite(base_scale_percentage_) || base_scale_percentage_ <= 0.0f) {
+        return 1.0f;
+    }
+    return base_scale_percentage_ / 100.0f;
+}
+
+SDL_FPoint MovementCanvas::frame_position_world(int frame_index) const {
+    if (positions_.empty()) {
+        return SDL_FPoint{0.0f, 0.0f};
+    }
+    int idx = std::clamp(frame_index, 0, static_cast<int>(positions_.size()) - 1);
+    return positions_[static_cast<size_t>(idx)];
+}
+
+SDL_FPoint MovementCanvas::frame_anchor_world(int frame_index) const {
+    if (!anchor_follows_movement_) {
+        return SDL_FPoint{0.0f, 0.0f};
+    }
+    return frame_position_world(frame_index);
+}
+
+SDL_FPoint MovementCanvas::frame_anchor_screen(int frame_index) const {
+    return world_to_screen(frame_anchor_world(frame_index));
 }
 
 }

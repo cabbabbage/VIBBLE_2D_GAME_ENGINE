@@ -65,8 +65,12 @@ class FrameChildrenEditor {
     bool point_in_canvas(int x, int y) const;
     SDL_FPoint screen_to_world(SDL_Point screen) const;
     SDL_FPoint world_to_screen(const SDL_FPoint& world) const;
+    SDL_FPoint child_screen_position(const ChildFrame& child,
+                     const SDL_FPoint& anchor_screen,
+                     float offset_scale) const;
     int hit_test_child(int x, int y) const;
     float canvas_pixels_per_unit() const;
+    float document_scale_factor() const;
     float child_scale_percentage(const std::string& child_id) const;
     std::filesystem::path resolve_assets_root() const;
     float lookup_scale_from_manifest(const std::string& key) const;
@@ -92,7 +96,6 @@ class FrameChildrenEditor {
     int selected_child_index_ = 0;
     bool dragging_child_ = false;
     SDL_Point drag_start_screen_{0, 0};
-    SDL_FPoint drag_start_world_{0.0f, 0.0f};
     ChildFrame drag_snapshot_;
     // Track the last-seen payload and children signature separately so we can safely
     // detect changes without corrupting the cached JSON.

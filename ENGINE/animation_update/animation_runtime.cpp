@@ -185,7 +185,10 @@ void AnimationRuntime::apply_pending_move() {
         if (req.resort_z) {
             refresh_z_index();
         }
-        suppress_root_motion_frames_ = std::max(1, suppress_root_motion_frames_);
+        suppress_root_motion_frames_ = std::max(2, suppress_root_motion_frames_);
+        if (planner_iface_) {
+            planner_iface_->clear_movement_plan();
+        }
     }
 
     // Reflect new position as the destination for planners

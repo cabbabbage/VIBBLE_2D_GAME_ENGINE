@@ -23,7 +23,7 @@ class WarpedScreenGrid {
 public:
     // Public constants
     static constexpr float kMinZoomAnchors = 0.5f;
-    static constexpr float kMaxZoomAnchors = 4.0f;
+    static constexpr float kMaxZoomAnchors = 20.0f;
     static constexpr float kMinPitchDegrees = 0.0f;
     static constexpr float kMaxPitchDegrees = 150.0f;
     static constexpr bool kForceDepthPerspectiveDisabled = true; // Toggle to false once perspective effects are restored.

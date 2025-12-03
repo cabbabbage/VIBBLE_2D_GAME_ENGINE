@@ -642,7 +642,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 203.0
+        "scale_percentage": 100.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -696,7 +696,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 203.0
+        "scale_percentage": 100.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -850,7 +850,14 @@
           "hit_geometry": [
             {
               "explosion": null,
-              "melee": null,
+              "melee": {
+                "center_x": 0.0,
+                "center_y": 322.3177185058594,
+                "half_height": 60.0,
+                "half_width": 40.0,
+                "rotation": 146.894287109375,
+                "type": "melee"
+              },
               "projectile": null
             },
             {
@@ -898,15 +905,15 @@
               0
             ],
             [
-              0,
+              1,
               0,
               false,
               null,
               [
                 [
                   0,
-                  30,
-                  9,
+                  42,
+                  43,
                   0.0,
                   true,
                   true
@@ -914,15 +921,15 @@
               ]
             ],
             [
-              0,
+              1,
               0,
               false,
               null,
               [
                 [
                   0,
-                  30,
-                  9,
+                  42,
+                  43,
                   0.0,
                   true,
                   true
@@ -930,15 +937,15 @@
               ]
             ],
             [
-              0,
+              1,
               0,
               false,
               null,
               [
                 [
                   0,
-                  30,
-                  9,
+                  42,
+                  43,
                   0.0,
                   true,
                   true
@@ -946,15 +953,15 @@
               ]
             ],
             [
-              0,
+              1,
               0,
               false,
               null,
               [
                 [
                   0,
-                  30,
-                  9,
+                  42,
+                  43,
                   0.0,
                   true,
                   true
@@ -962,15 +969,15 @@
               ]
             ],
             [
-              0,
+              1,
               0,
               false,
               null,
               [
                 [
                   0,
-                  30,
-                  9,
+                  42,
+                  43,
                   0.0,
                   true,
                   true
@@ -978,15 +985,15 @@
               ]
             ],
             [
-              0,
+              1,
               0,
               false,
               null,
               [
                 [
                   0,
-                  30,
-                  9,
+                  42,
+                  43,
                   0.0,
                   true,
                   true
@@ -994,15 +1001,15 @@
               ]
             ],
             [
-              47,
-              -249,
+              -6,
+              0,
               false,
               null,
               [
                 [
                   0,
-                  -17,
-                  -57,
+                  42,
+                  43,
                   0.0,
                   true,
                   true
@@ -1011,8 +1018,8 @@
             ]
           ],
           "movement_total": {
-            "dx": 47,
-            "dy": -249
+            "dx": 0,
+            "dy": 0
           },
           "number_of_frames": 8,
           "on_end": "default",
@@ -1475,7 +1482,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 20.0
+        "scale_percentage": 15.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -1555,7 +1562,6 @@
             "Candle"
           ],
           "flipped_source": false,
-          "fps": 24,
           "hit_geometry": [
             {
               "explosion": null,
@@ -1584,8 +1590,7 @@
             "kind": "folder",
             "name": "",
             "path": "default"
-          },
-          "speed_factor": 1.0
+          }
         }
       },
       "anti_tags": [],
@@ -3014,7 +3019,7 @@
         "render_quality_percent": 50,
         "scale_hysteresis_margin": 0.004999999888241291,
         "texture_opacity_falloff_method": 3,
-        "zoom_high": 3.999999761581421,
+        "zoom_high": 8.529999732971191,
         "zoom_low": 0.9399999976158142
       },
       "content_root": "MAPS/FORREST",
@@ -3123,10 +3128,12 @@
           ]
         },
         {
+          "bounding_extent": 7071.067811865475,
           "level": 1,
           "max_rooms": 1,
           "min_rooms": 0,
           "name": "layer_1",
+          "ring_radius": 11523.0,
           "rooms": [
             {
               "max_instances": 1,
@@ -3329,9 +3336,9 @@
         "bar": {
           "curvyness": 2,
           "display_color": [
-            242,
-            134,
-            36,
+            31,
+            204,
+            31,
             255
           ],
           "edge_smoothness": 19,
@@ -3349,9 +3356,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            36,
+            170,
             242,
-            148,
+            36,
             255
           ],
           "edge_smoothness": 43,
@@ -3402,9 +3409,9 @@
         "rnd": {
           "curvyness": 2,
           "display_color": [
-            32,
-            31,
-            204,
+            242,
+            85,
+            242,
             255
           ],
           "edge_smoothness": 2,
@@ -3422,9 +3429,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            207,
-            242,
-            85,
+            204,
+            31,
+            31,
             255
           ],
           "edge_smoothness": 101,
@@ -3569,8 +3576,8 @@
                 }
               ],
               "display_name": "church",
-              "dx": -1756,
-              "dy": -1276,
+              "dx": -1564,
+              "dy": -2060,
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
@@ -3581,10 +3588,39 @@
               "origional_width": 6904,
               "position": "Exact",
               "priority": 4,
-              "resolution": 8,
+              "resolution": 3,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-0feef2a44e33"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "trail"
+                }
+              ],
+              "display_name": "trail",
+              "dx": 60,
+              "dy": 2108,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 6904,
+              "origional_width": 6904,
+              "position": "Exact",
+              "priority": 5,
+              "resolution": 5,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-1a3f8fad520b"
             }
           ]
         }
