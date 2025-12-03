@@ -5,6 +5,7 @@
 #include "asset_info_methods/asset_child_loader.hpp"
 #include "asset_info_methods/lighting_loader.hpp"
 #include "utils/cache_manager.hpp"
+#include "utils/rebuild_queue.hpp"
 #include "core/manifest/manifest_loader.hpp"
 #include <algorithm>
 #include <iomanip>
@@ -257,47 +258,28 @@ bool try_load_cached_lights(const fs::path& cache_dir,
 }
 
 bool regenerate_lights_via_python(const std::string& asset_name) {
-    try {
-        const fs::path manifest_path = manifest::manifest_path();
-        const fs::path root          = manifest_path.parent_path();
-        const fs::path script        = root / "tools" / "light_tool.py";
-        const fs::path cache_root    = root / "cache";
-
-        if (!fs::exists(script)) {
-            std::cerr << "[AssetInfo] Cannot regenerate lights for '" << asset_name
-                      << "' because light_tool.py is missing at " << script << "\n";
-            return false;
-        }
-
-        std::string command =
-            "python \"" + script.string() + "\" \"" +
-            manifest_path.string() + "\" \"" + cache_root.string() + "\" \"" +
-            asset_name + "\"";
-
-#if defined(_WIN32)
-        command =
-            "set \"PATH=%PATH%;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.0\\bin\" && " +
-            command;
-#endif
-
-        std::cout << "[AssetInfo] Regenerating lights via light_tool.py for '"
-                  << asset_name << "'\n";
-        const int ret = std::system(command.c_str());
-        if (ret != 0) {
-            std::cerr << "[AssetInfo] light_tool.py exited with code " << ret
-                      << " while rebuilding lights for '" << asset_name << "'\n";
-            return false;
-        }
-        return true;
-    } catch (const std::exception& ex) {
-        std::cerr << "[AssetInfo] Failed to run light_tool.py for '" << asset_name
-                  << "': " << ex.what() << "\n";
-    } catch (...) {
-        std::cerr << "[AssetInfo] Failed to run light_tool.py for '" << asset_name
-                  << "' (unknown error)\n";
+    if (asset_name.empty()) {
+        return false;
     }
 
-    return false;
+    vibble::RebuildQueueCoordinator coordinator;
+    coordinator.request_light(asset_name);
+
+#if defined(_WIN32)
+    const std::string prefix =
+        "set \"PATH=%PATH%;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.0\\bin\" && ";
+#else
+    const std::string prefix;
+#endif
+
+    std::cout << "[AssetInfo] Regenerating lights via light_tool.py for '"
+              << asset_name << "'\n";
+    if (!coordinator.run_light_tool(prefix)) {
+        std::cerr << "[AssetInfo] light_tool.py failed for '" << asset_name << "'\n";
+        return false;
+    }
+
+    return true;
 }
 
 float read_float_field(const nlohmann::json& data, const char* key, float fallback) {

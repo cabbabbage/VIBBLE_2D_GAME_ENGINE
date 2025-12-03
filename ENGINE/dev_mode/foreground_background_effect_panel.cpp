@@ -9,6 +9,7 @@
 #include "dev_mode/widgets.hpp"
 #include "render/warped_screen_grid.hpp"
 #include "utils/cache_manager.hpp"
+#include "utils/rebuild_queue.hpp"
 
 #include <SDL_image.h>
 
@@ -999,19 +1000,20 @@ void ForegroundBackgroundEffectPanel::apply_and_regenerate() {
     }
 
     // Always regenerate the selected asset (or all assets if none selected) so Python applies current settings
-    const fs::path manifest_path = manifest::manifest_path();
-    const fs::path cache_root = "cache";
-    std::string python_cmd = std::string("python tools/asset_tool.py \"") +
-                             manifest_path.string() + "\" \"" + cache_root.string() + "\"";
-    if (!selected_asset_.empty()) {
-        python_cmd += " \"" + selected_asset_ + "\"";
+    vibble::RebuildQueueCoordinator coordinator;
+    if (selected_asset_.empty()) {
+        coordinator.request_full_asset_rebuild();
+    } else {
+        coordinator.request_asset(selected_asset_);
     }
-    std::cout << "[DepthCuePanel] Executing: " << python_cmd << "\n";
-    int result = std::system(python_cmd.c_str());
-    if (result != 0) {
-        std::cerr << "[DepthCuePanel] Failed to regenerate cache"
+
+    std::cout << "[DepthCuePanel] Running asset_tool.py via rebuild queue"
+              << (selected_asset_.empty() ? " for all assets" : (" for " + selected_asset_))
+              << "...\n";
+    if (!coordinator.run_asset_tool()) {
+        std::cerr << "[DepthCuePanel] asset_tool.py failed"
                   << (selected_asset_.empty() ? "" : " for " + selected_asset_)
-                  << ", exit code: " << result << "\n";
+                  << "; see logs for details.\n";
     }
 
     assets_->library().loadAllAnimations(renderer);

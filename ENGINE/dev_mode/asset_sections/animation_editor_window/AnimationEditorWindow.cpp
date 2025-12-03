@@ -25,10 +25,12 @@
 #include "EditorUIPrimitives.hpp"
 #include "AsyncTaskQueue.hpp"
 #include "AudioImporter.hpp"
+#include "core/manifest/manifest_loader.hpp"
 #include "CroppingService.hpp"
 #include "PreviewProvider.hpp"
 #include "string_utils.hpp"
 #include "ui/tinyfiledialogs.h"
+#include "utils/rebuild_queue.hpp"
 #ifdef _WIN32
 #  ifndef NOMINMAX
 #    define NOMINMAX
@@ -1826,26 +1828,14 @@ bool AnimationEditorWindow::regenerate_via_asset_tool(const std::shared_ptr<Asse
         return false;
     }
 
-    const std::filesystem::path project_root = std::filesystem::current_path();
+    const std::filesystem::path project_root = std::filesystem::path(manifest::manifest_path()).parent_path();
     const std::filesystem::path cache_root = project_root / "cache";
-    const std::filesystem::path manifest_path = project_root / "manifest.json";
-    const std::filesystem::path asset_tool = project_root / "tools" / "asset_tool.py";
-    if (!std::filesystem::exists(asset_tool)) {
-        set_status_message("Missing tools/asset_tool.py; cannot rebuild cache.", 300);
-        return false;
-    }
-
     clear_animation_cache(cache_root, asset_name, animation_id);
 
-    std::ostringstream cmd;
-    cmd << "python \"" << asset_tool.generic_string() << "\" "
-        << "\"" << manifest_path.generic_string() << "\" "
-        << "\"" << cache_root.generic_string() << "\" "
-        << "\"" << asset_name << "\" "
-        << "\"" << animation_id << "\"";
-
-    const int rc = std::system(cmd.str().c_str());
-    if (rc != 0) {
+    vibble::RebuildQueueCoordinator coordinator;
+    coordinator.request_animation(asset_name, animation_id);
+    if (!coordinator.run_asset_tool()) {
+        set_status_message("asset_tool.py failed; see logs for details.", 240);
         return false;
     }
 

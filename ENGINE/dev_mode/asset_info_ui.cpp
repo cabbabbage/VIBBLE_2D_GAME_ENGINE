@@ -59,6 +59,7 @@
 #include "dev_mode/asset_paths.hpp"
 
 #include "dev_mode/rebuildAnimation.hpp"
+#include "utils/rebuild_queue.hpp"
 
 namespace asset_paths = devmode::asset_paths;
 
@@ -1831,39 +1832,20 @@ void AssetInfoUI::regenerate_shadow_masks() {
     }
     last_renderer_ = renderer;
 
-    try {
-        const std::filesystem::path manifest_path = manifest::manifest_path();
-        const std::filesystem::path root          = manifest_path.parent_path();
-        const std::filesystem::path script        = root / "tools" / "asset_tool.py";
-        const std::filesystem::path cache_root    = root / "cache";
+    vibble::RebuildQueueCoordinator coordinator;
+    coordinator.request_asset(info_->name);
 
-        if (std::filesystem::exists(script)) {
-    #if defined(_WIN32)
-            std::string python_cmd = "python \"" + script.string() + "\" \"" +
-                                     manifest_path.string() + "\" \"" + cache_root.string() + "\" \"" +
-                                     info_->name + "\"";
-            python_cmd = "set \"PATH=%PATH%;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.0\\bin\" && " + python_cmd;
-    #else
-            std::string python_cmd = "python \"" + script.string() + "\" \"" +
-                                     manifest_path.string() + "\" \"" + cache_root.string() + "\" \"" +
-                                     info_->name + "\"";
-    #endif
-            std::cout << "[AssetInfoUI] Regenerating masks via asset_tool.py for "
-                      << info_->name << "\n";
-            int ret = std::system(python_cmd.c_str());
-            if (ret != 0) {
-                std::cerr << "[AssetInfoUI] asset_tool.py returned " << ret
-                          << " while regenerating masks for " << info_->name << "\n";
-            }
-        } else {
-            std::cerr << "[AssetInfoUI] asset_tool.py missing; cannot regenerate masks for "
-                      << info_->name << "\n";
-        }
-    } catch (const std::exception& ex) {
-        std::cerr << "[AssetInfoUI] Failed to regenerate masks for " << info_->name
-                  << ": " << ex.what() << "\n";
-    } catch (...) {
-        std::cerr << "[AssetInfoUI] Unknown error while regenerating masks for "
+#if defined(_WIN32)
+    const std::string prefix =
+        "set \"PATH=%PATH%;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.0\\bin\" && ";
+#else
+    const std::string prefix;
+#endif
+
+    std::cout << "[AssetInfoUI] Queueing mask regeneration via asset_tool.py for "
+              << info_->name << "\n";
+    if (!coordinator.run_asset_tool(prefix)) {
+        std::cerr << "[AssetInfoUI] asset_tool.py failed while regenerating masks for "
                   << info_->name << "\n";
     }
 

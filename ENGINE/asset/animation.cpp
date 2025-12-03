@@ -4,6 +4,7 @@
 #include "asset/surface_utils.hpp"
 #include "utils/cache_manager.hpp"
 #include "render/render.hpp"
+#include "render/scaling_logic.hpp"
 #include "utils/loading_status_notifier.hpp"
 #include "utils/log.hpp"
 #include <SDL_image.h>
@@ -286,24 +287,15 @@ bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool fl
 }
 
 const FrameVariant* Animation::get_frame(const AnimationFrame* frame, float requested_scale) const {
-    
-    //if requested_scale == 25 50 75 100 percent return that exact matching frame variant
-    
     if (!frame || frame->variants.empty()) return nullptr;
-    
-    int best_variant_idx = 0;
-    if (!variant_steps_.empty()) {
-        auto it = std::lower_bound(variant_steps_.begin(), variant_steps_.end(), requested_scale);
-        if (it != variant_steps_.end()) {
-            best_variant_idx = static_cast<int>(std::distance(variant_steps_.begin(), it));
-        } else {
-            best_variant_idx = static_cast<int>(variant_steps_.size()) - 1;
-        }
-    }
-    
+
+    // Select the smallest available variant that is at least as large as the requested scale.
+    const auto selection = render_pipeline::ScalingLogic::Choose(requested_scale, variant_steps_);
+    int best_variant_idx = selection.index;
+
     if (best_variant_idx < 0) best_variant_idx = 0;
     if (best_variant_idx >= static_cast<int>(frame->variants.size())) best_variant_idx = static_cast<int>(frame->variants.size()) - 1;
-    
+
     return &frame->variants[best_variant_idx];
 }
 

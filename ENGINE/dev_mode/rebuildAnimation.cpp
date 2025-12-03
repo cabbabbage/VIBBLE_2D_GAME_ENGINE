@@ -13,6 +13,7 @@
 #include "asset/asset_info.hpp"
 #include "core/AssetsManager.hpp"
 #include "core/manifest/manifest_loader.hpp"
+#include "utils/rebuild_queue.hpp"
 
 namespace fs = std::filesystem;
 
@@ -53,29 +54,17 @@ bool clear_animation_cache(const fs::path& cache_root,
     return cleared_any;
 }
 
-bool run_python_regen(const fs::path& project_root,
-                      const std::string& asset_name,
+bool run_python_regen(const std::string& asset_name,
                       const std::string& animation_id) {
-    const fs::path python_script = project_root / "tools" / "asset_tool.py";
-    const fs::path manifest_path = project_root / "manifest.json";
-    const fs::path cache_root = project_root / "cache";
-
-    std::ostringstream oss;
-    oss << "python \"" << python_script.string() << "\" "
-        << "\"" << manifest_path.string() << "\" "
-        << "\"" << cache_root.string() << "\" "
-        << "\"" << asset_name << "\" "
-        << "\"" << animation_id << "\"";
-    const std::string cmd = oss.str();
-
-    std::cout << "[AnimationRegenerator] Running: " << cmd << "\n";
-    const int ret = std::system(cmd.c_str());
-    if (ret != 0) {
+    vibble::RebuildQueueCoordinator coordinator;
+    coordinator.request_animation(asset_name, animation_id);
+    std::cout << "[AnimationRegenerator] Queueing asset_tool.py for "
+              << asset_name << "::" << animation_id << "\n";
+    if (!coordinator.run_asset_tool()) {
         std::cerr << "[AnimationRegenerator] asset_tool.py failed for " << asset_name
-                  << "::" << animation_id << " (exit code " << ret << ")\n";
+                  << "::" << animation_id << "\n";
         return false;
     }
-
     return true;
 }
 
@@ -165,8 +154,7 @@ AnimationRegenerationResult AnimationRegenerator::regenerate_animation(
     result.cache_cleared = clear_animation_cache(cache_root, asset_name, animation_id);
 
     result.python_launched = true;
-    result.python_success =
-        run_python_regen(project_root, asset_name, animation_id);
+    result.python_success = run_python_regen(asset_name, animation_id);
     if (!result.python_success) {
         return result;
     }

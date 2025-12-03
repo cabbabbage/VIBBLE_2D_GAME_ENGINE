@@ -185,6 +185,7 @@ void AnimationRuntime::apply_pending_move() {
         if (req.resort_z) {
             refresh_z_index();
         }
+        suppress_root_motion_frames_ = std::max(1, suppress_root_motion_frames_);
     }
 
     // Reflect new position as the destination for planners
@@ -486,6 +487,12 @@ void AnimationRuntime::advance_child_frames(float dt) {
     if (!self_ || self_->animation_children_.empty()) {
         return;
     }
+    std::vector<const AnimationFrame*> previous_frames;
+    previous_frames.reserve(self_->animation_children_.size());
+    for (const auto& slot : self_->animation_children_) {
+        previous_frames.push_back(slot.current_frame);
+    }
+
     animation_update::child_attachments::ParentState parent_state;
     SDL_Point render_pos{ static_cast<int>(std::lround(self_->smoothed_translation_x())),
                           static_cast<int>(std::lround(self_->smoothed_translation_y())) };
@@ -494,12 +501,38 @@ void AnimationRuntime::advance_child_frames(float dt) {
     parent_state.flipped = self_->flipped;
     parent_state.animation_id = self_->current_animation;
     animation_update::child_attachments::advance_frames(self_->animation_children_, parent_state, dt);
+
+    bool any_changed = false;
+    for (std::size_t i = 0; i < self_->animation_children_.size(); ++i) {
+        if (self_->animation_children_[i].current_frame != previous_frames[i]) {
+            any_changed = true;
+            break;
+        }
+    }
+    if (any_changed) {
+        self_->mark_composite_dirty();
+    }
 }
 
 void AnimationRuntime::apply_child_frame_data(const AnimationFrame* frame) {
     if (!self_ || self_->animation_children_.empty()) {
         return;
     }
+    std::vector<bool> prev_visible;
+    std::vector<bool> prev_front;
+    std::vector<float> prev_rotation;
+    std::vector<SDL_Point> prev_world;
+    prev_visible.reserve(self_->animation_children_.size());
+    prev_front.reserve(self_->animation_children_.size());
+    prev_rotation.reserve(self_->animation_children_.size());
+    prev_world.reserve(self_->animation_children_.size());
+    for (const auto& slot : self_->animation_children_) {
+        prev_visible.push_back(slot.visible);
+        prev_front.push_back(slot.render_in_front);
+        prev_rotation.push_back(slot.rotation_degrees);
+        prev_world.push_back(slot.world_pos);
+    }
+
     animation_update::child_attachments::ParentState parent_state;
     SDL_Point render_pos{ static_cast<int>(std::lround(self_->smoothed_translation_x())),
                           static_cast<int>(std::lround(self_->smoothed_translation_y())) };
@@ -508,6 +541,23 @@ void AnimationRuntime::apply_child_frame_data(const AnimationFrame* frame) {
     parent_state.flipped = self_->flipped;
     parent_state.animation_id = self_->current_animation;
     animation_update::child_attachments::apply_frame_data(self_->animation_children_, parent_state, frame);
+
+    bool any_changed = false;
+    for (std::size_t i = 0; i < self_->animation_children_.size(); ++i) {
+        const auto& slot = self_->animation_children_[i];
+        const bool changed = (prev_visible[i] != slot.visible) ||
+                             (prev_front[i] != slot.render_in_front) ||
+                             (std::abs(prev_rotation[i] - slot.rotation_degrees) > 0.001f) ||
+                             (prev_world[i].x != slot.world_pos.x) ||
+                             (prev_world[i].y != slot.world_pos.y);
+        if (changed) {
+            any_changed = true;
+            break;
+        }
+    }
+    if (any_changed) {
+        self_->mark_composite_dirty();
+    }
     sync_child_assets();
 }
 
@@ -593,12 +643,6 @@ void AnimationRuntime::sync_child_assets() {
             continue;
         }
 
-        if (!slot.visible) {
-            child->hidden = true;
-            child->alpha_smoothing_.target = 0.0f;
-            continue;
-        }
-
         // Keep attachment in parent's ownership list.
         if (std::find(self_->asset_children.begin(), self_->asset_children.end(), child) ==
             self_->asset_children.end()) {
@@ -617,7 +661,8 @@ void AnimationRuntime::sync_child_assets() {
         child->grid_resolution = self_->grid_resolution;
         child->depth = self_->depth;
         child->flipped = self_->flipped;
-        child->hidden = !slot.visible;
+        // Always hide the spawned asset; it is rendered via the parent's composite package.
+        child->hidden = true;
         child->z_offset = self_->z_offset + (slot.render_in_front ? 1 : -1);
         child->set_z_index();
         // Keep child aligned exactly with parent: disable smoothing and snap to the attachment position.
@@ -629,7 +674,9 @@ void AnimationRuntime::sync_child_assets() {
         child->translation_smoothing_x_.reset(static_cast<float>(child->pos.x));
         child->translation_smoothing_y_.reset(static_cast<float>(child->pos.y));
         child->alpha_smoothing_.set_params(snap);
-        child->alpha_smoothing_.reset(child->hidden ? 0.0f : 1.0f);
+        child->alpha_smoothing_.reset(0.0f);
+        child->render_package.clear();
+        child->scene_mask_lights.clear();
     }
 }
 

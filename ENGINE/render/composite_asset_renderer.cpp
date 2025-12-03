@@ -1,5 +1,7 @@
 #include "composite_asset_renderer.hpp"
 #include "asset/Asset.hpp"
+#include "asset/animation.hpp"
+#include "asset/animation_frame_variant.hpp"
 #include "core/AssetsManager.hpp"
 #include "world/world_grid.hpp"
 #include "world/grid_point.hpp"
@@ -19,23 +21,6 @@ void CompositeAssetRenderer::update(Asset* asset,
                                     const world::GridPoint* gp,
                                     float flicker_time_seconds) {
     if (!asset) return;
-
-    // Recursively update children first
-    bool children_dirty = false;
-    for (const auto& child_attachment : asset->animation_children()) {
-        if (child_attachment.child_index < 0) {
-            continue;
-        }
-        if (child_attachment.spawned_asset) {
-            Asset* child = child_attachment.spawned_asset;
-            const bool child_was_dirty = child->is_composite_dirty();
-            // Children do not have their own grid point, they are relative to the parent
-            update(child, nullptr, flicker_time_seconds);
-            if (child_was_dirty || child->is_composite_dirty()) {
-                children_dirty = true;
-            }
-        }
-    }
 
     float combined_scale = asset->current_nearest_variant_scale * asset->current_remaining_scale_adjustment;
     if (!std::isfinite(combined_scale) || combined_scale <= 0.0f) {
@@ -57,8 +42,8 @@ void CompositeAssetRenderer::update(Asset* asset,
         asset->mark_composite_dirty();
     }
 
-    // If asset is dirty or any child is dirty, regenerate
-    if (asset->is_composite_dirty() || children_dirty) {
+    // If asset is dirty, regenerate
+    if (asset->is_composite_dirty()) {
         regenerate_package(asset, gp, flicker_time_seconds, package_scale, perspective_scale);
     } else {
         asset->composite_scale_ = package_scale;
@@ -190,33 +175,53 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
     }
 
     // 2. Child animation assets behind
-    for (const auto& child_attachment : asset->animation_children()) {
-        if (child_attachment.child_index >= 0 &&
-            child_attachment.visible &&
-            !child_attachment.render_in_front &&
-            child_attachment.spawned_asset) {
-
-            Asset* child = child_attachment.spawned_asset;
-            for (const auto& render_obj : child->render_package) {
-                // Child render packages are already expressed in world space.
-                SDL_Rect child_rect = render_obj.screen_rect;
-
-                double final_angle = render_obj.angle + static_cast<double>(child_attachment.rotation_degrees);
-                std::optional<SDL_Point> center_opt = std::nullopt;
-                if (render_obj.use_custom_center) {
-                    center_opt = render_obj.center;
-                }
-
-                add_render_object(render_obj.texture,
-                                  child_rect,
-                                  render_obj.color_mod,
-                                  render_obj.blend_mode,
-                                  false,
-                                  final_angle,
-                                  center_opt,
-                                  render_obj.flip);
-            }
+    auto emit_child = [&](const Asset::AnimationChildAttachment& slot) {
+        if (slot.child_index < 0 || !slot.visible || !slot.animation || !slot.current_frame) {
+            return;
         }
+        const FrameVariant* variant =
+            slot.animation->get_frame(slot.current_frame, asset->current_nearest_variant_scale);
+        SDL_Texture* tex = variant ? variant->get_base_texture() : nullptr;
+        if (!tex && slot.current_frame && !slot.current_frame->variants.empty()) {
+            tex = slot.current_frame->variants[0].base_texture;
+        }
+        if (!tex) {
+            return;
+        }
+        int tex_w = 0;
+        int tex_h = 0;
+        SDL_QueryTexture(tex, nullptr, nullptr, &tex_w, &tex_h);
+        float remainder = asset->current_remaining_scale_adjustment;
+        if (!std::isfinite(remainder) || remainder <= 0.0f) {
+            remainder = 1.0f;
+        }
+        const float base_adjustment = remainder / std::max(0.0001f, perspective_scale);
+        int final_w = static_cast<int>(std::lround(static_cast<float>(tex_w) * base_adjustment));
+        int final_h = static_cast<int>(std::lround(static_cast<float>(tex_h) * base_adjustment));
+        final_w = std::max(1, final_w);
+        final_h = std::max(1, final_h);
+        SDL_Rect dest_rect{
+            slot.world_pos.x - final_w / 2,
+            slot.world_pos.y - final_h,
+            final_w,
+            final_h
+        };
+        SDL_RendererFlip flip = asset->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
+        add_render_object(tex,
+                          dest_rect,
+                          SDL_Color{255, 255, 255, 255},
+                          SDL_BLENDMODE_BLEND,
+                          false,
+                          static_cast<double>(slot.rotation_degrees),
+                          std::nullopt,
+                          flip);
+    };
+
+    for (const auto& child_attachment : asset->animation_children()) {
+        if (child_attachment.render_in_front) {
+            continue;
+        }
+        emit_child(child_attachment);
     }
 
     // 3. Base Asset and Depth Cue
@@ -230,13 +235,14 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
         if (anim_it != asset->info->animations.end()) {
             anim_ptr = &anim_it->second;
             if (asset->current_frame) {
-                const FrameVariant* variant =
-                    anim_ptr->get_frame(asset->current_frame,
-                                        asset->current_nearest_variant_scale);
-                if (variant) {
-                    base_tex = variant->get_base_texture();
-                    fg_tex = variant->get_depthcue_foreground_texture();
-                    bg_tex = variant->get_depthcue_background_texture();
+                const auto& variants = asset->current_frame->variants;
+                if (!variants.empty()) {
+                    int variant_idx = asset->current_variant_index;
+                    variant_idx = std::clamp(variant_idx, 0, static_cast<int>(variants.size()) - 1);
+                    const FrameVariant& variant = variants[static_cast<std::size_t>(variant_idx)];
+                    base_tex = variant.get_base_texture();
+                    fg_tex = variant.get_depthcue_foreground_texture();
+                    bg_tex = variant.get_depthcue_background_texture();
                 }
             }
         }
@@ -308,32 +314,10 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
 
     // 5. Child animation assets in front
     for (const auto& child_attachment : asset->animation_children()) {
-        if (child_attachment.child_index >= 0 &&
-            child_attachment.visible &&
-            child_attachment.render_in_front &&
-            child_attachment.spawned_asset) {
-
-            Asset* child = child_attachment.spawned_asset;
-            for (const auto& render_obj : child->render_package) {
-                // Child render packages are already expressed in world space.
-                SDL_Rect child_rect = render_obj.screen_rect;
-
-                double final_angle = render_obj.angle + static_cast<double>(child_attachment.rotation_degrees);
-                std::optional<SDL_Point> center_opt = std::nullopt;
-                if (render_obj.use_custom_center) {
-                    center_opt = render_obj.center;
-                }
-
-                add_render_object(render_obj.texture,
-                                  child_rect,
-                                  render_obj.color_mod,
-                                  render_obj.blend_mode,
-                                  false,
-                                  final_angle,
-                                  center_opt,
-                                  render_obj.flip);
-            }
+        if (!child_attachment.render_in_front) {
+            continue;
         }
+        emit_child(child_attachment);
     }
 
     // 6. In-front lights
