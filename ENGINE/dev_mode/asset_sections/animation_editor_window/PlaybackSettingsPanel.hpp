@@ -13,7 +13,6 @@
 
 class DMCheckbox;
 class DMSlider;
-class DMDropdown;
 
 namespace animation_editor {
 
@@ -46,8 +45,6 @@ class PlaybackSettingsPanel {
         bool inherit_source_movement = true; // new: controls whether movement is inherited from source animation
         bool locked = false;
         bool random_start = false;
-        // New: explicit playback FPS selection
-        int fps = 24;
 
         bool operator==(const PlaybackState& other) const {
             return flipped_source == other.flipped_source &&
@@ -57,8 +54,7 @@ class PlaybackSettingsPanel {
                    flip_movement_vertical == other.flip_movement_vertical &&
                    inherit_source_movement == other.inherit_source_movement &&
                    locked == other.locked &&
-                   random_start == other.random_start &&
-                   fps == other.fps;
+                   random_start == other.random_start;
         }
 
         bool operator!=(const PlaybackState& other) const { return !(*this == other); }
@@ -93,7 +89,6 @@ class PlaybackSettingsPanel {
     std::unique_ptr<DMCheckbox> locked_checkbox_;
     std::unique_ptr<DMCheckbox> random_start_checkbox_;
     std::unique_ptr<DMSlider> speed_slider_; // legacy UI, no longer used
-    std::unique_ptr<DMDropdown> fps_dropdown_;
 
     PlaybackState state_{};
     PlaybackState document_state_{};

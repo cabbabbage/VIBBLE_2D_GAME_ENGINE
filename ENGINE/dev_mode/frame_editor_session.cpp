@@ -3689,9 +3689,10 @@ void FrameEditorSession::select_child(int index) {
 }
 
 void FrameEditorSession::persist_changes() {
-    if (!document_) return;
-    if (!animation_id_.empty() &&
-        std::find(edited_animation_ids_.begin(), edited_animation_ids_.end(), animation_id_) == edited_animation_ids_.end()) {
+    if (!document_ || animation_id_.empty()) {
+        return;
+    }
+    if (std::find(edited_animation_ids_.begin(), edited_animation_ids_.end(), animation_id_) == edited_animation_ids_.end()) {
         edited_animation_ids_.push_back(animation_id_);
     }
     // Serialize primary movement + totals (reuse logic similar to FrameMovementEditor)
@@ -3701,13 +3702,11 @@ void FrameEditorSession::persist_changes() {
         if (!payload.is_object()) payload = nlohmann::json::object();
     }
     // Keep the animation children list in sync with the document so runtimes know which assets to bind.
-    if (document_) {
-        document_->replace_animation_children(child_assets_);
-        if (child_assets_.empty()) {
-            payload.erase("children");
-        } else {
-            payload["children"] = child_assets_;
-        }
+    document_->replace_animation_children(child_assets_);
+    if (child_assets_.empty()) {
+        payload.erase("children");
+    } else {
+        payload["children"] = child_assets_;
     }
     nlohmann::json movement = nlohmann::json::array();
     nlohmann::json hit_geometry = nlohmann::json::array();
@@ -3794,7 +3793,21 @@ void FrameEditorSession::persist_changes() {
     payload["movement"] = std::move(movement);
     payload["hit_geometry"] = std::move(hit_geometry);
     payload["attack_geometry"] = std::move(attack_geometry);
-    document_->replace_animation_payload(animation_id_, payload.dump());
+
+    std::string serialized = payload.dump();
+    if (!document_payload_cache_.empty() && serialized == document_payload_cache_) {
+        return;
+    }
+
+    pending_save_ = true;
+    document_->replace_animation_payload(animation_id_, serialized);
+    if (auto normalized = document_->animation_payload(animation_id_)) {
+        document_payload_cache_ = *normalized;
+    } else {
+        document_payload_cache_ = serialized;
+    }
+    document_->save_to_file();
+    pending_save_ = false;
 }
 
 ChildPreviewContext FrameEditorSession::build_child_preview_context() const {
@@ -3849,7 +3862,6 @@ void FrameEditorSession::persist_mode_changes(Mode mode) {
     // Mark document dirty and persist changes relevant to the given mode.
     // For now, persist_changes() handles all modes uniformly.
     (void)mode;
-    pending_save_ = true;
     persist_changes();
 }
 

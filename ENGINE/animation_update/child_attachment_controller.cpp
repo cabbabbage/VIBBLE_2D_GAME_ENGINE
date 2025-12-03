@@ -89,11 +89,7 @@ void advance_frames(std::vector<Asset::AnimationChildAttachment>& slots,
             continue;
         }
         const AnimationFrame* previous_frame = slot.current_frame;
-        int fps = slot.animation->playback_fps;
-        if (fps <= 0) {
-            fps = 24;
-        }
-        const float interval = 1.0f / static_cast<float>(fps);
+        const float interval = 1.0f / static_cast<float>(kBaseAnimationFps);
         slot.frame_progress += dt;
         while (slot.frame_progress >= interval) {
             slot.frame_progress -= interval;

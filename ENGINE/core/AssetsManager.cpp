@@ -19,7 +19,6 @@
 #include "utils/range_util.hpp"
 #include "utils/text_style.hpp"
 #include "utils/map_grid_settings.hpp"
-#include "utils/transform_smoothing_settings.hpp"
 #include "utils/quick_task_popup.hpp"
 #include "utils/log.hpp"
 
@@ -148,7 +147,7 @@ bool compute_asset_world_bounds(const Asset* asset,
     return true;
 }
 
-}
+} // namespace
 
 Assets::Assets(AssetLibrary& library,
                Asset*,
@@ -450,8 +449,6 @@ void Assets::apply_camera_runtime_settings() {
         const bool low_quality = (effective_percent < 100) && !force_high_quality_rendering_;
         // scene->set_low_quality_rendering(low_quality);
     }
-    const WarpedScreenGrid::RealismSettings& settings = camera_.realism_settings();
-    update_motion_smoothing_settings(settings);
     // Image effects are now handled by Python, so no longer setting global state here
 }
 
@@ -461,50 +458,6 @@ void Assets::set_depth_effects_enabled(bool enabled) {
     }
     depth_effects_enabled_ = enabled;
     devmode::camera_prefs::save_depthcue_enabled(enabled);
-}
-
-TransformSmoothingParams Assets::sanitize_smoothing(const TransformSmoothingParams& params) {
-    TransformSmoothingParams result = params;
-    if (!std::isfinite(result.lerp_rate) || result.lerp_rate < 0.0f) {
-        result.lerp_rate = 0.0f;
-    }
-    if (!std::isfinite(result.spring_frequency) || result.spring_frequency < 0.0f) {
-        result.spring_frequency = 0.0f;
-    }
-    if (!std::isfinite(result.max_step) || result.max_step < 0.0f) {
-        result.max_step = 0.0f;
-    }
-    if (!std::isfinite(result.snap_threshold) || result.snap_threshold < 0.0f) {
-        result.snap_threshold = 0.0f;
-    }
-    switch (result.method) {
-    case TransformSmoothingMethod::None:
-    case TransformSmoothingMethod::Lerp:
-    case TransformSmoothingMethod::CriticallyDampedSpring:
-        break;
-    default:
-        result.method = TransformSmoothingMethod::None;
-        break;
-    }
-    return result;
-}
-
-void Assets::update_motion_smoothing_settings(const WarpedScreenGrid::RealismSettings&) {
-    TransformSmoothingParams disabled{};
-    disabled = sanitize_smoothing(disabled);
-
-    transform_smoothing::set_camera_center_params(disabled);
-    transform_smoothing::set_camera_zoom_params(disabled);
-    transform_smoothing::set_asset_translation_params(disabled);
-    transform_smoothing::set_asset_scale_params(disabled);
-    transform_smoothing::set_asset_alpha_params(disabled);
-
-    for (Asset* asset : all) {
-        if (!asset) {
-            continue;
-        }
-        // asset->set_smoothing_params(disabled, disabled, disabled);
-    }
 }
 
 void Assets::apply_map_light_config() {

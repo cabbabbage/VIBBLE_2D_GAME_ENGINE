@@ -217,8 +217,6 @@ private:
     int  effective_render_quality_percent() const;
     void sync_dev_controls_current_room(Room* room, bool force_refresh = false);
     void reset_dev_controls_current_room_cache();
-    void update_motion_smoothing_settings(const WarpedScreenGrid::RealismSettings& settings);
-    static TransformSmoothingParams sanitize_smoothing(const TransformSmoothingParams& params);
 
     friend class SceneRenderer;
     friend class Asset;

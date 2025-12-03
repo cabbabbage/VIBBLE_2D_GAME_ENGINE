@@ -153,7 +153,6 @@ class SourceConfigPanel {
     // Animation preview state
     mutable Uint32 animation_start_time_ = 0;
     mutable int current_frame_ = 0;
-    mutable float current_speed_factor_ = 1.0f;
     mutable bool is_sfa_animation_ = false;
     mutable bool reverse_playback_ = false;
     mutable bool flip_x_ = false;

@@ -1363,22 +1363,11 @@ void AssetInfo::load_animations(const nlohmann::json& data) {
                     {"path", anim_json.value("frames_path", it.key())}
 };
                 converted["locked"] = anim_json.value("lock_until_done", false);
-                // Prefer explicit FPS; derive from legacy 'speed' if available
-                try {
-                    if (anim_json.contains("fps")) {
-                        converted["fps"] = anim_json["fps"].get<int>();
-                    } else {
-                        float sf = anim_json.value("speed", 1.0f);
-                        int fps = std::max(1, static_cast<int>(std::lround(24.0f * std::fabs(sf))));
-                        converted["fps"] = fps;
-                    }
-                } catch (...) {
-                    converted["fps"] = 24;
-                }
-                converted["speed_factor"] = anim_json.value("speed", 1.0f);
                 converted.erase("frames_path");
                 converted.erase("lock_until_done");
                 converted.erase("speed");
+                converted.erase("speed_factor");
+                converted.erase("fps");
             }
             new_anim[it.key()] = std::move(converted);
         }

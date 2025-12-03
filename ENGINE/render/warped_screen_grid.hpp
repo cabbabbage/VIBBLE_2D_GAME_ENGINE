@@ -166,7 +166,7 @@ public:
 
     // Settings and configuration
     void set_realism_settings(const RealismSettings& settings);
-    void set_screen_center(SDL_Point p);
+    void set_screen_center(SDL_Point p, bool snap_immediately = true);
     void set_up_rooms(CurrentRoomFinder* finder);
     void apply_camera_settings(const nlohmann::json& data);
     nlohmann::json camera_settings_to_json() const;

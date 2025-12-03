@@ -98,4 +98,7 @@ private:
     // Controller input tracking for on-end redirection
     bool debug_enabled_ = false;
     bool just_applied_controller_move_ = false;
+    int  suppress_root_motion_frames_ = 0;
+
+    bool suppress_root_motion_active() const { return suppress_root_motion_frames_ > 0; }
 };

@@ -207,7 +207,6 @@ bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool fl
     // Inherit core properties
     variant_steps_ = source.variant_steps_;
     locked = source.locked;
-    playback_fps = source.playback_fps;
     inherit_source_movement = source.inherit_source_movement;
 
     const std::size_t frame_count = source.frame_cache_.size();

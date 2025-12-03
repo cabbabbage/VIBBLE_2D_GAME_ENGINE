@@ -159,7 +159,7 @@ The `AnimationUpdate` class provides the restricted public interface for custom 
 
 ### Animation Control
 - **void set_animation(const std::string& animation_id)**  
-  Looks up and sets the animation from the asset's info by ID, using the animation's own `playback_fps` (defaults to 24 if invalid).
+  Looks up and sets the animation from the asset's info by ID; playback now always runs at the engine's fixed 24 fps timing.
 
 ---
 

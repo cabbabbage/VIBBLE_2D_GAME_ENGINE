@@ -21,7 +21,6 @@
 namespace {
 
 constexpr int kItemGap = 8;
-static const std::vector<int> kFpsOptions{12, 24, 30, 48, 60};
 
 using animation_editor::kPanelPadding;
 using animation_editor::strings::trim_copy;
@@ -83,32 +82,6 @@ bool parse_bool_field(const nlohmann::json& payload, const char* key, bool fallb
     return parse_bool_value(payload.at(key), fallback);
 }
 
-int parse_int_value(const nlohmann::json& value, int fallback) {
-    if (value.is_number_integer()) {
-        return value.get<int>();
-    }
-    if (value.is_number()) {
-        return static_cast<int>(value.get<double>());
-    }
-    if (value.is_string()) {
-        try {
-            return std::stoi(value.get<std::string>());
-        } catch (...) {
-        }
-    }
-    return fallback;
-}
-
-int parse_int_field(const nlohmann::json& payload, const char* key, int fallback) {
-    if (!payload.is_object()) {
-        return fallback;
-    }
-    if (!payload.contains(key)) {
-        return fallback;
-    }
-    return parse_int_value(payload.at(key), fallback);
-}
-
 }
 
 namespace animation_editor {
@@ -136,7 +109,6 @@ int PlaybackSettingsPanel::preferred_height(int width) const {
     const int padding = kPanelPadding;
     const int gap = kItemGap;
     const int checkbox_height = DMCheckbox::height();
-    const int dropdown_height = DMDropdown::height();
 
     int height = padding;
     auto add_checkbox_group = [&](int count) {
@@ -172,8 +144,6 @@ int PlaybackSettingsPanel::preferred_height(int width) const {
             height += gap;
             height += checkbox_height;  // random start
         }
-        height += gap;
-        height += dropdown_height;
     }
 
     height += padding;
@@ -213,7 +183,6 @@ void PlaybackSettingsPanel::render(SDL_Renderer* renderer) const {
     if (!derived_from_animation_ && random_start_checkbox_ && (!locked_checkbox_ || !locked_checkbox_->value())) {
         random_start_checkbox_->render(renderer);
     }
-    if (!derived_from_animation_ && fps_dropdown_) fps_dropdown_->render(renderer);
     // Replace instructional labels with tooltip icon/info
     DMWidgetTooltipRender(renderer, bounds_, info_tooltip_);
 }
@@ -255,11 +224,6 @@ bool PlaybackSettingsPanel::handle_event(const SDL_Event& e) {
         handle_checkbox(random_start_checkbox_);
     }
 
-    if (!derived_from_animation_ && fps_dropdown_ && fps_dropdown_->handle_event(e)) {
-        used = true;
-        handle_controls_changed();
-    }
-
     return used;
 }
 
@@ -279,14 +243,6 @@ void PlaybackSettingsPanel::ensure_widgets() {
     ensure_checkbox(reverse_checkbox_, "Play Frames In Reverse");
     ensure_checkbox(locked_checkbox_, "Locked (animation must finish before another can play)");
     ensure_checkbox(random_start_checkbox_, "Randomize Starting Frame");
-
-    if (!fps_dropdown_) {
-        std::vector<std::string> labels;
-        labels.reserve(kFpsOptions.size());
-        for (int v : kFpsOptions) labels.push_back(std::to_string(v));
-        fps_dropdown_ = std::make_unique<DMDropdown>("Playback FPS", labels, 1 /* 24 fps */);
-        layout_dirty_ = true;
-    }
 }
 
 void PlaybackSettingsPanel::layout_widgets() const {
@@ -365,9 +321,6 @@ void PlaybackSettingsPanel::layout_widgets() const {
         if (random_start_checkbox_) {
             random_start_checkbox_->set_rect(SDL_Rect{0, 0, 0, 0});
         }
-        if (fps_dropdown_) {
-            fps_dropdown_->set_rect(SDL_Rect{0, 0, 0, 0});
-        }
         int message_height = message_block_height(inherited_message_lines_);
         if (message_height > 0) {
             if (placed_any_checkbox) {
@@ -383,14 +336,6 @@ void PlaybackSettingsPanel::layout_widgets() const {
             place_checkbox(random_start_checkbox_.get(), true, placed_any_checkbox);
         } else if (random_start_checkbox_) {
             random_start_checkbox_->set_rect(SDL_Rect{0, 0, 0, 0});
-        }
-        if (fps_dropdown_) {
-            if (placed_any_checkbox) {
-                y += gap;
-            }
-            SDL_Rect dd_rect{x, y, width, DMDropdown::height()};
-            fps_dropdown_->set_rect(dd_rect);
-            y += dd_rect.h;
         }
         inherited_message_rect_ = SDL_Rect{0, 0, 0, 0};
     }
@@ -416,24 +361,6 @@ void PlaybackSettingsPanel::apply_state_to_controls(const PlaybackState& state) 
         } else {
             random_start_checkbox_->set_value(false);
         }
-    }
-    if (fps_dropdown_) {
-        int idx = 1; // Default to 24 fps if no exact match found
-        int min_diff = std::abs(kFpsOptions[1] - state.fps);
-        
-        // Find exact match or closest value
-        for (size_t i = 0; i < kFpsOptions.size(); ++i) {
-            if (kFpsOptions[i] == state.fps) {
-                idx = static_cast<int>(i);
-                break;
-            }
-            int diff = std::abs(kFpsOptions[i] - state.fps);
-            if (diff < min_diff) {
-                min_diff = diff;
-                idx = static_cast<int>(i);
-            }
-        }
-        fps_dropdown_->set_selected(idx);
     }
 }
 
@@ -475,11 +402,6 @@ PlaybackSettingsPanel::PlaybackState PlaybackSettingsPanel::read_controls() cons
         state.random_start = false;
     }
 
-    if (!derived_from_animation_ && fps_dropdown_) {
-        int idx = fps_dropdown_->pending_index();
-        if (idx < 0 || idx >= static_cast<int>(kFpsOptions.size())) idx = 1;
-        state.fps = kFpsOptions[idx];
-    }
     if (state.locked) {
         state.random_start = false;
     }
@@ -650,13 +572,6 @@ PlaybackSettingsPanel::PlaybackState PlaybackSettingsPanel::payload_to_state(con
         state.reverse_source = false;
     }
 
-    int fps = parse_int_field(payload, "fps", 24);
-    if (fps <= 0) {
-        int speed = parse_int_field(payload, "speed_factor", 1);
-        if (speed == 0) speed = 1;
-        fps = std::max(1, static_cast<int>(std::lround(24.0 * std::abs(speed))));
-    }
-    state.fps = fps;
     return state;
 }
 
@@ -690,9 +605,10 @@ void PlaybackSettingsPanel::apply_state_to_payload(nlohmann::json& payload, cons
         payload["derived_modifiers"] = std::move(modifiers);
     } else {
         payload["rnd_start"]    = state.random_start && !state.locked;
-        payload["fps"]          = std::max(1, state.fps);
         payload.erase("derived_modifiers");
         payload.erase("inherit_source_movement");
+        payload.erase("fps");
+        payload.erase("speed_factor");
     }
 }
 
@@ -755,7 +671,7 @@ void PlaybackSettingsPanel::refresh_inherited_message() {
     if (derived_from_animation_) {
         std::string target = derived_source_id_.empty() ? std::string("the source animation")
                                                        : "animation '" + derived_source_id_ + "'";
-        inherited_message_lines_.push_back("Speed (FPS), lock, and starting frame inherit from " + target + ".");
+        inherited_message_lines_.push_back("Lock and starting frame inherit from " + target + ".");
         if (!inherited_modifiers_.empty()) {
             std::string joined;
             for (size_t i = 0; i < inherited_modifiers_.size(); ++i) {

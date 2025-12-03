@@ -194,7 +194,6 @@ class AnimationInspectorPanel {
 
     // Animation preview timing variables
     mutable int current_frame_ = 0;
-    mutable int current_fps_ = 24;
     mutable int frame_count_ = 1;
 
     // External scrub state

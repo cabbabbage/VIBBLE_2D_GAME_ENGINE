@@ -5,6 +5,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <unordered_map>
 
 #include "asset/Asset.hpp"
 #include "asset/animation.hpp"
@@ -84,6 +85,15 @@ void AnimationRuntime::update() {
     if (!self_ || !self_->info || !planner_iface_) {
         return;
     }
+
+    struct SuppressionDecay {
+        AnimationRuntime* runtime = nullptr;
+        ~SuppressionDecay() {
+            if (runtime && runtime->suppress_root_motion_frames_ > 0) {
+                --runtime->suppress_root_motion_frames_;
+            }
+        }
+    } decay{ this };
 
     // Consume any input signal (planner sets this when controllers interacted)
     const bool got_input = planner_iface_->consume_input_event();
@@ -228,9 +238,8 @@ bool AnimationRuntime::advance(AnimationFrame*& frame) {
         self_->static_frame = false;
     }
 
-    // Time-based frame advance to respect desired playback FPS.
-    int target_fps = anim.playback_fps;
-    if (target_fps <= 0) target_fps = 24; // sane default
+    // Time-based frame advance using the fixed engine playback FPS.
+    constexpr int target_fps = kBaseAnimationFps;
     const float frame_interval = 1.0f / static_cast<float>(target_fps);
     float dt = 0.0f;
     if (assets_owner_) {
@@ -360,37 +369,71 @@ void AnimationRuntime::ensure_child_slots(Animation& anim) {
     }
     auto& slots = self_->animation_children_;
     const auto& requested = anim.child_assets();
-    if (slots.size() < requested.size()) {
-        slots.resize(requested.size());
-    }
 
     AssetLibrary* library = assets_owner_ ? &assets_owner_->library() : nullptr;
 
-    bool any_slot_changed = false;
-    for (std::size_t i = 0; i < requested.size(); ++i) {
-        auto& slot = slots[i];
-        const AnimationFrame* previous_frame = slot.current_frame;
-        const bool index_changed = slot.child_index != static_cast<int>(i);
-        const bool name_changed = slot.asset_name != requested[i];
-        if (index_changed || name_changed) {
+    if (requested.empty()) {
+        for (auto& slot : slots) {
+            slot.child_index = -1;
+            slot.visible = false;
+            slot.was_visible = false;
+            slot.last_parent_frame_index = -1;
             if (slot.spawned_asset) {
                 slot.spawned_asset->set_hidden(true);
             }
-            if (name_changed) {
-                slot.spawned_asset = nullptr;
-                slot.info.reset();
-                slot.animation = nullptr;
-                slot.current_frame = nullptr;
+        }
+        return;
+    }
+
+    std::unordered_map<std::string, std::size_t> index_by_name;
+    index_by_name.reserve(slots.size() + requested.size());
+    for (std::size_t i = 0; i < slots.size(); ++i) {
+        if (slots[i].asset_name.empty()) {
+            continue;
+        }
+        if (index_by_name.find(slots[i].asset_name) == index_by_name.end()) {
+            index_by_name[slots[i].asset_name] = i;
+        }
+    }
+
+    // Ensure there is a slot for every requested child id.
+    for (const auto& name : requested) {
+        if (index_by_name.find(name) != index_by_name.end()) {
+            continue;
+        }
+        slots.emplace_back();
+        auto& slot = slots.back();
+        slot.child_index = -1;
+        slot.asset_name = name;
+        slot.visible = false;
+        slot.was_visible = false;
+        slot.last_parent_frame_index = -1;
+        index_by_name[name] = slots.size() - 1;
+    }
+
+    // Reorder slots so indices line up with the animation's child order.
+    for (std::size_t i = 0; i < requested.size(); ++i) {
+        const std::string& desired = requested[i];
+        std::size_t current_idx = index_by_name[desired];
+        if (current_idx != i) {
+            std::swap(slots[i], slots[current_idx]);
+            if (!slots[current_idx].asset_name.empty()) {
+                index_by_name[slots[current_idx].asset_name] = current_idx;
             }
-            slot.child_index = static_cast<int>(i);
-            slot.asset_name = requested[i];
+            index_by_name[desired] = i;
+        }
+        auto& slot = slots[i];
+        const bool binding_changed = slot.child_index != static_cast<int>(i) ||
+                                     slot.asset_name != desired;
+        slot.child_index = static_cast<int>(i);
+        slot.asset_name = desired;
+        if (binding_changed) {
             slot.frame_progress = 0.0f;
             slot.cached_w = 0;
             slot.cached_h = 0;
             slot.was_visible = false;
-            slot.last_parent_frame_index = -1;
             slot.visible = false;
-            any_slot_changed = true;
+            slot.last_parent_frame_index = -1;
         }
         if (!slot.info && library && !slot.asset_name.empty()) {
             slot.info = library->get(slot.asset_name);
@@ -409,32 +452,24 @@ void AnimationRuntime::ensure_child_slots(Animation& anim) {
                 slot.cached_h = 0;
                 slot.was_visible = false;
                 slot.last_parent_frame_index = -1;
-            } else {
             }
         }
         if (slot.animation && !slot.current_frame) {
             animation_update::child_attachments::restart(slot);
         }
-        if (!slot.spawned_asset && slot.info && slot.visible) {
-            slot.spawned_asset = spawn_child_asset(slot);
+        if (!slot.spawned_asset && slot.info) {
+            Asset* spawned = spawn_child_asset(slot);
+            if (spawned) {
+                spawned->initialize_animation_children_recursive();
+                spawned->set_hidden(true);
+            }
         }
-        if (slot.current_frame != previous_frame) {
+        if (slot.current_frame) {
             animation_update::child_attachments::update_dimensions(slot);
         }
     }
 
-    // Force update child visibility if any slot changed
-    if (any_slot_changed && self_) {
-        animation_update::child_attachments::ParentState parent_state;
-        SDL_Point render_pos{ static_cast<int>(std::lround(self_->smoothed_translation_x())),
-                              static_cast<int>(std::lround(self_->smoothed_translation_y())) };
-        parent_state.position = render_pos;
-        parent_state.base_position = animation_update::detail::bottom_middle_for(*self_, render_pos);
-        parent_state.flipped = self_->flipped;
-        parent_state.animation_id = self_->current_animation;
-        animation_update::child_attachments::apply_frame_data(self_->animation_children_, parent_state, self_->current_frame);
-    }
-
+    // Park unused slots until a future animation needs them again.
     for (std::size_t i = requested.size(); i < slots.size(); ++i) {
         auto& slot = slots[i];
         slot.child_index = -1;

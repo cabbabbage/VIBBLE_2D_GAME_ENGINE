@@ -48,7 +48,7 @@ void InitializeAssets::initialize(Assets& assets,
                     raw->finalize_setup();
                 }
                 // Ensure animation children are initialized (and do so recursively)
-                if (raw->info && !raw->info->asset_children.empty()) {
+                if (raw->info && !raw->info->animation_children.empty()) {
                     try {
                         raw->initialize_animation_children_recursive();
                     } catch (...) {

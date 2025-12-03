@@ -261,7 +261,7 @@ private:
     SDL_FPoint attack_drag_start_mouse_local_{0.0f, 0.0f};
     animation_update::FrameAttackGeometry::Vector attack_drag_start_vector_;
 
-    // Defer persistence/rebuild until Back is pressed
+    // Track whether we have unsaved document writes
     bool pending_save_ = false;
 
 private:

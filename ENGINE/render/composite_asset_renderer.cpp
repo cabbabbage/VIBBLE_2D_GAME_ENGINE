@@ -23,6 +23,9 @@ void CompositeAssetRenderer::update(Asset* asset,
     // Recursively update children first
     bool children_dirty = false;
     for (const auto& child_attachment : asset->animation_children()) {
+        if (child_attachment.child_index < 0) {
+            continue;
+        }
         if (child_attachment.spawned_asset) {
             Asset* child = child_attachment.spawned_asset;
             const bool child_was_dirty = child->is_composite_dirty();
@@ -188,7 +191,8 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
 
     // 2. Child animation assets behind
     for (const auto& child_attachment : asset->animation_children()) {
-        if (child_attachment.visible &&
+        if (child_attachment.child_index >= 0 &&
+            child_attachment.visible &&
             !child_attachment.render_in_front &&
             child_attachment.spawned_asset) {
 
@@ -304,7 +308,8 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
 
     // 5. Child animation assets in front
     for (const auto& child_attachment : asset->animation_children()) {
-        if (child_attachment.visible &&
+        if (child_attachment.child_index >= 0 &&
+            child_attachment.visible &&
             child_attachment.render_in_front &&
             child_attachment.spawned_asset) {
 

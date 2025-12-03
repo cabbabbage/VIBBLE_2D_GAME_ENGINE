@@ -124,22 +124,6 @@ std::vector<AnimationFolderInfo> discover_animation_folders(const std::filesyste
         return result;
 }
 
-int default_fps_for_frames(int frame_count) {
-        if (frame_count >= 24) {
-                return 24;
-        }
-        if (frame_count >= 16) {
-                return 18;
-        }
-        if (frame_count >= 12) {
-                return 12;
-        }
-        if (frame_count >= 8) {
-                return 10;
-        }
-        return frame_count > 0 ? std::max(6, frame_count * 2) : 6;
-}
-
 bool ensure_start_animation(nlohmann::json& metadata) {
         auto animations_it = metadata.find("animations");
         if (animations_it == metadata.end() || !animations_it->is_object()) {
@@ -229,20 +213,12 @@ bool ensure_animation_metadata(const std::string& asset_name,
                         mutated = true;
                 }
 
-                if (!slot.contains("fps") || !slot["fps"].is_number_integer()) {
-                        slot["fps"] = default_fps_for_frames(folder.frame_count);
-                        mutated = true;
-                }
                 if (!slot.contains("loop") || !slot["loop"].is_boolean()) {
                         slot["loop"] = true;
                         mutated = true;
                 }
                 if (!slot.contains("locked") || !slot["locked"].is_boolean()) {
                         slot["locked"] = false;
-                        mutated = true;
-                }
-                if (!slot.contains("speed_factor") || (!slot["speed_factor"].is_number_integer() && !slot["speed_factor"].is_number_float())) {
-                        slot["speed_factor"] = 1.0;
                         mutated = true;
                 }
         }
