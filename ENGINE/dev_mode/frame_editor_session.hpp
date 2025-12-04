@@ -236,6 +236,7 @@ private:
     std::string document_payload_cache_;
     std::string document_children_signature_;
     std::unordered_map<Asset*, bool> child_hidden_cache_;
+    bool last_payload_loaded_ = false;
     mutable std::vector<std::string> animation_dropdown_options_cache_;
     mutable std::vector<std::string> child_dropdown_options_cache_;
     mutable std::vector<std::string> hitbox_type_labels_;
@@ -312,6 +313,9 @@ private:
     void sync_child_asset_visibility();
     void cache_child_hidden_states();
     void apply_child_hidden_state(bool show_children);
+    class Animation* current_animation_mutable() const;
+    void hydrate_frames_from_animation();
+    void apply_frames_to_animation();
     int max_scroll_offset() const;
     void clamp_scroll_offset() const;
     void ensure_selected_thumb_visible();

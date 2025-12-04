@@ -25,6 +25,7 @@ class FrameChildrenEditor {
     void set_tools_panel(FrameToolsPanel* panel);
     void set_canvas(MovementCanvas* canvas);
     void set_selected_frame(int index);
+    void refresh_payload_cache_from_document();
 
     void update();
     void render(SDL_Renderer* renderer) const;

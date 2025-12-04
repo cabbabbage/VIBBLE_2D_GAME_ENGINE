@@ -522,11 +522,15 @@ void FrameEditor::set_mode(Mode mode) {
     if (active_mode_ == mode) {
         return;
     }
+    Mode previous_mode = active_mode_;
     active_mode_ = mode;
     update_button_styles();
     update_navigation_styles();
     if (tools_panel_) {
         tools_panel_->set_mode(static_cast<FrameToolsPanel::Mode>(static_cast<int>(active_mode_)));
+    }
+    if (children_editor_ && (previous_mode == Mode::Children || active_mode_ == Mode::Children)) {
+        children_editor_->refresh_payload_cache_from_document();
     }
     if (movement_editor_ && movement_editor_->canvas()) {
         movement_editor_->canvas()->set_anchor_follows_movement(active_mode_ == Mode::Movement ||

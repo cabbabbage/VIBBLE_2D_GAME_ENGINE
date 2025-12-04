@@ -34,25 +34,21 @@ public:
         std::vector<SDL_Texture*> textures;
         std::vector<int> widths;
         std::vector<int> heights;
+        std::vector<SDL_Texture*> foreground_textures;
+        std::vector<SDL_Texture*> background_textures;
         std::vector<SDL_Texture*> mask_textures;
         std::vector<int> mask_widths;
         std::vector<int> mask_heights;
-        std::vector<SDL_Texture*> foreground_textures;
-        std::vector<SDL_Texture*> background_textures;
-        std::vector<SDL_Texture*> depthcue_foreground_textures;
-        std::vector<SDL_Texture*> depthcue_background_textures;
 
         void resize(std::size_t variant_count) {
             textures.assign(variant_count, nullptr);
             widths.assign(variant_count, 0);
             heights.assign(variant_count, 0);
+            foreground_textures.assign(variant_count, nullptr);
+            background_textures.assign(variant_count, nullptr);
             mask_textures.assign(variant_count, nullptr);
             mask_widths.assign(variant_count, 0);
             mask_heights.assign(variant_count, 0);
-            foreground_textures.assign(variant_count, nullptr);
-            background_textures.assign(variant_count, nullptr);
-            depthcue_foreground_textures.assign(variant_count, nullptr);
-            depthcue_background_textures.assign(variant_count, nullptr);
         }
     };
 

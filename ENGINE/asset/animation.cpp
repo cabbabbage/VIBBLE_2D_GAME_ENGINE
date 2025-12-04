@@ -59,12 +59,6 @@ void Animation::clear_texture_cache() {
                 tex = nullptr;
             }
         }
-        for (SDL_Texture*& mask_tex : cache_entry.mask_textures) {
-            if (mask_tex) {
-                SDL_DestroyTexture(mask_tex);
-                mask_tex = nullptr;
-            }
-        }
         for (SDL_Texture*& tex : cache_entry.foreground_textures) {
             if (tex) {
                 SDL_DestroyTexture(tex);
@@ -77,16 +71,10 @@ void Animation::clear_texture_cache() {
                 tex = nullptr;
             }
         }
-        for (SDL_Texture*& tex : cache_entry.depthcue_foreground_textures) {
-            if (tex) {
-                SDL_DestroyTexture(tex);
-                tex = nullptr;
-            }
-        }
-        for (SDL_Texture*& tex : cache_entry.depthcue_background_textures) {
-            if (tex) {
-                SDL_DestroyTexture(tex);
-                tex = nullptr;
+        for (SDL_Texture*& mask_tex : cache_entry.mask_textures) {
+            if (mask_tex) {
+                SDL_DestroyTexture(mask_tex);
+                mask_tex = nullptr;
             }
         }
     }
@@ -130,11 +118,13 @@ void Animation::adopt_prebuilt_frames(std::vector<FrameCache> caches,
                     FrameVariant variant;
                     variant.varient = static_cast<int>(v);
                     variant.base_texture = cache.textures[v];
-                    if (v < cache.foreground_textures.size()) variant.foreground_texture = cache.foreground_textures[v];
-                    if (v < cache.background_textures.size()) variant.background_texture = cache.background_textures[v];
+                    if (v < cache.foreground_textures.size()) {
+                        variant.foreground_texture = cache.foreground_textures[v];
+                    }
+                    if (v < cache.background_textures.size()) {
+                        variant.background_texture = cache.background_textures[v];
+                    }
                     if (v < cache.mask_textures.size()) variant.shadow_mask_texture = cache.mask_textures[v];
-                    if (v < cache.depthcue_foreground_textures.size()) variant.depthcue_foreground_texture = cache.depthcue_foreground_textures[v];
-                    if (v < cache.depthcue_background_textures.size()) variant.depthcue_background_texture = cache.depthcue_background_textures[v];
                     
                     frame.variants.push_back(variant);
                 }
@@ -251,6 +241,19 @@ bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool fl
             dst_cache.widths[variant_idx] = tex_w;
             dst_cache.heights[variant_idx] = tex_h;
 
+            // Copy foreground texture if present
+            SDL_Texture* src_fg = (variant_idx < src_cache.foreground_textures.size()) ? src_cache.foreground_textures[variant_idx] : nullptr;
+            if (src_fg) {
+                SDL_Texture* dst_fg = clone_texture(src_fg, tex_w, tex_h, flip_flags);
+                dst_cache.foreground_textures[variant_idx] = dst_fg;
+            }
+            // Copy background texture if present
+            SDL_Texture* src_bg = (variant_idx < src_cache.background_textures.size()) ? src_cache.background_textures[variant_idx] : nullptr;
+            if (src_bg) {
+                SDL_Texture* dst_bg = clone_texture(src_bg, tex_w, tex_h, flip_flags);
+                dst_cache.background_textures[variant_idx] = dst_bg;
+            }
+
             // Copy mask texture if present
             SDL_Texture* src_mask = (variant_idx < src_cache.mask_textures.size()) ? src_cache.mask_textures[variant_idx] : nullptr;
             if (src_mask) {
@@ -262,17 +265,6 @@ bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool fl
                 dst_cache.mask_widths[variant_idx] = mask_w;
                 dst_cache.mask_heights[variant_idx] = mask_h;
             }
-
-            // Copy foreground/background/depthcue overlays so derived animations keep effects
-            SDL_Texture* src_fg = (variant_idx < src_cache.foreground_textures.size()) ? src_cache.foreground_textures[variant_idx] : nullptr;
-            SDL_Texture* src_bg = (variant_idx < src_cache.background_textures.size()) ? src_cache.background_textures[variant_idx] : nullptr;
-            SDL_Texture* src_dfg = (variant_idx < src_cache.depthcue_foreground_textures.size()) ? src_cache.depthcue_foreground_textures[variant_idx] : nullptr;
-            SDL_Texture* src_dbg = (variant_idx < src_cache.depthcue_background_textures.size()) ? src_cache.depthcue_background_textures[variant_idx] : nullptr;
-
-            dst_cache.foreground_textures[variant_idx] = clone_texture(src_fg, tex_w, tex_h, flip_flags);
-            dst_cache.background_textures[variant_idx] = clone_texture(src_bg, tex_w, tex_h, flip_flags);
-            dst_cache.depthcue_foreground_textures[variant_idx] = clone_texture(src_dfg, tex_w, tex_h, flip_flags);
-            dst_cache.depthcue_background_textures[variant_idx] = clone_texture(src_dbg, tex_w, tex_h, flip_flags);
         }
 
         frame_cache_.push_back(std::move(dst_cache));

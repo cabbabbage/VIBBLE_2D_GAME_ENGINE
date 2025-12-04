@@ -82,6 +82,177 @@ fs::path project_root_path() {
 #endif
 }
 
+constexpr std::array<const char*, 3> kDamageTypeNames = {
+        "projectile", "melee", "explosion"
+};
+
+float read_float(const nlohmann::json& value, float fallback = 0.0f) {
+        if (value.is_number()) {
+                try {
+                        return static_cast<float>(value.get<double>());
+                } catch (...) {}
+        }
+        if (value.is_string()) {
+                try {
+                        return std::stof(value.get<std::string>());
+                } catch (...) {}
+        }
+        return fallback;
+}
+
+int read_int(const nlohmann::json& value, int fallback = 0) {
+        if (value.is_number_integer()) {
+                try {
+                        return value.get<int>();
+                } catch (...) {}
+        } else if (value.is_number()) {
+                try {
+                        return static_cast<int>(value.get<double>());
+                } catch (...) {}
+        } else if (value.is_string()) {
+                try {
+                        return std::stoi(value.get<std::string>());
+                } catch (...) {}
+        }
+        return fallback;
+}
+
+void upsert_hit_box(animation_update::FrameHitGeometry& geometry,
+                    const std::string& type,
+                    const nlohmann::json& node) {
+        if (type.empty() || node.is_null()) {
+                return;
+        }
+        animation_update::FrameHitGeometry::HitBox box;
+        box.type = type;
+        if (node.is_object()) {
+                box.center_x = read_float(node.value("center_x", 0.0f));
+                box.center_y = read_float(node.value("center_y", 0.0f));
+                box.half_width = read_float(node.value("half_width", 0.0f));
+                box.half_height = read_float(node.value("half_height", 0.0f));
+                box.rotation_degrees = read_float(node.value("rotation", node.value("rotation_degrees", 0.0f)));
+                if (node.contains("type") && node["type"].is_string()) {
+                        box.type = node["type"].get<std::string>();
+                }
+        } else if (node.is_array()) {
+                const auto& arr = node;
+                if (!arr.empty())          box.center_x = read_float(arr[0]);
+                if (arr.size() > 1)        box.center_y = read_float(arr[1]);
+                if (arr.size() > 2)        box.half_width = read_float(arr[2]);
+                if (arr.size() > 3)        box.half_height = read_float(arr[3]);
+                if (arr.size() > 4 && arr[4].is_number()) {
+                        box.rotation_degrees = read_float(arr[4]);
+                } else if (arr.size() > 5 && arr[5].is_number()) {
+                        box.rotation_degrees = read_float(arr[5]);
+                }
+                if (arr.size() > 4 && arr[4].is_boolean() && !arr[4].get<bool>()) {
+                        return;
+                }
+        } else {
+                return;
+        }
+        if (box.is_empty()) {
+                return;
+        }
+        if (auto* existing = geometry.find_box(box.type)) {
+                *existing = box;
+        } else {
+                geometry.boxes.push_back(box);
+        }
+}
+
+void apply_hit_geometry_entry(AnimationFrame& frame, const nlohmann::json& entry) {
+        frame.hit_geometry.boxes.clear();
+        if (entry.is_object()) {
+                for (const char* type : kDamageTypeNames) {
+                        auto it = entry.find(type);
+                        if (it != entry.end()) {
+                                upsert_hit_box(frame.hit_geometry, type, *it);
+                        }
+                }
+        } else if (!entry.is_null()) {
+                upsert_hit_box(frame.hit_geometry, "melee", entry);
+        }
+}
+
+void upsert_attack_vector(animation_update::FrameAttackGeometry& geometry,
+                          const std::string& type,
+                          const nlohmann::json& node) {
+        if (type.empty() || node.is_null()) {
+                return;
+        }
+        animation_update::FrameAttackGeometry::Vector vec;
+        vec.type = type;
+        if (node.is_object()) {
+                vec.start_x = read_float(node.value("start_x", 0.0f));
+                vec.start_y = read_float(node.value("start_y", 0.0f));
+                if (node.contains("control_x") || node.contains("control_y")) {
+                        vec.control_x = read_float(node.value("control_x", vec.start_x));
+                        vec.control_y = read_float(node.value("control_y", vec.start_y));
+                } else {
+                        vec.control_x = (vec.start_x + read_float(node.value("end_x", 0.0f))) * 0.5f;
+                        vec.control_y = (vec.start_y + read_float(node.value("end_y", 0.0f))) * 0.5f;
+                }
+                vec.end_x   = read_float(node.value("end_x", 0.0f));
+                vec.end_y   = read_float(node.value("end_y", 0.0f));
+                vec.damage  = read_int(node.value("damage", 0));
+                if (node.contains("type") && node["type"].is_string()) {
+                        vec.type = node["type"].get<std::string>();
+                }
+        } else if (node.is_array()) {
+                const auto& arr = node;
+                if (!arr.empty())      vec.start_x = read_float(arr[0]);
+                if (arr.size() > 1)    vec.start_y = read_float(arr[1]);
+                if (arr.size() > 2)    vec.end_x   = read_float(arr[2]);
+                if (arr.size() > 3)    vec.end_y   = read_float(arr[3]);
+                vec.control_x = (vec.start_x + vec.end_x) * 0.5f;
+                vec.control_y = (vec.start_y + vec.end_y) * 0.5f;
+                if (arr.size() > 4)    vec.damage  = read_int(arr[4]);
+        } else {
+                return;
+        }
+        if (auto* existing = geometry.find_vector(vec.type)) {
+                *existing = vec;
+        } else {
+                geometry.vectors.push_back(vec);
+        }
+}
+
+void apply_attack_geometry_entry(AnimationFrame& frame, const nlohmann::json& entry) {
+        frame.attack_geometry.vectors.clear();
+        if (entry.is_object()) {
+                for (const char* type : kDamageTypeNames) {
+                        auto it = entry.find(type);
+                        if (it != entry.end()) {
+                                upsert_attack_vector(frame.attack_geometry, type, *it);
+                        }
+                }
+        } else if (entry.is_array()) {
+                for (const auto& vec_node : entry) {
+                        upsert_attack_vector(frame.attack_geometry, "melee", vec_node);
+                }
+        } else if (!entry.is_null()) {
+                upsert_attack_vector(frame.attack_geometry, "melee", entry);
+        }
+}
+
+void apply_combat_geometry(std::vector<std::vector<AnimationFrame>>& paths,
+                           const nlohmann::json& hit_geometry,
+                           const nlohmann::json& attack_geometry) {
+        const nlohmann::json empty_json = nlohmann::json();
+        const bool has_hit = hit_geometry.is_array();
+        const bool has_attack = attack_geometry.is_array();
+        for (auto& path : paths) {
+                for (std::size_t idx = 0; idx < path.size(); ++idx) {
+                        AnimationFrame& frame = path[idx];
+                        const nlohmann::json& hit_entry = (has_hit && idx < hit_geometry.size()) ? hit_geometry[idx] : empty_json;
+                        const nlohmann::json& attack_entry = (has_attack && idx < attack_geometry.size()) ? attack_geometry[idx] : empty_json;
+                        apply_hit_geometry_entry(frame, hit_entry);
+                        apply_attack_geometry_entry(frame, attack_entry);
+                }
+        }
+}
+
 bool path_exists_safely(const fs::path& path) {
         std::error_code ec;
         return fs::exists(path, ec);
@@ -106,8 +277,6 @@ struct VariantLayerPaths {
         std::string foreground_folder;
         std::string background_folder;
         std::string mask_folder;
-        std::string depthcue_foreground_folder;
-        std::string depthcue_background_folder;
 };
 
 VariantLayerPaths build_variant_layer_paths(const std::string& cache_folder,
@@ -120,8 +289,6 @@ VariantLayerPaths build_variant_layer_paths(const std::string& cache_folder,
         paths.foreground_folder = (scale_root / "foreground").string();
         paths.background_folder = (scale_root / "background").string();
         paths.mask_folder       = (scale_root / "mask").string();
-        paths.depthcue_foreground_folder = (scale_root / "depthcue_foreground").string();
-        paths.depthcue_background_folder = (scale_root / "depthcue_background").string();
         
         // Log constructed paths for debugging
         std::cout << "[Animation] build_variant_layer_paths idx=" << index 
@@ -338,6 +505,14 @@ void AnimationLoader::load(Animation& animation,
         animation.movement_paths_.clear();
         animation.audio_clip = Animation::AudioClip{};
         bool movement_specified = false;
+        nlohmann::json hit_geometry_json = nlohmann::json::array();
+        if (anim_json.contains("hit_geometry") && anim_json["hit_geometry"].is_array()) {
+                hit_geometry_json = anim_json["hit_geometry"];
+        }
+        nlohmann::json attack_geometry_json = nlohmann::json::array();
+        if (anim_json.contains("attack_geometry") && anim_json["attack_geometry"].is_array()) {
+                attack_geometry_json = anim_json["attack_geometry"];
+        }
 
         auto parse_movement_sequence = [&](const nlohmann::json& seq, std::vector<AnimationFrame>& dest) {
                 bool specified = false;
@@ -618,8 +793,6 @@ void AnimationLoader::load(Animation& animation,
                 std::vector<std::vector<SDL_Surface*>> foreground_surfaces(variant_count);
                 std::vector<std::vector<SDL_Surface*>> background_surfaces(variant_count);
                 std::vector<std::vector<SDL_Surface*>> mask_surfaces(variant_count);
-                std::vector<std::vector<SDL_Surface*>> depthcue_foreground_surfaces(variant_count);
-                std::vector<std::vector<SDL_Surface*>> depthcue_background_surfaces(variant_count);
 
                 bool all_surfaces_loaded = true;
                 const bool needs_masks = info.is_shaded;
@@ -661,20 +834,6 @@ void AnimationLoader::load(Animation& animation,
                                           << " missing masks for variant " << idx << " at " << paths.mask_folder << "\n";
                                 break;
                         }
-
-                        // Load depthcue foreground textures if available
-                        std::vector<SDL_Surface*> dfg_loaded;
-                        if (CacheManager::load_surface_sequence(paths.depthcue_foreground_folder, frame_count, dfg_loaded) && 
-                            static_cast<int>(dfg_loaded.size()) == frame_count) {
-                                depthcue_foreground_surfaces[idx] = std::move(dfg_loaded);
-                        }
-
-                        // Load depthcue background textures if available
-                        std::vector<SDL_Surface*> dbg_loaded;
-                        if (CacheManager::load_surface_sequence(paths.depthcue_background_folder, frame_count, dbg_loaded) &&
-                            static_cast<int>(dbg_loaded.size()) == frame_count) {
-                                depthcue_background_surfaces[idx] = std::move(dbg_loaded);
-                        }
                 }
 
                 if (!all_surfaces_loaded || variant_surfaces[0].empty() || !variant_surfaces[0][0]) {
@@ -684,8 +843,6 @@ void AnimationLoader::load(Animation& animation,
                         free_surface_lists(foreground_surfaces);
                         free_surface_lists(background_surfaces);
                         free_surface_lists(mask_surfaces);
-                        free_surface_lists(depthcue_foreground_surfaces);
-                        free_surface_lists(depthcue_background_surfaces);
                         cache_invalid_detected = true;
                         flush_diagnostics();
                         return;
@@ -779,26 +936,6 @@ void AnimationLoader::load(Animation& animation,
                                         cache_entry.mask_heights[variant_idx] = 0;
                                 }
                                 cache_entry.mask_textures[variant_idx] = mask_tex;
-
-                                // Load depthcue foreground overlay if available
-                                SDL_Texture* dfg_tex = nullptr;
-                                if (frame_idx < depthcue_foreground_surfaces[variant_idx].size() && depthcue_foreground_surfaces[variant_idx][frame_idx]) {
-                                        dfg_tex = CacheManager::surface_to_texture(renderer, depthcue_foreground_surfaces[variant_idx][frame_idx]);
-                                        if (dfg_tex) {
-                                                apply_scale_mode(dfg_tex, info);
-                                        }
-                                }
-                                cache_entry.depthcue_foreground_textures[variant_idx] = dfg_tex;
-
-                                // Load depthcue background overlay if available
-                                SDL_Texture* dbg_tex = nullptr;
-                                if (frame_idx < depthcue_background_surfaces[variant_idx].size() && depthcue_background_surfaces[variant_idx][frame_idx]) {
-                                        dbg_tex = CacheManager::surface_to_texture(renderer, depthcue_background_surfaces[variant_idx][frame_idx]);
-                                        if (dbg_tex) {
-                                                apply_scale_mode(dbg_tex, info);
-                                        }
-                                }
-                                cache_entry.depthcue_background_textures[variant_idx] = dbg_tex;
                         }
                         animation.frame_cache_.push_back(std::move(cache_entry));
                 }
@@ -807,8 +944,6 @@ void AnimationLoader::load(Animation& animation,
                 free_surface_lists(foreground_surfaces);
                 free_surface_lists(background_surfaces);
                 free_surface_lists(mask_surfaces);
-                free_surface_lists(depthcue_foreground_surfaces);
-                free_surface_lists(depthcue_background_surfaces);
 
                 // Flip processing disabled for cached loading
                 if (animation.reverse_source && !animation.frame_cache_.empty()) {
@@ -961,11 +1096,7 @@ void AnimationLoader::load(Animation& animation,
                                 FrameVariant variant;
                                 variant.varient = static_cast<int>(v);
                                 variant.base_texture = cache.textures[v];
-                                if (v < cache.foreground_textures.size()) variant.foreground_texture = cache.foreground_textures[v];
-                                if (v < cache.background_textures.size()) variant.background_texture = cache.background_textures[v];
                                 if (v < cache.mask_textures.size()) variant.shadow_mask_texture = cache.mask_textures[v];
-                                if (v < cache.depthcue_foreground_textures.size()) variant.depthcue_foreground_texture = cache.depthcue_foreground_textures[v];
-                                if (v < cache.depthcue_background_textures.size()) variant.depthcue_background_texture = cache.depthcue_background_textures[v];
                                 f.variants.push_back(variant);
                             }
                         }
@@ -974,11 +1105,13 @@ void AnimationLoader::load(Animation& animation,
                                 any_motion = true;
                         }
                         // Only add frames from the primary path (index 0) to the frames list
-                        if (path_idx == 0) {
-                                animation.frames.push_back(&f);
-                        }
+                if (path_idx == 0) {
+                        animation.frames.push_back(&f);
                 }
         }
+}
+
+        apply_combat_geometry(animation.movement_paths_, hit_geometry_json, attack_geometry_json);
 
         animation.total_dx = 0;
         animation.total_dy = 0;

@@ -226,8 +226,6 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
 
     // 3. Base Asset and Depth Cue
     SDL_Texture* base_tex = nullptr;
-    SDL_Texture* fg_tex = nullptr;
-    SDL_Texture* bg_tex = nullptr;
 
     const Animation* anim_ptr = nullptr;
     if (asset->info) {
@@ -241,8 +239,6 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                     variant_idx = std::clamp(variant_idx, 0, static_cast<int>(variants.size()) - 1);
                     const FrameVariant& variant = variants[static_cast<std::size_t>(variant_idx)];
                     base_tex = variant.get_base_texture();
-                    fg_tex = variant.get_depthcue_foreground_texture();
-                    bg_tex = variant.get_depthcue_background_texture();
                 }
             }
         }

@@ -31,7 +31,7 @@
 namespace {
     constexpr int   kNavPreviewHeight = 96;
     constexpr int   kNavSliderGap = 12;
-    constexpr int   kNavSpacing = 8;
+    constexpr int   kNavSpacing = 12;
     constexpr int   kDirectoryPanelMinWidth = 360;
     constexpr int   kMovementTotalsFieldWidth = 120;
     constexpr int   kSmoothCheckboxMinWidth = 110;
@@ -166,6 +166,16 @@ namespace {
         }
         SDL_FreeSurface(surface);
     }
+
+    const char* mode_display_name(FrameEditorSession::Mode mode) {
+        switch (mode) {
+            case FrameEditorSession::Mode::Movement:        return "Movement";
+            case FrameEditorSession::Mode::Children:        return "Children";
+            case FrameEditorSession::Mode::AttackGeometry:  return "Attack Geometry";
+            case FrameEditorSession::Mode::HitGeometry:     return "Hit Geometry";
+        }
+        return "Unknown";
+    }
 }
 
 FrameEditorSession::FrameEditorSession() = default;
@@ -276,9 +286,9 @@ void FrameEditorSession::begin(Assets* assets,
         }
 
         // Position panels relative to asset
-        // Frame navigator: 400 pixels below asset, horizontally centered
+        // Frame navigator: 280 pixels below asset, horizontally centered
         nav_pos_.x = anchor_screen.x - nav_w / 2;
-        nav_pos_.y = anchor_screen.y + 400;
+        nav_pos_.y = anchor_screen.y + 280;
 
         // Mode selector: 200 pixels above asset, horizontally centered
         dir_pos_.x = anchor_screen.x - dir_w / 2;
@@ -308,6 +318,7 @@ void FrameEditorSession::load_animation_data(const std::string& animation_id) {
     }
     animation_id_ = animation_id;
     auto payload_dump = document_->animation_payload(animation_id_);
+    last_payload_loaded_ = payload_dump.has_value() && !payload_dump->empty();
     frames_ = parse_movement_frames_json(payload_dump.value_or(std::string{}));
     child_assets_ = document_->animation_children();
     child_preview_slots_.clear();
@@ -341,6 +352,9 @@ void FrameEditorSession::load_animation_data(const std::string& animation_id) {
     }
     // After padding/resizing, ensure newly added frames receive child placeholders.
     sync_child_frames();
+    // Pull the latest runtime frame data so edits made elsewhere (or in previous sessions)
+    // are reflected before we start editing.
+    hydrate_frames_from_animation();
     // Always keep the first frame zeroed
     frames_.front().dx = 0.0f;
     frames_.front().dy = 0.0f;
@@ -361,6 +375,9 @@ void FrameEditorSession::load_animation_data(const std::string& animation_id) {
 
 void FrameEditorSession::end() {
     if (!active_) return;
+
+    // Capture any pending edits before we start tearing down session state.
+    persist_changes();
     
     // Save local copies of critical data before clearing
     const bool has_assets = (assets_ != nullptr);
@@ -425,6 +442,7 @@ void FrameEditorSession::end() {
     document_payload_cache_.clear();
     document_children_signature_.clear();
     edited_animation_ids_.clear();
+    last_payload_loaded_ = false;
 
     // Reload animations AFTER session is closed
     if (info_to_reload && saved_assets) {
@@ -1521,6 +1539,13 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
     rebuild_layout();
     // Directory panel background
     dm_draw::DrawBeveledRect(renderer, directory_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelHeader(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+    {
+        std::string mode_text = std::string("Mode: ") + mode_display_name(mode_);
+        if (pending_save_) {
+            mode_text.append(" *");
+        }
+        render_label(renderer, mode_text, directory_rect_.x + DMSpacing::small_gap(), directory_rect_.y + DMSpacing::small_gap());
+    }
     if (btn_back_) btn_back_->render(renderer);
     if (btn_movement_) btn_movement_->render(renderer);
     if (btn_children_) btn_children_->render(renderer);
@@ -3600,6 +3625,142 @@ const FrameEditorSession::ChildFrame* FrameEditorSession::current_child_frame() 
     return &frame.children[selected_child_index_];
 }
 
+Animation* FrameEditorSession::current_animation_mutable() const {
+    if (!target_ || !target_->info) {
+        return nullptr;
+    }
+    if (assets_ && !assets_->contains_asset(target_)) {
+        return nullptr;
+    }
+    auto it = target_->info->animations.find(animation_id_);
+    if (it == target_->info->animations.end()) {
+        return nullptr;
+    }
+    return const_cast<Animation*>(&it->second);
+}
+
+void FrameEditorSession::hydrate_frames_from_animation() {
+    Animation* anim = current_animation_mutable();
+    if (!anim || anim->movement_path_count() == 0) {
+        return;
+    }
+    const auto& path = anim->movement_path(anim->default_movement_path_index());
+    if (path.empty()) {
+        return;
+    }
+    const std::size_t count = std::min<std::size_t>(frames_.size(), path.size());
+    for (std::size_t i = 0; i < count; ++i) {
+        const AnimationFrame& src = path[i];
+        MovementFrame& dst = frames_[i];
+        if (!last_payload_loaded_) {
+            dst.dx = static_cast<float>(src.dx);
+            dst.dy = static_cast<float>(src.dy);
+            dst.resort_z = src.z_resort;
+        }
+        if (!last_payload_loaded_ && dst.children.empty() && !src.children.empty()) {
+            for (const auto& child_src : src.children) {
+                if (child_src.child_index < 0 ||
+                    static_cast<std::size_t>(child_src.child_index) >= child_assets_.size()) {
+                    continue;
+                }
+                ChildFrame child;
+                child.child_index = child_src.child_index;
+                child.dx = static_cast<float>(child_src.dx);
+                child.dy = static_cast<float>(child_src.dy);
+                child.degree = child_src.degree;
+                child.visible = child_src.visible;
+                child.render_in_front = child_src.render_in_front;
+                dst.children.push_back(child);
+            }
+        }
+        if (!last_payload_loaded_ && dst.hit.boxes.empty() && !src.hit_geometry.boxes.empty()) {
+            dst.hit.boxes = src.hit_geometry.boxes;
+        }
+        if (!last_payload_loaded_ && dst.attack.vectors.empty() && !src.attack_geometry.vectors.empty()) {
+            dst.attack.vectors = src.attack_geometry.vectors;
+        }
+    }
+}
+
+void FrameEditorSession::apply_frames_to_animation() {
+    Animation* anim = current_animation_mutable();
+    if (!anim || anim->movement_path_count() == 0) {
+        return;
+    }
+    const std::size_t frame_count = frames_.size();
+    const std::size_t primary_path_index = anim->default_movement_path_index();
+    for (std::size_t path_index = 0; path_index < anim->movement_path_count(); ++path_index) {
+        auto& path = anim->movement_path(path_index);
+        if (path.empty()) {
+            continue;
+        }
+        if (path.size() < frame_count) {
+            const std::size_t prev_size = path.size();
+            path.resize(frame_count);
+            for (std::size_t i = prev_size; i < path.size(); ++i) {
+                path[i].frame_index = static_cast<int>(i);
+            }
+        }
+        const std::size_t copy_count = std::min<std::size_t>(frame_count, path.size());
+        for (std::size_t i = 0; i < copy_count; ++i) {
+            const MovementFrame& src = frames_[i];
+            AnimationFrame& dst = path[i];
+            dst.dx = static_cast<int>(std::lround(i == 0 ? 0.0f : src.dx));
+            dst.dy = static_cast<int>(std::lround(i == 0 ? 0.0f : src.dy));
+            dst.z_resort = src.resort_z;
+            dst.frame_index = static_cast<int>(i);
+            dst.children.clear();
+            if (!child_assets_.empty()) {
+                for (const auto& child_src : src.children) {
+                    if (child_src.child_index < 0 ||
+                        child_src.child_index >= static_cast<int>(child_assets_.size())) {
+                        continue;
+                    }
+                    AnimationChildFrameData child{};
+                    child.child_index = child_src.child_index;
+                    child.dx = static_cast<int>(std::lround(child_src.dx));
+                    child.dy = static_cast<int>(std::lround(child_src.dy));
+                    child.degree = child_src.degree;
+                    child.visible = child_src.visible;
+                    child.render_in_front = child_src.render_in_front;
+                    dst.children.push_back(child);
+                }
+            }
+            dst.hit_geometry.boxes.clear();
+            for (const auto& box : src.hit.boxes) {
+                if (box.is_empty()) continue;
+                dst.hit_geometry.boxes.push_back(box);
+            }
+            dst.attack_geometry.vectors = src.attack.vectors;
+        }
+        for (std::size_t i = 0; i < path.size(); ++i) {
+            AnimationFrame& dst = path[i];
+            dst.frame_index = static_cast<int>(i);
+            dst.is_first = (i == 0);
+            dst.is_last = (i + 1 == path.size());
+            dst.prev = (i > 0) ? &path[i - 1] : nullptr;
+            dst.next = (i + 1 < path.size()) ? &path[i + 1] : nullptr;
+        }
+        if (path_index == primary_path_index) {
+            anim->frames.clear();
+            anim->frames.reserve(path.size());
+            for (auto& frame : path) {
+                anim->frames.push_back(&frame);
+            }
+            anim->total_dx = 0;
+            anim->total_dy = 0;
+            anim->movment = false;
+            for (const auto& frame : path) {
+                anim->total_dx += frame.dx;
+                anim->total_dy += frame.dy;
+                if (frame.dx != 0 || frame.dy != 0) {
+                    anim->movment = true;
+                }
+            }
+        }
+    }
+}
+
 void FrameEditorSession::sync_child_asset_visibility() {
     if (!target_) return;
     const bool desired_show = show_animation_ && show_child_;
@@ -3691,6 +3852,8 @@ void FrameEditorSession::persist_changes() {
     if (!document_ || animation_id_.empty()) {
         return;
     }
+    // Keep runtime data in sync with the editor copy so re-entry shows the latest edits.
+    apply_frames_to_animation();
     if (std::find(edited_animation_ids_.begin(), edited_animation_ids_.end(), animation_id_) == edited_animation_ids_.end()) {
         edited_animation_ids_.push_back(animation_id_);
     }
@@ -3901,15 +4064,13 @@ void FrameEditorSession::clamp_scroll_offset() const {
 void FrameEditorSession::ensure_selected_thumb_visible() {
     if (frames_.empty() || thumb_viewport_width_ <= 0) return;
     const int thumb_w = std::max(1, thumb_viewport_width_ / std::max(1, static_cast<int>(frames_.size())));
-    const int spacing = 8;
+    const int spacing = 12;
     const int per = thumb_w + spacing;
+    // Center the selected frame in the viewport when scrolling
     const int left_edge = selected_index_ * per;
     const int right_edge = left_edge + thumb_w;
-    if (left_edge < scroll_offset_) {
-        scroll_offset_ = left_edge;
-    } else if (right_edge > scroll_offset_ + thumb_viewport_width_) {
-        scroll_offset_ = right_edge - thumb_viewport_width_;
-    }
+    const int center_offset = left_edge + (thumb_w / 2) - (thumb_viewport_width_ / 2);
+    scroll_offset_ = std::clamp(center_offset, left_edge - (thumb_viewport_width_ - thumb_w), right_edge);
     clamp_scroll_offset();
 }
 

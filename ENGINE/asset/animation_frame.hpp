@@ -3,6 +3,7 @@
 #include <vector>
 #include <SDL.h>
 
+#include "animation_update/combat_geometry.hpp"
 #include "animation_frame_variant.hpp"
 
 class AnimationFrame {
@@ -39,17 +40,24 @@ public:
 
 
     std::vector<AnimationChildFrameData> children; //children are the same for every variant
+    animation_update::FrameHitGeometry hit_geometry;
+    animation_update::FrameAttackGeometry attack_geometry;
 
-    // Convenience accessors for child / hit / attack on a given variant (default first)
-    const std::vector<AnimationChildFrameData>& get_children(int variant_index = 0) const {
+    const std::vector<AnimationChildFrameData>& get_children() const {
         return children;
     }
 
-    const animation_update::FrameHitGeometry& get_hit_geometry_single(int variant_index = 0) const {
-        return variants[variant_index].get_hit_geometry();
+    const animation_update::FrameHitGeometry& get_hit_geometry() const {
+        return hit_geometry;
+    }
+    animation_update::FrameHitGeometry& mutable_hit_geometry() {
+        return hit_geometry;
     }
 
-    const animation_update::FrameAttackGeometry& get_attack_geometry_single(int variant_index = 0) const {
-        return variants[variant_index].get_attack_geometry();
+    const animation_update::FrameAttackGeometry& get_attack_geometry() const {
+        return attack_geometry;
+    }
+    animation_update::FrameAttackGeometry& mutable_attack_geometry() {
+        return attack_geometry;
     }
 };

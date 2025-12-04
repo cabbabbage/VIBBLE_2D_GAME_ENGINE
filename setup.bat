@@ -160,40 +160,61 @@ winget install --id Git.Git -e --source winget --silent || (echo [ERROR] Git ins
 git --version >nul 2>&1 && echo [setup.bat] Git installed and on PATH.
 exit /b 0
 
-:EnsureVSBuildTools
-where cl >nul 2>&1 && ( echo [setup.bat] MSVC toolchain already available. & exit /b 0 )
 
-set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
-set "VS_INSTALL_PATH="
-if exist "%VSWHERE%" (
-  for /f "usebackq tokens=* delims=" %%I in (`
-    "%VSWHERE%" -latest -products Microsoft.VisualStudio.Product.BuildTools -property installationPath
-  `) do set "VS_INSTALL_PATH=%%I"
+
+:EnsureVSBuildTools
+rem Short circuit if cl is already usable
+where cl >nul 2>&1 && (
+    echo [setup.bat] MSVC toolchain already available.
+    exit /b 0
 )
+
+set "VS_INSTALL_PATH="
+set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+
+rem Try to find any VS instance that already has the VC tools installed
+if exist "%VSWHERE%" (
+    for /f "usebackq tokens=* delims=" %%I in (`
+        "%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    `) do set "VS_INSTALL_PATH=%%I"
+)
+
+rem Fallback to common BuildTools folder or your custom install dir if vswhere did not return anything
 if not defined VS_INSTALL_PATH if exist "C:\Program Files\Microsoft Visual Studio\2022\BuildTools" set "VS_INSTALL_PATH=C:\Program Files\Microsoft Visual Studio\2022\BuildTools"
 if not defined VS_INSTALL_PATH if exist "%VSBT_INSTALL_DIR%" set "VS_INSTALL_PATH=%VSBT_INSTALL_DIR%"
 
-if not defined VS_INSTALL_PATH (
-    echo [setup.bat] Installing Visual Studio 2022 Build Tools...
-    call :DownloadVSBootstrapper || exit /b 1
-    call :RunWithTimeoutPS "%VS_BOOT_EXE%" "--installPath ""%VSBT_INSTALL_DIR%"" --quiet --wait --norestart --nocache --includeRecommended --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows11SDK.22621" %INSTALL_TIMEOUT_SECS%
-    if errorlevel 1 (
-        call :RunWithTimeoutPS "%VS_BOOT_EXE%" "--installPath ""%VSBT_INSTALL_DIR%"" --quiet --wait --norestart --nocache --includeRecommended --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows10SDK.19041" %INSTALL_TIMEOUT_SECS% || (echo [ERROR] VS Build Tools install failed. & exit /b 1)
-    )
-) else (
-    echo [setup.bat] Ensuring required C++ components...
-    set "VS_SETUP=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\setup.exe"
-    if exist "%VS_SETUP%" (
-        call :RunWithTimeoutPS "%VS_SETUP%" "modify --installPath ""%VS_INSTALL_PATH%"" --quiet --norestart --wait --locale en-US --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows11SDK.22621" %INSTALL_TIMEOUT_SECS% ^
-        || call :RunWithTimeoutPS "%VS_SETUP%" "modify --installPath ""%VS_INSTALL_PATH%"" --quiet --norestart --wait --locale en-US --add Microsoft.VisualStudio.Component.Windows10SDK.19041" %INSTALL_TIMEOUT_SECS%
-    ) else (
-        echo [setup.bat] Visual Studio Installer not found. Using bootstrapper to modify...
-        call :DownloadVSBootstrapper || exit /b 1
-        call :RunWithTimeoutPS "%VS_BOOT_EXE%" "modify --installPath ""%VS_INSTALL_PATH%"" --quiet --wait --norestart --nocache --includeRecommended --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows11SDK.22621" %INSTALL_TIMEOUT_SECS% ^
-        || call :RunWithTimeoutPS "%VS_BOOT_EXE%" "modify --installPath ""%VS_INSTALL_PATH%"" --quiet --wait --norestart --nocache --includeRecommended --add Microsoft.VisualStudio.Component.Windows10SDK.19041" %INSTALL_TIMEOUT_SECS% || (echo [ERROR] VS component modify failed. & exit /b 1)
-    )
+if defined VS_INSTALL_PATH (
+    echo [setup.bat] Found existing MSVC install at "%VS_INSTALL_PATH%".
+    exit /b 0
 )
+
+rem If we get here, there is no usable MSVC. Install Build Tools silently via winget.
+echo [setup.bat] MSVC build tools not found. Installing Visual Studio 2022 Build Tools with winget...
+winget install --id Microsoft.VisualStudio.2022.BuildTools -e --source winget --silent ^
+  --override "--installPath \"%VSBT_INSTALL_DIR%\" --quiet --wait --norestart --nocache --includeRecommended --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.CMake.Project --add Microsoft.VisualStudio.Component.Windows11SDK.22621"
+if errorlevel 1 (
+    echo [ERROR] VS Build Tools install failed.
+    exit /b 1
+)
+
+rem Re-run detection so later steps (like EnsureDevShell) know where it ended up
+set "VS_INSTALL_PATH="
+if exist "%VSWHERE%" (
+    for /f "usebackq tokens=* delims=" %%I in (`
+        "%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    `) do set "VS_INSTALL_PATH=%%I"
+)
+if not defined VS_INSTALL_PATH if exist "%VSBT_INSTALL_DIR%" set "VS_INSTALL_PATH=%VSBT_INSTALL_DIR%"
+
+if not defined VS_INSTALL_PATH (
+    echo [ERROR] VS Build Tools installation did not register correctly.
+    exit /b 1
+)
+
+echo [setup.bat] VS Build Tools installed at "%VS_INSTALL_PATH%".
 exit /b 0
+
+
 
 :EnsureDevShell
 where cl >nul 2>&1 && (echo [setup.bat] MSVC already on PATH. & exit /b 0)

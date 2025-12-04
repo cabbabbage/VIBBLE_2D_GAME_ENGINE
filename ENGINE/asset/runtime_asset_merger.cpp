@@ -593,6 +593,8 @@ std::unique_ptr<Asset> AssetMerger::merge(std::vector<std::unique_ptr<Asset>> as
             frames.push_back(frame_texture);
         }
 
+        caches[0].foreground_textures[idx] = nullptr;
+        caches[0].background_textures[idx] = nullptr;
         SDL_Surface* mask_surface = mask_surfaces[idx].empty() ? nullptr : mask_surfaces[idx][0];
         SDL_Texture* mask_texture = surface_to_texture_checked(mask_surface, "mask", false);
         if (mask_surface) {

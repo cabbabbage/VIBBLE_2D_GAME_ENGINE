@@ -145,6 +145,25 @@ void FrameChildrenEditor::set_selected_frame(int index) {
     refresh_tools_panel();
 }
 
+void FrameChildrenEditor::refresh_payload_cache_from_document() {
+    if (!document_ || animation_id_.empty()) {
+        payload_signature_.clear();
+        payload_cache_.clear();
+        children_signature_cache_.clear();
+        reload_from_document();
+        return;
+    }
+    auto payload_dump = document_->animation_payload(animation_id_);
+    payload_cache_ = payload_dump.has_value() ? *payload_dump : std::string{};
+    children_signature_cache_ = document_->animation_children_signature();
+    payload_signature_.clear();
+    payload_signature_ = payload_cache_;
+    if (!children_signature_cache_.empty()) {
+        payload_signature_ += "|" + children_signature_cache_;
+    }
+    reload_from_document();
+}
+
 void FrameChildrenEditor::update() {
     if (!document_ || animation_id_.empty()) {
         return;
