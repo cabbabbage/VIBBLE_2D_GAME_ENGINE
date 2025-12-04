@@ -706,7 +706,5 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
         ++frame_index;
     }
     if (frames.empty()) frames.push_back(MovementFrame{});
-    frames.front().dx = 0.0f;
-    frames.front().dy = 0.0f;
     return frames;
 }

@@ -600,8 +600,8 @@ void FrameChildrenEditor::persist_changes() {
     nlohmann::json movement_json = nlohmann::json::array();
     for (std::size_t i = 0; i < frames_.size(); ++i) {
         const auto& frame = frames_[i];
-        int dx = static_cast<int>(std::lround(i == 0 ? 0.0f : frame.dx));
-        int dy = static_cast<int>(std::lround(i == 0 ? 0.0f : frame.dy));
+        int dx = static_cast<int>(std::lround(frame.dx));
+        int dy = static_cast<int>(std::lround(frame.dy));
         nlohmann::json entry = nlohmann::json::array({dx, dy});
         if (frame.resort_z) {
             entry.push_back(frame.resort_z);
@@ -635,8 +635,6 @@ void FrameChildrenEditor::persist_changes() {
     if (movement_json.empty()) {
         movement_json.push_back(nlohmann::json::array({0, 0}));
     }
-    movement_json[0][0] = 0;
-    movement_json[0][1] = 0;
     payload["movement"] = std::move(movement_json);
 
     int total_dx = 0;

@@ -49,8 +49,6 @@ void sanitize_frames(std::vector<MovementFrame>& frames) {
         frames.push_back(MovementFrame{});
     }
     if (frames.empty()) return;
-    frames.front().dx = 0.0f;
-    frames.front().dy = 0.0f;
     for (auto& frame : frames) {
         if (!std::isfinite(frame.dx)) frame.dx = 0.0f;
         if (!std::isfinite(frame.dy)) frame.dy = 0.0f;
@@ -85,8 +83,6 @@ std::vector<MovementFrame> parse_movement_frames(const nlohmann::json& payload) 
     if (frames.empty()) {
         frames.push_back(MovementFrame{});
     }
-    frames.front().dx = 0.0f;
-    frames.front().dy = 0.0f;
     sanitize_frames(frames);
     return frames;
 }
@@ -95,8 +91,8 @@ nlohmann::json serialize_frames_to_json(const std::vector<MovementFrame>& frames
     nlohmann::json movement = nlohmann::json::array();
     for (size_t i = 0; i < frames.size(); ++i) {
         const MovementFrame& frame = frames[i];
-        int dx = static_cast<int>(std::lround(i == 0 ? 0.0f : frame.dx));
-        int dy = static_cast<int>(std::lround(i == 0 ? 0.0f : frame.dy));
+        int dx = static_cast<int>(std::lround(frame.dx));
+        int dy = static_cast<int>(std::lround(frame.dy));
         nlohmann::json entry = nlohmann::json::array({dx, dy});
         if (frame.resort_z) {
             entry.push_back(frame.resort_z);
@@ -106,8 +102,6 @@ nlohmann::json serialize_frames_to_json(const std::vector<MovementFrame>& frames
     if (movement.empty()) {
         movement.push_back(nlohmann::json::array({0, 0}));
     }
-    movement[0][0] = 0;
-    movement[0][1] = 0;
     return movement;
 }
 

@@ -36,8 +36,8 @@ private:
     // Dashing variables
     bool canDash    = true;
     bool isDashing  = false;
-    float dashingPower = 20.0f;
-    float dashingTime = 0.1f;
+    float dashingPower = 10.0f;
+    float dashingTime = 0.05f;
     float dashingCooldown = 1.0f;
     std::chrono::steady_clock::time_point dashEndTime;
     std::chrono::steady_clock::time_point cooldownEndTime;
@@ -48,4 +48,3 @@ private:
 };
 
 #endif
-

@@ -1594,7 +1594,26 @@ void AssetLibraryUI::perform_delete(const PendingDeleteInfo& pending, bool defer
     bool manifest_entry_removed = false;
     if (!asset_name.empty()) {
         if (manifest_store_owner_) {
-            manifest_entry_removed = manifest_store_owner_->remove_asset(asset_name);
+            bool removed_any = false;
+            const nlohmann::json& manifest = manifest_store_owner_->manifest_json();
+            auto assets_it = manifest.find("assets");
+            if (assets_it != manifest.end() && assets_it->is_object()) {
+                std::vector<std::string> keys_to_remove;
+                for (auto it = assets_it->begin(); it != assets_it->end(); ++it) {
+                    const auto& key = it.key();
+                    const auto& asset_json = it.value();
+                    auto asset_name_it = asset_json.find("asset_name");
+                    if (asset_name_it != asset_json.end() && asset_name_it->is_string() && asset_name_it->get<std::string>() == asset_name) {
+                        keys_to_remove.push_back(key);
+                    }
+                }
+                for (const std::string& key : keys_to_remove) {
+                    if (manifest_store_owner_->remove_asset(key)) {
+                        removed_any = true;
+                    }
+                }
+            }
+            manifest_entry_removed = removed_any;
             if (!manifest_entry_removed) {
                 std::cerr << "[AssetLibraryUI] Failed to remove '" << asset_name
                           << "' from manifest\n";

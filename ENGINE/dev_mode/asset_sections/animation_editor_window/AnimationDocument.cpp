@@ -209,7 +209,6 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
         if (movement.empty()) {
             movement.push_back(nlohmann::json::array({0, 0}));
         }
-        movement[0] = nlohmann::json::array({0, 0});
         payload["movement"] = movement;
 
         auto read_component = [](const nlohmann::json& entry, int index) -> int {

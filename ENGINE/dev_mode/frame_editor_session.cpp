@@ -364,9 +364,6 @@ void FrameEditorSession::load_animation_data(const std::string& animation_id) {
     // Pull the latest runtime frame data so edits made elsewhere (or in previous sessions)
     // are reflected before we start editing.
     hydrate_frames_from_animation();
-    // Always keep the first frame zeroed
-    frames_.front().dx = 0.0f;
-    frames_.front().dy = 0.0f;
     rebuild_rel_positions();
 
     selected_index_ = 0;
@@ -3692,20 +3689,32 @@ void FrameEditorSession::hydrate_frames_from_animation() {
             dst.dy = static_cast<float>(src.dy);
             dst.resort_z = src.z_resort;
         }
-        if (!last_payload_loaded_ && dst.children.empty() && !src.children.empty()) {
+        // Merge runtime child frames into our per-frame placeholders when there is
+        // no document payload present. Previously hydration only copied children
+        // when dst.children was empty which failed when sync_child_frames had
+        // already created per-frame placeholders. When the document is present
+        // it is authoritative and we should not overwrite document-provided
+        // child entries here.
+        if (!last_payload_loaded_ && !src.children.empty()) {
+            // Ensure destination vector has slots for all known child assets.
+            if (dst.children.size() < child_assets_.size()) {
+                dst.children.resize(child_assets_.size());
+                for (std::size_t k = 0; k < dst.children.size(); ++k) {
+                    dst.children[k].child_index = static_cast<int>(k);
+                }
+            }
             for (const auto& child_src : src.children) {
                 if (child_src.child_index < 0 ||
                     static_cast<std::size_t>(child_src.child_index) >= child_assets_.size()) {
                     continue;
                 }
-                ChildFrame child;
+                ChildFrame& child = dst.children[static_cast<std::size_t>(child_src.child_index)];
                 child.child_index = child_src.child_index;
                 child.dx = static_cast<float>(child_src.dx);
                 child.dy = static_cast<float>(child_src.dy);
                 child.degree = child_src.degree;
                 child.visible = child_src.visible;
                 child.render_in_front = child_src.render_in_front;
-                dst.children.push_back(child);
             }
         }
         if (!last_payload_loaded_ && dst.hit.boxes.empty() && !src.hit_geometry.boxes.empty()) {
@@ -3742,8 +3751,8 @@ void FrameEditorSession::apply_frames_to_animation() {
         for (std::size_t i = 0; i < copy_count; ++i) {
             const MovementFrame& src = frames_[i];
             AnimationFrame& dst = path[i];
-            dst.dx = static_cast<int>(std::lround(i == 0 ? 0.0f : src.dx));
-            dst.dy = static_cast<int>(std::lround(i == 0 ? 0.0f : src.dy));
+            dst.dx = static_cast<int>(std::lround(src.dx));
+            dst.dy = static_cast<int>(std::lround(src.dy));
             dst.z_resort = src.resort_z;
             dst.frame_index = static_cast<int>(i);
             dst.children.clear();
@@ -3920,8 +3929,8 @@ void FrameEditorSession::persist_changes() {
     nlohmann::json attack_geometry = nlohmann::json::array();
     for (size_t i = 0; i < frames_.size(); ++i) {
         const MovementFrame& f = frames_[i];
-        int dx = static_cast<int>(std::lround(i == 0 ? 0.0f : f.dx));
-        int dy = static_cast<int>(std::lround(i == 0 ? 0.0f : f.dy));
+        int dx = static_cast<int>(std::lround(f.dx));
+        int dy = static_cast<int>(std::lround(f.dy));
         nlohmann::json entry = nlohmann::json::array({dx, dy});
         // Always include resort_z boolean slot to keep schema stable
         entry.push_back(f.resort_z);
@@ -3996,7 +4005,6 @@ void FrameEditorSession::persist_changes() {
         attack_geometry.push_back(std::move(attack_entry));
     }
     if (movement.empty()) movement.push_back(nlohmann::json::array({0,0}));
-    movement[0][0] = 0; movement[0][1] = 0;
     payload["movement"] = std::move(movement);
     payload["hit_geometry"] = std::move(hit_geometry);
     payload["attack_geometry"] = std::move(attack_geometry);
@@ -4211,4 +4219,3 @@ void FrameEditorSession::render_attack_geometry(SDL_Renderer* renderer) const {
         }
     }
 }
-

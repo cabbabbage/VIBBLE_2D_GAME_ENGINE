@@ -200,12 +200,16 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
         int final_h = static_cast<int>(std::lround(static_cast<float>(tex_h) * base_adjustment));
         final_w = std::max(1, final_w);
         final_h = std::max(1, final_h);
+        // Child attachments store world_pos as the child's base (bottom-middle) in world coordinates.
+        // The SceneRenderer centers draw rectangles around asset->pos and subtracts height to align
+        // the bottom edge, so pass the base position directly and let the renderer handle anchoring.
         SDL_Rect dest_rect{
-            slot.world_pos.x - final_w / 2,
-            slot.world_pos.y - final_h,
+            slot.world_pos.x,
+            slot.world_pos.y,
             final_w,
             final_h
         };
+        SDL_Point pivot{ final_w / 2, final_h }; // rotate around bottom-middle like the editor preview
         SDL_RendererFlip flip = asset->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
         add_render_object(tex,
                           dest_rect,
@@ -213,7 +217,7 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                           SDL_BLENDMODE_BLEND,
                           false,
                           static_cast<double>(slot.rotation_degrees),
-                          std::nullopt,
+                          pivot,
                           flip);
     };
 
