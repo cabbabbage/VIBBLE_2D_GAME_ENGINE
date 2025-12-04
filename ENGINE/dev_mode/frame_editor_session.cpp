@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <unordered_set>
 #include <utility>
 
 #include "animation_update/animation_update.hpp"
@@ -412,20 +413,27 @@ void FrameEditorSession::end() {
     child_hidden_cache_.clear();
     last_applied_show_asset_state_ = true;
     
+    const bool had_pending_save = pending_save_;
     // Save document to disk if there are pending changes
     if (pending_save_ && document_) {
         pending_save_ = false;
-        document_->save_to_file();
+        // Avoid firing document saved callbacks while closing; we handle reloads explicitly below.
+        document_->save_to_file(false);
     }
 
     // Save critical locals before clearing session data
     auto saved_host = host_;
     auto saved_animation_id = animation_id_;
-    std::vector<std::string> animations_to_reload = edited_animation_ids_;
-    if (!saved_animation_id.empty() &&
-        std::find(animations_to_reload.begin(), animations_to_reload.end(), saved_animation_id) == animations_to_reload.end()) {
-        animations_to_reload.push_back(saved_animation_id);
+    std::vector<std::string> animations_to_reload;
+    {
+        std::unordered_set<std::string> seen;
+        for (const auto& id : edited_animation_ids_) {
+            if (!id.empty() && seen.insert(id).second) {
+                animations_to_reload.push_back(id);
+            }
+        }
     }
+    const bool had_edits = had_pending_save || !animations_to_reload.empty();
 
     // Clear session data
     active_ = false;
@@ -444,56 +452,21 @@ void FrameEditorSession::end() {
     edited_animation_ids_.clear();
     last_payload_loaded_ = false;
 
-    // Reload animations AFTER session is closed
-    if (info_to_reload && saved_assets) {
-        bool refreshed = false;
-        bool regen_failed = false;
-
-        if (!asset_name_for_cache.empty()) {
-            for (const auto& anim_id : animations_to_reload) {
-                if (anim_id.empty()) {
-                    continue;
-                }
-                try {
-                    auto result = devmode::AnimationRegenerator::regenerate_animation(
-                        saved_assets, info_to_reload, anim_id);
-                    refreshed = refreshed || result.refreshed_instances || result.reloaded;
-                    regen_failed = regen_failed || (result.python_launched && !result.python_success);
-                } catch (const std::exception& ex) {
-                    regen_failed = true;
-                    std::cerr << "[FrameEditorSession] regenerate_animation threw for '" << anim_id
-                              << "': " << ex.what() << "\n";
-                } catch (...) {
-                    regen_failed = true;
-                    std::cerr << "[FrameEditorSession] regenerate_animation threw for '" << anim_id
-                              << "' (unknown error)\n";
-                }
+    // Reload animations AFTER session is closed; avoid running python regen unless needed.
+    if (info_to_reload && saved_assets && had_edits) {
+        try {
+            const bool ok = info_to_reload->reload_animations_from_disk();
+            SDL_Renderer* renderer = saved_assets->renderer();
+            if (ok && renderer) {
+                info_to_reload->loadAnimations(renderer);
+                devmode::AnimationRegenerator::refresh_loaded_instances(saved_assets, info_to_reload);
             }
-        }
-
-        // Fallback reload when regeneration was not attempted or when reload failed
-        // unexpectedly (e.g., python error). Rebuild via AnimationRegenerator is preferred,
-        // but a straight reload keeps the editor stable when regeneration cannot run.
-        if (!refreshed) {
-            try {
-                const bool ok = info_to_reload->reload_animations_from_disk();
-                SDL_Renderer* renderer = saved_assets->renderer();
-                if (ok && renderer) {
-                    info_to_reload->loadAnimations(renderer);
-                    devmode::AnimationRegenerator::refresh_loaded_instances(saved_assets, info_to_reload);
-                    refreshed = true;
-                }
-            } catch (const std::exception& ex) {
-                std::cerr << "[FrameEditorSession] Safe animation reload failed for '" << asset_name_for_cache
-                          << "': " << ex.what() << "\n";
-            } catch (...) {
-                std::cerr << "[FrameEditorSession] Safe animation reload failed for '" << asset_name_for_cache
-                          << "' (unknown error)\n";
-            }
-            if (regen_failed) {
-                std::cerr << "[FrameEditorSession] Animation regeneration failed; applied fallback reload for '"
-                          << asset_name_for_cache << "'\n";
-            }
+        } catch (const std::exception& ex) {
+            std::cerr << "[FrameEditorSession] Animation reload failed for '" << asset_name_for_cache
+                      << "': " << ex.what() << "\n";
+        } catch (...) {
+            std::cerr << "[FrameEditorSession] Animation reload failed for '" << asset_name_for_cache
+                      << "' (unknown error)\n";
         }
     }
 
@@ -3856,9 +3829,6 @@ void FrameEditorSession::persist_changes() {
     }
     // Keep runtime data in sync with the editor copy so re-entry shows the latest edits.
     apply_frames_to_animation();
-    if (std::find(edited_animation_ids_.begin(), edited_animation_ids_.end(), animation_id_) == edited_animation_ids_.end()) {
-        edited_animation_ids_.push_back(animation_id_);
-    }
     // Serialize primary movement + totals (reuse logic similar to FrameMovementEditor)
     nlohmann::json payload = nlohmann::json::object();
     if (auto j = document_->animation_payload(animation_id_)) {
@@ -3959,10 +3929,14 @@ void FrameEditorSession::persist_changes() {
     payload["attack_geometry"] = std::move(attack_geometry);
 
     std::string serialized = payload.dump();
-    if (!document_payload_cache_.empty() && serialized == document_payload_cache_) {
+    const bool changed = document_payload_cache_.empty() || serialized != document_payload_cache_;
+    if (!changed) {
         return;
     }
 
+    if (std::find(edited_animation_ids_.begin(), edited_animation_ids_.end(), animation_id_) == edited_animation_ids_.end()) {
+        edited_animation_ids_.push_back(animation_id_);
+    }
     pending_save_ = true;
     document_->replace_animation_payload(animation_id_, serialized);
     if (auto normalized = document_->animation_payload(animation_id_)) {
