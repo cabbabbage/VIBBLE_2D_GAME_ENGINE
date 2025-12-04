@@ -21,12 +21,14 @@ void BombController::update(const Input&) {
     }
     Asset* player = assets_->player;
 
+    int distance_sq = (self_->pos.x - player->pos.x) * (self_->pos.x - player->pos.x) +
+                          (self_->pos.y - player->pos.y) * (self_->pos.y - player->pos.y);
 
-    if (self_->target_reached) {
+    if (distance_sq <= 700) { 
         std::cout << "[BombController] target reached" << std::endl;
-        if (self_->info && self_->info->animations.count("explode")) {
+        if (self_->info && self_->info->animations.count("explosion")) {
             std::cout << "[BombController] triggering explode animation." << std::endl;
-            self_->anim_->set_animation("explode");
+            self_->anim_->set_animation("explosion");
         }
         else {
             std::cout << "[BombController] no explode animation found." << std::endl;
@@ -35,6 +37,7 @@ void BombController::update(const Input&) {
     else {
         if(self_->needs_target){
             self_->anim_->auto_move(player);
+            std::cout << "[BombController] auto-moving towards player. PX dist: " << distance_sq << std::endl;
         }
     }
 }

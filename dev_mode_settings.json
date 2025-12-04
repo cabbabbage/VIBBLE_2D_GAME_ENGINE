@@ -27,10 +27,10 @@
             }
         },
         "grid": {
-            "cell_size_px": 8.0,
+            "cell_size_px": 2.0,
             "overlay": {
                 "enabled": true,
-                "r": 3.0
+                "r": 1.0
             },
             "snap": {
                 "enabled": true

@@ -322,6 +322,14 @@ void FrameEditorSession::load_animation_data(const std::string& animation_id) {
     last_payload_loaded_ = payload_dump.has_value() && !payload_dump->empty();
     frames_ = parse_movement_frames_json(payload_dump.value_or(std::string{}));
     child_assets_ = document_->animation_children();
+    if (target_ && target_->info) {
+        target_->info->set_animation_children(child_assets_);
+        target_->initialize_animation_children_recursive();
+        target_->mark_composite_dirty();
+    }
+    if (assets_) {
+        assets_->mark_active_assets_dirty();
+    }
     child_preview_slots_.clear();
     document_payload_cache_.clear();
     document_children_signature_ = document_->animation_children_signature();
@@ -434,6 +442,24 @@ void FrameEditorSession::end() {
         }
     }
     const bool had_edits = had_pending_save || !animations_to_reload.empty();
+    bool refreshed_runtime = false;
+    if (info_to_reload && assets_ && had_edits) {
+        try {
+            SDL_Renderer* renderer = assets_->renderer();
+            const bool reloaded = info_to_reload->reload_animations_from_disk();
+            if (reloaded && renderer) {
+                info_to_reload->loadAnimations(renderer);
+            }
+            devmode::AnimationRegenerator::refresh_loaded_instances(assets_, info_to_reload);
+            refreshed_runtime = true;
+        } catch (const std::exception& ex) {
+            std::cerr << "[FrameEditorSession] Animation reload failed for '" << asset_name_for_cache
+                      << "': " << ex.what() << "\n";
+        } catch (...) {
+            std::cerr << "[FrameEditorSession] Animation reload failed for '" << asset_name_for_cache
+                      << "' (unknown error)\n";
+        }
+    }
 
     // Clear session data
     active_ = false;
@@ -452,15 +478,15 @@ void FrameEditorSession::end() {
     edited_animation_ids_.clear();
     last_payload_loaded_ = false;
 
-    // Reload animations AFTER session is closed; avoid running python regen unless needed.
-    if (info_to_reload && saved_assets && had_edits) {
+    // Reload animations AFTER session is closed if we could not refresh before teardown.
+    if (info_to_reload && saved_assets && had_edits && !refreshed_runtime) {
         try {
             const bool ok = info_to_reload->reload_animations_from_disk();
             SDL_Renderer* renderer = saved_assets->renderer();
             if (ok && renderer) {
                 info_to_reload->loadAnimations(renderer);
-                devmode::AnimationRegenerator::refresh_loaded_instances(saved_assets, info_to_reload);
             }
+            devmode::AnimationRegenerator::refresh_loaded_instances(saved_assets, info_to_reload);
         } catch (const std::exception& ex) {
             std::cerr << "[FrameEditorSession] Animation reload failed for '" << asset_name_for_cache
                       << "': " << ex.what() << "\n";
@@ -1305,8 +1331,11 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         if (mode_ == Mode::Children) {
             // In Children mode, clicks set the selected child's per-frame offset.
             if (auto* child = current_child_frame()) {
-                child->dx = static_cast<float>(std::round(desired_rel.x));
-                child->dy = static_cast<float>(std::round(desired_rel.y));
+                const float scale = attachment_scale();
+                const float inv_scale = (scale > 0.0001f) ? (1.0f / scale) : 1.0f;
+                const float unflipped_x = target_->flipped ? -desired_rel.x : desired_rel.x;
+                child->dx = static_cast<float>(std::round(unflipped_x * inv_scale));
+                child->dy = static_cast<float>(std::round(desired_rel.y * inv_scale));
                 const bool should_smooth_child = smooth_enabled_ && selected_index_ > 0;
                 if (should_smooth_child) {
                     smooth_child_offsets(selected_child_index_, selected_index_);
@@ -1415,17 +1444,25 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
     if (mode_ == Mode::Children && show_child_ && !child_assets_.empty() &&
         selected_index_ < static_cast<int>(frames_.size())) {
         const auto& frame = frames_[selected_index_];
-        const ChildPreviewContext preview_ctx = build_child_preview_context();
+        ChildPreviewContext preview_ctx = build_child_preview_context();
         // Get parent's base (bottom-middle) for child positioning
         SDL_Point parent_base = asset_anchor_world();
+        const float base_adjustment = attachment_scale();
+        float variant_scale = target_->current_nearest_variant_scale;
+        if (!std::isfinite(variant_scale) || variant_scale <= 0.0f) {
+            variant_scale = 1.0f;
+        }
+        preview_ctx.document_scale = base_adjustment;
         // Draw markers and names
         for (std::size_t i = 0; i < child_assets_.size() && i < frame.children.size(); ++i) {
             const auto& child = frame.children[i];
             // Child offsets are in pixels relative to parent's base (bottom-middle)
-            const float dx_world = target_->flipped ? -static_cast<float>(child.dx) : static_cast<float>(child.dx);
+            const float scaled_dx = static_cast<float>(child.dx) * base_adjustment;
+            const float scaled_dy = static_cast<float>(child.dy) * base_adjustment;
+            const float dx_world = target_->flipped ? -scaled_dx : scaled_dx;
             SDL_FPoint screen = cam.map_to_screen_f(SDL_FPoint{
                 dx_world + static_cast<float>(parent_base.x),
-                static_cast<float>(child.dy) + static_cast<float>(parent_base.y)
+                scaled_dy + static_cast<float>(parent_base.y)
             });
             SDL_Point cp = round_point(screen);
             const int marker_r = (static_cast<int>(i) == selected_child_index_) ? 6 : 4;
@@ -1439,12 +1476,6 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
             render_label(renderer, child_assets_[i], marker.x + marker.w + 4, marker.y - 4);
         }
         // Overlay actual child textures at edited positions
-        const float doc_scale_factor = document_scale_factor();
-        float parent_scale = target_->smoothed_scale();
-        if (!std::isfinite(parent_scale) || parent_scale <= 0.0f) {
-            parent_scale = 1.0f;
-        }
-        const float scale_override_base = parent_scale * doc_scale_factor;
         const std::size_t preview_count = std::min({ child_assets_.size(), frame.children.size(), child_preview_slots_.size() });
         for (std::size_t i = 0; i < preview_count; ++i) {
             const auto& child = frame.children[i];
@@ -1455,19 +1486,15 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
 
             // Child offsets are in pixels relative to the parent's base (bottom-middle),
             // mirroring dx when the parent is flipped (see AnimationRuntime::apply_child_frame_data).
-            const float dx_world = target_->flipped ? -static_cast<float>(child.dx) : static_cast<float>(child.dx);
+            const float scaled_dx = static_cast<float>(child.dx) * base_adjustment;
+            const float scaled_dy = static_cast<float>(child.dy) * base_adjustment;
+            const float dx_world = target_->flipped ? -scaled_dx : scaled_dx;
             SDL_FPoint child_world{
                 static_cast<float>(parent_base.x) + dx_world,
-                static_cast<float>(parent_base.y) + static_cast<float>(child.dy)
+                static_cast<float>(parent_base.y) + scaled_dy
             };
-            const auto& scale_steps = (slot.info && !slot.info->scale_variants.empty())
-                                          ? slot.info->scale_variants
-                                          : render_pipeline::ScalingLogic::DefaultScaleSteps();
-            const float requested_variant_scale = std::max(0.0001f, scale_override_base);
-            const auto selection = render_pipeline::ScalingLogic::Choose(requested_variant_scale, scale_steps);
-
             const FrameVariant* variant = (preview_anim && preview_frame)
-                                              ? preview_anim->get_frame(preview_frame, requested_variant_scale)
+                                              ? preview_anim->get_frame(preview_frame, variant_scale)
                                               : nullptr;
             SDL_Texture* tex = variant ? variant->get_base_texture() : slot.texture;
             if (!tex) continue;
@@ -1481,13 +1508,9 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
             }
             if (tex_w <= 0 || tex_h <= 0) continue;
 
-            float stored_scale = selection.stored_scale;
-            if (!std::isfinite(stored_scale) || stored_scale <= 0.0f) {
-                stored_scale = 1.0f;
-            }
-            float final_scale = requested_variant_scale / stored_scale;
+            float final_scale = base_adjustment;
             if (!std::isfinite(final_scale) || final_scale <= 0.0f) {
-                final_scale = requested_variant_scale;
+                final_scale = 1.0f;
             }
 
             SDL_FRect dst = child_preview_rect(child_world, tex_w, tex_h, preview_ctx, final_scale);
@@ -2796,6 +2819,28 @@ float FrameEditorSession::document_scale_factor() const {
     return static_cast<float>(pct / 100.0);
 }
 
+float FrameEditorSession::attachment_scale() const {
+    if (!assets_ || !target_) {
+        return 1.0f;
+    }
+    const WarpedScreenGrid& cam = assets_->getView();
+    float perspective_scale = 1.0f;
+    if (target_->info && target_->info->apply_distance_scaling) {
+        if (const auto* gp = cam.grid_point_for_asset(target_)) {
+            perspective_scale = std::max(0.0001f, gp->perspective_scale);
+        }
+    }
+    float remainder = target_->current_remaining_scale_adjustment;
+    if (!std::isfinite(remainder) || remainder <= 0.0f) {
+        remainder = 1.0f;
+    }
+    float scale = remainder / std::max(0.0001f, perspective_scale);
+    if (!std::isfinite(scale) || scale <= 0.0f) {
+        scale = 1.0f;
+    }
+    return scale;
+}
+
 SDL_Point FrameEditorSession::asset_anchor_world() const {
     if (!target_) {
         return SDL_Point{0, 0};
@@ -3531,6 +3576,14 @@ void FrameEditorSession::refresh_child_assets_from_document() {
         return;
     }
     child_assets_ = std::move(names);
+    if (target_ && target_->info) {
+        target_->info->set_animation_children(child_assets_);
+        target_->initialize_animation_children_recursive();
+        target_->mark_composite_dirty();
+    }
+    if (assets_) {
+        assets_->mark_active_assets_dirty();
+    }
     sync_child_frames();
     child_dropdown_options_cache_.clear();
     rebuild_child_preview_cache();
@@ -3543,6 +3596,13 @@ void FrameEditorSession::rebuild_child_preview_cache() {
     }
     SDL_Renderer* renderer = assets_->renderer();
     child_preview_slots_.reserve(child_assets_.size());
+    float variant_scale = 1.0f;
+    if (target_) {
+        variant_scale = target_->current_nearest_variant_scale;
+        if (!std::isfinite(variant_scale) || variant_scale <= 0.0f) {
+            variant_scale = 1.0f;
+        }
+    }
     auto& library = assets_->library();
     for (const auto& name : child_assets_) {
         ChildPreviewSlot slot;
@@ -3556,7 +3616,7 @@ void FrameEditorSession::rebuild_child_preview_cache() {
                 slot.animation = pick_preview_animation(slot.info);
                 slot.frame = slot.animation ? slot.animation->get_first_frame() : nullptr;
                 if (slot.frame) {
-                    const FrameVariant* variant = slot.animation->get_frame(slot.frame, 1.0f);
+                    const FrameVariant* variant = slot.animation->get_frame(slot.frame, variant_scale);
                     slot.texture = variant ? variant->get_base_texture() : nullptr;
                     if (!slot.texture && !slot.frame->variants.empty()) {
                         slot.texture = slot.frame->variants[0].get_base_texture();
@@ -3662,6 +3722,8 @@ void FrameEditorSession::apply_frames_to_animation() {
     if (!anim || anim->movement_path_count() == 0) {
         return;
     }
+    // Keep the runtime animation's child bindings in sync with the document.
+    anim->child_assets() = child_assets_;
     const std::size_t frame_count = frames_.size();
     const std::size_t primary_path_index = anim->default_movement_path_index();
     for (std::size_t path_index = 0; path_index < anim->movement_path_count(); ++path_index) {
@@ -3829,6 +3891,17 @@ void FrameEditorSession::persist_changes() {
     }
     // Keep runtime data in sync with the editor copy so re-entry shows the latest edits.
     apply_frames_to_animation();
+    if (target_ && target_->info) {
+        target_->info->set_animation_children(child_assets_);
+        for (auto& entry : target_->info->animations) {
+            entry.second.child_assets() = child_assets_;
+        }
+        target_->initialize_animation_children_recursive();
+        target_->mark_composite_dirty();
+    }
+    if (assets_) {
+        assets_->mark_active_assets_dirty();
+    }
     // Serialize primary movement + totals (reuse logic similar to FrameMovementEditor)
     nlohmann::json payload = nlohmann::json::object();
     if (auto j = document_->animation_payload(animation_id_)) {
@@ -3976,20 +4049,24 @@ SDL_FRect FrameEditorSession::child_preview_rect(SDL_FPoint child_world,
     if (!std::isfinite(scale) || scale <= 0.0f) {
         scale = 1.0f;
     }
-    rect.w = static_cast<float>(texture_w) * scale;
-    rect.h = static_cast<float>(texture_h) * scale;
+    const float raw_w = static_cast<float>(texture_w) * scale;
+    const float raw_h = static_cast<float>(texture_h) * scale;
+    const WarpedScreenGrid& cam = assets_->getView();
+    const float inv_scale = 1.0f / std::max(0.000001f, cam.get_scale());
+    rect.w = raw_w * inv_scale;
+    rect.h = raw_h * inv_scale;
     if (rect.w <= 0.0f || rect.h <= 0.0f) {
         rect.w = rect.h = 0.0f;
         return rect;
     }
-    SDL_FPoint top_left_world{
-        child_world.x - rect.w * 0.5f,
-        child_world.y - rect.h
-    };
-    const WarpedScreenGrid& cam = assets_->getView();
-    SDL_FPoint top_left_screen = cam.map_to_screen_f(top_left_world);
-    rect.x = top_left_screen.x;
-    rect.y = top_left_screen.y;
+    SDL_FPoint screen_base = cam.map_to_screen_f(SDL_FPoint{
+        static_cast<float>(target_->pos.x),
+        static_cast<float>(target_->pos.y)
+    });
+    const float offset_x = child_world.x - static_cast<float>(target_->pos.x);
+    const float offset_y = child_world.y - static_cast<float>(target_->pos.y);
+    rect.x = screen_base.x + offset_x * inv_scale - rect.w * 0.5f;
+    rect.y = screen_base.y + offset_y * inv_scale - rect.h;
     return rect;
 }
 

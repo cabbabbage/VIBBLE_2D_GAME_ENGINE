@@ -407,6 +407,7 @@ private:
     bool begin_attack_drag(SDL_Point mouse);
     void update_attack_drag(SDL_Point mouse);
     void end_attack_drag(bool commit);
+    float attachment_scale() const;
 
 private:
     void render_directory_panel(SDL_Renderer* renderer);

@@ -15,7 +15,20 @@ bool StridePlayer::tick(AnimationRuntime& up, Plan& plan,
         return false;
     }
 
+    auto check_target_reached = [&]() {
+        if (self && up.planner_iface_) {
+            const int visited_thresh = up.planner_iface_->visit_threshold_px();
+            const int visited_thresh_squared = visited_thresh * visited_thresh;
+            const int dist_sq = (self->pos.x - plan.final_dest.x) * (self->pos.x - plan.final_dest.x) +
+                                (self->pos.y - plan.final_dest.y) * (self->pos.y - plan.final_dest.y);
+            if (dist_sq <= visited_thresh_squared) {
+                self->target_reached = true;
+            }
+        }
+    };
+
     if (plan.strides.empty() || stride_index >= plan.strides.size()) {
+        check_target_reached();
         plan.strides.clear();
         stride_index         = 0;
         stride_frame_counter = 0;
@@ -37,6 +50,7 @@ bool StridePlayer::tick(AnimationRuntime& up, Plan& plan,
         ++stride_index;
         stride_frame_counter = 0;
         if (stride_index >= plan.strides.size()) {
+            check_target_reached();
             plan.strides.clear();
             return false;
         }
@@ -116,6 +130,7 @@ bool StridePlayer::tick(AnimationRuntime& up, Plan& plan,
         ++stride_index;
         stride_frame_counter = 0;
         if (stride_index >= plan.strides.size()) {
+            check_target_reached();
             plan.strides.clear();
             return false;
         }

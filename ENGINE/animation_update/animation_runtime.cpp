@@ -19,6 +19,7 @@
 #include "get_best_path.hpp"
 #include "utils/area.hpp"
 #include "utils/grid.hpp"
+#include "render/warped_screen_grid.hpp"
 #include <iostream>
 #include "animation_update.hpp" // planner interface
 #include "animation_update/child_attachment_controller.hpp"
@@ -490,6 +491,24 @@ void AnimationRuntime::advance_child_frames(float dt) {
     if (!self_ || self_->animation_children_.empty()) {
         return;
     }
+    auto compute_attachment_scale = [&]() -> float {
+        float perspective_scale = 1.0f;
+        if (assets_owner_ && self_ && self_->info && self_->info->apply_distance_scaling) {
+            const WarpedScreenGrid& cam = assets_owner_->getView();
+            if (const auto* gp = cam.grid_point_for_asset(self_)) {
+                perspective_scale = std::max(0.0001f, gp->perspective_scale);
+            }
+        }
+        float remainder = self_->current_remaining_scale_adjustment;
+        if (!std::isfinite(remainder) || remainder <= 0.0f) {
+            remainder = 1.0f;
+        }
+        float scale = remainder / std::max(0.0001f, perspective_scale);
+        if (!std::isfinite(scale) || scale <= 0.0f) {
+            scale = 1.0f;
+        }
+        return scale;
+    };
     std::vector<const AnimationFrame*> previous_frames;
     previous_frames.reserve(self_->animation_children_.size());
     for (const auto& slot : self_->animation_children_) {
@@ -501,6 +520,7 @@ void AnimationRuntime::advance_child_frames(float dt) {
                           static_cast<int>(std::lround(self_->smoothed_translation_y())) };
     parent_state.position = render_pos;
     parent_state.base_position = animation_update::detail::bottom_middle_for(*self_, render_pos);
+    parent_state.scale = compute_attachment_scale();
     parent_state.flipped = self_->flipped;
     parent_state.animation_id = self_->current_animation;
     animation_update::child_attachments::advance_frames(self_->animation_children_, parent_state, dt);
@@ -521,6 +541,24 @@ void AnimationRuntime::apply_child_frame_data(const AnimationFrame* frame) {
     if (!self_ || self_->animation_children_.empty()) {
         return;
     }
+    auto compute_attachment_scale = [&]() -> float {
+        float perspective_scale = 1.0f;
+        if (assets_owner_ && self_ && self_->info && self_->info->apply_distance_scaling) {
+            const WarpedScreenGrid& cam = assets_owner_->getView();
+            if (const auto* gp = cam.grid_point_for_asset(self_)) {
+                perspective_scale = std::max(0.0001f, gp->perspective_scale);
+            }
+        }
+        float remainder = self_->current_remaining_scale_adjustment;
+        if (!std::isfinite(remainder) || remainder <= 0.0f) {
+            remainder = 1.0f;
+        }
+        float scale = remainder / std::max(0.0001f, perspective_scale);
+        if (!std::isfinite(scale) || scale <= 0.0f) {
+            scale = 1.0f;
+        }
+        return scale;
+    };
     std::vector<bool> prev_visible;
     std::vector<bool> prev_front;
     std::vector<float> prev_rotation;
@@ -541,6 +579,7 @@ void AnimationRuntime::apply_child_frame_data(const AnimationFrame* frame) {
                           static_cast<int>(std::lround(self_->smoothed_translation_y())) };
     parent_state.position = render_pos;
     parent_state.base_position = animation_update::detail::bottom_middle_for(*self_, render_pos);
+    parent_state.scale = compute_attachment_scale();
     parent_state.flipped = self_->flipped;
     parent_state.animation_id = self_->current_animation;
     animation_update::child_attachments::apply_frame_data(self_->animation_children_, parent_state, frame);

@@ -14,6 +14,7 @@ namespace animation_update::child_attachments {
 struct ParentState {
     SDL_Point position{0, 0};      // Top-left position of the parent asset
     SDL_Point base_position{0, 0}; // Bottom-middle (base) of the parent asset in pixels
+    float scale = 1.0f;            // Base scale applied to child offsets
     bool flipped = false;
     std::string_view animation_id{};
 };

@@ -3,6 +3,7 @@
 #include <mutex>
 #include <random>
 #include <iostream>
+#include <cmath>
 
 #include "animation_update/child_attachment_math.hpp"
 
@@ -120,6 +121,9 @@ void apply_frame_data(std::vector<Asset::AnimationChildAttachment>& slots,
     if (slots.empty()) {
         return;
     }
+    const float parent_scale = std::isfinite(parent_state.scale) && parent_state.scale > 0.0f
+                                   ? parent_state.scale
+                                   : 1.0f;
     const int parent_frame_index = frame ? frame->frame_index : -1;
     if constexpr (kChildAttachmentDebug) {
         std::cout << "[ChildAttachments] Applying frame data (parent_frame_index=" << parent_frame_index << ")\n";
@@ -182,11 +186,16 @@ void apply_frame_data(std::vector<Asset::AnimationChildAttachment>& slots,
                       << "') visible=true dx=" << child_data.dx << " dy=" << child_data.dy
                       << " deg=" << child_data.degree << "\n";
         }
+        const float scaled_dx = static_cast<float>(child_data.dx) * parent_scale;
+        const float scaled_dy = static_cast<float>(child_data.dy) * parent_scale;
         // Position child relative to parent's base (bottom-middle) in pixels,
         // not relative to the parent's top-left position or grid.
-        const int dx = parent_state.flipped ? -child_data.dx : child_data.dx;
+        const int dx = parent_state.flipped
+                           ? -static_cast<int>(std::lround(scaled_dx))
+                           : static_cast<int>(std::lround(scaled_dx));
+        const int dy = static_cast<int>(std::lround(scaled_dy));
         slot.world_pos.x = parent_state.base_position.x + dx;
-        slot.world_pos.y = parent_state.base_position.y + child_data.dy;
+        slot.world_pos.y = parent_state.base_position.y + dy;
         slot.rotation_degrees = mirrored_child_rotation(parent_state.flipped, child_data.degree);
         slot.render_in_front = child_data.render_in_front;
     }

@@ -1,5 +1,145 @@
 {
   "assets": {
+    "Bench": {
+      "animations": {
+        "default": {
+          "crop_frames": true,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          },
+          "speed_multiplier": 1.0
+        }
+      },
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/Bench",
+      "asset_name": "Bench",
+      "asset_type": "Object",
+      "can_invert": false,
+      "has_shading": false,
+      "lighting_info": [],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
+      "neighbor_search_distance": 500,
+      "render_radius": 0,
+      "size_settings": {
+        "scale_percentage": 100.0
+      },
+      "start": "default",
+      "tags": [],
+      "update_radius": 0
+    },
+    "Bush_1": {
+      "animations": {
+        "default": {
+          "crop_frames": false,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 12,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          },
+          "speed_multiplier": 1.0
+        }
+      },
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/Bush_1",
+      "asset_name": "Bush_1",
+      "asset_type": "Object",
+      "can_invert": false,
+      "has_shading": false,
+      "lighting_info": [],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
+      "neighbor_search_distance": 500,
+      "render_radius": 0,
+      "size_settings": {
+        "scale_percentage": 100.0
+      },
+      "start": "default",
+      "tags": [],
+      "update_radius": 0
+    },
     "Candle": {
       "animation_children": [],
       "animations": {
@@ -100,6 +240,54 @@
       "start": "default",
       "tags": [],
       "tillable": false
+    },
+    "Casino": {
+      "animations": {
+        "default": {
+          "crop_frames": false,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          },
+          "speed_multiplier": 1.0
+        }
+      },
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/town_hall",
+      "asset_name": "town_hall",
+      "asset_type": "object",
+      "can_invert": false,
+      "has_shading": false,
+      "lighting_info": [],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
+      "neighbor_search_distance": 500,
+      "render_radius": 0,
+      "size_settings": {
+        "scale_percentage": 100.0
+      },
+      "start": "default",
+      "tags": [],
+      "update_radius": 0
     },
     "Davey": {
       "animation_children": [],
@@ -486,6 +674,98 @@
       "start": "default",
       "tags": [],
       "tillable": false,
+      "update_radius": 0
+    },
+    "Fountain": {
+      "animations": {
+        "default": {
+          "crop_frames": true,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 12,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          },
+          "speed_multiplier": 1.0
+        }
+      },
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/town_hall",
+      "asset_name": "town_hall",
+      "asset_type": "object",
+      "can_invert": false,
+      "has_shading": false,
+      "lighting_info": [],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
+      "neighbor_search_distance": 500,
+      "render_radius": 0,
+      "size_settings": {
+        "scale_percentage": 100.0
+      },
+      "start": "default",
+      "tags": [],
       "update_radius": 0
     },
     "Grass_1": {
@@ -915,8 +1195,8 @@
               [
                 [
                   0,
-                  136,
-                  8,
+                  7,
+                  -307,
                   0.0,
                   true,
                   true
@@ -931,8 +1211,8 @@
               [
                 [
                   0,
-                  136,
-                  8,
+                  7,
+                  -307,
                   0.0,
                   true,
                   true
@@ -947,8 +1227,8 @@
               [
                 [
                   0,
-                  136,
-                  8,
+                  7,
+                  -307,
                   0.0,
                   true,
                   true
@@ -963,8 +1243,8 @@
               [
                 [
                   0,
-                  136,
-                  8,
+                  7,
+                  -307,
                   0.0,
                   true,
                   true
@@ -979,8 +1259,8 @@
               [
                 [
                   0,
-                  136,
-                  8,
+                  7,
+                  -307,
                   0.0,
                   true,
                   true
@@ -995,8 +1275,8 @@
               [
                 [
                   0,
-                  136,
-                  8,
+                  7,
+                  -307,
                   0.0,
                   true,
                   true
@@ -1011,8 +1291,8 @@
               [
                 [
                   0,
-                  136,
-                  8,
+                  -33,
+                  -273,
                   0.0,
                   true,
                   true
@@ -1657,6 +1937,7 @@
       "animation_children": [],
       "animations": {
         "backward": {
+          "crop_frames": false,
           "derived_modifiers": {
             "flipMovementX": false,
             "flipMovementY": true,
@@ -1675,11 +1956,12 @@
             "kind": "animation",
             "name": "foward",
             "path": ""
-          }
+          },
+          "speed_multiplier": 1.0
         },
         "default": {
+          "crop_frames": false,
           "flipped_source": false,
-          "fps": 24,
           "inherit_source_movement": false,
           "locked": true,
           "loop": true,
@@ -1762,11 +2044,122 @@
             "name": "",
             "path": "default"
           },
-          "speed_factor": 1.0
+          "speed_multiplier": 1.0
         },
         "explosion": {
+          "attack_geometry": [
+            {
+              "explosion": {
+                "control_x": -32.96440887451172,
+                "control_y": 191.8294219970703,
+                "damage": 0,
+                "end_x": -14.14930534362793,
+                "end_y": 90.69010162353516,
+                "start_x": -25.900606155395508,
+                "start_y": 285.9049377441406,
+                "type": "explosion"
+              },
+              "melee": {
+                "control_x": 3.526475667953491,
+                "control_y": 179.0364532470703,
+                "damage": 0,
+                "end_x": -93.67404174804688,
+                "end_y": 165.47308349609375,
+                "start_x": 96.21310424804688,
+                "start_y": 219.73741149902344,
+                "type": "melee"
+              },
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": {
+                "control_x": 3.526475667953491,
+                "control_y": 179.0364532470703,
+                "damage": 0,
+                "end_x": -93.67404174804688,
+                "end_y": 165.47308349609375,
+                "start_x": 96.21310424804688,
+                "start_y": 219.73741149902344,
+                "type": "melee"
+              },
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            }
+          ],
+          "crop_frames": true,
           "flipped_source": false,
-          "fps": 12,
+          "hit_geometry": [
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            },
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
+            }
+          ],
           "inherit_source_movement": false,
           "locked": true,
           "loop": true,
@@ -1777,31 +2170,38 @@
             ],
             [
               0,
-              0
+              0,
+              false
             ],
             [
               0,
-              0
+              0,
+              false
             ],
             [
               0,
-              0
+              0,
+              false
             ],
             [
               0,
-              0
+              0,
+              false
             ],
             [
               0,
-              0
+              0,
+              false
             ],
             [
               0,
-              0
+              0,
+              false
             ],
             [
               0,
-              0
+              0,
+              false
             ]
           ],
           "movement_total": {
@@ -1817,7 +2217,7 @@
             "name": "",
             "path": "explosion"
           },
-          "speed_factor": 1.0
+          "speed_multiplier": 1.0
         },
         "foward": {
           "attack_geometry": [
@@ -1902,8 +2302,8 @@
               "projectile": null
             }
           ],
+          "crop_frames": false,
           "flipped_source": false,
-          "fps": 24,
           "hit_geometry": [
             {
               "explosion": null,
@@ -2090,7 +2490,7 @@
             "name": "",
             "path": "foward"
           },
-          "speed_factor": 1.0
+          "speed_multiplier": 1.0
         },
         "left": {
           "attack_geometry": [
@@ -2176,6 +2576,7 @@
             }
           ],
           "children": [],
+          "crop_frames": false,
           "derived_modifiers": {
             "flipMovementX": false,
             "flipMovementY": false,
@@ -2346,9 +2747,11 @@
             "kind": "animation",
             "name": "foward",
             "path": ""
-          }
+          },
+          "speed_multiplier": 1.0
         },
         "right": {
+          "crop_frames": false,
           "derived_modifiers": {
             "flipMovementX": true,
             "flipMovementY": false,
@@ -2367,7 +2770,8 @@
             "kind": "animation",
             "name": "left",
             "path": ""
-          }
+          },
+          "speed_multiplier": 1.0
         }
       },
       "anti_tags": [],
@@ -2642,6 +3046,7 @@
       "update_radius": 0
     },
     "lantern": {
+      "animation_children": [],
       "animations": {
         "default": {
           "flipped_source": false,
@@ -2675,7 +3080,7 @@
       "asset_directory": "SRC/assets/lantern",
       "asset_name": "lantern",
       "asset_type": "object",
-      "can_invert": true,
+      "can_invert": false,
       "has_shading": false,
       "lighting_info": [
         {
@@ -2778,7 +3183,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 42.0
+        "scale_percentage": 50.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -2786,6 +3191,67 @@
       "tillable": false,
       "update_radius": 0,
       "z_threshold": -1
+    },
+    "latern_left": {
+      "animation_children": [],
+      "animations": {
+        "default": {
+          "crop_frames": true,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          },
+          "speed_multiplier": 1.0
+        }
+      },
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/latern_left",
+      "asset_name": "latern_left",
+      "asset_type": "Object",
+      "can_invert": false,
+      "has_shading": false,
+      "lighting_info": [],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
+      "neighbor_search_distance": 500,
+      "render_radius": 0,
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
+      },
+      "size_settings": {
+        "scale_percentage": 50.0
+      },
+      "spawn_groups": [],
+      "start": "default",
+      "tags": [],
+      "tillable": false,
+      "update_radius": 0
     },
     "spawn_light": {
       "animations": {},
@@ -2845,8 +3311,8 @@
       "animation_children": [],
       "animations": {
         "default": {
+          "crop_frames": true,
           "flipped_source": false,
-          "fps": 24,
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -2869,7 +3335,7 @@
             "name": "",
             "path": "default"
           },
-          "speed_factor": 1.0
+          "speed_multiplier": 1.0
         }
       },
       "anti_tags": [],
@@ -2894,7 +3360,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 272.0
+        "scale_percentage": 100.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -3348,8 +3814,8 @@
         "bar": {
           "curvyness": 2,
           "display_color": [
-            31,
             32,
+            31,
             204,
             255
           ],
@@ -3368,8 +3834,8 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            128,
             242,
+            176,
             36,
             255
           ],
@@ -3421,8 +3887,8 @@
         "rnd": {
           "curvyness": 2,
           "display_color": [
-            61,
-            140,
+            163,
+            36,
             242,
             255
           ],
@@ -3441,9 +3907,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            85,
             242,
-            242,
+            241,
+            36,
             255
           ],
           "edge_smoothness": 101,
@@ -3657,10 +4123,125 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
+              "priority": 6,
               "resolution": 7,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-a1e46e3fd15e"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "town_hall"
+                }
+              ],
+              "display_name": "town_hall",
+              "dx": -188,
+              "dy": -1756,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 6904,
+              "origional_width": 6904,
+              "position": "Exact",
+              "priority": 7,
+              "resolution": 1,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-4122997ba615"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "Casino"
+                }
+              ],
+              "display_name": "Casino",
+              "dx": 1122,
+              "dy": -1750,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 6904,
+              "origional_width": 6904,
+              "position": "Exact",
+              "priority": 8,
+              "resolution": 1,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-70c883db5005"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "lantern"
+                }
+              ],
+              "display_name": "lantern",
+              "dx": -1750,
+              "dy": -1744,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 6904,
+              "origional_width": 6904,
+              "position": "Exact",
+              "resolution": 7,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-5f19831b92c3"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "latern_left"
+                }
+              ],
+              "display_name": "latern_left",
+              "dx": 2620,
+              "dy": -1732,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 6904,
+              "origional_width": 6904,
+              "position": "Exact",
+              "resolution": 1,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-c54e6f1a557e"
             }
           ]
         }
