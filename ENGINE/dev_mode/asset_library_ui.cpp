@@ -1857,16 +1857,31 @@ AssetLibraryUI::CreateAssetResult AssetLibraryUI::create_new_asset(const std::st
             return CreateAssetResult::AlreadyExists;
         }
         fs::create_directories(dir);
+        fs::create_directories(dir / "default");
 
         const std::string asset_dir_str = dir.lexically_normal().generic_string();
+
+        // Seed a fresh default animation entry so the editor opens with a usable state.
+        nlohmann::json default_anim = {
+            {"loop", true},
+            {"locked", false},
+            {"reverse_source", false},
+            {"flipped_source", false},
+            {"rnd_start", false},
+            {"source", nlohmann::json{
+                {"kind", "folder"},
+                {"path", "default"},
+                {"name", ""}
+            }}
+        };
+
         nlohmann::json manifest_entry = {
             {"asset_name", name},
             {"asset_type", "Object"},
-            {"animations", nlohmann::json::object()},
-            {"start", ""}
-};
-        manifest_entry["start"] = asset_dir_str;
-        manifest_entry["asset_directory"] = asset_dir_str;
+            {"animations", nlohmann::json{{"default", default_anim}}},
+            {"start", "default"},
+            {"asset_directory", asset_dir_str}
+        };
         manifest_entry["tags"] = nlohmann::json::array();
         manifest_entry["anti_tags"] = nlohmann::json::array();
         manifest_entry["neighbor_search_distance"] = 500;

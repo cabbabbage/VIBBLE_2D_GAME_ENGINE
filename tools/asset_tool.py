@@ -59,6 +59,39 @@ def _configure_logger() -> logging.Logger:
 
 LOGGER = _configure_logger()
 
+
+def _dir_has_files(path: Path) -> bool:
+    """Return True if the directory exists and contains at least one entry."""
+    try:
+        return path.exists() and path.is_dir() and any(path.iterdir())
+    except Exception:
+        return False
+
+
+def find_assets_missing_animation_cache(manifest_path: str, cache_root: Path) -> List[str]:
+    """Identify manifest assets whose animation caches do not exist yet."""
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as fh:
+            manifest = json.load(fh)
+    except Exception as exc:
+        LOGGER.warning("Failed to read manifest '%s' while checking caches: %s", manifest_path, exc)
+        return []
+
+    assets_block = manifest.get("assets", {})
+    if not isinstance(assets_block, dict):
+        return []
+
+    missing: List[str] = []
+    for name in assets_block.keys():
+        if not name:
+            continue
+        anim_dir = cache_root / name / "animations"
+        meta_dir = cache_root / ".asset_cache" / "animations" / name
+        if not (_dir_has_files(anim_dir) and _dir_has_files(meta_dir)):
+            missing.append(str(name))
+
+    return missing
+
 # Global per worker to avoid constructing ApplyEffects for every frame
 _APPLY_EFFECTS: Optional[ApplyEffects] = None
 
@@ -802,15 +835,37 @@ class AssetTool:
 
 def main():
     queue = RebuildQueue()
+    manifest_path = str(queue.manifest_path)
+    cache_root_path = Path(queue.cache_root)
+    missing_assets = find_assets_missing_animation_cache(manifest_path, cache_root_path)
+
     mode = queue.asset_mode()
+    if mode == QueueMode.NONE and missing_assets:
+        LOGGER.info(
+            "Detected %d asset(s) missing animation cache; regenerating: %s",
+            len(missing_assets),
+            ", ".join(sorted(missing_assets)),
+        )
+
+        tool = AssetTool(manifest_path, str(cache_root_path), None)
+        tool.asset_mode = QueueMode.PARTIAL
+        tool.asset_animation_filters = {name: _ALL_ANIMATIONS for name in missing_assets}
+        assets_to_regen = [
+            Asset(
+                name=name,
+                manifest_path=manifest_path,
+                cache_dir=str(cache_root_path / ".asset_cache"),
+            )
+            for name in missing_assets
+        ]
+        tool.process_assets(assets_to_regen)
+        return
+
     if mode == QueueMode.NONE:
         LOGGER.info("No pending asset rebuild requests; exiting.")
         return
 
-    manifest_path = str(queue.manifest_path)
-    cache_root = str(queue.cache_root)
-
-    tool = AssetTool(manifest_path, cache_root, queue)
+    tool = AssetTool(manifest_path, str(cache_root_path), queue)
     assets_to_regen = tool.collect_assets_to_regen()
     tool.process_assets(assets_to_regen)
 

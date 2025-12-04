@@ -4,6 +4,8 @@
 #include <cstdlib>
 #include <fstream>
 #include <system_error>
+#include <string>
+#include <vector>
 
 #include "core/manifest/manifest_loader.hpp"
 #include "utils/log.hpp"
@@ -22,6 +24,40 @@ fs::path default_repo_root() {
         return fs::current_path();
     }
     return fs::absolute(manifest).parent_path();
+}
+
+bool directory_has_files(const fs::path& dir) {
+    std::error_code ec;
+    if (!fs::exists(dir, ec) || !fs::is_directory(dir, ec)) {
+        return false;
+    }
+    return fs::directory_iterator(dir, ec) != fs::directory_iterator();
+}
+
+bool has_animation_cache(const fs::path& cache_root, const std::string& asset_name) {
+    const fs::path anim_dir = cache_root / asset_name / "animations";
+    const fs::path meta_dir = cache_root / ".asset_cache" / "animations" / asset_name;
+    return directory_has_files(anim_dir) && directory_has_files(meta_dir);
+}
+
+std::vector<std::string> detect_missing_asset_caches(const fs::path& cache_root,
+                                                     const manifest::ManifestData& manifest) {
+    std::vector<std::string> missing;
+    for (auto it = manifest.assets.begin(); it != manifest.assets.end(); ++it) {
+        if (!it->is_object()) {
+            continue;
+        }
+
+        const std::string asset_name = it.key();
+        if (asset_name.empty()) {
+            continue;
+        }
+
+        if (!has_animation_cache(cache_root, asset_name)) {
+            missing.push_back(asset_name);
+        }
+    }
+    return missing;
 }
 
 } // namespace
@@ -91,6 +127,19 @@ bool RebuildQueueCoordinator::has_pending_asset_work() const {
     if (!fs::exists(cache_root_, ec)) {
         vibble::log::info("[RebuildQueue] Cache root missing; queueing full asset rebuild.");
         request_full_asset_rebuild();
+        return true;
+    }
+
+    const auto manifest_data = manifest::load_manifest();
+    const auto missing_assets = detect_missing_asset_caches(cache_root_, manifest_data);
+    if (!missing_assets.empty()) {
+        const std::string message =
+            "[RebuildQueue] Detected " + std::to_string(missing_assets.size()) +
+            " asset(s) missing animation cache; queueing rebuild.";
+        vibble::log::info(message);
+        for (const auto& name : missing_assets) {
+            request_asset(name, {});
+        }
         return true;
     }
 

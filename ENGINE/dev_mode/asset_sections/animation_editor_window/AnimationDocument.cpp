@@ -791,19 +791,47 @@ std::string AnimationDocument::animation_children_signature() const {
 }
 
 void AnimationDocument::ensure_document_initialized() {
+    bool mutated = false;
     std::vector<std::string> ids;
     ids.reserve(animations_.size());
+
     for (auto& entry : animations_) {
         nlohmann::json normalized = parse_payload(entry.second, entry.first);
-        entry.second = serialize_payload(normalized);
+        std::string serialized = serialize_payload(normalized);
+        if (serialized != entry.second) {
+            entry.second = std::move(serialized);
+            mutated = true;
+        }
         ids.push_back(entry.first);
     }
+
+    if (ids.empty()) {
+        // New document: seed a default animation so the editor/UI start in a valid state.
+        nlohmann::json payload = coerce_payload("default", nlohmann::json::object({
+                                                           {"source", nlohmann::json{{"kind", "folder"},
+                                                                                       {"path", "default"},
+                                                                                       {"name", ""}}},
+                                                       }));
+        animations_["default"] = serialize_payload(payload);
+        ids.push_back("default");
+        start_animation_ = std::string{"default"};
+        mutated = true;
+    }
+
     if (start_animation_ && animations_.count(*start_animation_) == 0) {
         start_animation_.reset();
+        mutated = true;
     }
+
     if (!start_animation_ && !ids.empty()) {
         std::sort(ids.begin(), ids.end());
-        start_animation_ = ids.front();
+        auto preferred = std::find(ids.begin(), ids.end(), std::string{"default"});
+        start_animation_ = (preferred != ids.end()) ? *preferred : ids.front();
+        mutated = true;
+    }
+
+    if (mutated) {
+        mark_dirty();
     }
 }
 

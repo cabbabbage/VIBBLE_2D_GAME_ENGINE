@@ -53,7 +53,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 100.0
+        "scale_percentage": 30.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -997,69 +997,8 @@
     "Vibble": {
       "animation_children": [],
       "animations": {
-        "backward": {
-          "crop_frames": false,
-          "derived_modifiers": {
-            "flipMovementX": false,
-            "flipMovementY": false,
-            "flipX": false,
-            "flipY": false,
-            "reverse": false
-          },
-          "flipped_source": false,
-          "inherit_source_movement": false,
-          "loop": true,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": 0
-          },
-          "number_of_frames": 8,
-          "on_end": "default",
-          "reverse_source": false,
-          "rnd_start": false,
-          "source": {
-            "kind": "animation",
-            "name": "forward",
-            "path": ""
-          },
-          "speed_multiplier": 1.0
-        },
         "default": {
-          "crop_frames": false,
+          "crop_frames": true,
           "flipped_source": false,
           "inherit_source_movement": false,
           "locked": false,
@@ -1082,177 +1021,6 @@
             "kind": "folder",
             "name": "",
             "path": "default"
-          },
-          "speed_multiplier": 1.0
-        },
-        "forward": {
-          "crop_frames": false,
-          "flipped_source": false,
-          "inherit_source_movement": false,
-          "locked": false,
-          "loop": true,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": 0
-          },
-          "number_of_frames": 8,
-          "on_end": "default",
-          "reverse_source": false,
-          "rnd_start": false,
-          "source": {
-            "kind": "folder",
-            "name": "",
-            "path": "forward"
-          },
-          "speed_multiplier": 1.0
-        },
-        "left": {
-          "crop_frames": false,
-          "flipped_source": false,
-          "inherit_source_movement": false,
-          "locked": false,
-          "loop": true,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": 0
-          },
-          "number_of_frames": 8,
-          "on_end": "default",
-          "reverse_source": false,
-          "rnd_start": false,
-          "source": {
-            "kind": "folder",
-            "name": "",
-            "path": "left"
-          },
-          "speed_multiplier": 1.0
-        },
-        "right": {
-          "crop_frames": false,
-          "derived_modifiers": {
-            "flipMovementX": false,
-            "flipMovementY": false,
-            "flipX": true,
-            "flipY": false,
-            "reverse": false
-          },
-          "flipped_source": true,
-          "inherit_source_movement": false,
-          "loop": true,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": 0
-          },
-          "number_of_frames": 8,
-          "on_end": "default",
-          "reverse_source": false,
-          "rnd_start": false,
-          "source": {
-            "kind": "animation",
-            "name": "left",
-            "path": ""
           },
           "speed_multiplier": 1.0
         }
@@ -2349,6 +2117,54 @@
       "tillable": false,
       "update_radius": 0
     },
+    "bottle": {
+      "animations": {
+        "default": {
+          "crop_frames": true,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          },
+          "speed_multiplier": 1.0
+        }
+      },
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/bottle",
+      "asset_name": "bottle",
+      "asset_type": "object",
+      "can_invert": false,
+      "has_shading": false,
+      "lighting_info": [],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
+      "neighbor_search_distance": 500,
+      "render_radius": 0,
+      "size_settings": {
+        "scale_percentage": 100.0
+      },
+      "start": "default",
+      "tags": [],
+      "update_radius": 0
+    },
     "bottle_2": {
       "animations": {
         "default": {
@@ -3273,9 +3089,9 @@
         "bar": {
           "curvyness": 2,
           "display_color": [
-            213,
             242,
             36,
+            155,
             255
           ],
           "edge_smoothness": 19,
@@ -3294,7 +3110,7 @@
           "curvyness": 2,
           "display_color": [
             204,
-            31,
+            102,
             31,
             255
           ],
@@ -3346,9 +3162,9 @@
         "rnd": {
           "curvyness": 2,
           "display_color": [
-            82,
-            204,
-            31,
+            143,
+            36,
+            242,
             255
           ],
           "edge_smoothness": 2,
@@ -3366,8 +3182,8 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            114,
             242,
+            164,
             36,
             255
           ],
@@ -3741,93 +3557,6 @@
                 }
               ],
               "display_name": "Vibble",
-              "dx": 982,
-              "dy": -574,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 6904,
-              "origional_width": 6904,
-              "position": "Exact",
-              "priority": 12,
-              "resolution": 7,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-faaa9c2131de"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Vibble"
-                }
-              ],
-              "display_name": "Vibble",
-              "dx": 1010,
-              "dy": -646,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 6904,
-              "origional_width": 6904,
-              "position": "Exact",
-              "priority": 13,
-              "resolution": 7,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-07e80f851d17"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Vibble"
-                }
-              ],
-              "display_name": "Vibble",
-              "dx": 496,
-              "dy": -714,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 6904,
-              "origional_width": 6904,
-              "position": "Exact",
-              "priority": 14,
-              "resolution": 7,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-d0c70d3ce9cb"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "Vibble"
-                }
-              ],
-              "display_name": "Vibble",
               "dx": -1038,
               "dy": -654,
               "enforce_spacing": false,
@@ -3839,7 +3568,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 15,
+              "priority": 12,
               "resolution": 7,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -3868,7 +3597,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 16,
+              "priority": 13,
               "resolution": 7,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -3882,12 +3611,12 @@
                 },
                 {
                   "chance": 100,
-                  "name": "bottle_2"
+                  "name": "bottle"
                 }
               ],
-              "display_name": "bottle_2",
-              "dx": -170,
-              "dy": -60,
+              "display_name": "bottle",
+              "dx": -166,
+              "dy": -638,
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
@@ -3897,10 +3626,40 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
+              "priority": 14,
               "resolution": 7,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-66e1100cd85b"
+              "spawn_id": "spn-10371e0648f5"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "bottle"
+                }
+              ],
+              "display_name": "bottle",
+              "dx": -708,
+              "dy": -68,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 6904,
+              "origional_width": 6904,
+              "position": "Exact",
+              "priority": 15,
+              "resolution": 1,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-5a348b912d45"
             }
           ]
         }

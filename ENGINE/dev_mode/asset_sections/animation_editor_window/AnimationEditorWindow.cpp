@@ -556,6 +556,7 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
         }
     };
 
+    const bool snapshot_was_empty = !has_animation_entries(snapshot);
     document_->load_from_manifest(snapshot, asset_root_path_, persist_callback);
     if (seed_transaction_with_recovery) {
         persist_manifest_payload(snapshot);
@@ -591,7 +592,15 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
         }
     }
 
-    document_->consume_dirty_flag();
+    const bool seeded_default = snapshot_was_empty && recovery_source == SnapshotRecoverySource::None &&
+                                document_ && document_->animation_ids().size() == 1 &&
+                                document_->animation_ids().front() == "default";
+
+    if (seeded_default) {
+        document_->save_to_file();
+    } else if (document_) {
+        document_->consume_dirty_flag();
+    }
     preview_provider_->set_document(document_);
     configure_list_panel();
     configure_inspector_panel();
@@ -608,20 +617,24 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
     update_controller_button_label();
     std::string asset_label = info->name.empty() ? std::string("asset") : info->name;
     const bool has_any_animations = !document_->animation_ids().empty();
-    switch (recovery_source) {
-        case SnapshotRecoverySource::AssetMetadata:
-            set_status_message("Recovered animations from asset metadata for " + asset_label + ".", 300);
-            break;
-        case SnapshotRecoverySource::AssetFolders:
-            set_status_message("Recovered animations from asset folders for " + asset_label + ".", 300);
-            break;
-        default:
-            if (has_any_animations) {
-                set_status_message("Loaded " + asset_label, 240);
-            } else {
-                set_status_message("No animations found for " + asset_label + ".", 240);
-            }
-            break;
+    if (seeded_default) {
+        set_status_message("Created default animation for " + asset_label + ".", 300);
+    } else {
+        switch (recovery_source) {
+            case SnapshotRecoverySource::AssetMetadata:
+                set_status_message("Recovered animations from asset metadata for " + asset_label + ".", 300);
+                break;
+            case SnapshotRecoverySource::AssetFolders:
+                set_status_message("Recovered animations from asset folders for " + asset_label + ".", 300);
+                break;
+            default:
+                if (has_any_animations) {
+                    set_status_message("Loaded " + asset_label, 240);
+                } else {
+                    set_status_message("No animations found for " + asset_label + ".", 240);
+                }
+                break;
+        }
     }
     auto_save_pending_ = false;
     auto_save_timer_frames_ = 0;
@@ -1514,6 +1527,7 @@ void AnimationEditorWindow::create_animation_via_prompt() {
 
 void AnimationEditorWindow::reload_document() {
     auto info_ptr = info_.lock();
+    bool snapshot_was_empty = true;
     if (!info_ptr || !manifest_store_) {
         close_manifest_transaction();
         document_->load_from_manifest(nlohmann::json::object(), asset_root_path_, {});
@@ -1526,6 +1540,7 @@ void AnimationEditorWindow::reload_document() {
             if (manifest_transaction_) {
                 using_manifest_store_ = true;
                 nlohmann::json snapshot = manifest_transaction_.data();
+                snapshot_was_empty = !has_animation_entries(snapshot);
                 document_->load_from_manifest(snapshot,
                                               asset_root_path_,
                                               [this](const nlohmann::json& payload) {
@@ -1545,14 +1560,25 @@ void AnimationEditorWindow::reload_document() {
         }
     }
 
-    document_->consume_dirty_flag();
+    const bool seeded_default = snapshot_was_empty && document_ && document_->animation_ids().size() == 1 &&
+                                document_->animation_ids().front() == "default";
+
+    if (seeded_default) {
+        document_->save_to_file();
+    } else if (document_) {
+        document_->consume_dirty_flag();
+    }
     preview_provider_->invalidate_all();
     if (list_panel_) list_panel_->set_document(document_);
     if (inspector_panel_) inspector_panel_->set_document(document_);
     configure_list_panel();
     configure_inspector_panel();
     ensure_selection_valid();
-    set_status_message("Reloaded animations.", 240);
+    if (seeded_default) {
+        set_status_message("Created default animation.", 240);
+    } else {
+        set_status_message("Reloaded animations.", 240);
+    }
     auto_save_pending_ = false;
     auto_save_timer_frames_ = 0;
 }
