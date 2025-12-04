@@ -1023,6 +1023,22 @@
             "path": "default"
           },
           "speed_multiplier": 1.0
+        },
+        "forward": {
+          "locked": false,
+          "loop": true,
+          "source": {
+            "kind": "folder",
+            "path": "forward"
+          }
+        },
+        "left": {
+          "locked": false,
+          "loop": true,
+          "source": {
+            "kind": "folder",
+            "path": "left"
+          }
         }
       },
       "anti_tags": [],
