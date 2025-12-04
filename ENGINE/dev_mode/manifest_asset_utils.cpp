@@ -2,9 +2,10 @@
 
 #include <algorithm>
 #include <cctype>
-#include <iostream>
 #include <exception>
+#include <iostream>
 
+#include "dev_mode/core/manifest_store.hpp"
 #include "core/manifest/manifest_loader.hpp"
 
 namespace devmode::manifest_utils {
@@ -26,6 +27,7 @@ bool remove_manifest_asset_entry(const std::string& asset_name, std::ostream* lo
     }
 
     manifest::ManifestData manifest;
+
     try {
         manifest = manifest::load_manifest();
     } catch (const std::exception& error) {
@@ -76,6 +78,57 @@ bool remove_manifest_asset_entry(const std::string& asset_name, std::ostream* lo
         *log << "[ManifestAsset] Removed '" << asset_name << "' from manifest assets\n";
     }
     return true;
+}
+
+RemoveAssetResult remove_asset_entry(core::ManifestStore* store,
+                                     const std::string& asset_name,
+                                     std::ostream* log) {
+    RemoveAssetResult result{};
+    if (asset_name.empty()) {
+        if (log) {
+            *log << "[ManifestAsset] Cannot remove asset with empty name\n";
+        }
+        return result;
+    }
+
+    if (store) {
+        if (auto resolved = store->resolve_asset_name(asset_name)) {
+            if (store->remove_asset(*resolved)) {
+                result.removed = true;
+                result.used_store = true;
+            }
+        }
+
+        if (!result.removed && store->remove_asset(asset_name)) {
+            result.removed = true;
+            result.used_store = true;
+        }
+    }
+
+    if (!result.removed) {
+        if (remove_manifest_asset_entry(asset_name, log)) {
+            result.removed = true;
+            if (store) {
+                store->reload();
+            }
+        } else if (log) {
+            *log << "[ManifestAsset] Unable to remove manifest entry for '" << asset_name << "'\n";
+        }
+    }
+
+    if (store && result.removed) {
+        const bool still_exists = store->resolve_asset_name(asset_name).has_value();
+        if (still_exists) {
+            if (log) {
+                *log << "[ManifestAsset] Manifest still contains '" << asset_name
+                     << "' after removal attempt\n";
+            }
+            result.removed = false;
+            result.used_store = false;
+        }
+    }
+
+    return result;
 }
 
 } // namespace devmode::manifest_utils

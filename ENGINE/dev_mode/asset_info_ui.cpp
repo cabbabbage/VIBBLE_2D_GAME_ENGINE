@@ -495,6 +495,7 @@ void AssetInfoUI::clear_info() {
     }
     container_.reset_scroll();
     if (asset_selector_) asset_selector_->close();
+    pending_animation_editor_open_ = false;
     if (animation_editor_window_) {
         try {
             animation_editor_window_->clear_info();
@@ -527,6 +528,7 @@ void AssetInfoUI::open()  {
 }
 void AssetInfoUI::close() {
     if (!visible_) return;
+    pending_animation_editor_open_ = false;
     apply_camera_override(false);
     visible_ = false;
     container_.close();
@@ -545,12 +547,36 @@ void AssetInfoUI::close() {
         // assets_->set_force_high_quality_rendering(false);
         forcing_high_quality_rendering_ = false;
     }
+    light_drag_active_ = false;
+    light_drag_index_  = -1;
+    hovered_light_index_ = -1;
+    if (lighting_section_) {
+        lighting_section_->set_highlighted_light(std::nullopt);
+    }
 }
 void AssetInfoUI::toggle(){
     if (visible_) {
         close();
     } else {
         open();
+    }
+}
+
+void AssetInfoUI::open_animation_editor_panel() {
+    if (!animation_editor_window_ || !info_) {
+        pending_animation_editor_open_ = false;
+        return;
+    }
+
+    pending_animation_editor_open_ = true;
+
+    if (last_screen_w_ > 0 && last_screen_h_ > 0) {
+        layout_widgets(last_screen_w_, last_screen_h_);
+        if (animation_editor_rect_.w > 0 && animation_editor_rect_.h > 0) {
+            animation_editor_window_->set_bounds(animation_editor_rect_);
+            animation_editor_window_->set_visible(true);
+            pending_animation_editor_open_ = false;
+        }
     }
 }
 
@@ -903,6 +929,11 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
 
     if (animation_editor_window_) {
         animation_editor_window_->set_bounds(animation_editor_rect_);
+        if (pending_animation_editor_open_ && info_ &&
+            animation_editor_rect_.w > 0 && animation_editor_rect_.h > 0) {
+            animation_editor_window_->set_visible(true);
+            pending_animation_editor_open_ = false;
+        }
         if (animation_editor_window_->is_visible()) {
             animation_editor_window_->update(input, screen_w, screen_h);
         }
@@ -2391,25 +2422,23 @@ void AssetInfoUI::confirm_delete_request() {
     bool manifest_entry_removed = false;
     if (!asset_name.empty()) {
         if (manifest_store_) {
-            manifest_entry_removed = manifest_store_->remove_asset(asset_name);
+            const auto remove_result = devmode::manifest_utils::remove_asset_entry(manifest_store_, asset_name, &std::cerr);
+            manifest_entry_removed = remove_result.removed;
             if (!manifest_entry_removed) {
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Failed to remove '%s' from manifest", asset_name.c_str());
-            } else {
-                manifest_flush_required = true;
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                            "[AssetInfoUI] Failed to remove '%s' from manifest",
+                            asset_name.c_str());
             }
+            manifest_flush_required = remove_result.used_store || manifest_flush_required;
         } else {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Manifest store unavailable; manifest not updated for '%s'", asset_name.c_str());
-        }
-
-        if (!manifest_entry_removed) {
-            if (devmode::manifest_utils::remove_manifest_asset_entry(asset_name, &std::cerr)) {
-                manifest_entry_removed = true;
-                manifest_flush_required = true;
-                if (manifest_store_) {
-                    manifest_store_->reload();
-                }
-            } else {
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Failed to remove '%s' from manifest assets list", asset_name.c_str());
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "[AssetInfoUI] Manifest store unavailable; manifest not updated for '%s'",
+                        asset_name.c_str());
+            manifest_entry_removed = devmode::manifest_utils::remove_manifest_asset_entry(asset_name, &std::cerr);
+            if (!manifest_entry_removed) {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                            "[AssetInfoUI] Failed to remove '%s' from manifest assets list",
+                            asset_name.c_str());
             }
         }
     }
@@ -2437,6 +2466,7 @@ void AssetInfoUI::confirm_delete_request() {
     }
 
     if (!asset_name.empty() && manifest_store_ && manifest_entry_removed) {
+        manifest_flush_required = manifest_flush_required || manifest_store_->dirty();
         const nlohmann::json& manifest = manifest_store_->manifest_json();
         auto maps_it = manifest.find("maps");
         if (maps_it != manifest.end() && maps_it->is_object()) {

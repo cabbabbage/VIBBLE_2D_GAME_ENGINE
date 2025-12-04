@@ -64,17 +64,29 @@ SDL_Texture* clone_texture(SDL_Texture* src,
     return dst;
 }
 
+} // namespace
+
+void AnimationCloner::ApplyChildFrameFlip(std::vector<AnimationChildFrameData>& children,
+                                          const Options& opts) {
+    const bool flip_children_h = opts.flip_horizontal || opts.flip_movement_horizontal;
+    const bool flip_children_v = opts.flip_vertical   || opts.flip_movement_vertical;
+    if (!flip_children_h && !flip_children_v) {
+        return;
+    }
+
+    for (auto& child : children) {
+        if (flip_children_h) child.dx = -child.dx; // mirror across parent's bottom-center vertical axis
+        if (flip_children_v) child.dy = -child.dy; // mirror across parent's bottom-center horizontal axis
+    }
+}
+
+namespace {
+
 void copy_children(const std::vector<AnimationChildFrameData>& src_children,
                    std::vector<AnimationChildFrameData>& dst_children,
-                   bool flip_h,
-                   bool flip_v) {
+                   const AnimationCloner::Options& opts) {
     dst_children = src_children;
-    if (flip_h || flip_v) {
-        for (auto& c : dst_children) {
-            if (flip_h) c.dx = -c.dx;
-            if (flip_v) c.dy = -c.dy;
-        }
-    }
+    AnimationCloner::ApplyChildFrameFlip(dst_children, opts);
 }
 
 } // namespace
@@ -207,7 +219,7 @@ bool AnimationCloner::Clone(const Animation& source,
 
             dst_frame.children.clear();
             if (src_frame) {
-                copy_children(src_frame->children, dst_frame.children, opts.flip_movement_horizontal, opts.flip_movement_vertical);
+                copy_children(src_frame->children, dst_frame.children, opts);
                 dst_frame.hit_geometry = src_frame->hit_geometry;
                 dst_frame.attack_geometry = src_frame->attack_geometry;
             }

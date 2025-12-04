@@ -49,6 +49,8 @@ class AssetInfoUI {
     void render(SDL_Renderer* r, int screen_w, int screen_h) const;
     void render_world_overlay(SDL_Renderer* r, const class WarpedScreenGrid& cam) const;
     void pulse_header();
+    // Ensure the animation editor panel is visible for the current asset
+    void open_animation_editor_panel();
     void set_assets(Assets* a);
     Assets* assets() const { return assets_; }
     void set_manifest_store(devmode::core::ManifestStore* store);
@@ -132,6 +134,7 @@ class AssetInfoUI {
     bool prev_camera_parallax_enabled_ = false;
     std::unique_ptr<SearchAssets> asset_selector_;
     std::unique_ptr<animation_editor::AnimationEditorWindow> animation_editor_window_;
+    bool pending_animation_editor_open_ = false;
     bool map_light_panel_auto_opened_ = false;
     bool forcing_high_quality_rendering_ = false;
     devmode::core::ManifestStore* manifest_store_ = nullptr;

@@ -8,7 +8,11 @@
 #include <chrono>
 
 #include "core/manifest/manifest_loader.hpp"
+#include "dev_mode/core/manifest_store.hpp"
+#include "dev_mode/manifest_asset_utils.hpp"
 #include "utils/log.hpp"
+
+#include <nlohmann/json.hpp>
 
 namespace fs = std::filesystem;
 
@@ -66,5 +70,80 @@ TEST_CASE("manifest loader retries and falls back to cached on parse error") {
 
     auto data3 = manifest::load_manifest();
     CHECK(data3.raw["version"].get<int>() == version1 + 1);
+}
+
+TEST_CASE("manifest store helper removes asset entries") {
+    vibble::log::set_level(vibble::log::Level::Warn);
+
+    const fs::path root = test_root() / "manifest_remove_helper";
+    const fs::path manifest_path = root / "manifest.json";
+    std::error_code ec;
+    fs::create_directories(root, ec);
+
+    nlohmann::json initial = nlohmann::json::object();
+    initial["version"] = 1;
+    initial["assets"] = {
+        {"Alpha", {
+            {"asset_name", "Alpha"},
+            {"asset_directory", "SRC/assets/Alpha"},
+            {"asset_type", "Object"}
+        }}
+    };
+    initial["maps"] = nlohmann::json::object();
+
+    {
+        std::ofstream out(manifest_path);
+        REQUIRE(out.is_open());
+        out << initial.dump(2);
+    }
+
+    auto loader = [&]() {
+        manifest::ManifestData data;
+        std::ifstream in(manifest_path);
+        REQUIRE(in.is_open());
+        in >> data.raw;
+        if (!data.raw.is_object()) {
+            data.raw = nlohmann::json::object();
+        }
+        if (!data.raw.contains("assets")) {
+            data.raw["assets"] = nlohmann::json::object();
+        }
+        if (!data.raw.contains("maps")) {
+            data.raw["maps"] = nlohmann::json::object();
+        }
+        data.assets = data.raw["assets"];
+        data.maps = data.raw["maps"];
+        return data;
+    };
+
+    auto submit = [&](const fs::path&, const nlohmann::json& payload, int indent) {
+        std::ofstream out(manifest_path);
+        REQUIRE(out.is_open());
+        out << payload.dump(indent);
+    };
+
+    bool flushed = false;
+    auto flush = [&]() { flushed = true; };
+
+    devmode::core::ManifestStore store(manifest_path, loader, submit, flush, 2);
+    REQUIRE(store.resolve_asset_name("Alpha").has_value());
+
+    const auto result = devmode::manifest_utils::remove_asset_entry(&store, "Alpha");
+    CHECK(result.removed);
+    CHECK(result.used_store);
+    CHECK_FALSE(store.resolve_asset_name("Alpha").has_value());
+    CHECK(store.dirty());
+
+    store.flush();
+    CHECK(flushed);
+
+    nlohmann::json written;
+    {
+        std::ifstream in(manifest_path);
+        REQUIRE(in.is_open());
+        in >> written;
+    }
+    CHECK(written["assets"].is_object());
+    CHECK(written["assets"].empty());
 }
 

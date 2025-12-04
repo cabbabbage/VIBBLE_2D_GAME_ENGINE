@@ -25,4 +25,9 @@ public:
                       const Options&   opts,
                       SDL_Renderer*    renderer,
                       AssetInfo&       info);
+
+    // Mirrors child attachment offsets around the parent's bottom-center pivot
+    // using the provided flip options. Exposed for tests and reuse.
+    static void ApplyChildFrameFlip(std::vector<AnimationChildFrameData>& children,
+                                    const Options& opts);
 };

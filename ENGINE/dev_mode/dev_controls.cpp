@@ -2306,8 +2306,7 @@ void DevControls::open_asset_info_editor_for_asset(Asset* asset) {
 
 void DevControls::open_animation_editor_for_asset(const std::shared_ptr<AssetInfo>& info) {
     if (!can_use_room_editor_ui()) return;
-    room_editor_->open_asset_info_editor(info);
-    // The animation editor will be opened within the asset info UI
+    room_editor_->open_animation_editor_for_asset(info);
 }
 
 void DevControls::close_asset_info_editor() {

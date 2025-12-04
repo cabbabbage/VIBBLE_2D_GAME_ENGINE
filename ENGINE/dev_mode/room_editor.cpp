@@ -1955,6 +1955,13 @@ void RoomEditor::open_asset_info_editor(const std::shared_ptr<AssetInfo>& info) 
     active_modal_ = ActiveModal::AssetInfo;
 }
 
+void RoomEditor::open_animation_editor_for_asset(const std::shared_ptr<AssetInfo>& info) {
+    open_asset_info_editor(info);
+    if (info_ui_) {
+        info_ui_->open_animation_editor_panel();
+    }
+}
+
 void RoomEditor::open_asset_info_editor_for_asset(Asset* asset) {
     if (!asset || !asset->info) return;
     std::cout << "Opening AssetInfoUI for asset: " << asset->info->name << std::endl;
@@ -5039,6 +5046,9 @@ bool RoomEditor::delete_spawn_group_internal(const std::string& spawn_id) {
         return false;
     }
     save_current_room_assets_json();
+    if (assets_) {
+        assets_->notify_spawn_group_removed(spawn_id);
+    }
     if (active_spawn_group_id_ && *active_spawn_group_id_ == spawn_id) {
         clear_active_spawn_group_target();
     }

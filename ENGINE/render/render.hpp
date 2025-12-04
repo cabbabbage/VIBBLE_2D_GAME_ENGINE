@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "render/composite_asset_renderer.hpp"
 #include "render/scaling_logic.hpp"
@@ -41,6 +42,8 @@ public:
                   const std::string& map_id);
     ~SceneRenderer();
 
+    static constexpr float kDefaultMapLightOpacity = 0.75f;
+
     static inline bool prerequisites_ready(SDL_Renderer* renderer, Assets* assets, std::string* reason = nullptr) {
         if (!renderer) {
             if (reason) { *reason = "SDL_Renderer pointer is null."; }
@@ -64,6 +67,12 @@ public:
     bool dark_mask_enabled() const { return dark_mask_enabled_; }
 
 private:
+    struct DarkMaskSprite {
+        SDL_Texture*    texture     = nullptr;
+        SDL_Rect        screen_rect{};
+        SDL_Color       color_mod{255, 255, 255, 255};
+        SDL_RendererFlip flip       = SDL_FLIP_NONE;
+    };
     struct PrevalidatedTag {};
 
     SceneRenderer(PrevalidatedTag,
@@ -77,7 +86,8 @@ private:
 
     bool ensure_darkness_overlay();
     void destroy_darkness_overlay();
-    void render_dynamic_darkness_overlay(float map_light_opacity, float flicker_time_seconds);
+    void render_dynamic_darkness_overlay(float map_light_opacity,
+                                         const std::vector<DarkMaskSprite>& sprites);
 
     bool ensure_sky_texture();
     void destroy_sky_texture();
@@ -105,6 +115,7 @@ private:
     SDL_Texture* darkness_overlay_texture_ = nullptr;
     int          darkness_overlay_width_   = 0;
     int          darkness_overlay_height_  = 0;
+    float        map_light_opacity_        = kDefaultMapLightOpacity;
     SDL_Color    map_clear_color_{0, 128, 0, 255};  // Green for debugging
     bool         debug_auto_paths_ = true;
 

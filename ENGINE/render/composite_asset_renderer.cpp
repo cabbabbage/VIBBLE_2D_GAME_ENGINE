@@ -97,7 +97,8 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                                     SDL_Rect rect,
                                     SDL_Color color = {255, 255, 255, 255},
                                     SDL_BlendMode blend = SDL_BLENDMODE_BLEND,
-                                    bool apply_scale = true) {
+                                    bool apply_scale = true,
+                                    SDL_RendererFlip flip = SDL_FLIP_NONE) {
         if (!tex) return;
         if (apply_scale) {
             rect.w = static_cast<int>(std::lround(static_cast<float>(rect.w) * package_scale));
@@ -105,7 +106,13 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
             rect.w = std::max(1, rect.w);
             rect.h = std::max(1, rect.h);
         }
-        asset->scene_mask_lights.push_back({tex, rect, color, blend});
+        RenderObject obj{};
+        obj.texture   = tex;
+        obj.screen_rect = rect;
+        obj.color_mod = color;
+        obj.blend_mode = blend;
+        obj.flip       = flip;
+        asset->scene_mask_lights.push_back(obj);
     };
 
     auto compute_light_color = [&](const LightSource& light) -> std::optional<SDL_Color> {
@@ -152,23 +159,30 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                     continue;
                 }
 
+                int offset_x = light_source.offset_x;
+                if (asset->flipped) {
+                    offset_x = -offset_x;
+                }
+
                 int w, h;
                 SDL_QueryTexture(light_source.texture, nullptr, nullptr, &w, &h);
                 SDL_Rect dest_rect = {
-                    static_cast<int>(asset->pos.x + light_source.offset_x * package_scale),
+                    static_cast<int>(asset->pos.x + offset_x * package_scale),
                     static_cast<int>(asset->pos.y + light_source.offset_y * package_scale),
                     w,
                     h
                 };
+                SDL_RendererFlip light_flip = asset->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
 
-                add_render_object(light_source.texture, dest_rect, *light_color);
+                add_render_object(light_source.texture, dest_rect, *light_color, SDL_BLENDMODE_ADD, true, 0.0, std::nullopt, light_flip);
 
                 if (light_source.render_to_dark_mask) {
                     add_scene_mask_light(light_source.texture,
                                          dest_rect,
                                          *light_color,
-                                         SDL_BLENDMODE_BLEND,
-                                         false);
+                                         SDL_BLENDMODE_ADD,
+                                         true,
+                                         light_flip);
                 }
             }
         }
@@ -329,23 +343,30 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                     continue;
                 }
 
+                int offset_x = light_source.offset_x;
+                if (asset->flipped) {
+                    offset_x = -offset_x;
+                }
+
                 int w, h;
                 SDL_QueryTexture(light_source.texture, nullptr, nullptr, &w, &h);
                 SDL_Rect dest_rect = {
-                    static_cast<int>(asset->pos.x + light_source.offset_x * package_scale),
+                    static_cast<int>(asset->pos.x + offset_x * package_scale),
                     static_cast<int>(asset->pos.y + light_source.offset_y * package_scale),
                     w,
                     h
                 };
+                SDL_RendererFlip light_flip = asset->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
 
-                add_render_object(light_source.texture, dest_rect, *light_color);
+                add_render_object(light_source.texture, dest_rect, *light_color, SDL_BLENDMODE_ADD, true, 0.0, std::nullopt, light_flip);
 
                 if (light_source.render_to_dark_mask) {
                     add_scene_mask_light(light_source.texture,
                                          dest_rect,
                                          *light_color,
-                                         SDL_BLENDMODE_BLEND,
-                                         false);
+                                         SDL_BLENDMODE_ADD,
+                                         true,
+                                         light_flip);
                 }
             }
         }

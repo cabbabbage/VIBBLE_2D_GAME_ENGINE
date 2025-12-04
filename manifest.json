@@ -981,6 +981,111 @@
       "tags": [],
       "tillable": false
     },
+    "Vibble": {
+      "animation_children": [],
+      "animations": {
+        "default": {
+          "crop_frames": false,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          },
+          "speed_multiplier": 1.0
+        },
+        "forward": {
+          "crop_frames": true,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "forward"
+          },
+          "speed_multiplier": 1.0
+        },
+        "left": {
+          "crop_frames": false,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "left"
+          },
+          "speed_multiplier": 1.0
+        }
+      },
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/Vibble",
+      "asset_name": "Vibble",
+      "asset_type": "player",
+      "neighbor_search_distance": 500,
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
+      },
+      "spawn_groups": [],
+      "start": "default",
+      "tags": [],
+      "tillable": false
+    },
     "Vibble_attack_1": {
       "asset_directory": "SRC/assets/Vibble_attack_1",
       "asset_name": "Vibble_attack_1"
@@ -2919,9 +3024,9 @@
         "bar": {
           "curvyness": 2,
           "display_color": [
-            31,
-            204,
-            31,
+            242,
+            213,
+            36,
             255
           ],
           "edge_smoothness": 19,
@@ -2939,9 +3044,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            136,
-            36,
-            242,
+            204,
+            31,
+            31,
             255
           ],
           "edge_smoothness": 43,
@@ -2992,8 +3097,8 @@
         "rnd": {
           "curvyness": 2,
           "display_color": [
-            85,
-            242,
+            136,
+            36,
             242,
             255
           ],
@@ -3012,8 +3117,8 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            37,
             242,
+            91,
             36,
             255
           ],
@@ -3311,6 +3416,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
+              "priority": 9,
               "resolution": 4,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -3339,6 +3445,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
+              "priority": 10,
               "resolution": 4,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -3367,10 +3474,39 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
+              "priority": 11,
               "resolution": 4,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-b7b6e9667cf5"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "Vibble"
+                }
+              ],
+              "display_name": "Vibble",
+              "dx": 982,
+              "dy": -574,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 6904,
+              "origional_width": 6904,
+              "position": "Exact",
+              "resolution": 7,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-faaa9c2131de"
             }
           ]
         }

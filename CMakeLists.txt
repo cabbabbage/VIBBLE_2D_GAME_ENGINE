@@ -185,10 +185,15 @@ add_executable(engine_tests
     TESTS/test_scene_renderer_prereqs.cpp
     TESTS/test_animation_child_visibility.cpp
     TESTS/test_animation_child_runtime.cpp
+    TESTS/test_animation_child_clone.cpp
     ENGINE/asset/animation.cpp
     ENGINE/asset/surface_utils.cpp
+    ENGINE/asset/animation_cloner.cpp
     ENGINE/animation_update/child_attachment_controller.cpp
     ENGINE/dev_mode/core/dev_json_store.cpp
+    ENGINE/dev_mode/core/manifest_store.cpp
+    ENGINE/dev_mode/manifest_asset_utils.cpp
+    ENGINE/dev_mode/tag_utils.cpp
     ENGINE/core/manifest/manifest_loader.cpp
     ENGINE/utils/log.cpp
     ENGINE/utils/cache_manager.cpp

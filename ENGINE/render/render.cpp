@@ -118,8 +118,6 @@ void GridTileRenderer::render(SDL_Renderer* renderer, const WarpedScreenGrid& ca
 
 namespace {
 
-constexpr float kDefaultMapLightOpacity = 1.0f;
-
 inline float ticks_to_seconds(Uint64 ticks) {
     return static_cast<float>(ticks) * 0.001f;
 }
@@ -171,20 +169,31 @@ SceneRenderer::SceneRenderer(PrevalidatedTag,
     bool color_set = false;
     if (map_manifest.contains("maps") && map_manifest["maps"].contains(map_id)) {
         const auto& map_data = map_manifest["maps"][map_id];
-        if (map_data.contains("map_light_data") && map_data["map_light_data"].contains("map_color")) {
-            const auto& mc = map_data["map_light_data"]["map_color"];
-            if (mc.contains("r") && mc["r"].contains("max") && mc["r"]["max"].is_number_integer() &&
-                mc.contains("g") && mc["g"].contains("max") && mc["g"]["max"].is_number_integer() &&
-                mc.contains("b") && mc["b"].contains("max") && mc["b"]["max"].is_number_integer() &&
-                mc.contains("a") && mc["a"].contains("max") && mc["a"]["max"].is_number_integer()) {
-                int r_max = mc["r"]["max"];
-                int g_max = mc["g"]["max"];
-                int b_max = mc["b"]["max"];
-                int a_max = mc["a"]["max"];
-                if (r_max >= 0 && r_max <= 255 && g_max >= 0 && g_max <= 255 &&
-                    b_max >= 0 && b_max <= 255 && a_max >= 0 && a_max <= 255) {
-                    map_clear_color_ = SDL_Color{static_cast<Uint8>(r_max), static_cast<Uint8>(g_max), static_cast<Uint8>(b_max), static_cast<Uint8>(a_max)};
-                    color_set = true;
+        if (map_data.contains("map_light_data") && map_data["map_light_data"].is_object()) {
+            const auto& mld = map_data["map_light_data"];
+            if (mld.contains("map_color")) {
+                const auto& mc = mld["map_color"];
+                if (mc.contains("r") && mc["r"].contains("max") && mc["r"]["max"].is_number_integer() &&
+                    mc.contains("g") && mc["g"].contains("max") && mc["g"]["max"].is_number_integer() &&
+                    mc.contains("b") && mc["b"].contains("max") && mc["b"]["max"].is_number_integer() &&
+                    mc.contains("a") && mc["a"].contains("max") && mc["a"]["max"].is_number_integer()) {
+                    int r_max = mc["r"]["max"];
+                    int g_max = mc["g"]["max"];
+                    int b_max = mc["b"]["max"];
+                    int a_max = mc["a"]["max"];
+                    if (r_max >= 0 && r_max <= 255 && g_max >= 0 && g_max <= 255 &&
+                        b_max >= 0 && b_max <= 255 && a_max >= 0 && a_max <= 255) {
+                        map_clear_color_ = SDL_Color{static_cast<Uint8>(r_max), static_cast<Uint8>(g_max), static_cast<Uint8>(b_max), static_cast<Uint8>(a_max)};
+                        color_set = true;
+                    }
+                }
+            }
+            if (mld.contains("intensity") && mld["intensity"].is_number()) {
+                const int intensity_raw = static_cast<int>(mld["intensity"]);
+                const int clamped       = std::clamp(intensity_raw, 0, 255);
+                map_light_opacity_      = static_cast<float>(clamped) / 255.0f;
+                if (!std::isfinite(map_light_opacity_)) {
+                    map_light_opacity_ = SceneRenderer::kDefaultMapLightOpacity;
                 }
             }
         }
@@ -254,7 +263,62 @@ void SceneRenderer::render() {
     const float flicker_time_seconds = ticks_to_seconds(SDL_GetTicks64());
     const float inv_scale = 1.0f / std::max(0.000001f, cam.get_scale());
 
+    struct ScreenRenderData {
+        SDL_Rect  rect{};
+        SDL_Point center{};
+        bool      use_center = false;
+    };
+
+    auto build_screen_render_data = [&](const RenderObject& obj,
+                                        const SDL_FPoint& base,
+                                        int asset_world_x,
+                                        int asset_world_y) -> std::optional<ScreenRenderData> {
+        if (!obj.texture) {
+            return std::nullopt;
+        }
+
+        const int raw_width  = obj.screen_rect.w;
+        const int raw_height = obj.screen_rect.h;
+        if (raw_width <= 0 || raw_height <= 0) {
+            return std::nullopt;
+        }
+
+        const int offset_x = obj.screen_rect.x - asset_world_x;
+        const int offset_y = obj.screen_rect.y - asset_world_y;
+
+        const double scaled_width  = static_cast<double>(raw_width)  * static_cast<double>(inv_scale);
+        const double scaled_height = static_cast<double>(raw_height) * static_cast<double>(inv_scale);
+
+        if (!std::isfinite(scaled_width) || !std::isfinite(scaled_height)) {
+            return std::nullopt;
+        }
+
+        const int screen_w = std::max(1, static_cast<int>(std::lround(scaled_width)));
+        const int screen_h = std::max(1, static_cast<int>(std::lround(scaled_height)));
+
+        SDL_Rect screen_rect{
+            static_cast<int>(std::lround(base.x + static_cast<double>(offset_x) * static_cast<double>(inv_scale) - scaled_width * 0.5)),
+            static_cast<int>(std::lround(base.y + static_cast<double>(offset_y) * static_cast<double>(inv_scale) - scaled_height)),
+            screen_w,
+            screen_h
+        };
+
+        SDL_Point center = obj.center;
+        if (obj.use_custom_center) {
+            center.x = static_cast<int>(std::lround(static_cast<double>(center.x) * static_cast<double>(inv_scale)));
+            center.y = static_cast<int>(std::lround(static_cast<double>(center.y) * static_cast<double>(inv_scale)));
+        }
+
+        ScreenRenderData data;
+        data.rect       = screen_rect;
+        data.center     = center;
+        data.use_center = obj.use_custom_center;
+        return data;
+    };
+
     const auto& active_assets = assets_->getActive();
+    std::vector<DarkMaskSprite> dark_mask_sprites;
+    dark_mask_sprites.reserve(std::max<std::size_t>(active_assets.size(), 8u));
     for (Asset* asset : active_assets) {
         if (!asset || asset->is_hidden() || !asset->info) {
             continue;
@@ -280,35 +344,26 @@ void SceneRenderer::render() {
         const int asset_world_x = asset->pos.x;
         const int asset_world_y = asset->pos.y;
 
+        if (dark_mask_enabled_ && !asset->scene_mask_lights.empty()) {
+            for (const RenderObject& mask_obj : asset->scene_mask_lights) {
+                auto screen_data = build_screen_render_data(mask_obj, screen_base, asset_world_x, asset_world_y);
+                if (!screen_data) {
+                    continue;
+                }
+                DarkMaskSprite sprite;
+                sprite.texture     = mask_obj.texture;
+                sprite.screen_rect = screen_data->rect;
+                sprite.color_mod   = mask_obj.color_mod;
+                sprite.flip        = mask_obj.flip;
+                dark_mask_sprites.push_back(sprite);
+            }
+        }
+
         for (const RenderObject& obj : asset->render_package) {
-            if (!obj.texture) {
+            auto screen_data = build_screen_render_data(obj, screen_base, asset_world_x, asset_world_y);
+            if (!screen_data) {
                 continue;
             }
-
-            const int raw_width  = obj.screen_rect.w;
-            const int raw_height = obj.screen_rect.h;
-            if (raw_width <= 0 || raw_height <= 0) {
-                continue;
-            }
-
-            const int offset_x = obj.screen_rect.x - asset_world_x;
-            const int offset_y = obj.screen_rect.y - asset_world_y;
-
-            // Convert world-space dimensions to screen space using the current camera scale.
-            const double scaled_width  = static_cast<double>(raw_width)  * static_cast<double>(inv_scale);
-            const double scaled_height = static_cast<double>(raw_height) * static_cast<double>(inv_scale);
-            const int    screen_w      = std::max(1, static_cast<int>(std::lround(scaled_width)));
-            const int    screen_h      = std::max(1, static_cast<int>(std::lround(scaled_height)));
-
-            const double scaled_offset_x = static_cast<double>(offset_x) * static_cast<double>(inv_scale);
-            const double scaled_offset_y = static_cast<double>(offset_y) * static_cast<double>(inv_scale);
-
-            SDL_Rect screen_rect{
-                static_cast<int>(std::lround(screen_base.x + scaled_offset_x - static_cast<double>(screen_w) * 0.5)),
-                static_cast<int>(std::lround(screen_base.y + scaled_offset_y - static_cast<double>(screen_h))),
-                screen_w,
-                screen_h
-            };
 
             SDL_SetTextureBlendMode(obj.texture, obj.blend_mode);
             // Apply horizon fade to alpha
@@ -318,17 +373,16 @@ void SceneRenderer::render() {
             SDL_SetTextureAlphaMod(obj.texture, final_alpha);
 
             if (obj.angle != 0.0 || obj.use_custom_center || obj.flip != SDL_FLIP_NONE) {
-                SDL_Point final_center = obj.center;
-                if (obj.use_custom_center) {
-                    final_center.x = static_cast<int>(std::lround(static_cast<double>(final_center.x) * static_cast<double>(inv_scale)));
-                    final_center.y = static_cast<int>(std::lround(static_cast<double>(final_center.y) * static_cast<double>(inv_scale)));
-                }
-                const SDL_Point* center_ptr = obj.use_custom_center ? &final_center : nullptr;
-                SDL_RenderCopyEx(renderer_, obj.texture, nullptr, &screen_rect, obj.angle, center_ptr, obj.flip);
+                const SDL_Point* center_ptr = screen_data->use_center ? &screen_data->center : nullptr;
+                SDL_RenderCopyEx(renderer_, obj.texture, nullptr, &screen_data->rect, obj.angle, center_ptr, obj.flip);
             } else {
-                SDL_RenderCopy(renderer_, obj.texture, nullptr, &screen_rect);
+                SDL_RenderCopy(renderer_, obj.texture, nullptr, &screen_data->rect);
             }
         }
+    }
+
+    if (dark_mask_enabled_) {
+        render_dynamic_darkness_overlay(map_light_opacity_, dark_mask_sprites);
     }
 
     if (debug_auto_paths_) {
@@ -434,19 +488,11 @@ void SceneRenderer::render() {
                                            static_cast<int>(std::lround(ring[i].x)),
                                            static_cast<int>(std::lround(ring[i].y)));
                     }
-                }
-            }
-
-
-
         }
     }
 
-    // TEMP: darkness overlay disabled for debugging
-    // if (dark_mask_enabled_) {
-    //     render_dynamic_darkness_overlay(kDefaultMapLightOpacity, flicker_time_seconds);
-    // }
-    // Presentation is handled by the outer frame loop (e.g., MenuUI::game_loop).
+        }
+    }
 }
 
 bool SceneRenderer::ensure_darkness_overlay() {
@@ -576,7 +622,8 @@ void SceneRenderer::render_sky_layer(const WarpedScreenGrid& cam, bool depth_eff
     SDL_RenderCopyF(renderer_, sky_texture_, nullptr, &dst);
 }
 
-void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity, float /*flicker_time_seconds*/) {
+void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity,
+                                                    const std::vector<DarkMaskSprite>& sprites) {
     if (!renderer_) {
         return;
     }
@@ -599,13 +646,37 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity, flo
 
     SDL_Texture* previous_target = SDL_GetRenderTarget(renderer_);
     SDL_SetRenderTarget(renderer_, darkness_overlay_texture_);
-    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, static_cast<Uint8>(std::clamp(std::lround(overlay_alpha * 255.0f), 0L, 255L)));
+    SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE);
+    const Uint8 overlay_alpha_byte = static_cast<Uint8>(std::clamp(std::lround(overlay_alpha * 255.0f), 0L, 255L));
+    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, overlay_alpha_byte);
     SDL_RenderClear(renderer_);
+
+    if (!sprites.empty()) {
+        SDL_BlendMode carve_mode = SDL_ComposeCustomBlendMode(
+            SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_ONE,
+            SDL_BLENDOPERATION_ADD,
+            SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+            SDL_BLENDOPERATION_ADD);
+
+        for (const DarkMaskSprite& sprite : sprites) {
+            if (!sprite.texture) {
+                continue;
+            }
+            SDL_SetTextureBlendMode(sprite.texture, carve_mode);
+            SDL_SetTextureColorMod(sprite.texture, sprite.color_mod.r, sprite.color_mod.g, sprite.color_mod.b);
+            SDL_SetTextureAlphaMod(sprite.texture, sprite.color_mod.a);
+            if (sprite.flip != SDL_FLIP_NONE) {
+                SDL_RenderCopyEx(renderer_, sprite.texture, nullptr, &sprite.screen_rect, 0.0, nullptr, sprite.flip);
+            } else {
+                SDL_RenderCopy(renderer_, sprite.texture, nullptr, &sprite.screen_rect);
+            }
+        }
+    }
+
     SDL_SetRenderTarget(renderer_, previous_target);
 
     SDL_SetTextureBlendMode(darkness_overlay_texture_, SDL_BLENDMODE_BLEND);
-    SDL_SetTextureAlphaMod(darkness_overlay_texture_, static_cast<Uint8>(std::clamp(std::lround(overlay_alpha * 255.0f), 0L, 255L)));
+    SDL_SetTextureAlphaMod(darkness_overlay_texture_, overlay_alpha_byte);
     SDL_SetTextureColorMod(darkness_overlay_texture_, 0, 0, 0);
 
     SDL_Rect screen_dst{0, 0, screen_width_, screen_height_};
