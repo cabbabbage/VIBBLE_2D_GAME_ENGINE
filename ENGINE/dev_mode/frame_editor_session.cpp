@@ -1608,8 +1608,6 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
     if (dd_animation_select_) {
         dd_animation_select_->render(renderer);
     }
-    if (btn_prev_) btn_prev_->render(renderer);
-    if (btn_next_) btn_next_->render(renderer);
 
     // Thumbnails
     for (size_t i = 0; i < thumb_rects_.size() && i < thumb_indices_.size(); ++i) {
@@ -1673,6 +1671,10 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
         SDL_SetRenderDrawColor(renderer, DMStyles::Border().r, DMStyles::Border().g, DMStyles::Border().b, 255);
         SDL_RenderDrawRect(renderer, &scrollbar_thumb_);
     }
+
+    // Render navigation buttons on top of thumbnails so they are always visible
+    if (btn_prev_) btn_prev_->render(renderer);
+    if (btn_next_) btn_next_->render(renderer);
 
     DMDropdown::render_active_options(renderer);
 }
@@ -2250,7 +2252,7 @@ void FrameEditorSession::rebuild_layout() const {
     const int thumb_w = thumb_h;
     const int content_top = nav_rect_.y + nav_drag_handle_height + DMSpacing::small_gap();
     const int thumb_top = content_top + title_h;
-    const int btn_size = thumb_h;
+    const int btn_size = std::min(thumb_h, DMButton::height() * 2);
     if (btn_prev_) {
         btn_prev_->set_rect(SDL_Rect{ nav_rect_.x + DMSpacing::small_gap(), thumb_top, btn_size, btn_size });
     }
@@ -4063,14 +4065,20 @@ void FrameEditorSession::clamp_scroll_offset() const {
 
 void FrameEditorSession::ensure_selected_thumb_visible() {
     if (frames_.empty() || thumb_viewport_width_ <= 0) return;
-    const int thumb_w = std::max(1, thumb_viewport_width_ / std::max(1, static_cast<int>(frames_.size())));
-    const int spacing = 12;
+    // Use same thumbnail dimensions as layout: thumbnails are square with width == thumb_h
+    // Compute thumb_h the same way layout does by deriving it from nav_rect_ and constants
+    const int nav_drag_handle_height = DMSpacing::small_gap() * 2;
+    const int title_h = nav_header_height_px(dd_animation_select_ != nullptr);
+    const int nav_vertical_padding = DMSpacing::small_gap() * 2;
+    const int thumb_h = std::max(1, nav_rect_.h - nav_drag_handle_height - nav_vertical_padding - title_h - kNavSliderGap);
+    const int thumb_w = thumb_h;
+    const int spacing = kNavSpacing;
     const int per = thumb_w + spacing;
-    // Center the selected frame in the viewport when scrolling
+
+    // Desired scroll so the selected thumbnail is centered in the viewport
     const int left_edge = selected_index_ * per;
-    const int right_edge = left_edge + thumb_w;
-    const int center_offset = left_edge + (thumb_w / 2) - (thumb_viewport_width_ / 2);
-    scroll_offset_ = std::clamp(center_offset, left_edge - (thumb_viewport_width_ - thumb_w), right_edge);
+    const int desired_scroll = left_edge + (thumb_w / 2) - (thumb_viewport_width_ / 2);
+    scroll_offset_ = std::clamp(desired_scroll, 0, max_scroll_offset());
     clamp_scroll_offset();
 }
 

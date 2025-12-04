@@ -1571,6 +1571,7 @@
           "children": [
             "Candle"
           ],
+          "crop_frames": false,
           "flipped_source": false,
           "hit_geometry": [
             {
@@ -1600,7 +1601,8 @@
             "kind": "folder",
             "name": "",
             "path": "default"
-          }
+          },
+          "speed_multiplier": 1.0
         }
       },
       "anti_tags": [],
