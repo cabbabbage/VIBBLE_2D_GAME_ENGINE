@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <limits>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <unordered_set>
@@ -24,6 +25,17 @@ bool parse_bool(const nlohmann::json& value, bool fallback) {
         if (text == "false" || text == "0" || text == "no" || text == "off") return false;
     }
     return fallback;
+}
+
+bool parse_bool_field(const nlohmann::json& payload, const char* key, bool fallback) {
+    if (!payload.is_object() || !key) {
+        return fallback;
+    }
+    auto it = payload.find(key);
+    if (it == payload.end()) {
+        return fallback;
+    }
+    return parse_bool(*it, fallback);
 }
 
 int parse_int(const nlohmann::json& value, int fallback) {
@@ -126,7 +138,57 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
     payload["flipped_source"] = derived_flip_x;
 
     payload.erase("fps");
+    double raw_speed = 1.0;
+    try {
+        if (payload.contains("speed_multiplier") && payload["speed_multiplier"].is_number()) {
+            raw_speed = payload["speed_multiplier"].get<double>();
+        } else if (payload.contains("speed_factor") && payload["speed_factor"].is_number()) {
+            raw_speed = payload["speed_factor"].get<double>();
+        }
+    } catch (...) {
+        raw_speed = 1.0;
+    }
+    const double kSpeedOptions[] = {0.25, 0.5, 1.0, 2.0, 4.0};
+    double best_speed = 1.0;
+    double best_diff = std::numeric_limits<double>::max();
+    for (double opt : kSpeedOptions) {
+        double diff = std::abs(opt - raw_speed);
+        if (diff < best_diff) {
+            best_diff = diff;
+            best_speed = opt;
+        }
+    }
+    if (!std::isfinite(raw_speed) || raw_speed <= 0.0) {
+        best_speed = 1.0;
+    }
+    payload["speed_multiplier"] = best_speed;
     payload.erase("speed_factor");
+
+    bool crop_frames = parse_bool_field(payload, "crop_frames", false);
+    payload["crop_frames"] = crop_frames;
+    if (crop_frames && payload.contains("crop_bounds") && payload["crop_bounds"].is_object()) {
+        const auto& bounds = payload["crop_bounds"];
+        auto read_bound = [&](const char* key) {
+            if (bounds.contains(key)) {
+                return parse_int(bounds.at(key), 0);
+            }
+            return 0;
+        };
+        int top = std::max(0, read_bound("top"));
+        int left = std::max(0, read_bound("left"));
+        int right = std::max(0, read_bound("right"));
+        int bottom = std::max(0, read_bound("bottom"));
+        int width = std::max(0, read_bound("width"));
+        int height = std::max(0, read_bound("height"));
+        nlohmann::json clean_bounds = {{"top", top}, {"left", left}, {"right", right}, {"bottom", bottom}};
+        if (width > 0 && height > 0) {
+            clean_bounds["width"] = width;
+            clean_bounds["height"] = height;
+        }
+        payload["crop_bounds"] = clean_bounds;
+    } else if (!crop_frames) {
+        payload.erase("crop_bounds");
+    }
 
     int frames = parse_int(payload.contains("number_of_frames") ? payload["number_of_frames"] : nlohmann::json(1), 1);
     if (frames < 1) frames = 1;

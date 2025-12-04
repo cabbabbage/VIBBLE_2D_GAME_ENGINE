@@ -29,12 +29,13 @@ class AnimationDocument;
 class AnimationListPanel;
 class AnimationInspectorPanel;
 class PreviewProvider;
-class CroppingService;
 class AsyncTaskQueue;
 class AudioImporter;
 class AnimationListContextMenu;
 
 using DMButton = ::DMButton;
+using DMCheckbox = ::DMCheckbox;
+using DMDropdown = ::DMDropdown;
 
 class AnimationEditorWindow {
   public:
@@ -108,8 +109,13 @@ class AnimationEditorWindow {
     std::string generate_class_name(const std::string& asset_name) const;
     void add_controller();
     void open_controller();
-    void retime_selected_animation(bool double_speed);
-    bool run_retime_script(const std::string& asset_name, const std::string& animation_id, bool double_speed);
+    void apply_speed_multiplier_from_dropdown();
+    void apply_crop_frames_toggle();
+    void sync_header_controls();
+    float parse_speed_multiplier(const nlohmann::json& payload) const;
+    bool parse_crop_frames(const nlohmann::json& payload) const;
+    void persist_header_metadata(float speed_multiplier, bool crop_frames);
+    std::vector<float> speed_multiplier_options() const;
     bool rebuild_animation_from_sources(const std::shared_ptr<AssetInfo>& info, const std::string& animation_id);
     bool regenerate_via_asset_tool(const std::shared_ptr<AssetInfo>& info, const std::string& animation_id);
     void clear_animation_cache(const std::filesystem::path& cache_root,
@@ -123,7 +129,6 @@ class AnimationEditorWindow {
     std::filesystem::path asset_root_path_;
     std::shared_ptr<AnimationDocument> document_;
     std::shared_ptr<PreviewProvider> preview_provider_;
-    std::shared_ptr<CroppingService> cropping_service_;
     std::shared_ptr<AsyncTaskQueue> task_queue_;
     std::shared_ptr<AudioImporter> audio_importer_;
     std::unique_ptr<AnimationListPanel> list_panel_;
@@ -131,8 +136,8 @@ class AnimationEditorWindow {
     std::unique_ptr<AnimationListContextMenu> list_context_menu_;
     std::unique_ptr<DMButton> add_button_;
     std::unique_ptr<DMButton> controller_button_;
-    std::unique_ptr<DMButton> half_speed_button_;
-    std::unique_ptr<DMButton> double_speed_button_;
+    std::unique_ptr<DMDropdown> speed_dropdown_;
+    std::unique_ptr<DMCheckbox> crop_checkbox_;
     SDL_Rect header_rect_{0, 0, 0, 0};
     SDL_Rect list_rect_{0, 0, 0, 0};
     SDL_Rect inspector_rect_{0, 0, 0, 0};

@@ -21,7 +21,6 @@
 #include "PreviewProvider.hpp"
 
 #include "AsyncTaskQueue.hpp"
-#include "CroppingService.hpp"
 #include "dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
 #include "dev_mode/widgets.hpp"
@@ -98,8 +97,7 @@ void SourceConfigPanel::set_bounds(const SDL_Rect& bounds) {
     layout_controls();
 }
 
-void SourceConfigPanel::set_services(std::shared_ptr<CroppingService> cropping, std::shared_ptr<AsyncTaskQueue> tasks) {
-    cropping_service_ = std::move(cropping);
+void SourceConfigPanel::set_task_queue(std::shared_ptr<AsyncTaskQueue> tasks) {
     task_queue_ = std::move(tasks);
 }
 
@@ -727,18 +725,7 @@ void SourceConfigPanel::copy_sequence_to_output(const std::vector<std::filesyste
             SDL_Log("SourceConfigPanel: failed copying %s -> %s: %s", files[i].string().c_str(), dst.string().c_str(), ex.what());
         }
     }
-    post_copy_process(copied);
-}
-
-void SourceConfigPanel::post_copy_process(const std::vector<std::filesystem::path>& out_files) const {
-    if (out_files.empty()) return;
-    if (!cropping_service_) return;
-    try {
-        cropping_service_->compute_union_bounds(out_files);
-        cropping_service_->crop_images_with_bounds(out_files);
-    } catch (const std::exception& ex) {
-        SDL_Log("SourceConfigPanel: cropping failed: %s", ex.what());
-    }
+    // No post-processing here; cropping is handled by the asset tool in Python.
 }
 
 void SourceConfigPanel::layout_controls() {
@@ -1060,8 +1047,7 @@ void SourceConfigPanel::import_from_gif() {
     stbi_image_free(data);
     if (delays) stbi_image_free(delays);
 
-    // Crop and finalize
-    post_copy_process(written);
+    // Finalize
 
     SourceConfig config;
     config.kind = "folder";

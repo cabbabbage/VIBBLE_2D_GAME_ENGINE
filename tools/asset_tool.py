@@ -65,27 +65,149 @@ _APPLY_EFFECTS: Optional[ApplyEffects] = None
 _ALL_ANIMATIONS = object()
 
 
-def scan_animation_frames(src_folder: Path) -> Tuple[int, int, int]:
-    """Scan animation frames to count them and get original dimensions."""
-    frame_count = 0
-    orig_w = 0
-    orig_h = 0
+SPEED_MULTIPLIERS: Tuple[float, ...] = (0.25, 0.5, 1.0, 2.0, 4.0)
 
+
+def _closest_speed_multiplier(value: float) -> float:
+    if not math.isfinite(value) or value <= 0.0:
+        return 1.0
+    best = SPEED_MULTIPLIERS[0]
+    best_diff = abs(best - value)
+    for candidate in SPEED_MULTIPLIERS[1:]:
+        diff = abs(candidate - value)
+        if diff < best_diff:
+            best_diff = diff
+            best = candidate
+    return best
+
+
+def read_speed_multiplier(anim_meta: Dict[str, object]) -> float:
+    if not isinstance(anim_meta, dict):
+        return 1.0
+    raw = anim_meta.get("speed_multiplier", anim_meta.get("speed_factor", 1.0))
+    try:
+        return _closest_speed_multiplier(float(raw))
+    except Exception:
+        return 1.0
+
+
+def read_crop_frames(anim_meta: Dict[str, object]) -> bool:
+    if not isinstance(anim_meta, dict):
+        return False
+    value = anim_meta.get("crop_frames", False)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        text = value.strip().lower()
+        return text in {"true", "1", "yes", "on"}
+    return False
+
+
+def build_speed_frame_sequence(frame_count: int, multiplier: float) -> List[int]:
+    """Return a list of source frame indices after applying a speed multiplier."""
+    if frame_count <= 0:
+        return []
+    multiplier = _closest_speed_multiplier(multiplier)
+    if multiplier < 1.0:
+        repeat = int(round(1.0 / multiplier))
+        repeat = max(1, repeat)
+        sequence: List[int] = []
+        for idx in range(frame_count):
+            sequence.extend([idx] * repeat)
+        return sequence
+
+    if multiplier > 1.0:
+        step = int(round(multiplier))
+        step = max(1, step)
+        sequence = list(range(0, frame_count, step))
+        if not sequence:
+            sequence = [0]
+        last_index = frame_count - 1
+        if sequence[-1] != last_index:
+            sequence.append(last_index)
+        return sequence
+
+    return list(range(frame_count))
+
+
+def list_numeric_frame_paths(src_folder: Path) -> List[Path]:
+    """Return ordered numeric frame paths from a folder (0.png, 1.png, ...)."""
+    frames: List[Path] = []
+    idx = 0
     while True:
-        frame_path = src_folder / f"{frame_count}.png"
-        if not frame_path.exists():
+        candidate = src_folder / f"{idx}.png"
+        if not candidate.exists():
             break
+        frames.append(candidate)
+        idx += 1
+    return frames
 
-        if frame_count == 0:
-            try:
-                with Image.open(frame_path) as img:
-                    orig_w, orig_h = img.size
-            except Exception:
-                break
 
-        frame_count += 1
+def compute_crop_bounds(frame_paths: List[Path]) -> Optional[Dict[str, int]]:
+    """Compute shared crop bounds across all frames based on alpha channel."""
+    if not frame_paths:
+        return None
 
-    return frame_count, orig_w, orig_h
+    union_left = None
+    union_top = None
+    union_right = None
+    union_bottom = None
+    base_size: Optional[Tuple[int, int]] = None
+
+    for path in frame_paths:
+        try:
+            with Image.open(path) as img:
+                if img.mode != "RGBA":
+                    img = img.convert("RGBA")
+                if base_size is None:
+                    base_size = img.size
+                elif img.size != base_size:
+                    LOGGER.warning("Inconsistent frame sizes detected in %s; skipping crop.", path.parent)
+                    return None
+                alpha = img.getchannel("A")
+                bbox = alpha.getbbox()
+                if not bbox:
+                    continue
+                left, top, right, bottom = bbox  # right/bottom are exclusive
+                union_left = left if union_left is None else min(union_left, left)
+                union_top = top if union_top is None else min(union_top, top)
+                union_right = right if union_right is None else max(union_right, right)
+                union_bottom = bottom if union_bottom is None else max(union_bottom, bottom)
+        except Exception as exc:
+            LOGGER.warning("Failed computing crop bounds for %s: %s", path, exc)
+            return None
+
+    if base_size is None or union_left is None or union_top is None or union_right is None or union_bottom is None:
+        return None
+
+    base_w, base_h = base_size
+    right_margin = max(0, base_w - union_right)
+    bottom_margin = max(0, base_h - union_bottom)
+    cropped_w = base_w - union_left - right_margin
+    cropped_h = base_h - union_top - bottom_margin
+    if cropped_w <= 0 or cropped_h <= 0:
+        return None
+
+    return {
+        "left": int(union_left),
+        "top": int(union_top),
+        "right": int(right_margin),
+        "bottom": int(bottom_margin),
+        "width": int(base_w),
+        "height": int(base_h),
+    }
+
+
+def scale_crop_bounds(bounds: Dict[str, int], scale_factor: float) -> Optional[Tuple[int, int, int, int]]:
+    if not bounds:
+        return None
+    left = int(round(bounds.get("left", 0) * scale_factor))
+    top = int(round(bounds.get("top", 0) * scale_factor))
+    right = int(round(bounds.get("right", 0) * scale_factor))
+    bottom = int(round(bounds.get("bottom", 0) * scale_factor))
+    return left, top, right, bottom
 
 
 def process_frame_task(task):
@@ -98,6 +220,7 @@ def process_frame_task(task):
           src_path,
           target_w,
           target_h,
+          crop_bounds,
           normal_path,
           fg_path,
           bg_path,
@@ -116,6 +239,7 @@ def process_frame_task(task):
         src_path,
         target_w,
         target_h,
+        crop_bounds,
         normal_path,
         fg_path,
         bg_path,
@@ -136,6 +260,22 @@ def process_frame_task(task):
             if target_w > 0 and target_h > 0:
                 if img.size != (target_w, target_h):
                     img = img.resize((target_w, target_h), Image.LANCZOS)
+
+            if crop_bounds:
+                left, top, right, bottom = crop_bounds
+                crop_left = max(0, left)
+                crop_top = max(0, top)
+                crop_right = max(0, right)
+                crop_bottom = max(0, bottom)
+                crop_width = max(1, img.width - crop_left - crop_right)
+                crop_height = max(1, img.height - crop_top - crop_bottom)
+                crop_box = (
+                    crop_left,
+                    crop_top,
+                    crop_left + crop_width,
+                    crop_top + crop_height,
+                )
+                img = img.crop(crop_box)
 
             # Save normal (dirs already created in parent)
             img.save(normal_path, "PNG", optimize=False)
@@ -245,27 +385,36 @@ class AssetTool:
             / f"{anim_id}.json"
         )
 
+    def _animation_payloads_for_asset(self, asset: Asset) -> Dict[str, Dict]:
+        payloads = asset.json_entry.get("animations", {})
+        if isinstance(payloads, dict) and "animations" in payloads and isinstance(payloads["animations"], dict):
+            payloads = payloads["animations"]
+        if not isinstance(payloads, dict):
+            return {}
+        return {k: v for k, v in payloads.items() if isinstance(v, dict)}
+
     def _compute_animation_signature(
         self,
         asset: Asset,
         anim_id: str,
         anim_dir: Path,
-        frame_count: int,
+        frame_paths: List[Path],
         orig_w: int,
         orig_h: int,
         scale_pcts: List[int],
         mask_enabled: bool,
         mask_settings: Optional[Dict],
+        output_frame_count: int,
+        speed_multiplier: float,
+        crop_frames: bool,
+        crop_bounds: Optional[Dict],
     ) -> Dict:
         """
         Build a lightweight fingerprint for an animation so we can skip
         regenerating unchanged animations.
         """
         frame_meta = []
-        for frame_idx in range(frame_count):
-            frame_path = anim_dir / f"{frame_idx}.png"
-            if not frame_path.exists():
-                break
+        for frame_idx, frame_path in enumerate(frame_paths):
             try:
                 stat_res = frame_path.stat()
                 mtime_ns = getattr(stat_res, "st_mtime_ns", int(stat_res.st_mtime * 1e9))
@@ -294,17 +443,24 @@ class AssetTool:
             "animation": anim_id,
             "source": {
                 "dir": str(anim_dir),
-                "frame_count": frame_count,
+                "frame_count": len(frame_paths),
                 "orig_size": [orig_w, orig_h],
                 "frames_digest": stable_hash(frame_meta),
             },
+            "output": {"frame_count": output_frame_count},
             "scales": scale_pcts,
             "mask": {
                 "enabled": mask_enabled,
                 "settings": mask_settings or {},
             },
+            "processing": {
+                "speed_multiplier": speed_multiplier,
+                "crop_frames": bool(crop_frames),
+            },
             "effects_digest": effects_digest,
         }
+        if crop_frames and crop_bounds:
+            signature_payload["processing"]["crop_bounds"] = crop_bounds
         signature_payload["digest"] = stable_hash(signature_payload)
         return signature_payload
 
@@ -439,6 +595,7 @@ class AssetTool:
 
         processed_any = False
         asset_had_errors = False
+        animation_payloads = self._animation_payloads_for_asset(asset)
         existing_anim_ids = {anim_id for _, anim_id in animations}
         if requested_filter is not None:
             missing = requested_filter - existing_anim_ids
@@ -453,8 +610,8 @@ class AssetTool:
                         self.queue.mark_animation_complete(asset.name, anim_id)
 
         for anim_dir, anim_id in animations:
-            frame_count, orig_w, orig_h = scan_animation_frames(anim_dir)
-            if frame_count == 0:
+            frame_paths = list_numeric_frame_paths(anim_dir)
+            if not frame_paths:
                 LOGGER.warning(
                     "No frames found for asset '%s' animation '%s' in %s. Skipping.",
                     asset.name,
@@ -463,9 +620,44 @@ class AssetTool:
                 )
                 continue
 
+            try:
+                with Image.open(frame_paths[0]) as img:
+                    orig_w, orig_h = img.size
+            except Exception as exc:
+                LOGGER.warning(
+                    "Failed to read first frame for asset '%s' animation '%s': %s",
+                    asset.name,
+                    anim_id,
+                    exc,
+                )
+                continue
+
+            anim_meta = animation_payloads.get(anim_id, {})
+            speed_multiplier = read_speed_multiplier(anim_meta)
+            crop_requested = read_crop_frames(anim_meta)
+
+            frame_sequence = build_speed_frame_sequence(len(frame_paths), speed_multiplier)
+            output_frame_count = len(frame_sequence)
+            if output_frame_count == 0:
+                LOGGER.warning(
+                    "No output frames for asset '%s' animation '%s' after speed processing.",
+                    asset.name,
+                    anim_id,
+                )
+                continue
+
             print(
-                f"  Animation '{anim_id}': {frame_count} frames, size {orig_w}x{orig_h}"
+                f"  Animation '{anim_id}': {len(frame_paths)} frames, size {orig_w}x{orig_h}, "
+                f"speed x{speed_multiplier} -> {output_frame_count} cached frame(s)"
             )
+
+            crop_bounds = compute_crop_bounds(frame_paths) if crop_requested else None
+            if crop_requested and crop_bounds is None:
+                LOGGER.warning(
+                    "Crop requested for asset '%s' animation '%s' but bounds could not be determined; leaving uncropped.",
+                    asset.name,
+                    anim_id,
+                )
 
             anim_cache_root = asset_cache_root / anim_id
             anim_meta_path = self._animation_meta_path(asset.name, anim_id)
@@ -474,12 +666,16 @@ class AssetTool:
                 asset,
                 anim_id,
                 anim_dir,
-                frame_count,
+                frame_paths,
                 orig_w,
                 orig_h,
                 scale_pcts,
                 mask_enabled,
                 mask_settings,
+                output_frame_count,
+                speed_multiplier,
+                crop_requested,
+                crop_bounds,
             )
 
             cache_match = compare_and_update_json(
@@ -526,19 +722,23 @@ class AssetTool:
                         shutil.rmtree(mask_dir, ignore_errors=True)
 
                 tasks = []
-                for frame_idx in range(frame_count):
-                    src_path = str(anim_dir / f"{frame_idx}.png")
-                    normal_path = str(normal_dir / f"{frame_idx}.png")
-                    fg_path = str(fg_dir / f"{frame_idx}.png")
-                    bg_path = str(bg_dir / f"{frame_idx}.png")
-                    mask_path = str(mask_dir / f"{frame_idx}.png") if mask_enabled else None
+                scaled_crop = scale_crop_bounds(crop_bounds, scale_factor) if crop_bounds else None
+                for output_idx, source_idx in enumerate(frame_sequence):
+                    if source_idx < 0 or source_idx >= len(frame_paths):
+                        continue
+                    src_path = str(frame_paths[source_idx])
+                    normal_path = str(normal_dir / f"{output_idx}.png")
+                    fg_path = str(fg_dir / f"{output_idx}.png")
+                    bg_path = str(bg_dir / f"{output_idx}.png")
+                    mask_path = str(mask_dir / f"{output_idx}.png") if mask_enabled else None
 
                     tasks.append(
                         (
-                            frame_idx,
+                            output_idx,
                             src_path,
                             target_w,
                             target_h,
+                            scaled_crop,
                             normal_path,
                             fg_path,
                             bg_path,

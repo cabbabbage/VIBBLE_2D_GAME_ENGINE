@@ -41,7 +41,6 @@ class MovementSummaryWidget;
 class OnEndSelector;
 class AudioPanel;
 class PreviewProvider;
-class CroppingService;
 class AsyncTaskQueue;
 class AudioImporter;
 class PreviewTimeline;
@@ -66,7 +65,7 @@ class AnimationInspectorPanel {
     void set_bounds(const SDL_Rect& bounds);
     void set_preview_provider(std::shared_ptr<PreviewProvider> provider);
 
-    void set_source_services(std::shared_ptr<CroppingService> cropping, std::shared_ptr<AsyncTaskQueue> tasks);
+    void set_task_queue(std::shared_ptr<AsyncTaskQueue> tasks);
     void set_source_folder_picker(PathPicker picker);
     void set_source_animation_picker(AnimationPicker picker);
     void set_source_gif_picker(PathPicker picker);
@@ -177,7 +176,6 @@ class AnimationInspectorPanel {
     bool preview_scrubbing_active_ = false;
     mutable bool was_playing_before_scrub_ = false;
 
-    std::shared_ptr<CroppingService> cropping_service_;
     std::shared_ptr<AsyncTaskQueue> task_queue_;
     PathPicker folder_picker_;
     AnimationPicker animation_picker_;

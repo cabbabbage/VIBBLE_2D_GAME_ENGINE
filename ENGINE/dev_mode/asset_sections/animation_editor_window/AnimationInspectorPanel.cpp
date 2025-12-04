@@ -310,9 +310,7 @@ void AnimationInspectorPanel::set_preview_provider(std::shared_ptr<PreviewProvid
     preview_provider_ = std::move(provider);
 }
 
-void AnimationInspectorPanel::set_source_services(std::shared_ptr<CroppingService> cropping,
-                                                  std::shared_ptr<AsyncTaskQueue> tasks) {
-    cropping_service_ = std::move(cropping);
+void AnimationInspectorPanel::set_task_queue(std::shared_ptr<AsyncTaskQueue> tasks) {
     task_queue_ = std::move(tasks);
     apply_dependencies();
 }
@@ -1290,7 +1288,7 @@ bool AnimationInspectorPanel::handle_scroll_wheel(const SDL_Event& e) {
 
 void AnimationInspectorPanel::apply_dependencies() {
     if (source_config_) {
-        source_config_->set_services(cropping_service_, task_queue_);
+        source_config_->set_task_queue(task_queue_);
         source_config_->set_folder_picker(folder_picker_);
         source_config_->set_animation_picker(animation_picker_);
         source_config_->set_gif_picker(gif_picker_);

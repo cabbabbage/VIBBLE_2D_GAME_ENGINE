@@ -4,10 +4,13 @@
 #include <SDL_image.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstring>
+#include <cmath>
 #include <nlohmann/json.hpp>
 #include <system_error>
+#include <numeric>
 #include <vector>
 
 #include "AnimationDocument.hpp"
@@ -90,6 +93,70 @@ std::string lowercase_copy(std::string value) {
         return static_cast<char>(std::tolower(ch));
     });
     return value;
+}
+
+const std::array<float, 5> kSpeedOptions{0.25f, 0.5f, 1.0f, 2.0f, 4.0f};
+
+float normalize_speed_multiplier(float raw) {
+    if (!std::isfinite(raw) || raw <= 0.0f) {
+        return 1.0f;
+    }
+    float best = kSpeedOptions[0];
+    float best_diff = std::fabs(best - raw);
+    for (float option : kSpeedOptions) {
+        float diff = std::fabs(option - raw);
+        if (diff < best_diff) {
+            best_diff = diff;
+            best = option;
+        }
+    }
+    return best;
+}
+
+std::vector<int> build_speed_sequence(int frame_count, float multiplier) {
+    std::vector<int> sequence;
+    if (frame_count <= 0) {
+        return sequence;
+    }
+    float speed = normalize_speed_multiplier(multiplier);
+    if (speed < 1.0f) {
+        int repeat = std::max(1, static_cast<int>(std::lround(1.0f / speed)));
+        sequence.reserve(static_cast<std::size_t>(frame_count) * repeat);
+        for (int idx = 0; idx < frame_count; ++idx) {
+            for (int r = 0; r < repeat; ++r) {
+                sequence.push_back(idx);
+            }
+        }
+        return sequence;
+    }
+    if (speed > 1.0f) {
+        int step = std::max(1, static_cast<int>(std::lround(speed)));
+        for (int idx = 0; idx < frame_count; idx += step) {
+            sequence.push_back(idx);
+        }
+        if (sequence.empty()) {
+            sequence.push_back(frame_count - 1);
+        } else if (sequence.back() != frame_count - 1) {
+            sequence.push_back(frame_count - 1);
+        }
+        return sequence;
+    }
+    sequence.resize(frame_count);
+    std::iota(sequence.begin(), sequence.end(), 0);
+    return sequence;
+}
+
+float parse_speed_multiplier(const nlohmann::json& payload) {
+    try {
+        if (payload.contains("speed_multiplier") && payload["speed_multiplier"].is_number()) {
+            return normalize_speed_multiplier(payload["speed_multiplier"].get<float>());
+        }
+        if (payload.contains("speed_factor") && payload["speed_factor"].is_number()) {
+            return normalize_speed_multiplier(payload["speed_factor"].get<float>());
+        }
+    } catch (...) {
+    }
+    return 1.0f;
 }
 
 }
@@ -355,6 +422,8 @@ PreviewProvider::ResolvedAnimation PreviewProvider::resolve_animation(const std:
         flip_movement_y = modifiers.value("flipMovementY", flip_movement_y);
     }
 
+    float speed_multiplier = parse_speed_multiplier(payload);
+
     if (kind == "animation") {
         std::string reference = source ? source->value("name", std::string{}) : std::string{};
         if (reference.empty() && source) {
@@ -369,6 +438,22 @@ PreviewProvider::ResolvedAnimation PreviewProvider::resolve_animation(const std:
         ResolvedAnimation nested = resolve_animation(reference, depth + 1);
         result.frames = nested.frames;
         result.signature = payload_signature + "|child{" + nested.signature + "}";
+
+        if (!result.frames.empty() && speed_multiplier != 1.0f) {
+            auto sequence = build_speed_sequence(static_cast<int>(result.frames.size()), speed_multiplier);
+            if (!sequence.empty()) {
+                std::vector<FrameImageRequest> adjusted;
+                adjusted.reserve(sequence.size());
+                for (int idx : sequence) {
+                    if (idx >= 0 && idx < static_cast<int>(result.frames.size())) {
+                        adjusted.push_back(result.frames[static_cast<std::size_t>(idx)]);
+                    }
+                }
+                if (!adjusted.empty()) {
+                    result.frames.swap(adjusted);
+                }
+            }
+        }
 
         if (reverse && !result.frames.empty()) {
             std::reverse(result.frames.begin(), result.frames.end());
@@ -434,8 +519,21 @@ PreviewProvider::ResolvedAnimation PreviewProvider::resolve_animation(const std:
     }
 
     std::vector<std::filesystem::path> paths = find_frame_sequence(folder, frames);
-    result.frames.reserve(paths.size());
-    for (const auto& path : paths) {
+    std::vector<std::filesystem::path> adjusted_paths;
+    if (!paths.empty()) {
+        auto sequence = build_speed_sequence(static_cast<int>(paths.size()), speed_multiplier);
+        adjusted_paths.reserve(sequence.size());
+        for (int idx : sequence) {
+            if (idx >= 0 && idx < static_cast<int>(paths.size())) {
+                adjusted_paths.push_back(paths[static_cast<std::size_t>(idx)]);
+            }
+        }
+    }
+    const std::vector<std::filesystem::path>& final_paths =
+        adjusted_paths.empty() ? paths : adjusted_paths;
+
+    result.frames.reserve(final_paths.size());
+    for (const auto& path : final_paths) {
         FrameImageRequest request{path, flip_x, flip_y};
         result.frames.push_back(request);
     }
@@ -444,7 +542,7 @@ PreviewProvider::ResolvedAnimation PreviewProvider::resolve_animation(const std:
     }
 
     result.signature = payload_signature + "|files:";
-    for (const auto& path : paths) {
+    for (const auto& path : final_paths) {
         result.signature.append(path.filename().generic_string());
         result.signature.push_back(';');
     }

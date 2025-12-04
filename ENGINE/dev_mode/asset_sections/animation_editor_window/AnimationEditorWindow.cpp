@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -15,6 +16,8 @@
 #include <utility>
 #include <unordered_set>
 #include <vector>
+#include <array>
+#include <limits>
 
 #include <nlohmann/json.hpp>
 
@@ -26,7 +29,6 @@
 #include "AsyncTaskQueue.hpp"
 #include "AudioImporter.hpp"
 #include "core/manifest/manifest_loader.hpp"
-#include "CroppingService.hpp"
 #include "PreviewProvider.hpp"
 #include "string_utils.hpp"
 #include "ui/tinyfiledialogs.h"
@@ -391,7 +393,6 @@ AnimationEditorWindow::AnimationEditorWindow() {
     document_->set_on_saved_callback([this]() { this->handle_document_saved(); });
     preview_provider_ = std::make_shared<PreviewProvider>();
     preview_provider_->set_document(document_);
-    cropping_service_ = std::make_shared<CroppingService>();
     task_queue_ = std::make_shared<AsyncTaskQueue>();
     audio_importer_ = std::make_shared<AudioImporter>();
     list_panel_ = std::make_unique<AnimationListPanel>();
@@ -406,8 +407,10 @@ AnimationEditorWindow::AnimationEditorWindow() {
 
     add_button_ = std::make_unique<DMButton>("Add Animation", &DMStyles::CreateButton(), 160, DMButton::height());
     controller_button_ = std::make_unique<DMButton>("Add Controller", &DMStyles::CreateButton(), 140, DMButton::height());
-    half_speed_button_ = std::make_unique<DMButton>("0.5x Speed", &DMStyles::HeaderButton(), 110, DMButton::height());
-    double_speed_button_ = std::make_unique<DMButton>("2x Speed", &DMStyles::HeaderButton(), 110, DMButton::height());
+    const auto speeds = speed_multiplier_options();
+    const std::vector<std::string> speed_labels = {"0.25x", "0.5x", "1.0x", "2.0x", "4.0x"};
+    speed_dropdown_ = std::make_unique<DMDropdown>("Speed Multiplier", speed_labels, 2);
+    crop_checkbox_ = std::make_unique<DMCheckbox>("Crop Frames", false);
     layout_dirty_ = true;
 }
 
@@ -622,6 +625,7 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
     }
     auto_save_pending_ = false;
     auto_save_timer_frames_ = 0;
+    sync_header_controls();
 }
 
 void AnimationEditorWindow::clear_info() {
@@ -642,6 +646,7 @@ void AnimationEditorWindow::clear_info() {
     set_status_message("Select an asset to configure animations.", 240);
     auto_save_pending_ = false;
     auto_save_timer_frames_ = 0;
+    sync_header_controls();
 }
 
 void AnimationEditorWindow::layout_children() {
@@ -649,7 +654,9 @@ void AnimationEditorWindow::layout_children() {
     const int padding = DMSpacing::panel_padding();
     const int header_gap = DMSpacing::small_gap();
     const int button_gap = DMSpacing::small_gap();
-    const int header_height = DMButton::height() + header_gap * 2;
+    const int header_control_height =
+        std::max({DMButton::height(), DMDropdown::height(), DMCheckbox::height()});
+    const int header_height = header_control_height + header_gap * 2;
     header_rect_ = SDL_Rect{bounds_.x, bounds_.y, bounds_.w, header_height};
 
     int y = header_rect_.y + header_gap;
@@ -666,13 +673,15 @@ void AnimationEditorWindow::layout_children() {
         left_x += controller_button_->rect().w + button_gap;
     }
 
-    if (half_speed_button_) {
-        half_speed_button_->set_rect(SDL_Rect{left_x, y, half_speed_button_->rect().w, DMButton::height()});
-        left_x += half_speed_button_->rect().w + button_gap;
+    if (speed_dropdown_) {
+        const int dropdown_width = 180;
+        speed_dropdown_->set_rect(SDL_Rect{left_x, y, dropdown_width, DMDropdown::height()});
+        left_x += dropdown_width + button_gap;
     }
 
-    if (double_speed_button_) {
-        double_speed_button_->set_rect(SDL_Rect{left_x, y, double_speed_button_->rect().w, DMButton::height()});
+    if (crop_checkbox_) {
+        const int checkbox_width = 150;
+        crop_checkbox_->set_rect(SDL_Rect{left_x, y, checkbox_width, DMCheckbox::height()});
     }
 
     const int status_padding = DMSpacing::panel_padding();
@@ -735,7 +744,7 @@ void AnimationEditorWindow::configure_inspector_panel() {
     if (!inspector_panel_) return;
     inspector_panel_->set_document(document_);
     inspector_panel_->set_preview_provider(preview_provider_);
-    inspector_panel_->set_source_services(cropping_service_, task_queue_);
+    inspector_panel_->set_task_queue(task_queue_);
     inspector_panel_->set_source_folder_picker([this]() { return this->pick_folder(); });
     inspector_panel_->set_source_animation_picker([this]() { return this->pick_animation_reference(); });
     inspector_panel_->set_source_gif_picker([this]() { return this->pick_gif(); });
@@ -772,6 +781,8 @@ void AnimationEditorWindow::select_animation(const std::optional<std::string>& a
     if (inspector_panel_ && selected_animation_id_) {
         inspector_panel_->set_animation_id(*selected_animation_id_);
     }
+
+    sync_header_controls();
 
     if (from_user) {
         if (selected_animation_id_) {
@@ -1171,8 +1182,8 @@ void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
 
     if (add_button_) add_button_->render(renderer);
     if (controller_button_) controller_button_->render(renderer);
-    if (half_speed_button_) half_speed_button_->render(renderer);
-    if (double_speed_button_) double_speed_button_->render(renderer);
+    if (speed_dropdown_) speed_dropdown_->render(renderer);
+    if (crop_checkbox_) crop_checkbox_->render(renderer);
 
     int label_x = header_rect_.x + DMSpacing::panel_padding();
     if (add_button_) {
@@ -1181,11 +1192,11 @@ void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
     if (controller_button_) {
         label_x = std::max(label_x, controller_button_->rect().x + controller_button_->rect().w + DMSpacing::small_gap());
     }
-    if (half_speed_button_) {
-        label_x = std::max(label_x, half_speed_button_->rect().x + half_speed_button_->rect().w + DMSpacing::small_gap());
+    if (speed_dropdown_) {
+        label_x = std::max(label_x, speed_dropdown_->rect().x + speed_dropdown_->rect().w + DMSpacing::small_gap());
     }
-    if (double_speed_button_) {
-        label_x = std::max(label_x, double_speed_button_->rect().x + double_speed_button_->rect().w + DMSpacing::small_gap());
+    if (crop_checkbox_) {
+        label_x = std::max(label_x, crop_checkbox_->rect().x + crop_checkbox_->rect().w + DMSpacing::small_gap());
     }
     render_label(renderer, title, label_x, header_rect_.y + DMSpacing::small_gap());
 }
@@ -1234,9 +1245,171 @@ bool AnimationEditorWindow::handle_header_event(const SDL_Event& e) {
 
     handle_button(add_button_, [this]() { create_animation_via_prompt(); });
     handle_button(controller_button_, [this]() { handle_controller_button_click(); });
-    handle_button(half_speed_button_, [this]() { retime_selected_animation(false); });
-    handle_button(double_speed_button_, [this]() { retime_selected_animation(true); });
+
+    if (!consumed && speed_dropdown_) {
+        int before = speed_dropdown_->selected();
+        if (speed_dropdown_->handle_event(e)) {
+            consumed = true;
+            if (speed_dropdown_->selected() != before) {
+                apply_speed_multiplier_from_dropdown();
+            }
+        }
+    }
+
+    if (!consumed && crop_checkbox_) {
+        bool before = crop_checkbox_->value();
+        if (crop_checkbox_->handle_event(e)) {
+            consumed = true;
+            if (crop_checkbox_->value() != before) {
+                apply_crop_frames_toggle();
+            }
+        }
+    }
     return consumed;
+}
+
+std::vector<float> AnimationEditorWindow::speed_multiplier_options() const {
+    return {0.25f, 0.5f, 1.0f, 2.0f, 4.0f};
+}
+
+float AnimationEditorWindow::parse_speed_multiplier(const nlohmann::json& payload) const {
+    float raw = 1.0f;
+    try {
+        if (payload.contains("speed_multiplier") && payload["speed_multiplier"].is_number()) {
+            raw = payload["speed_multiplier"].get<float>();
+        } else if (payload.contains("speed_factor") && payload["speed_factor"].is_number()) {
+            raw = payload["speed_factor"].get<float>();
+        }
+    } catch (...) {
+        raw = 1.0f;
+    }
+    if (!std::isfinite(raw) || raw <= 0.0f) {
+        raw = 1.0f;
+    }
+    const auto options = speed_multiplier_options();
+    float best = options.empty() ? 1.0f : options.front();
+    float best_diff = std::numeric_limits<float>::max();
+    for (float option : options) {
+        float diff = std::fabs(option - raw);
+        if (diff < best_diff) {
+            best_diff = diff;
+            best = option;
+        }
+    }
+    return best;
+}
+
+bool AnimationEditorWindow::parse_crop_frames(const nlohmann::json& payload) const {
+    try {
+        auto it = payload.find("crop_frames");
+        if (it != payload.end()) {
+            if (it->is_boolean()) {
+                return it->get<bool>();
+            }
+            if (it->is_number()) {
+                return it->get<double>() != 0.0;
+            }
+            if (it->is_string()) {
+                std::string text = it->get<std::string>();
+                std::transform(text.begin(), text.end(), text.begin(), [](unsigned char ch) {
+                    return static_cast<char>(std::tolower(ch));
+                });
+                return text == "true" || text == "1" || text == "yes" || text == "on";
+            }
+        }
+    } catch (...) {
+    }
+    return false;
+}
+
+void AnimationEditorWindow::persist_header_metadata(float speed_multiplier, bool crop_frames) {
+    if (!document_ || !selected_animation_id_) {
+        return;
+    }
+
+    nlohmann::json payload = nlohmann::json::object();
+    if (auto payload_text = document_->animation_payload(*selected_animation_id_)) {
+        nlohmann::json parsed = nlohmann::json::parse(*payload_text, nullptr, false);
+        if (parsed.is_object()) {
+            payload = parsed;
+        }
+    }
+
+    payload["speed_multiplier"] = speed_multiplier;
+    payload["crop_frames"] = crop_frames;
+    if (!crop_frames) {
+        payload.erase("crop_bounds");
+    }
+
+    document_->replace_animation_payload(*selected_animation_id_, payload.dump());
+    nlohmann::json normalized = payload;
+    if (auto updated = document_->animation_payload(*selected_animation_id_)) {
+        nlohmann::json parsed = nlohmann::json::parse(*updated, nullptr, false);
+        if (parsed.is_object()) {
+            normalized = parsed;
+        }
+    }
+    if (preview_provider_) {
+        preview_provider_->invalidate(*selected_animation_id_);
+    }
+    if (on_animation_properties_changed_) {
+        on_animation_properties_changed_(*selected_animation_id_, normalized);
+    }
+    auto_save_pending_ = true;
+    auto_save_timer_frames_ = 0;
+    sync_header_controls();
+}
+
+void AnimationEditorWindow::apply_speed_multiplier_from_dropdown() {
+    if (!speed_dropdown_) {
+        return;
+    }
+    const auto options = speed_multiplier_options();
+    int idx = std::clamp(speed_dropdown_->selected(), 0, static_cast<int>(options.size()) - 1);
+    float speed = options.empty() ? 1.0f : options[idx];
+    bool crop = crop_checkbox_ ? crop_checkbox_->value() : false;
+    persist_header_metadata(speed, crop);
+}
+
+void AnimationEditorWindow::apply_crop_frames_toggle() {
+    const auto options = speed_multiplier_options();
+    float speed = options.size() > 2 ? options[2] : 1.0f;
+    if (speed_dropdown_) {
+        int idx = std::clamp(speed_dropdown_->selected(), 0, static_cast<int>(options.size()) - 1);
+        speed = options.empty() ? 1.0f : options[idx];
+    }
+    bool crop = crop_checkbox_ ? crop_checkbox_->value() : false;
+    persist_header_metadata(speed, crop);
+}
+
+void AnimationEditorWindow::sync_header_controls() {
+    float speed = 1.0f;
+    bool crop = false;
+    if (document_ && selected_animation_id_) {
+        if (auto payload_text = document_->animation_payload(*selected_animation_id_)) {
+            nlohmann::json parsed = nlohmann::json::parse(*payload_text, nullptr, false);
+            if (parsed.is_object()) {
+                speed = parse_speed_multiplier(parsed);
+                crop = parse_crop_frames(parsed);
+            }
+        }
+    }
+
+    const auto options = speed_multiplier_options();
+    int idx = 0;
+    for (std::size_t i = 0; i < options.size(); ++i) {
+        if (std::fabs(options[i] - speed) < 1e-3f) {
+            idx = static_cast<int>(i);
+            break;
+        }
+    }
+
+    if (speed_dropdown_) {
+        speed_dropdown_->set_selected(idx);
+    }
+    if (crop_checkbox_) {
+        crop_checkbox_->set_value(crop);
+    }
 }
 
 void AnimationEditorWindow::set_status_message(const std::string& message, int frames) {
@@ -1794,30 +1967,6 @@ void AnimationEditorWindow::clear_animation_cache(const std::filesystem::path& c
     std::filesystem::remove(meta_file, ec);
 }
 
-bool AnimationEditorWindow::run_retime_script(const std::string& asset_name,
-                                              const std::string& animation_id,
-                                              bool double_speed) {
-    const std::filesystem::path project_root = std::filesystem::current_path();
-    std::filesystem::path script_path = project_root / "tools" / "retime_animation.py";
-    if (!std::filesystem::exists(script_path)) {
-        set_status_message("Missing tools/retime_animation.py.", 240);
-        return false;
-    }
-    const std::string mode = double_speed ? "double" : "half";
-    std::ostringstream cmd;
-    cmd << "python \"" << script_path.generic_string() << "\" "
-        << "\"" << asset_name << "\" "
-        << "\"" << animation_id << "\" "
-        << "--mode " << mode;
-
-    const int rc = std::system(cmd.str().c_str());
-    if (rc != 0) {
-        set_status_message("Failed to retime frames for '" + animation_id + "'.", 300);
-        return false;
-    }
-    return true;
-}
-
 bool AnimationEditorWindow::regenerate_via_asset_tool(const std::shared_ptr<AssetInfo>& info,
                                                       const std::string& animation_id) {
     if (!info) {
@@ -1867,40 +2016,6 @@ bool AnimationEditorWindow::rebuild_animation_from_sources(const std::shared_ptr
         return result.python_success && (result.reloaded || result.refreshed_instances);
     }
     return regenerate_via_asset_tool(info, animation_id);
-}
-
-void AnimationEditorWindow::retime_selected_animation(bool double_speed) {
-    auto info_ptr = info_.lock();
-    if (!info_ptr) {
-        set_status_message("Select an asset before retiming.", 200);
-        return;
-    }
-    if (!selected_animation_id_) {
-        set_status_message("Select an animation to retime.", 200);
-        return;
-    }
-    if (info_ptr->name.empty()) {
-        set_status_message("Asset name is missing.", 200);
-        return;
-    }
-
-    const std::string animation_id = *selected_animation_id_;
-    const std::string action_label = double_speed ? "Doubling" : "Halving";
-    set_status_message(action_label + " speed for '" + animation_id + "'...", 120);
-
-    if (!run_retime_script(info_ptr->name, animation_id, double_speed)) {
-        return;
-    }
-
-    const bool regenerated = rebuild_animation_from_sources(info_ptr, animation_id);
-    if (preview_provider_) {
-        preview_provider_->invalidate(animation_id);
-    }
-    if (regenerated) {
-        set_status_message(std::string(double_speed ? "Doubled" : "Halved") + " speed for '" + animation_id + "'.", 240);
-    } else {
-        set_status_message("Frames updated, but failed to rebuild '" + animation_id + "'.", 300);
-    }
 }
 
 std::optional<std::filesystem::path> AnimationEditorWindow::pick_gif() const {

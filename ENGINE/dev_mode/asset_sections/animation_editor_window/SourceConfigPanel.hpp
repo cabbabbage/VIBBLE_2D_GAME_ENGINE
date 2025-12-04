@@ -21,7 +21,6 @@ namespace animation_editor {
 
 class AnimationDocument;
 class PreviewProvider;
-class CroppingService;
 class AsyncTaskQueue;
 
 using DMCheckbox = ::DMCheckbox;
@@ -41,7 +40,7 @@ class SourceConfigPanel {
     void set_override_preview_provider(std::shared_ptr<PreviewProvider> provider);
     void set_animation_id(const std::string& animation_id);
     void set_bounds(const SDL_Rect& bounds);
-    void set_services(std::shared_ptr<CroppingService> cropping, std::shared_ptr<AsyncTaskQueue> tasks);
+    void set_task_queue(std::shared_ptr<AsyncTaskQueue> tasks);
 
     using PathPicker = std::function<std::optional<std::filesystem::path>()>;
     using MultiPathPicker = std::function<std::vector<std::filesystem::path>()>;
@@ -98,7 +97,6 @@ class SourceConfigPanel {
     std::vector<std::filesystem::path> collect_png_files(const std::filesystem::path& folder) const;
     std::vector<std::filesystem::path> normalize_sequence(const std::vector<std::filesystem::path>& files) const;
     void copy_sequence_to_output(const std::vector<std::filesystem::path>& files, const std::filesystem::path& out_dir) const;
-    void post_copy_process(const std::vector<std::filesystem::path>& out_files) const;
     void layout_controls();
     void update_status(const std::string& message) const;
     void refresh_animation_options();
@@ -114,7 +112,6 @@ class SourceConfigPanel {
   private:
     std::shared_ptr<AnimationDocument> document_;
     std::shared_ptr<PreviewProvider> preview_provider_;
-    std::shared_ptr<CroppingService> cropping_service_;
     std::shared_ptr<AsyncTaskQueue> task_queue_;
     std::string animation_id_;
     SDL_Rect bounds_{0, 0, 0, 0};

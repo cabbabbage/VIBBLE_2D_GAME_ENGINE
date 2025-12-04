@@ -144,6 +144,7 @@ if exist "%REPO_ROOT%\vcpkg.json" (
 )
 
 echo [setup.bat] Setup complete.
+call run.bat
 popd >nul
 exit /b 0
 
