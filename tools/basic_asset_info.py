@@ -5,9 +5,10 @@ import logging
 import os
 import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from cache_helper import compare_and_update_json
+from cache_helper import compare_and_update_json, stable_hash
 
 
 def _configure_logger() -> logging.Logger:
@@ -47,6 +48,7 @@ class Asset:
     needs_regen: bool = True
     is_shaded: bool = False
     shadow_mask_settings: Dict[str, Any] = field(default_factory=dict)
+    source_fingerprint: Dict[str, Any] = field(default_factory=dict)
 
     cache_dir: Optional[str] = None
 
@@ -116,8 +118,19 @@ class Asset:
         else:
             self.size_variants = [100]
 
+        manifest_dir = os.path.dirname(manifest_abs)
+        source_dir = self._resolve_asset_src_dir(manifest_dir)
+        # Track source fingerprint so asset content edits trigger regeneration without nuking caches.
+        self.source_fingerprint = self._compute_source_fingerprint(source_dir)
+
+        cache_payload = {
+            "version": 2,
+            "manifest": self.json_entry,
+            "source": self.source_fingerprint,
+        }
+
         cache_file = self._get_cache_path(manifest_abs)
-        same = compare_and_update_json(self.json_entry, cache_file)
+        same = compare_and_update_json(cache_payload, cache_file)
         self.needs_regen = not same
 
     def _get_cache_path(self, manifest_abs: str) -> str:
@@ -127,6 +140,66 @@ class Asset:
             manifest_dir = os.path.dirname(manifest_abs)
             cache_root = os.path.join(manifest_dir, ".asset_cache")
         return os.path.join(cache_root, f"{self.name}.json")
+
+    def _resolve_asset_src_dir(self, manifest_dir: str) -> Path:
+        if not self.src_path:
+            return Path(manifest_dir) / "SRC" / "assets" / self.name
+        candidate = Path(self.src_path)
+        if candidate.is_absolute():
+            return candidate
+        return Path(manifest_dir) / candidate
+
+    def _compute_source_fingerprint(self, asset_dir: Path) -> Dict[str, Any]:
+        if not asset_dir.exists():
+            return {
+                "digest": "__missing__",
+                "file_count": 0,
+                "latest_mtime_ns": 0,
+                "missing": True,
+            }
+
+        entries: List[Dict[str, Any]] = []
+        latest_mtime_ns = 0
+
+        try:
+            for path in sorted(p for p in asset_dir.rglob("*") if p.is_file()):
+                try:
+                    stat_res = path.stat()
+                except OSError:
+                    continue
+
+                mtime_ns = getattr(stat_res, "st_mtime_ns", int(stat_res.st_mtime * 1e9))
+                if mtime_ns > latest_mtime_ns:
+                    latest_mtime_ns = mtime_ns
+
+                entries.append(
+                    {
+                        "path": path.relative_to(asset_dir).as_posix(),
+                        "size": stat_res.st_size,
+                        "mtime_ns": mtime_ns,
+                    }
+                )
+        except Exception as exc:
+            LOGGER.warning(
+                "Failed to enumerate source files for asset '%s' in %s: %s",
+                self.name,
+                asset_dir,
+                exc,
+            )
+            return {
+                "digest": "__error__",
+                "file_count": 0,
+                "latest_mtime_ns": 0,
+                "missing": False,
+            }
+
+        digest = stable_hash(entries)
+        return {
+            "digest": digest,
+            "file_count": len(entries),
+            "latest_mtime_ns": latest_mtime_ns,
+            "missing": False,
+        }
 
 
 if __name__ == "__main__":
