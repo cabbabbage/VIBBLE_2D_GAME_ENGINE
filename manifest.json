@@ -1405,7 +1405,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 100.0
+        "scale_percentage": 65.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -1465,7 +1465,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 100.0
+        "scale_percentage": 65.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -1511,7 +1511,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 100.0
+        "scale_percentage": 65.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -1519,9 +1519,7 @@
       "tillable": false
     },
     "Vibble": {
-      "animation_children": [
-        "Vibble_eyes"
-      ],
+      "animation_children": [],
       "animations": {
         "backward": {
           "crop_frames": false,
@@ -1564,13 +1562,10 @@
         "default": {
           "attack_geometry": [
             {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
+              "explosion": [],
+              "melee": [],
+              "projectile": []
             }
-          ],
-          "children": [
-            "Vibble_eyes"
           ],
           "crop_frames": false,
           "flipped_source": false,
@@ -1593,18 +1588,7 @@
             [
               0,
               0,
-              false,
-              null,
-              [
-                [
-                  0,
-                  -76,
-                  -527,
-                  0.0,
-                  true,
-                  true
-                ]
-              ]
+              false
             ]
           ],
           "movement_total": {
@@ -1665,9 +1649,6 @@
               "projectile": null
             }
           ],
-          "children": [
-            "Vibble_eyes"
-          ],
           "crop_frames": false,
           "flipped_source": false,
           "frames": [
@@ -1747,16 +1728,7 @@
               0,
               false,
               null,
-              [
-                [
-                  0,
-                  -59,
-                  -559,
-                  0.0,
-                  true,
-                  true
-                ]
-              ]
+              []
             ]
           ],
           "movement_total": {
@@ -1817,9 +1789,6 @@
               "projectile": []
             }
           ],
-          "children": [
-            "Vibble_eyes"
-          ],
           "crop_frames": false,
           "flipped_source": false,
           "frames": [
@@ -1899,16 +1868,7 @@
               0,
               false,
               null,
-              [
-                [
-                  0,
-                  -133,
-                  -520,
-                  0.0,
-                  true,
-                  true
-                ]
-              ]
+              []
             ]
           ],
           "movement_total": {
@@ -2000,7 +1960,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 29.0
+        "scale_percentage": 20.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -2013,6 +1973,26 @@
         "default": {
           "crop_frames": false,
           "flipped_source": false,
+          "frames": [
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            }
+          ],
           "inherit_source_movement": false,
           "locked": true,
           "loop": true,
@@ -2116,7 +2096,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 28.0
+        "scale_percentage": 18.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -4040,18 +4020,39 @@
       "update_radius": 0
     },
     "top_hat": {
+      "animation_children": [],
       "animations": {
         "default": {
+          "crop_frames": true,
           "flipped_source": false,
+          "frames": [
+            {
+              "needs_rebuild": false
+            }
+          ],
+          "inherit_source_movement": false,
           "locked": false,
           "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
           "reverse_source": false,
           "rnd_start": false,
           "source": {
             "kind": "folder",
             "name": "",
             "path": "default"
-          }
+          },
+          "speed_multiplier": 1.0
         }
       },
       "anti_tags": [],
@@ -4065,11 +4066,23 @@
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
       "render_radius": 0,
-      "size_settings": {
-        "scale_percentage": 100.0
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
       },
+      "size_settings": {
+        "scale_percentage": 16.0
+      },
+      "spawn_groups": [],
       "start": "default",
       "tags": [],
+      "tillable": false,
       "update_radius": 0
     },
     "trail": {

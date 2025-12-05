@@ -1897,6 +1897,10 @@ void AssetInfoUI::sync_animation_children() {
         asset->initialize_animation_children_recursive();
     });
 
+    if (animation_editor_window_) {
+        animation_editor_window_->refresh_children_from_asset_info();
+    }
+
     if (updated_any && assets_) {
         assets_->mark_active_assets_dirty();
     }

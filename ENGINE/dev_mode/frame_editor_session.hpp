@@ -69,6 +69,8 @@ public:
     void set_grid_overlay_enabled_transient(bool enabled);
 
 private:
+    bool target_is_alive() const;
+
     struct ChildFrame {
         int child_index = -1;
         float dx = 0.0f;
@@ -76,6 +78,7 @@ private:
         float degree = 0.0f;
         bool visible = true;
         bool render_in_front = true;
+        bool has_data = false;
     };
     struct MovementFrame {
         float dx = 0.0f;
@@ -293,6 +296,7 @@ private:
                                 std::vector<SDL_FPoint>& redistributed,
                                 int last_index) const;
     void rebuild_rel_positions();
+    void ensure_child_frames_initialized();
     void smooth_child_offsets(int child_index, int adjusted_index);
     void persist_changes();
     // Persist only the section relevant to the given mode.
@@ -308,6 +312,7 @@ private:
     }
     static std::vector<MovementFrame> parse_movement_frames_json(const std::string& payload_json);
     void sync_child_frames();
+    void remap_child_indices(const std::vector<int>& remap);
     ChildFrame* current_child_frame();
     const ChildFrame* current_child_frame() const;
     void refresh_child_assets_from_document();
@@ -614,6 +619,7 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
                             child.render_in_front = child_entry[5].get<int>() != 0;
                         }
                     }
+                    child.has_data = true;
                     f.children.push_back(child);
                 }
             }
@@ -638,6 +644,7 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
                     }
                     child.visible = child_entry.value("visible", true);
                     child.render_in_front = child_entry.value("render_in_front", true);
+                    child.has_data = true;
                 } else if (child_entry.is_array()) {
                     try { child.child_index = child_entry[0].get<int>(); } catch (...) { child.child_index = -1; }
                     if (child_entry.size() > 1 && child_entry[1].is_number()) {
@@ -664,6 +671,7 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
                             }
                         }
                     }
+                    child.has_data = true;
                     f.children.push_back(child);
                 }
             }

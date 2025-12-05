@@ -9,6 +9,7 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <unordered_set>
+#include <unordered_map>
 
 namespace {
 
@@ -733,6 +734,150 @@ std::vector<std::string> parse_child_names(const nlohmann::json& value) {
 }
 }  // namespace
 
+namespace {
+
+std::vector<int> build_child_index_remap(const std::vector<std::string>& previous,
+                                         const std::vector<std::string>& next) {
+    std::vector<int> remap(previous.size(), -1);
+    if (previous.empty()) {
+        return remap;
+    }
+    std::unordered_map<std::string, int> next_lookup;
+    next_lookup.reserve(next.size());
+    for (size_t i = 0; i < next.size(); ++i) {
+        next_lookup[next[i]] = static_cast<int>(i);
+    }
+    for (size_t i = 0; i < previous.size(); ++i) {
+        auto it = next_lookup.find(previous[i]);
+        if (it != next_lookup.end()) {
+            remap[i] = it->second;
+        }
+    }
+    return remap;
+}
+
+bool extract_child_index(const nlohmann::json& node, int& out_index) {
+    if (node.is_object()) {
+        auto it = node.find("child_index");
+        if (it != node.end() && it->is_number_integer()) {
+            out_index = it->get<int>();
+            return true;
+        }
+    }
+    if (node.is_array() && !node.empty()) {
+        const auto& idx = node[0];
+        if (idx.is_number_integer()) {
+            out_index = idx.get<int>();
+            return true;
+        }
+        if (idx.is_number()) {
+            out_index = static_cast<int>(idx.get<double>());
+            return true;
+        }
+    }
+    return false;
+}
+
+bool sanitize_child_entries(nlohmann::json& container, const std::vector<int>& remap) {
+    if (!container.is_array()) {
+        const bool had_data = !container.is_null();
+        container = nlohmann::json::array();
+        return had_data;
+    }
+    if (container.empty()) {
+        return false;
+    }
+    if (remap.empty()) {
+        const bool had_entries = !container.empty();
+        container = nlohmann::json::array();
+        return had_entries;
+    }
+    nlohmann::json sanitized = nlohmann::json::array();
+    sanitized.get_ref<nlohmann::json::array_t&>().reserve(container.size());
+    bool changed = false;
+    for (const auto& entry : container) {
+        int old_index = -1;
+        if (!extract_child_index(entry, old_index)) {
+            changed = true;
+            continue;
+        }
+        if (old_index < 0 || old_index >= static_cast<int>(remap.size())) {
+            changed = true;
+            continue;
+        }
+        const int new_index = remap[static_cast<std::size_t>(old_index)];
+        if (new_index < 0) {
+            changed = true;
+            continue;
+        }
+        nlohmann::json updated = entry;
+        if (entry.is_array()) {
+            if (updated.empty()) {
+                updated.push_back(new_index);
+                changed = true;
+            } else if (!updated[0].is_number_integer() || updated[0].get<int>() != new_index) {
+                updated[0] = new_index;
+                changed = true;
+            }
+        } else if (entry.is_object()) {
+            int stored = updated.value("child_index", -1);
+            if (stored != new_index) {
+                updated["child_index"] = new_index;
+                changed = true;
+            }
+        }
+        sanitized.push_back(std::move(updated));
+    }
+    if (sanitized.size() != container.size()) {
+        changed = true;
+    }
+    container = std::move(sanitized);
+    return changed;
+}
+
+nlohmann::json* locate_child_array(nlohmann::json& entry) {
+    if (!entry.is_array()) {
+        return nullptr;
+    }
+    auto nested_array = [](nlohmann::json& value) -> nlohmann::json* {
+        if (value.is_array() && !value.empty() && value[0].is_array()) {
+            return &value;
+        }
+        return nullptr;
+    };
+    if (entry.size() > 4 && entry[4].is_array()) {
+        return &entry[4];
+    }
+    if (entry.size() > 3) {
+        if (auto* ptr = nested_array(entry[3])) {
+            return ptr;
+        }
+    }
+    if (entry.size() > 2) {
+        if (auto* ptr = nested_array(entry[2])) {
+            return ptr;
+        }
+    }
+    return nullptr;
+}
+
+bool sanitize_movement_children(nlohmann::json& movement_entry, const std::vector<int>& remap) {
+    bool changed = false;
+    if (movement_entry.is_array()) {
+        if (auto* child_array = locate_child_array(movement_entry)) {
+            changed |= sanitize_child_entries(*child_array, remap);
+        }
+    } else if (movement_entry.is_object()) {
+        auto it = movement_entry.find("children");
+        if (it != movement_entry.end()) {
+            changed |= sanitize_child_entries(*it, remap);
+        }
+    }
+    return changed;
+}
+
+}  // namespace
+
 std::vector<std::string> AnimationDocument::animation_children() const {
     auto* self = const_cast<AnimationDocument*>(this);
     if (!self->base_data_.is_object()) {
@@ -766,19 +911,65 @@ void AnimationDocument::replace_animation_children(const std::vector<std::string
     if (!base_data_.is_object()) {
         base_data_ = nlohmann::json::object();
     }
-    nlohmann::json arr = nlohmann::json::array();
+    std::vector<std::string> previous = animation_children();
+    std::vector<std::string> sanitized;
+    sanitized.reserve(children.size());
     std::unordered_set<std::string> seen;
     for (const auto& entry : children) {
-        if (entry.empty()) continue;
+        if (entry.empty()) {
+            continue;
+        }
         if (seen.insert(entry).second) {
-            arr.push_back(entry);
+            sanitized.push_back(entry);
         }
     }
-    if (base_data_.contains("animation_children") && base_data_["animation_children"] == arr) {
+    if (previous == sanitized && base_data_.contains("animation_children")) {
         return;
     }
+    nlohmann::json arr = nlohmann::json::array();
+    for (const auto& name : sanitized) {
+        arr.push_back(name);
+    }
     base_data_["animation_children"] = std::move(arr);
+    const std::vector<int> remap = build_child_index_remap(previous, sanitized);
+    (void)rewrite_child_payloads(remap, sanitized);
     mark_dirty();
+}
+
+bool AnimationDocument::rewrite_child_payloads(const std::vector<int>& remap,
+                                               const std::vector<std::string>& next_children) {
+    bool mutated = false;
+    for (auto& entry : animations_) {
+        const std::string& animation_id = entry.first;
+        nlohmann::json payload = parse_payload(entry.second, animation_id);
+        bool payload_changed = false;
+        if (next_children.empty()) {
+            if (payload.contains("children")) {
+                payload.erase("children");
+                payload_changed = true;
+            }
+        } else {
+            if (!payload.contains("children") || payload["children"] != next_children) {
+                payload["children"] = next_children;
+                payload_changed = true;
+            }
+        }
+
+        auto movement_it = payload.find("movement");
+        if (movement_it != payload.end() && movement_it->is_array()) {
+            for (auto& frame_entry : *movement_it) {
+                if (sanitize_movement_children(frame_entry, remap)) {
+                    payload_changed = true;
+                }
+            }
+        }
+
+        if (payload_changed) {
+            entry.second = serialize_payload(coerce_payload(animation_id, payload));
+            mutated = true;
+        }
+    }
+    return mutated;
 }
 
 std::string AnimationDocument::animation_children_signature() const {

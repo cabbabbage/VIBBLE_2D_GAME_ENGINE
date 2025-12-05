@@ -25,6 +25,7 @@
 namespace {
 
 constexpr int kRowSpacing = 6;
+constexpr int kDefaultSearchHeight = 260;
 constexpr SDL_Color kRowBackground{32, 38, 44, 255};
 constexpr SDL_Color kRowBorder{64, 72, 80, 255};
 constexpr SDL_Color kPlaceholderBg{58, 66, 74, 255};
@@ -194,7 +195,16 @@ bool ChildrenPanel::handle_event(const SDL_Event& e) {
 int ChildrenPanel::preferred_height(int width) const {
     (void)width;
     const int padding = kPanelPadding;
-    int height = padding * 2 + DMButton::height();
+    int height = padding * 2;
+
+    height += DMButton::height();
+
+    const bool search_visible = search_assets_ && search_assets_->visible();
+    if (search_visible) {
+        const int overlay_height = search_panel_height_ > 0 ? search_panel_height_ : kDefaultSearchHeight;
+        height += DMSpacing::small_gap();
+        height += overlay_height;
+    }
 
     if (inherits_children_ && !inherited_message_lines_.empty()) {
         height += DMSpacing::small_gap();
@@ -206,16 +216,9 @@ int ChildrenPanel::preferred_height(int width) const {
 
     if (!display_children_.empty()) {
         height += DMSpacing::small_gap();
-        if (!inherits_children_) {
-            height += static_cast<int>(display_children_.size()) * row_height_;
-            if (display_children_.size() > 1) {
-                height += (static_cast<int>(display_children_.size()) - 1) * kRowSpacing;
-            }
-        } else {
-            height += static_cast<int>(display_children_.size()) * row_height_;
-            if (display_children_.size() > 1) {
-                height += (static_cast<int>(display_children_.size()) - 1) * kRowSpacing;
-            }
+        height += static_cast<int>(display_children_.size()) * row_height_;
+        if (display_children_.size() > 1) {
+            height += (static_cast<int>(display_children_.size()) - 1) * kRowSpacing;
         }
     }
 
@@ -355,16 +358,38 @@ void ChildrenPanel::update_layout() const {
                              DMButton::height()};
         add_button_->set_rect(button_rect);
         self->add_button_rect_ = button_rect;
-        self->search_anchor_rect_ = SDL_Rect{button_rect.x,
-                                             button_rect.y + button_rect.h + DMSpacing::small_gap(),
-                                             std::max(button_rect.w * 2, std::min(bounds_.w, 320)),
-                                             260};
     } else {
         self->add_button_rect_ = SDL_Rect{0, 0, 0, 0};
-        self->search_anchor_rect_ = SDL_Rect{bounds_.x + padding,
-                                             bounds_.y + padding + DMButton::height(),
-                                             std::max(bounds_.w / 2, 320),
-                                             260};
+    }
+
+    const bool search_visible = search_assets_ && search_assets_->visible();
+    int overlay_height = 0;
+    int overlay_width = 0;
+    if (search_visible) {
+        overlay_height = search_panel_height_ > 0 ? search_panel_height_ : kDefaultSearchHeight;
+        overlay_width = width;
+        if (add_button_rect_.w > 0) {
+            overlay_width = std::max(add_button_rect_.w * 2, std::min(width, 320));
+        } else if (width > 0) {
+            overlay_width = std::max(width / 2, std::min(width, 320));
+        }
+        if (overlay_width <= 0) {
+            overlay_width = width;
+        }
+        if (overlay_width > width) {
+            overlay_width = width;
+        }
+        int overlay_x = x;
+        if (add_button_rect_.w > 0 && overlay_width > 0) {
+            overlay_x = std::clamp(add_button_rect_.x + add_button_rect_.w - overlay_width,
+                                   x,
+                                   x + width - overlay_width);
+        }
+        y += DMSpacing::small_gap();
+        self->search_anchor_rect_ = SDL_Rect{overlay_x, y, overlay_width, overlay_height};
+        y += overlay_height;
+    } else {
+        self->search_anchor_rect_ = SDL_Rect{x, y + DMSpacing::small_gap(), width, 0};
     }
 
     y += DMSpacing::small_gap();
@@ -484,6 +509,7 @@ void ChildrenPanel::commit_children() {
     }
     info_->set_animation_children(local_children_);
     info_->commit_manifest();
+    refresh_local_children_from_info();
     if (children_changed_callback_) {
         children_changed_callback_();
     }
@@ -492,6 +518,16 @@ void ChildrenPanel::commit_children() {
         arr.push_back(child);
     }
     payload_signature_ = arr.dump();
+}
+
+void ChildrenPanel::refresh_local_children_from_info() {
+    if (!info_) {
+        return;
+    }
+    local_children_ = info_->animation_children;
+    if (!inherits_children_) {
+        display_children_ = local_children_;
+    }
 }
 
 void ChildrenPanel::add_child_entry(const std::string& entry) {
@@ -506,6 +542,7 @@ void ChildrenPanel::add_child_entry(const std::string& entry) {
             }
         }
     }
+    refresh_local_children_from_info();
     if (std::find(local_children_.begin(), local_children_.end(), value) != local_children_.end()) {
         request_status("Child '" + value + "' already in list.");
         return;
@@ -520,6 +557,7 @@ void ChildrenPanel::add_child_entry(const std::string& entry) {
 }
 
 void ChildrenPanel::remove_child_entry(size_t index) {
+    refresh_local_children_from_info();
     if (index >= local_children_.size()) {
         return;
     }
@@ -556,12 +594,18 @@ void ChildrenPanel::open_search_panel() {
         add_child_entry(selection);
         close_search_panel();
     });
+    if (search_panel_height_ <= 0) {
+        search_panel_height_ = search_assets_->rect().h > 0 ? search_assets_->rect().h : kDefaultSearchHeight;
+    }
+    request_layout();
 }
 
 void ChildrenPanel::close_search_panel() {
     if (search_assets_) {
         search_assets_->close();
     }
+    search_panel_height_ = 0;
+    request_layout();
 }
 
 void ChildrenPanel::position_search_panel() const {
@@ -572,6 +616,38 @@ void ChildrenPanel::position_search_panel() const {
     constexpr int kMinSearchWidth = 280;
     constexpr int kMinSearchHeight = 240;
     constexpr int kMaxSearchHeight = 420;
+
+    SDL_Rect target = search_anchor_rect_;
+    if (target.w > 0 && target.h > 0) {
+        int max_width = std::max(0, bounds_.w - padding * 2);
+        if (max_width > 0) {
+            target.w = std::min(target.w, max_width);
+        }
+        if (target.w < kMinSearchWidth) {
+            target.w = max_width > 0 ? std::min(max_width, kMinSearchWidth) : kMinSearchWidth;
+        }
+        target.h = std::clamp(target.h, kMinSearchHeight, kMaxSearchHeight);
+
+        int min_x = bounds_.x + padding;
+        int max_x = bounds_.x + bounds_.w - padding - target.w;
+        if (max_x < min_x) {
+            max_x = min_x;
+        }
+        int min_y = bounds_.y + padding;
+        int max_y = bounds_.y + bounds_.h - padding - target.h;
+        if (max_y < min_y) {
+            max_y = min_y;
+        }
+
+        target.x = std::clamp(target.x, min_x, max_x);
+        target.y = std::clamp(target.y, min_y, max_y);
+
+        search_assets_->set_embedded_rect(target);
+        auto* self = const_cast<ChildrenPanel*>(this);
+        SDL_Rect applied = search_assets_->rect();
+        self->search_panel_height_ = applied.h > 0 ? applied.h : target.h;
+        return;
+    }
 
     int width = kMinSearchWidth;
     if (bounds_.w > padding * 2) {
@@ -612,7 +688,11 @@ void ChildrenPanel::position_search_panel() const {
     int y = std::clamp(header_bottom + padding, min_y, max_y);
 
     // Keep the embedded search overlay wide and anchored below the header so results are visible immediately.
-    search_assets_->set_embedded_rect(SDL_Rect{x, y, width, height});
+    SDL_Rect fallback{x, y, width, height};
+    search_assets_->set_embedded_rect(fallback);
+    auto* self = const_cast<ChildrenPanel*>(this);
+    SDL_Rect applied = search_assets_->rect();
+    self->search_panel_height_ = applied.h > 0 ? applied.h : fallback.h;
 }
 
 void ChildrenPanel::request_layout() const {

@@ -9,6 +9,7 @@
 #include <iostream>
 #include <sstream>
 #include <unordered_set>
+#include <unordered_map>
 #include <utility>
 
 #include "animation_update/animation_update.hpp"
@@ -365,6 +366,7 @@ void FrameEditorSession::load_animation_data(const std::string& animation_id) {
     // Pull the latest runtime frame data so edits made elsewhere (or in previous sessions)
     // are reflected before we start editing.
     hydrate_frames_from_animation();
+    ensure_child_frames_initialized();
     rebuild_rel_positions();
 
     selected_index_ = 0;
@@ -385,24 +387,14 @@ void FrameEditorSession::load_animation_data(const std::string& animation_id) {
 void FrameEditorSession::end() {
     if (!active_) return;
 
+    const bool target_alive = target_is_alive();
+
     // Capture any pending edits before we start tearing down session state.
+    // This serializes frame data to JSON and saves to the document.
     persist_changes();
     
-    // Save local copies of critical data before clearing
-    const bool has_assets = (assets_ != nullptr);
-    const bool target_still_alive = has_assets && target_ && assets_->contains_asset(target_);
-    std::shared_ptr<AssetInfo> info_to_reload;
-    std::string asset_name_for_cache;
-    
-    if (target_still_alive && target_->info) {
-        info_to_reload = target_->info;
-        if (info_to_reload) {
-            asset_name_for_cache = info_to_reload->name;
-        }
-    }
-    
     // Restore camera and overlay state
-    if (has_assets) {
+    if (assets_ != nullptr) {
         WarpedScreenGrid& cam = assets_->getView();
         cam.set_realism_enabled(prev_realism_enabled_);
         cam.set_parallax_enabled(prev_parallax_enabled_);
@@ -410,60 +402,36 @@ void FrameEditorSession::end() {
         pan_zoom_.cancel(cam);
     }
     
-    // If the target asset has been deleted externally, do not dereference it.
-    if (target_ && target_still_alive) {
+    // Restore target asset visibility if it still exists
+    if (target_alive) {
         apply_child_hidden_state(true);
         target_->set_hidden(prev_asset_hidden_);
+    } else {
+        child_hidden_cache_.clear();
+        last_applied_show_asset_state_ = true;
     }
     
+    // Clean up editor state
     end_hitbox_drag(false);
     end_attack_drag(false);
     child_hidden_cache_.clear();
     last_applied_show_asset_state_ = true;
     
-    const bool had_pending_save = pending_save_;
     // Save document to disk if there are pending changes
     if (pending_save_ && document_) {
         pending_save_ = false;
-        // Avoid firing document saved callbacks while closing; we handle reloads explicitly below.
         document_->save_to_file(false);
     }
 
-    // Save critical locals before clearing session data
+    // Save callbacks before clearing session data
     auto saved_host = host_;
     auto saved_animation_id = animation_id_;
-    std::vector<std::string> animations_to_reload;
-    {
-        std::unordered_set<std::string> seen;
-        for (const auto& id : edited_animation_ids_) {
-            if (!id.empty() && seen.insert(id).second) {
-                animations_to_reload.push_back(id);
-            }
-        }
-    }
-    const bool had_edits = had_pending_save || !animations_to_reload.empty();
-    bool refreshed_runtime = false;
-    if (info_to_reload && assets_ && had_edits) {
-        try {
-            SDL_Renderer* renderer = assets_->renderer();
-            const bool reloaded = info_to_reload->reload_animations_from_disk();
-            if (reloaded && renderer) {
-                info_to_reload->loadAnimations(renderer);
-            }
-            devmode::refresh_loaded_animation_instances(assets_, info_to_reload);
-            refreshed_runtime = true;
-        } catch (const std::exception& ex) {
-            std::cerr << "[FrameEditorSession] Animation reload failed for '" << asset_name_for_cache
-                      << "': " << ex.what() << "\n";
-        } catch (...) {
-            std::cerr << "[FrameEditorSession] Animation reload failed for '" << asset_name_for_cache
-                      << "' (unknown error)\n";
-        }
-    }
 
-    // Clear session data
+    // Clear all session data - NO texture rebuilds or animation reloads needed
+    // Frame editor only modifies animation frame metadata (movement, children, hit/attack geometry),
+    // not texture assets. Changes are persisted to JSON via persist_changes() above.
+    // Runtime will lazy-load animation data on next playback.
     active_ = false;
-    Assets* saved_assets = assets_;
     assets_ = nullptr;
     target_ = nullptr;
     document_.reset();
@@ -478,29 +446,12 @@ void FrameEditorSession::end() {
     edited_animation_ids_.clear();
     last_payload_loaded_ = false;
 
-    // Reload animations AFTER session is closed if we could not refresh before teardown.
-    if (info_to_reload && saved_assets && had_edits && !refreshed_runtime) {
-        try {
-            const bool ok = info_to_reload->reload_animations_from_disk();
-            SDL_Renderer* renderer = saved_assets->renderer();
-            if (ok && renderer) {
-                info_to_reload->loadAnimations(renderer);
-            }
-            devmode::refresh_loaded_animation_instances(saved_assets, info_to_reload);
-        } catch (const std::exception& ex) {
-            std::cerr << "[FrameEditorSession] Animation reload failed for '" << asset_name_for_cache
-                      << "': " << ex.what() << "\n";
-        } catch (...) {
-            std::cerr << "[FrameEditorSession] Animation reload failed for '" << asset_name_for_cache
-                      << "' (unknown error)\n";
-        }
-    }
-
-    // Reopen animation editor window AFTER reloading animations
+    // Invoke host callback to reopen animation editor window
     if (saved_host) {
         saved_host->on_live_frame_editor_closed(saved_animation_id);
     }
 
+    // Invoke exit callback
     if (on_end_) {
         auto cb = std::move(on_end_);
         on_end_ = {};
@@ -1060,6 +1011,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                     }
                 }
                 if (changed) {
+                    child->has_data = true;
                     rebuild_rel_positions();
                     const bool should_smooth_child = child_offset_changed &&
                                                      smooth_enabled_ &&
@@ -1339,6 +1291,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                 const float unflipped_x = target_->flipped ? -desired_rel.x : desired_rel.x;
                 child->dx = static_cast<float>(std::round(unflipped_x * inv_scale));
                 child->dy = static_cast<float>(std::round(desired_rel.y * inv_scale));
+                child->has_data = true;
                 const bool should_smooth_child = smooth_enabled_ && selected_index_ > 0;
                 if (should_smooth_child) {
                     smooth_child_offsets(selected_child_index_, selected_index_);
@@ -1386,6 +1339,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                 delta = -delta;
             }
             child->degree += delta;
+            child->has_data = true;
             persist_changes();
             return true;
         }
@@ -2805,7 +2759,8 @@ void FrameEditorSession::apply_current_mode_to_all_frames() {
             const int frame_index = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
             const auto& frame = frames_[frame_index];
             const int child_index = std::clamp(selected_child_index_, 0, static_cast<int>(frame.children.size()) - 1);
-            const ChildFrame src = frame.children.empty() ? ChildFrame{} : frame.children[child_index];
+            ChildFrame src = frame.children.empty() ? ChildFrame{} : frame.children[child_index];
+            src.has_data = true;
             for (auto& f : frames_) {
                 if (child_index >= 0 && child_index < static_cast<int>(f.children.size())) {
                     auto& d = f.children[child_index];
@@ -2814,6 +2769,7 @@ void FrameEditorSession::apply_current_mode_to_all_frames() {
                     d.degree = src.degree;
                     d.visible = src.visible;
                     d.render_in_front = src.render_in_front;
+                    d.has_data = true;
                 }
             }
             persist_mode_changes(Mode::Children);
@@ -3634,6 +3590,7 @@ void FrameEditorSession::smooth_child_offsets(int child_index, int adjusted_inde
         auto& child = children[child_index];
         child.dx = static_cast<float>(std::round(redistributed[i].x));
         child.dy = static_cast<float>(std::round(redistributed[i].y));
+        child.has_data = true;
     }
     persist_changes();
 }
@@ -3666,6 +3623,7 @@ void FrameEditorSession::sync_child_frames() {
             normalized[i].child_index = static_cast<int>(i);
             normalized[i].visible = false; // default hidden until explicitly enabled
             normalized[i].render_in_front = true;
+            normalized[i].has_data = false;
         }
         for (const auto& existing : frame.children) {
             if (existing.child_index < 0 ||
@@ -3682,6 +3640,45 @@ void FrameEditorSession::sync_child_frames() {
     if (selected_child_index_ < 0) {
         selected_child_index_ = 0;
     }
+    ensure_child_frames_initialized();
+}
+
+void FrameEditorSession::ensure_child_frames_initialized() {
+    if (child_assets_.empty()) {
+        return;
+    }
+    const std::size_t child_count = child_assets_.size();
+    std::vector<ChildFrame> last_known(child_count);
+    std::vector<bool> has_last(child_count, false);
+    for (auto& frame : frames_) {
+        if (frame.children.size() < child_count) {
+            frame.children.resize(child_count);
+            for (std::size_t i = 0; i < child_count; ++i) {
+                frame.children[i].child_index = static_cast<int>(i);
+                frame.children[i].has_data = false;
+            }
+        }
+        for (std::size_t i = 0; i < child_count; ++i) {
+            auto& child = frame.children[i];
+            child.child_index = static_cast<int>(i);
+            if (!child.has_data && has_last[i]) {
+                child = last_known[i];
+                child.child_index = static_cast<int>(i);
+                child.has_data = true;
+            } else if (!child.has_data && !has_last[i]) {
+                child.visible = false;
+                child.render_in_front = true;
+                child.dx = 0.0f;
+                child.dy = 0.0f;
+                child.degree = 0.0f;
+            }
+            if (child.has_data) {
+                last_known[i] = child;
+                last_known[i].has_data = true;
+                has_last[i] = true;
+            }
+        }
+    }
 }
 
 void FrameEditorSession::refresh_child_assets_from_document() {
@@ -3697,7 +3694,23 @@ void FrameEditorSession::refresh_child_assets_from_document() {
     if (names == child_assets_) {
         return;
     }
+    const std::vector<std::string> previous = child_assets_;
+    std::vector<int> remap(previous.size(), -1);
+    if (!previous.empty()) {
+        std::unordered_map<std::string, int> new_index;
+        new_index.reserve(names.size());
+        for (size_t i = 0; i < names.size(); ++i) {
+            new_index[names[i]] = static_cast<int>(i);
+        }
+        for (size_t i = 0; i < previous.size(); ++i) {
+            auto it = new_index.find(previous[i]);
+            if (it != new_index.end()) {
+                remap[i] = it->second;
+            }
+        }
+    }
     child_assets_ = std::move(names);
+    remap_child_indices(remap);
     if (target_ && target_->info) {
         target_->info->set_animation_children(child_assets_);
         target_->initialize_animation_children_recursive();
@@ -3782,6 +3795,10 @@ const FrameEditorSession::ChildFrame* FrameEditorSession::current_child_frame() 
     return &frame.children[selected_child_index_];
 }
 
+bool FrameEditorSession::target_is_alive() const {
+    return assets_ && target_ && assets_->contains_asset(target_);
+}
+
 Animation* FrameEditorSession::current_animation_mutable() const {
     if (!target_ || !target_->info) {
         return nullptr;
@@ -3840,6 +3857,7 @@ void FrameEditorSession::hydrate_frames_from_animation() {
                 child.degree = child_src.degree;
                 child.visible = child_src.visible;
                 child.render_in_front = child_src.render_in_front;
+                child.has_data = true;
             }
         }
         if (!last_payload_loaded_ && dst.hit.boxes.empty() && !src.hit_geometry.boxes.empty()) {
@@ -3933,7 +3951,11 @@ void FrameEditorSession::apply_frames_to_animation() {
 }
 
 void FrameEditorSession::sync_child_asset_visibility() {
-    if (!target_) return;
+    if (!target_is_alive()) {
+        child_hidden_cache_.clear();
+        last_applied_show_asset_state_ = show_animation_ && show_child_;
+        return;
+    }
     const bool desired_show = show_animation_ && show_child_;
     if (desired_show != last_applied_show_asset_state_) {
         if (!desired_show) {
@@ -3954,11 +3976,13 @@ void FrameEditorSession::sync_child_asset_visibility() {
 }
 
 void FrameEditorSession::cache_child_hidden_states() {
-    if (!target_) return;
+    if (!target_is_alive()) return;
     std::function<void(Asset*)> recurse = [&](Asset* parent) {
         if (!parent) return;
+        if (assets_ && !assets_->contains_asset(parent)) return;
         for (Asset* child : parent->asset_children) {
             if (!child) continue;
+            if (assets_ && !assets_->contains_asset(child)) continue;
             child_hidden_cache_[child] = child->is_hidden();
             recurse(child);
         }
@@ -3967,11 +3991,13 @@ void FrameEditorSession::cache_child_hidden_states() {
 }
 
 void FrameEditorSession::apply_child_hidden_state(bool show_children) {
-    if (!target_) return;
+    if (!target_is_alive()) return;
     std::function<void(Asset*)> recurse = [&](Asset* parent) {
         if (!parent) return;
+        if (assets_ && !assets_->contains_asset(parent)) return;
         for (Asset* child : parent->asset_children) {
             if (!child) continue;
+            if (assets_ && !assets_->contains_asset(child)) continue;
             if (show_children) {
                 auto it = child_hidden_cache_.find(child);
                 const bool desired = (it != child_hidden_cache_.end()) ? it->second : child->is_hidden();
@@ -4023,9 +4049,10 @@ void FrameEditorSession::persist_changes() {
     if (!document_ || animation_id_.empty()) {
         return;
     }
+    ensure_child_frames_initialized();
     // Keep runtime data in sync with the editor copy so re-entry shows the latest edits.
     apply_frames_to_animation();
-    if (target_ && target_->info) {
+    if (target_is_alive() && target_->info) {
         target_->info->set_animation_children(child_assets_);
         for (auto& entry : target_->info->animations) {
             entry.second.child_assets() = child_assets_;
@@ -4156,6 +4183,29 @@ void FrameEditorSession::persist_changes() {
     // Save without firing document callbacks so we do not trigger live rebuilds
     // (which can invalidate textures) while the frame editor session is running.
     document_->save_to_file(false);
+}
+
+void FrameEditorSession::remap_child_indices(const std::vector<int>& remap) {
+    if (frames_.empty()) {
+        return;
+    }
+    if (remap.empty()) {
+        for (auto& frame : frames_) {
+            for (auto& child : frame.children) {
+                child.child_index = -1;
+            }
+        }
+        return;
+    }
+    for (auto& frame : frames_) {
+        for (auto& child : frame.children) {
+            if (child.child_index < 0 || child.child_index >= static_cast<int>(remap.size())) {
+                child.child_index = -1;
+                continue;
+            }
+            child.child_index = remap[child.child_index];
+        }
+    }
 }
 
 ChildPreviewContext FrameEditorSession::build_child_preview_context() const {

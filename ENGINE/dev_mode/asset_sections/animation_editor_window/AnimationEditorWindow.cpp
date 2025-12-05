@@ -1163,6 +1163,10 @@ void AnimationEditorWindow::set_on_animation_properties_changed(std::function<vo
     on_animation_properties_changed_ = std::move(callback);
 }
 
+void AnimationEditorWindow::refresh_children_from_asset_info() {
+    sync_document_children_from_info();
+}
+
 void AnimationEditorWindow::handle_document_saved() {
     if (on_document_saved_) {
         on_document_saved_();

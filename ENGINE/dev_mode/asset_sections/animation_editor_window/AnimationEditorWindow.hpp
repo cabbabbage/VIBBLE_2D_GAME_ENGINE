@@ -61,6 +61,7 @@ class AnimationEditorWindow {
 
     void set_on_document_saved(std::function<void()> callback);
     void set_on_animation_properties_changed(std::function<void(const std::string&, const nlohmann::json&)> callback);
+    void refresh_children_from_asset_info();
 
     // Wiring to in-world frame editor session
     void set_assets(Assets* assets) { assets_ = assets; }

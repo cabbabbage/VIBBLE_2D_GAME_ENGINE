@@ -57,6 +57,7 @@ class ChildrenPanel {
     std::vector<std::string> read_local_children(const nlohmann::json& payload) const;
     std::vector<std::string> resolve_inherited_children(const nlohmann::json& payload, int depth = 0) const;
     void commit_children();
+    void refresh_local_children_from_info();
     void add_child_entry(const std::string& entry);
     void remove_child_entry(size_t index);
     void ensure_search_panel();
@@ -117,8 +118,9 @@ class ChildrenPanel {
 
     std::unique_ptr<SearchAssets> search_assets_;
     mutable SDL_Rect search_anchor_rect_{0, 0, 0, 0};
+    mutable int search_panel_height_ = 0;
 
-  std::function<void()> children_changed_callback_{};
+    std::function<void()> children_changed_callback_{};
 
     int row_height_ = 44;
     int icon_size_ = 36;
