@@ -113,6 +113,8 @@ void ChildrenPanel::set_bounds(const SDL_Rect& bounds) {
 
 void ChildrenPanel::set_status_callback(StatusCallback callback) { status_callback_ = std::move(callback); }
 
+void ChildrenPanel::set_on_children_changed(std::function<void()> callback) { children_changed_callback_ = std::move(callback); }
+
 void ChildrenPanel::set_layout_dirty_callback(std::function<void()> callback) { layout_dirty_callback_ = std::move(callback); }
 
 void ChildrenPanel::update() {
@@ -482,6 +484,9 @@ void ChildrenPanel::commit_children() {
     }
     info_->set_animation_children(local_children_);
     info_->commit_manifest();
+    if (children_changed_callback_) {
+        children_changed_callback_();
+    }
     nlohmann::json arr = nlohmann::json::array();
     for (const auto& child : local_children_) {
         arr.push_back(child);

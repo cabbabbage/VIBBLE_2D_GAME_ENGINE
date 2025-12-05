@@ -71,6 +71,7 @@ class AssetInfoUI {
     void sync_target_shading_settings();
     void sync_target_spacing_settings();
     void sync_target_tags();
+    void sync_animation_children();
     void sync_target_basic_render_settings(bool type_changed);
     void mark_light_for_rebuild(std::size_t light_index);
     void mark_lighting_asset_for_rebuild();

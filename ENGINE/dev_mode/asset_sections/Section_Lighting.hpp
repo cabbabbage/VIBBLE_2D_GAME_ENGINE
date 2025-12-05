@@ -168,7 +168,7 @@ public:
         if (!info_ || !expanded_) return used;
         bool changed = false;
         bool reset_scaling_profile = false;
-        bool purge_light_cache = false;
+        bool rebuild_required = false;
         for (size_t i = 0; i < rows_.size(); ++i) {
             auto& r = rows_[i];
             if (r.lbl && r.lbl->handle_event(e)) {
@@ -182,7 +182,7 @@ public:
                     rows_.erase(rows_.begin() + static_cast<long long>(i));
                     changed = true;
                     reset_scaling_profile = true;
-                    purge_light_cache = true;
+                    rebuild_required = true;
                     schedule_full_asset_light_rebuild();
                     used = true;
                     refresh_row_headers();
@@ -196,7 +196,7 @@ public:
                     rows_.insert(rows_.begin() + static_cast<long long>(i) + 1, std::move(nr));
                     changed = true;
                     reset_scaling_profile = true;
-                    purge_light_cache = true;
+                    rebuild_required = true;
                     schedule_full_asset_light_rebuild();
                     used = true;
                     refresh_row_headers();
@@ -207,26 +207,29 @@ public:
             if (!r.expanded) {
                 continue;
             }
-            auto commit_change = [&]() {
-                changed = true; reset_scaling_profile = true; purge_light_cache = true; used = true;
+            auto commit_change = [&](bool requires_rebuild) {
+                changed = true;
+                reset_scaling_profile = true;
+                rebuild_required = rebuild_required || requires_rebuild;
+                used = true;
             };
 
             if (r.c_front && r.c_front->handle_event(e)) {
                 r.light.in_front = r.c_front->value();
-                commit_change();
+                commit_change(false);
             }
 
             if (r.c_behind && r.c_behind->handle_event(e)) {
                 r.light.behind = r.c_behind->value();
-                commit_change();
+                commit_change(false);
             }
             if (r.c_dark_mask && r.c_dark_mask->handle_event(e)) {
                 r.light.render_to_dark_mask = r.c_dark_mask->value();
-                commit_change();
+                commit_change(false);
             }
             if (r.c_asset_alpha_mask && r.c_asset_alpha_mask->handle_event(e)) {
                 r.light.render_front_and_back_to_asset_alpha_mask = r.c_asset_alpha_mask->value();
-                commit_change();
+                commit_change(false);
             }
             if (r.color_widget && r.color_widget->handle_event(e)) {
                 used = true;
@@ -237,7 +240,7 @@ public:
             auto handle_slider = [&](std::unique_ptr<DMSlider>& slider,
                                      auto get_value,
                                      auto set_value,
-                                     bool mark_light_texture) {
+                                     bool requires_rebuild) {
                 if (!slider) return;
                 const int previous_value = get_value();
                 const bool slider_used = slider->handle_event(e);
@@ -246,8 +249,9 @@ public:
                     set_value(committed_value);
                     changed = true;
                     reset_scaling_profile = true;
+                    rebuild_required = rebuild_required || requires_rebuild;
                     used = true;
-                    if (mark_light_texture) {
+                    if (requires_rebuild) {
                         schedule_light_rebuild(i);
                     }
                 } else if (slider_used) {
@@ -292,7 +296,7 @@ public:
                 rows_.push_back(create_row_from_light(new_light, true, false));
                 changed = true;
                 reset_scaling_profile = true;
-                purge_light_cache = true;
+                rebuild_required = true;
                 schedule_full_asset_light_rebuild();
                 used = true;
                 refresh_row_headers();
@@ -306,14 +310,7 @@ public:
             return true;
         }
         if (changed) {
-            commit_to_info();
-            if (info_) {
-                if (ui_ && reset_scaling_profile) {
-                    ui_->notify_light_sources_modified(purge_light_cache);
-                }
-                (void)info_->commit_manifest();
-                finalize_pending_light_rebuilds();
-            }
+            apply_light_change(reset_scaling_profile, rebuild_required);
         }
         return used || changed;
     }
@@ -523,14 +520,20 @@ private:
         apply_light_change(true, true);
     }
 
-    void apply_light_change(bool reset_scaling_profile, bool purge_light_cache) {
+    void apply_light_change(bool reset_scaling_profile, bool rebuild_required) {
         commit_to_info();
         if (info_) {
+            const bool purge_light_cache = rebuild_required;
             if (ui_ && reset_scaling_profile) {
                 ui_->notify_light_sources_modified(purge_light_cache);
             }
             (void)info_->commit_manifest();
-            finalize_pending_light_rebuilds();
+            if (rebuild_required) {
+                finalize_pending_light_rebuilds();
+            } else {
+                pending_light_rebuild_indices_.clear();
+                pending_full_asset_light_rebuild_ = false;
+            }
         }
     }
 

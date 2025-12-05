@@ -69,6 +69,11 @@ void Section_AnimationChildren::build() {
     if (!children_panel_) {
         children_panel_ = std::make_unique<animation_editor::ChildrenPanel>();
         children_panel_->set_layout_dirty_callback([this]() { this->rebuild_rows(); });
+        children_panel_->set_on_children_changed([this]() {
+            if (ui_) {
+                ui_->sync_animation_children();
+            }
+        });
     }
     children_panel_->set_info(info_);
     children_panel_->set_manifest_store(manifest_store_);

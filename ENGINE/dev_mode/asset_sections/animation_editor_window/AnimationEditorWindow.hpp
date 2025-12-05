@@ -87,6 +87,7 @@ class AnimationEditorWindow {
     bool handle_header_event(const SDL_Event& e);
     void set_status_message(const std::string& message, int frames = 300);
     void open_frame_editor(const std::string& animation_id);
+    void sync_document_children_from_info();
     Asset* resolve_frame_editor_asset();
     void create_animation_via_prompt();
     void reload_document();

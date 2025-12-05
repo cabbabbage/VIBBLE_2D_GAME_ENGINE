@@ -1514,9 +1514,22 @@ void AnimationEditorWindow::open_frame_editor(const std::string& animation_id) {
         return;
     }
     target_asset_ = runtime_asset;
+    sync_document_children_from_info();
     live_frame_editor_session_active_ = true;
     assets_->begin_frame_editor_session(runtime_asset, document_, preview_provider_, animation_id, this);
     set_visible(false, false /*suspend without closing hooks*/);
+}
+
+void AnimationEditorWindow::sync_document_children_from_info() {
+    auto info_ptr = info_.lock();
+    if (!info_ptr || !document_) {
+        return;
+    }
+
+    document_->replace_animation_children(info_ptr->animation_children);
+    // Keep any open panels in sync with the refreshed document state
+    if (list_panel_) list_panel_->set_document(document_);
+    if (inspector_panel_) inspector_panel_->set_document(document_);
 }
 
 void AnimationEditorWindow::on_live_frame_editor_closed(const std::string& animation_id) {

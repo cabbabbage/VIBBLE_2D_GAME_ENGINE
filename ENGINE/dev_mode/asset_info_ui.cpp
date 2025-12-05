@@ -894,7 +894,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                     lighting_section_->update_light_offsets(static_cast<std::size_t>(light_drag_index_), final_off_x, final_off_y);
                 }
                 set_light_hover(light_drag_index_);
-                this->notify_light_sources_modified(true);
+                this->notify_light_sources_modified(false);
                 (void)info_->commit_manifest();
                 return true;
             } else if (e.type == SDL_MOUSEMOTION) {
@@ -1877,6 +1877,24 @@ void AssetInfoUI::sync_target_tags() {
         }
         asset->info->set_tags(info_->tags);
         asset->info->set_anti_tags(info_->anti_tags);
+    });
+
+    if (updated_any && assets_) {
+        assets_->mark_active_assets_dirty();
+    }
+}
+
+void AssetInfoUI::sync_animation_children() {
+    if (!info_) {
+        return;
+    }
+
+    bool updated_any = apply_to_assets_with_info([&](Asset* asset) {
+        if (!asset || !asset->info) {
+            return;
+        }
+        asset->info->set_animation_children(info_->animation_children);
+        asset->initialize_animation_children_recursive();
     });
 
     if (updated_any && assets_) {
