@@ -1,12 +1,5 @@
-﻿#pragma once
+﻿// Compatibility shim: migrated to movement_plan_executor.{hpp,cpp}
+#pragma once
+#include "movement_plan_executor.hpp"
 
-#include <cstddef>
-
-#include "stride_types.hpp"
-
-class AnimationRuntime;
-
-class StridePlayer {
-public:
-    bool tick(AnimationRuntime& up, Plan& plan, std::size_t& stride_index, int& stride_frame_counter);
-};
+using StridePlayer = MovementPlanExecutor;

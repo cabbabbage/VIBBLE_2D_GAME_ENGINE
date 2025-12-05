@@ -14,7 +14,7 @@
 #include "asset/asset_types.hpp"
 #include "core/AssetsManager.hpp"
 #include "core/asset_list.hpp"
-#include "stride_player.hpp"
+#include "movement_plan_executor.hpp"
 #include "path_sanitizer.hpp"
 #include "get_best_path.hpp"
 #include "utils/area.hpp"
@@ -105,7 +105,7 @@ void AnimationRuntime::update() {
 
     // Follow path plan if present
     if (has_plan && !plan_deferred &&
-        player_.tick(*this, planner_iface_->plan_, stride_index_, stride_frame_counter_)) {
+        executor_.tick(*this, planner_iface_->plan_, stride_index_, stride_frame_counter_)) {
         just_applied_controller_move_ = false;
         return;
     }

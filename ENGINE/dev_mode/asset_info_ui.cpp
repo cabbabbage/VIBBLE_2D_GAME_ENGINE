@@ -1352,11 +1352,11 @@ void AssetInfoUI::refresh_target_asset_scale() {
     const bool target_valid = validate_target_asset();
     Asset* validated_target = target_asset_;
 
-    const auto refresh_asset = [&](Asset* asset) {
+    const auto refresh_asset = [&](Asset* asset, bool force_update = false) {
         if (!asset || !asset->info) {
             return false;
         }
-        if (!asset_matches_current_info(asset)) {
+        if (!force_update && !asset_matches_current_info(asset)) {
             return false;
         }
         asset->info->set_scale_factor(info_->scale_factor);
@@ -1374,13 +1374,13 @@ void AssetInfoUI::refresh_target_asset_scale() {
     }
 
     if (target_valid && validated_target) {
-        if (refresh_asset(validated_target)) {
+        if (refresh_asset(validated_target, true)) {
             refreshed_any = true;
         }
     }
 
     if (current_target && current_target != validated_target) {
-        if (refresh_asset(current_target)) {
+        if (refresh_asset(current_target, true)) {
             refreshed_any = true;
         }
     }

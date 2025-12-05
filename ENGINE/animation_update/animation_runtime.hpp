@@ -11,7 +11,7 @@
 #include "stride_types.hpp"
 #include "path_sanitizer.hpp"
 #include "get_best_path.hpp"
-#include "stride_player.hpp"
+#include "movement_plan_executor.hpp"
 
 namespace vibble::grid {
 class Grid;
@@ -25,7 +25,7 @@ class AnimationUpdate; // planner (public-facing)
 
 class PathSanitizer;
 class GetBestPath;
-class StridePlayer;
+class MovementPlanExecutor;
 
 // Non-public executor: advances frames, applies movement, handles path following.
 class AnimationRuntime {
@@ -41,7 +41,7 @@ public:
     // Query current active path index for an animation
     std::size_t path_index_for(const std::string& anim_id) const;
 
-    // Internal helpers used by StridePlayer
+    // Internal helpers used by MovementPlanExecutor
     vibble::grid::Grid& grid() const;
     bool path_blocked(SDL_Point from, SDL_Point to, const Asset* ignored, std::vector<const Asset*>* blockers = nullptr) const;
     bool handle_blocked_path(SDL_Point from, SDL_Point to, const std::vector<const Asset*>& blockers);
@@ -75,7 +75,7 @@ private:
     void       apply_pending_move();
 
 private:
-    friend class StridePlayer;
+    friend class MovementPlanExecutor;
 
     Asset*  self_         = nullptr;
     Assets* assets_owner_ = nullptr;
@@ -90,7 +90,7 @@ private:
     // Executors that can also re-plan when blocked
     PathSanitizer  sanitizer_{};
     GetBestPath    planner_{};
-    StridePlayer   player_{};
+    MovementPlanExecutor   executor_{};
 
     // Active movement path per animation id
     std::unordered_map<std::string, std::size_t> active_paths_{};

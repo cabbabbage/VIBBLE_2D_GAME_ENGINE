@@ -55,6 +55,10 @@ list(REMOVE_DUPLICATES ENGINE_SRC)
 
 add_executable(engine ${ENGINE_SRC})
 
+# Exclude old shim files from the build
+set(SHIM_FILES stride_player.hpp stride_player.cpp)
+list(REMOVE_ITEM ENGINE_SRC ${SHIM_FILES})
+
 # Unity build (jumbo) for faster compiles
 option(ENABLE_UNITY_BUILD "Enable unity builds for faster compilation" OFF)
 if(ENABLE_UNITY_BUILD)

@@ -37,7 +37,7 @@ class ChildrenPanel {
     void set_animation_id(const std::string& animation_id);
     void set_bounds(const SDL_Rect& bounds);
     void set_status_callback(StatusCallback callback);
-    void set_on_children_changed(std::function<void()> callback) { children_changed_callback_ = std::move(callback); }
+    void set_on_children_changed(std::function<void()> callback);
     void set_layout_dirty_callback(std::function<void()> callback);
 
     void update();
