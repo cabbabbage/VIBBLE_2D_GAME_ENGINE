@@ -2009,9 +2009,59 @@
       "update_radius": 0
     },
     "Vibble_attack_1": {
+      "animations": {
+        "default": {
+          "crop_frames": false,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": true,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 6,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          },
+          "speed_multiplier": 1.0
+        }
+      },
       "asset_directory": "SRC/assets/Vibble_attack_1",
       "asset_name": "Vibble_attack_1",
-      "lighting_info": []
+      "lighting_info": [],
+      "start": "default"
     },
     "Vibble_eyes": {
       "animation_children": [],
@@ -3989,6 +4039,39 @@
       "tillable": false,
       "update_radius": 0
     },
+    "top_hat": {
+      "animations": {
+        "default": {
+          "flipped_source": false,
+          "locked": false,
+          "loop": true,
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          }
+        }
+      },
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/top_hat",
+      "asset_name": "top_hat",
+      "asset_type": "object",
+      "can_invert": false,
+      "has_shading": false,
+      "lighting_info": [],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
+      "neighbor_search_distance": 500,
+      "render_radius": 0,
+      "size_settings": {
+        "scale_percentage": 100.0
+      },
+      "start": "default",
+      "tags": [],
+      "update_radius": 0
+    },
     "trail": {
       "animation_children": [],
       "animations": {
@@ -4444,9 +4527,9 @@
         "bar": {
           "curvyness": 2,
           "display_color": [
-            242,
-            36,
-            155,
+            31,
+            204,
+            31,
             255
           ],
           "edge_smoothness": 19,
@@ -4465,7 +4548,7 @@
           "curvyness": 2,
           "display_color": [
             204,
-            102,
+            31,
             31,
             255
           ],
@@ -4517,9 +4600,9 @@
         "rnd": {
           "curvyness": 2,
           "display_color": [
-            143,
-            36,
             242,
+            85,
+            145,
             255
           ],
           "edge_smoothness": 2,
@@ -4537,9 +4620,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            242,
-            164,
             36,
+            242,
+            151,
             255
           ],
           "edge_smoothness": 101,
@@ -5015,6 +5098,34 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-5a348b912d45"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "top_hat"
+                }
+              ],
+              "display_name": "top_hat",
+              "dx": -2228,
+              "dy": -1060,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 6904,
+              "origional_width": 6904,
+              "position": "Exact",
+              "resolution": 7,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-e2c95ad9e42f"
             }
           ]
         }
