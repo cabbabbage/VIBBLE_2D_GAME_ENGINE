@@ -167,7 +167,6 @@ public:
         bool used = DockableCollapsible::handle_event(e);
         if (!info_ || !expanded_) return used;
         bool changed = false;
-        bool regenerate_lighting = false;
         bool reset_scaling_profile = false;
         bool purge_light_cache = false;
         for (size_t i = 0; i < rows_.size(); ++i) {
@@ -182,9 +181,9 @@ public:
                 if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                     rows_.erase(rows_.begin() + static_cast<long long>(i));
                     changed = true;
-                    regenerate_lighting = true;
                     reset_scaling_profile = true;
                     purge_light_cache = true;
+                    schedule_full_asset_light_rebuild();
                     used = true;
                     refresh_row_headers();
                     refresh_highlight_state();
@@ -196,9 +195,9 @@ public:
                     Row nr = create_row_from_light(r.light, true);
                     rows_.insert(rows_.begin() + static_cast<long long>(i) + 1, std::move(nr));
                     changed = true;
-                    regenerate_lighting = true;
                     reset_scaling_profile = true;
                     purge_light_cache = true;
+                    schedule_full_asset_light_rebuild();
                     used = true;
                     refresh_row_headers();
                     refresh_highlight_state();
@@ -209,7 +208,7 @@ public:
                 continue;
             }
             auto commit_change = [&]() {
-                changed = true; regenerate_lighting = true; reset_scaling_profile = true; purge_light_cache = true; used = true;
+                changed = true; reset_scaling_profile = true; purge_light_cache = true; used = true;
             };
 
             if (r.c_front && r.c_front->handle_event(e)) {
@@ -238,7 +237,7 @@ public:
             auto handle_slider = [&](std::unique_ptr<DMSlider>& slider,
                                      auto get_value,
                                      auto set_value,
-                                     bool affects_texture) {
+                                     bool mark_light_texture) {
                 if (!slider) return;
                 const int previous_value = get_value();
                 const bool slider_used = slider->handle_event(e);
@@ -248,8 +247,8 @@ public:
                     changed = true;
                     reset_scaling_profile = true;
                     used = true;
-                    if (affects_texture) {
-                        regenerate_lighting = true;
+                    if (mark_light_texture) {
+                        schedule_light_rebuild(i);
                     }
                 } else if (slider_used) {
                     used = true;
@@ -271,11 +270,11 @@ public:
             handle_slider(r.s_flicker_speed,
                           [&]() { return r.light.flicker_speed; },
                           [&](int v) { r.light.flicker_speed = v; },
-                          true);
+                          false);
             handle_slider(r.s_flicker_smoothness,
                           [&]() { return r.light.flicker_smoothness; },
                           [&](int v) { r.light.flicker_smoothness = v; },
-                          true);
+                          false);
             handle_slider(r.s_offset_x,
                           [&]() { return r.light.offset_x; },
                           [&](int v) { r.light.offset_x = v; },
@@ -292,9 +291,9 @@ public:
                 new_light.render_to_dark_mask = true;
                 rows_.push_back(create_row_from_light(new_light, true, false));
                 changed = true;
-                regenerate_lighting = true;
                 reset_scaling_profile = true;
                 purge_light_cache = true;
+                schedule_full_asset_light_rebuild();
                 used = true;
                 refresh_row_headers();
                 refresh_highlight_state();
@@ -313,7 +312,7 @@ public:
                     ui_->notify_light_sources_modified(purge_light_cache);
                 }
                 (void)info_->commit_manifest();
-                (void)regenerate_lighting;
+                finalize_pending_light_rebuilds();
             }
         }
         return used || changed;
@@ -519,6 +518,8 @@ private:
             return;
         }
         row_it->light.color = new_c;
+        const std::size_t row_index = static_cast<std::size_t>(row_it - rows_.begin());
+        schedule_light_rebuild(row_index);
         apply_light_change(true, true);
     }
 
@@ -529,11 +530,51 @@ private:
                 ui_->notify_light_sources_modified(purge_light_cache);
             }
             (void)info_->commit_manifest();
+            finalize_pending_light_rebuilds();
         }
+    }
+
+    void schedule_light_rebuild(std::size_t index) {
+        if (pending_full_asset_light_rebuild_ || index >= rows_.size()) {
+            return;
+        }
+        const auto existing = std::find(pending_light_rebuild_indices_.begin(),
+                                         pending_light_rebuild_indices_.end(),
+                                         index);
+        if (existing == pending_light_rebuild_indices_.end()) {
+            pending_light_rebuild_indices_.push_back(index);
+        }
+    }
+
+    void schedule_full_asset_light_rebuild() {
+        if (pending_full_asset_light_rebuild_) {
+            return;
+        }
+        pending_full_asset_light_rebuild_ = true;
+        pending_light_rebuild_indices_.clear();
+    }
+
+    void finalize_pending_light_rebuilds() {
+        if (!info_ || !ui_) {
+            pending_light_rebuild_indices_.clear();
+            pending_full_asset_light_rebuild_ = false;
+            return;
+        }
+        if (pending_full_asset_light_rebuild_) {
+            ui_->mark_lighting_asset_for_rebuild();
+        } else {
+            for (std::size_t index : pending_light_rebuild_indices_) {
+                ui_->mark_light_for_rebuild(index);
+            }
+        }
+        pending_light_rebuild_indices_.clear();
+        pending_full_asset_light_rebuild_ = false;
     }
 
     std::vector<Row> rows_;
     int highlighted_row_index_ = -1;
+    std::vector<std::size_t> pending_light_rebuild_indices_;
+    bool pending_full_asset_light_rebuild_ = false;
     std::unique_ptr<DMButton> b_add_;
     std::unique_ptr<DMButton> apply_btn_;
     AssetInfoUI* ui_ = nullptr;

@@ -28,7 +28,12 @@
             "name": "",
             "path": "default"
           },
-          "speed_multiplier": 1.0
+          "speed_multiplier": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -132,7 +137,45 @@
             "name": "",
             "path": "default"
           },
-          "speed_multiplier": 1.0
+          "speed_multiplier": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -164,7 +207,45 @@
             "kind": "folder",
             "path": "default"
           },
-          "speed_factor": 1.0
+          "speed_factor": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -192,7 +273,8 @@
           "offset_y": -645,
           "radius": 29,
           "render_front_and_back_to_asset_alpha_mask": false,
-          "render_to_dark_mask": true
+          "render_to_dark_mask": true,
+          "needs_rebuild": false
         },
         {
           "behind": false,
@@ -213,7 +295,8 @@
           "offset_y": -728,
           "radius": 331,
           "render_front_and_back_to_asset_alpha_mask": false,
-          "render_to_dark_mask": true
+          "render_to_dark_mask": true,
+          "needs_rebuild": false
         }
       ],
       "neighbor_search_distance": 500,
@@ -262,13 +345,19 @@
           "source": {
             "kind": "folder",
             "path": "default"
-          }
+          },
+          "frames": [
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "asset_directory": "SRC/assets/Casino",
       "asset_name": "Casino",
       "asset_type": "object",
-      "start": "default"
+      "start": "default",
+      "lighting_info": []
     },
     "Davey": {
       "animation_children": [],
@@ -342,7 +431,45 @@
             "name": "",
             "path": "back"
           },
-          "speed_factor": 1.0
+          "speed_factor": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            }
+          ]
         },
         "default": {
           "flipped_source": false,
@@ -461,7 +588,81 @@
             "name": "",
             "path": "default"
           },
-          "speed_factor": 1.0
+          "speed_factor": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            }
+          ]
         },
         "forward": {
           "flipped_source": false,
@@ -532,7 +733,45 @@
             "name": "",
             "path": "forward"
           },
-          "speed_factor": 1.0
+          "speed_factor": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            }
+          ]
         },
         "left": {
           "derived_modifiers": {
@@ -553,7 +792,45 @@
             "kind": "animation",
             "name": "right",
             "path": ""
-          }
+          },
+          "frames": [
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            }
+          ]
         },
         "right": {
           "flipped_source": false,
@@ -624,7 +901,45 @@
             "name": "",
             "path": "right"
           },
-          "speed_factor": 1.0
+          "speed_factor": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -666,7 +981,45 @@
           "source": {
             "kind": "folder",
             "path": "default"
-          }
+          },
+          "frames": [
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -689,7 +1042,8 @@
       "spawn_groups": [],
       "start": "default",
       "tags": [],
-      "tillable": false
+      "tillable": false,
+      "lighting_info": []
     },
     "Grass_1": {
       "animation_children": [],
@@ -719,7 +1073,45 @@
             "name": "",
             "path": "default"
           },
-          "speed_factor": 1.0
+          "speed_factor": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -760,7 +1152,8 @@
       "spawn_groups": [],
       "start": "default",
       "tags": [],
-      "tillable": false
+      "tillable": false,
+      "lighting_info": []
     },
     "Grass_2": {
       "animations": {
@@ -772,7 +1165,45 @@
             "kind": "folder",
             "path": "default"
           },
-          "speed_factor": 1.0
+          "speed_factor": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -813,7 +1244,8 @@
       "spawn_groups": [],
       "start": "default",
       "tags": [],
-      "tillable": false
+      "tillable": false,
+      "lighting_info": []
     },
     "Town_Hall": {
       "animations": {
@@ -842,7 +1274,12 @@
             "name": "",
             "path": "default"
           },
-          "speed_multiplier": 1.0
+          "speed_multiplier": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -874,7 +1311,81 @@
             "kind": "folder",
             "path": "default"
           },
-          "speed_factor": 1.0
+          "speed_factor": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -898,7 +1409,8 @@
       "spawn_groups": [],
       "start": "default",
       "tags": [],
-      "tillable": false
+      "tillable": false,
+      "lighting_info": []
     },
     "Tree_2": {
       "animation_children": [],
@@ -928,7 +1440,12 @@
             "name": "",
             "path": "default"
           },
-          "speed_factor": 1.0
+          "speed_factor": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -952,7 +1469,8 @@
       "spawn_groups": [],
       "start": "default",
       "tags": [],
-      "tillable": false
+      "tillable": false,
+      "lighting_info": []
     },
     "Tree_3": {
       "animation_children": [],
@@ -965,7 +1483,12 @@
             "kind": "folder",
             "path": "default"
           },
-          "speed_factor": 1.0
+          "speed_factor": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -992,7 +1515,8 @@
       "spawn_groups": [],
       "start": "default",
       "tags": [],
-      "tillable": false
+      "tillable": false,
+      "lighting_info": []
     },
     "Vibble": {
       "animation_children": [],
@@ -1022,7 +1546,12 @@
             "name": "",
             "path": "default"
           },
-          "speed_multiplier": 1.0
+          "speed_multiplier": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            }
+          ]
         },
         "forward": {
           "locked": false,
@@ -1030,7 +1559,33 @@
           "source": {
             "kind": "folder",
             "path": "forward"
-          }
+          },
+          "frames": [
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            }
+          ]
         },
         "left": {
           "locked": false,
@@ -1038,7 +1593,33 @@
           "source": {
             "kind": "folder",
             "path": "left"
-          }
+          },
+          "frames": [
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -1047,7 +1628,30 @@
       "asset_type": "player",
       "can_invert": false,
       "has_shading": false,
-      "lighting_info": [],
+      "lighting_info": [
+        {
+          "behind": false,
+          "falloff": 50,
+          "flare": 0,
+          "flicker": 0,
+          "flicker_smoothness": 100,
+          "flicker_speed": 0,
+          "has_light_source": true,
+          "in_front": true,
+          "light_color": [
+            255,
+            255,
+            255
+          ],
+          "light_intensity": 255,
+          "offset_x": 0,
+          "offset_y": 0,
+          "radius": 64,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true,
+          "needs_rebuild": false
+        }
+      ],
       "min_distance_all": 0,
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
@@ -1073,7 +1677,8 @@
     },
     "Vibble_attack_1": {
       "asset_directory": "SRC/assets/Vibble_attack_1",
-      "asset_name": "Vibble_attack_1"
+      "asset_name": "Vibble_attack_1",
+      "lighting_info": []
     },
     "Vibble_eyes": {
       "animation_children": [],
@@ -1103,7 +1708,12 @@
             "name": "",
             "path": "default"
           },
-          "speed_multiplier": 1.0
+          "speed_multiplier": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -1127,7 +1737,8 @@
       "spawn_groups": [],
       "start": "default",
       "tags": [],
-      "tillable": false
+      "tillable": false,
+      "lighting_info": []
     },
     "barrel": {
       "animation_children": [
@@ -1188,7 +1799,12 @@
             "name": "",
             "path": "default"
           },
-          "speed_multiplier": 1.0
+          "speed_multiplier": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -1263,7 +1879,57 @@
             "name": "foward",
             "path": ""
           },
-          "speed_multiplier": 1.0
+          "speed_multiplier": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            }
+          ]
         },
         "default": {
           "crop_frames": false,
@@ -1350,7 +2016,57 @@
             "name": "",
             "path": "default"
           },
-          "speed_multiplier": 1.0
+          "speed_multiplier": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            }
+          ]
         },
         "explosion": {
           "attack_geometry": [
@@ -1523,7 +2239,33 @@
             "name": "",
             "path": "explosion"
           },
-          "speed_multiplier": 1.0
+          "speed_multiplier": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            }
+          ]
         },
         "foward": {
           "attack_geometry": [
@@ -1796,7 +2538,57 @@
             "name": "",
             "path": "foward"
           },
-          "speed_multiplier": 1.0
+          "speed_multiplier": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            }
+          ]
         },
         "left": {
           "attack_geometry": [
@@ -2054,7 +2846,57 @@
             "name": "foward",
             "path": ""
           },
-          "speed_multiplier": 1.0
+          "speed_multiplier": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            }
+          ]
         },
         "right": {
           "crop_frames": false,
@@ -2077,7 +2919,57 @@
             "name": "left",
             "path": ""
           },
-          "speed_multiplier": 1.0
+          "speed_multiplier": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            },
+            {
+              "needs_rebuild": true
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -2107,7 +2999,8 @@
           "offset_y": -116,
           "radius": 48,
           "render_front_and_back_to_asset_alpha_mask": false,
-          "render_to_dark_mask": false
+          "render_to_dark_mask": false,
+          "needs_rebuild": false
         }
       ],
       "min_distance_all": 0,
@@ -2134,6 +3027,7 @@
       "update_radius": 0
     },
     "bottle": {
+      "animation_children": [],
       "animations": {
         "default": {
           "crop_frames": true,
@@ -2160,25 +3054,42 @@
             "name": "",
             "path": "default"
           },
-          "speed_multiplier": 1.0
+          "speed_multiplier": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
       "asset_directory": "SRC/assets/bottle",
       "asset_name": "bottle",
       "asset_type": "object",
-      "can_invert": false,
+      "can_invert": true,
       "has_shading": false,
       "lighting_info": [],
       "min_distance_all": 0,
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
       "render_radius": 0,
-      "size_settings": {
-        "scale_percentage": 100.0
+      "shading_opacity_multiplier": 1.0,
+      "shading_parallax_amount": 0.0,
+      "shading_screen_brightness_multiplier": 1.0,
+      "shadow_mask_settings": {
+        "alpha_multiplier": 1.0,
+        "blur_scale": 1.0,
+        "expansion_ratio": 0.800000011920929,
+        "falloff_exponent": 1.0499999523162842,
+        "falloff_start": 0.0
       },
+      "size_settings": {
+        "scale_percentage": 46.0
+      },
+      "spawn_groups": [],
       "start": "default",
       "tags": [],
+      "tillable": false,
       "update_radius": 0
     },
     "bottle_2": {
@@ -2208,7 +3119,68 @@
             "name": "",
             "path": "default"
           },
-          "speed_multiplier": 1.0
+          "speed_multiplier": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            }
+          ]
+        },
+        "forward": {
+          "frames": [
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            }
+          ]
+        },
+        "left": {
+          "frames": [
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -2257,7 +3229,12 @@
             "name": "",
             "path": "default"
           },
-          "speed_factor": 1.0
+          "speed_factor": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -2318,7 +3295,12 @@
             "name": "",
             "path": "default"
           },
-          "speed_factor": 1.0
+          "speed_factor": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -2396,7 +3378,12 @@
             "name": "",
             "path": "default"
           },
-          "speed_factor": 1.0
+          "speed_factor": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -2475,7 +3462,12 @@
             "name": "",
             "path": "default"
           },
-          "speed_factor": 1.0
+          "speed_factor": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -2504,7 +3496,8 @@
           "offset_y": -732,
           "radius": 54,
           "render_front_and_back_to_asset_alpha_mask": false,
-          "render_to_dark_mask": true
+          "render_to_dark_mask": true,
+          "needs_rebuild": false
         },
         {
           "behind": false,
@@ -2525,7 +3518,8 @@
           "offset_y": -714,
           "radius": 216,
           "render_front_and_back_to_asset_alpha_mask": false,
-          "render_to_dark_mask": true
+          "render_to_dark_mask": true,
+          "needs_rebuild": false
         },
         {
           "behind": false,
@@ -2546,7 +3540,8 @@
           "offset_y": -729,
           "radius": 1927,
           "render_front_and_back_to_asset_alpha_mask": false,
-          "render_to_dark_mask": true
+          "render_to_dark_mask": true,
+          "needs_rebuild": false
         },
         {
           "behind": false,
@@ -2567,7 +3562,8 @@
           "offset_y": -735,
           "radius": 797,
           "render_front_and_back_to_asset_alpha_mask": false,
-          "render_to_dark_mask": true
+          "render_to_dark_mask": true,
+          "needs_rebuild": false
         }
       ],
       "min_distance_all": 0,
@@ -2622,7 +3618,12 @@
             "name": "",
             "path": "default"
           },
-          "speed_multiplier": 1.0
+          "speed_multiplier": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -2683,7 +3684,12 @@
             "name": "",
             "path": "default"
           },
-          "speed_factor": 1.0
+          "speed_factor": 1.0,
+          "frames": [
+            {
+              "needs_rebuild": false
+            }
+          ]
         }
       },
       "anti_tags": [],
@@ -3075,7 +4081,7 @@
           },
           {
             "brightness": 1.0,
-            "offset": 658.9600219726563,
+            "offset": 658.9600219726562,
             "opacity": 7.659999847412109,
             "scale": 6.590000152587891
           }

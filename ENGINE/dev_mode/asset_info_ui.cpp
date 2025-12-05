@@ -1746,6 +1746,22 @@ void AssetInfoUI::notify_light_sources_modified(bool purge_light_cache) {
     std::filesystem::remove_all(cache_dir, ec);
 }
 
+void AssetInfoUI::mark_light_for_rebuild(std::size_t light_index) {
+    if (!info_) {
+        return;
+    }
+    vibble::RebuildQueueCoordinator coordinator;
+    coordinator.request_light_entry(info_->name, static_cast<int>(light_index));
+}
+
+void AssetInfoUI::mark_lighting_asset_for_rebuild() {
+    if (!info_) {
+        return;
+    }
+    vibble::RebuildQueueCoordinator coordinator;
+    coordinator.request_light(info_->name);
+}
+
 void AssetInfoUI::sync_target_shading_settings() {
     if (!info_) {
         return;

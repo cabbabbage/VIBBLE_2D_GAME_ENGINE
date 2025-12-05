@@ -1,21 +1,5 @@
 #!/usr/bin/env python3
-"""
-Light cache generation tool driven by tools/rebuild_requests.json.
-
-Behavior summary:
-        - Reads tools/rebuild_requests.json via rebuild_queue.RebuildQueue to
-            determine which assets require light regeneration. When the JSON contains
-            an empty "lights" list it signals a full rebuild; a populated list limits
-            regeneration to those assets; and when the field is null the tool falls
-            back to its historical "only regen when snippets changed" behavior.
-        - Stores normalized lighting snippets per asset inside
-            <cache_root>/.light_cache and skips regeneration when cached signatures
-            match unless the queue explicitly requested the asset.
-        - Emits PNG light textures plus metadata into
-            <cache_root>/<AssetName>/lights/.
-        - Successfully processed assets are removed from the queue so repeated
-            invocations only touch remaining requests.
-"""
+"""Light cache generation tool driven by manifest content (no rebuild queue)."""
 
 import json
 import logging
@@ -29,8 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from PIL import Image
 
-from cache_helper import compare_and_update_json
-from rebuild_queue import QueueMode, RebuildQueue
+LIGHT_CACHE_VERSION = 3
 
 
 def _configure_logger() -> logging.Logger:
@@ -44,9 +27,6 @@ def _configure_logger() -> logging.Logger:
 
 
 LOGGER = _configure_logger()
-
-LIGHT_CACHE_VERSION = 3
-
 
 def clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
@@ -214,54 +194,16 @@ def build_light_image(light: LightDefinition) -> Image.Image:
 @dataclass
 class LightAsset:
     name: str
-    manifest_entry: Dict[str, Any]
-    cache_root: Path
-
-    light_defs: List[LightDefinition] = None
-    cache_payload: Dict[str, Any] = None
-    needs_regen: bool = True
-
-    def __post_init__(self) -> None:
-        self.light_defs = []
-        self.cache_payload = {"version": LIGHT_CACHE_VERSION, "lighting_info": []}
-        self._parse_entry_and_cache()
-
-    def _parse_entry_and_cache(self) -> None:
-        raw_lights = self.manifest_entry.get("lighting_info", [])
-        parsed: List[LightDefinition] = []
-        if isinstance(raw_lights, list):
-            for entry in raw_lights:
-                light = parse_light_entry(entry)
-                if light:
-                    parsed.append(light)
-        elif isinstance(raw_lights, dict):
-            maybe_light = parse_light_entry(raw_lights)
-            if maybe_light:
-                parsed.append(maybe_light)
-
-        self.light_defs = parsed
-        self.cache_payload = {
-            "version": LIGHT_CACHE_VERSION,
-            "lighting_info": [l.cache_json() for l in self.light_defs],
-        }
-
-        cache_dir = self.cache_root / ".light_cache"
-        cache_file = cache_dir / f"{self.name}.json"
-        same = compare_and_update_json(self.cache_payload, str(cache_file))
-        self.needs_regen = not same
+    lighting_entries: List[Dict[str, Any]]
+    light_defs: List[LightDefinition]
+    flagged_indices: List[int]
 
 
 class LightTool:
-    def __init__(self,
-                 manifest_path: str,
-                 cache_root: str,
-                 queue: Optional[RebuildQueue] = None) -> None:
+    def __init__(self, manifest_path: str, cache_root: str) -> None:
         self.manifest_path = Path(manifest_path).absolute()
         self.cache_root = Path(cache_root).absolute()
         self.manifest = self._load_manifest()
-        self.queue = queue
-        self.light_mode = queue.light_mode() if queue else QueueMode.FULL
-        self.requested_assets = set(queue.light_requests()) if queue else set()
         self.any_failures = False
 
     def _load_manifest(self) -> Dict[str, Any]:
@@ -272,45 +214,50 @@ class LightTool:
             LOGGER.error("Failed to read manifest '%s': %s", self.manifest_path, exc)
             sys.exit(1)
 
+    def save_manifest(self) -> None:
+        try:
+            with open(self.manifest_path, "w", encoding="utf-8") as f:
+                json.dump(self.manifest, f, indent=2)
+        except Exception as exc:
+            LOGGER.error("Failed to write manifest '%s': %s", self.manifest_path, exc)
+            sys.exit(1)
+
+    @staticmethod
+    def _normalize_lighting_entries(asset_meta: Dict[str, Any]) -> List[Dict[str, Any]]:
+        lights = asset_meta.get("lighting_info")
+        if isinstance(lights, dict):
+            lights = [lights]
+        if not isinstance(lights, list):
+            lights = []
+        normalized: List[Dict[str, Any]] = []
+        for entry in lights:
+            if not isinstance(entry, dict):
+                continue
+            entry.setdefault("needs_rebuild", False)
+            normalized.append(entry)
+        asset_meta["lighting_info"] = normalized
+        return normalized
+
     def _collect_assets(self) -> List[LightAsset]:
         assets_block = self.manifest.get("assets", {})
         if not isinstance(assets_block, dict):
             LOGGER.error("Manifest 'assets' block missing or invalid.")
             return []
 
-        selected: List[str]
-        explicit = False
-        if self.light_mode == QueueMode.PARTIAL and self.requested_assets:
-            selected = sorted(self.requested_assets)
-            explicit = True
-        elif self.light_mode == QueueMode.FULL:
-            selected = list(assets_block.keys())
-            explicit = True
-        else:
-            selected = list(assets_block.keys())
-
         light_assets: List[LightAsset] = []
-        for name in selected:
-            entry = assets_block.get(name)
+        for name, entry in assets_block.items():
             if not isinstance(entry, dict):
-                if explicit:
-                    LOGGER.warning("Requested asset '%s' not found; skipping.", name)
-                    if self.queue and self.light_mode == QueueMode.PARTIAL:
-                        self.queue.mark_light_complete(name)
                 continue
-            light_asset = LightAsset(name, entry, self.cache_root)
-            if self.light_mode == QueueMode.PARTIAL:
-                light_assets.append(light_asset)
+            entries = self._normalize_lighting_entries(entry)
+            flagged = [idx for idx, light in enumerate(entries) if bool(light.get("needs_rebuild"))]
+            if not flagged:
                 continue
-            if self.light_mode == QueueMode.FULL:
-                light_assets.append(light_asset)
-                continue
-            if light_asset.light_defs or explicit or light_asset.needs_regen:
-                light_assets.append(light_asset)
-
-        if self.light_mode == QueueMode.NONE:
-            light_assets = [a for a in light_assets if a.needs_regen]
-
+            parsed_defs: List[LightDefinition] = []
+            for light_entry in entries:
+                parsed = parse_light_entry(light_entry)
+                if parsed:
+                    parsed_defs.append(parsed)
+            light_assets.append(LightAsset(name, entries, parsed_defs, flagged))
         return light_assets
 
     def _write_metadata(self, cache_dir: Path, signatures: List[str]) -> None:
@@ -320,6 +267,11 @@ class LightTool:
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(meta, f, indent=2)
 
+    def _clear_light_flags(self, asset: LightAsset) -> None:
+        for idx in asset.flagged_indices:
+            if 0 <= idx < len(asset.lighting_entries):
+                asset.lighting_entries[idx]["needs_rebuild"] = False
+
     def generate_for_asset(self, asset: LightAsset) -> bool:
         cache_dir = self.cache_root / asset.name / "lights"
         if cache_dir.exists():
@@ -328,6 +280,7 @@ class LightTool:
 
         if not asset.light_defs:
             LOGGER.info("[LightTool] %s has no lights; cleared cache directory.", asset.name)
+            self._clear_light_flags(asset)
             return True
 
         LOGGER.info(
@@ -345,38 +298,43 @@ class LightTool:
             signatures.append(light.signature())
 
         self._write_metadata(cache_dir, signatures)
+        self._clear_light_flags(asset)
         return True
 
     def run(self) -> None:
         assets = self._collect_assets()
         if not assets:
             print("No light assets need regeneration.")
-            if self.queue and self.light_mode == QueueMode.FULL:
-                self.queue.mark_full_light_rebuild_complete()
             return
 
+        manifest_changed = False
         for asset in assets:
             success = self.generate_for_asset(asset)
-            if not success:
+            if success:
+                manifest_changed = True
+            else:
                 self.any_failures = True
-            if success and self.queue and self.light_mode == QueueMode.PARTIAL:
-                self.queue.mark_light_complete(asset.name)
 
-        if self.queue and self.light_mode == QueueMode.FULL and not self.any_failures:
-            self.queue.mark_full_light_rebuild_complete()
+        if manifest_changed:
+            assets_block = self.manifest.get("assets", {})
+            if isinstance(assets_block, dict):
+                self.manifest["assets"] = assets_block
+            self.save_manifest()
+            LOGGER.info("Updated manifest needs_rebuild flags after light rebuilds.")
+        else:
+            LOGGER.info("No light assets marked for rebuild; nothing to do.")
+
+        if self.any_failures:
+            LOGGER.warning("Some light assets could not be regenerated; flags remain set.")
 
 
 def main() -> None:
-    queue = RebuildQueue()
-    mode = queue.light_mode()
-    if mode == QueueMode.NONE:
-        LOGGER.info("No pending light rebuild requests; exiting.")
-        return
+    tools_dir = Path(__file__).resolve().parent
+    repo_root = tools_dir.parent
+    manifest_path = str(repo_root / "manifest.json")
+    cache_root = str(repo_root / "cache")
 
-    manifest_path = str(queue.manifest_path)
-    cache_root = str(queue.cache_root)
-
-    tool = LightTool(manifest_path, cache_root, queue)
+    tool = LightTool(manifest_path, cache_root)
     tool.run()
 
 
