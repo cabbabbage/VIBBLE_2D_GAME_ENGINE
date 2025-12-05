@@ -175,7 +175,7 @@ void apply_hit_geometry_entry(AnimationFrame& frame, const nlohmann::json& entry
         }
 }
 
-void upsert_attack_vector(animation_update::FrameAttackGeometry& geometry,
+void append_attack_vector(animation_update::FrameAttackGeometry& geometry,
                           const std::string& type,
                           const nlohmann::json& node) {
         if (type.empty() || node.is_null()) {
@@ -211,28 +211,22 @@ void upsert_attack_vector(animation_update::FrameAttackGeometry& geometry,
         } else {
                 return;
         }
-        if (auto* existing = geometry.find_vector(vec.type)) {
-                *existing = vec;
-        } else {
-                geometry.vectors.push_back(vec);
-        }
+        geometry.add_vector(vec.type, vec);
 }
 
 void apply_attack_geometry_entry(AnimationFrame& frame, const nlohmann::json& entry) {
         frame.attack_geometry.vectors.clear();
-        if (entry.is_object()) {
-                for (const char* type : kDamageTypeNames) {
-                        auto it = entry.find(type);
-                        if (it != entry.end()) {
-                                upsert_attack_vector(frame.attack_geometry, type, *it);
-                        }
+        if (!entry.is_object()) {
+                return;
+        }
+        for (const char* type : kDamageTypeNames) {
+                auto it = entry.find(type);
+                if (it == entry.end() || !it->is_array()) {
+                        continue;
                 }
-        } else if (entry.is_array()) {
-                for (const auto& vec_node : entry) {
-                        upsert_attack_vector(frame.attack_geometry, "melee", vec_node);
+                for (const auto& vec_node : *it) {
+                        append_attack_vector(frame.attack_geometry, type, vec_node);
                 }
-        } else if (!entry.is_null()) {
-                upsert_attack_vector(frame.attack_geometry, "melee", entry);
         }
 }
 

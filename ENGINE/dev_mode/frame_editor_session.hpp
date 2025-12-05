@@ -166,6 +166,7 @@ private:
     // Attack geometry widgets
     mutable std::unique_ptr<class DMDropdown> dd_attack_type_;
     mutable std::unique_ptr<class DMButton> btn_attack_add_remove_;
+    mutable std::unique_ptr<class DMButton> btn_attack_delete_;
     mutable std::unique_ptr<class DMButton> btn_attack_copy_next_;
     mutable std::unique_ptr<class DMTextBox> tb_attack_start_x_;
     mutable std::unique_ptr<class DMTextBox> tb_attack_start_y_;
@@ -258,6 +259,7 @@ private:
 
     // Attack vector editing state
     int selected_attack_type_index_ = 1;
+    std::array<int, kDamageTypeNames.size()> selected_attack_vector_indices_{ { -1, -1, -1 } };
     enum class AttackHandle { None, Start, Control, End, Segment };
     AttackHandle active_attack_handle_ = AttackHandle::None;
     bool attack_dragging_ = false;
@@ -399,8 +401,11 @@ private:
     animation_update::FrameAttackGeometry::Vector* current_attack_vector();
     const animation_update::FrameAttackGeometry::Vector* current_attack_vector() const;
     animation_update::FrameAttackGeometry::Vector* ensure_attack_vector_for_type(const std::string& type);
-    void delete_attack_vector_for_type(const std::string& type);
+    void delete_current_attack_vector();
     std::string current_attack_type() const;
+    int current_attack_vector_index() const;
+    void set_current_attack_vector_index(int index);
+    void clamp_attack_selection();
     void refresh_attack_form() const;
     void copy_attack_vector_to_next_frame();
     void render_attack_geometry(SDL_Renderer* renderer) const;
@@ -522,12 +527,12 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
         }
     };
 
-    auto upsert_attack_vector = [&](MovementFrame& frame,
+    auto append_attack_vector = [&](MovementFrame& frame,
                                     const std::string& type,
                                     const nlohmann::json& node) {
-        if (node.is_null()) return;
+        if (type.empty() || node.is_null()) return;
         animation_update::FrameAttackGeometry::Vector vec;
-        vec.type = type.empty() ? std::string{"melee"} : type;
+        vec.type = type;
         if (node.is_object()) {
             vec.start_x = read_float(node.value("start_x", 0.0f));
             vec.start_y = read_float(node.value("start_y", 0.0f));
@@ -556,11 +561,7 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
         } else {
             return;
         }
-        if (auto* existing = frame.attack.find_vector(vec.type)) {
-            *existing = vec;
-        } else {
-            frame.attack.vectors.push_back(vec);
-        }
+        frame.attack.add_vector(vec.type, vec);
     };
 
     std::size_t frame_index = 0;
@@ -689,16 +690,11 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
             if (attack_entry.is_object()) {
                 for (const char* type : kDamageTypeNames) {
                     auto it = attack_entry.find(type);
-                    if (it != attack_entry.end()) {
-                        upsert_attack_vector(f, type, *it);
+                    if (it == attack_entry.end() || !it->is_array()) continue;
+                    for (const auto& vec_node : *it) {
+                        append_attack_vector(f, type, vec_node);
                     }
                 }
-            } else if (attack_entry.is_array()) {
-                for (const auto& vec_node : attack_entry) {
-                    upsert_attack_vector(f, "melee", vec_node);
-                }
-            } else if (!attack_entry.is_null()) {
-                upsert_attack_vector(f, "melee", attack_entry);
             }
         }
 

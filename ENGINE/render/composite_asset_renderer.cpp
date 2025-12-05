@@ -193,8 +193,44 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
         if (slot.child_index < 0 || !slot.visible || !slot.animation || !slot.current_frame) {
             return;
         }
+        
+        // Calculate child's own scale using its own scale_factor but parent's perspective
+        float child_base_scale = (slot.info && std::isfinite(slot.info->scale_factor) && slot.info->scale_factor > 0.0f)
+            ? slot.info->scale_factor
+            : 1.0f;
+        
+        // Child inherits parent's perspective_scale from grid point
+        float child_current_scale = child_base_scale * perspective_scale;
+        
+        // Get camera scale
+        float camera_scale = 1.0f;
+        if (assets_) {
+            camera_scale = std::max(0.0001f, assets_->getView().get_scale());
+        }
+        
+        // Determine desired variant scale for child
+        float child_desired_variant_scale = child_current_scale / camera_scale;
+        if (!std::isfinite(child_desired_variant_scale) || child_desired_variant_scale <= 0.0f) {
+            child_desired_variant_scale = child_current_scale;
+        }
+        
+        // Choose appropriate variant using child's own scale steps
+        const auto& child_steps = (slot.info && !slot.info->scale_variants.empty())
+            ? static_cast<const std::vector<float>&>(slot.info->scale_variants)
+            : render_pipeline::ScalingLogic::DefaultScaleSteps();
+        
+        auto child_selection = render_pipeline::ScalingLogic::Choose(child_desired_variant_scale, child_steps);
+        float child_nearest_variant_scale = child_selection.stored_scale;
+        
+        // Calculate remaining adjustment for child
+        float child_remaining_adjustment = 1.0f;
+        if (child_nearest_variant_scale > 0.0f) {
+            child_remaining_adjustment = child_current_scale / child_nearest_variant_scale;
+        }
+        
+        // Get texture using child's own variant scale
         const FrameVariant* variant =
-            slot.animation->get_frame(slot.current_frame, asset->current_nearest_variant_scale);
+            slot.animation->get_frame(slot.current_frame, child_nearest_variant_scale);
         SDL_Texture* tex = variant ? variant->get_base_texture() : nullptr;
         if (!tex && slot.current_frame && !slot.current_frame->variants.empty()) {
             tex = slot.current_frame->variants[0].base_texture;
@@ -202,14 +238,13 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
         if (!tex) {
             return;
         }
+        
         int tex_w = 0;
         int tex_h = 0;
         SDL_QueryTexture(tex, nullptr, nullptr, &tex_w, &tex_h);
-        float remainder = asset->current_remaining_scale_adjustment;
-        if (!std::isfinite(remainder) || remainder <= 0.0f) {
-            remainder = 1.0f;
-        }
-        const float base_adjustment = remainder / std::max(0.0001f, perspective_scale);
+        
+        // Apply child's remaining adjustment divided by perspective
+        const float base_adjustment = child_remaining_adjustment / std::max(0.0001f, perspective_scale);
         int final_w = static_cast<int>(std::lround(static_cast<float>(tex_w) * base_adjustment));
         int final_h = static_cast<int>(std::lround(static_cast<float>(tex_h) * base_adjustment));
         final_w = std::max(1, final_w);

@@ -1533,6 +1533,11 @@
             "reverse": true
           },
           "flipped_source": false,
+          "frames": [
+            {
+              "needs_rebuild": true
+            }
+          ],
           "inherit_source_movement": false,
           "loop": true,
           "movement": [
@@ -1772,44 +1777,44 @@
         "left": {
           "attack_geometry": [
             {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
+              "explosion": [],
+              "melee": [],
+              "projectile": []
             },
             {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
+              "explosion": [],
+              "melee": [],
+              "projectile": []
             },
             {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
+              "explosion": [],
+              "melee": [],
+              "projectile": []
             },
             {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
+              "explosion": [],
+              "melee": [],
+              "projectile": []
             },
             {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
+              "explosion": [],
+              "melee": [],
+              "projectile": []
             },
             {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
+              "explosion": [],
+              "melee": [],
+              "projectile": []
             },
             {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
+              "explosion": [],
+              "melee": [],
+              "projectile": []
             },
             {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
+              "explosion": [],
+              "melee": [],
+              "projectile": []
             }
           ],
           "children": [
@@ -1931,6 +1936,11 @@
             "reverse": false
           },
           "flipped_source": true,
+          "frames": [
+            {
+              "needs_rebuild": true
+            }
+          ],
           "inherit_source_movement": true,
           "loop": true,
           "number_of_frames": 1,
@@ -2056,7 +2066,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 65.0
+        "scale_percentage": 28.0
       },
       "spawn_groups": [],
       "start": "default",
