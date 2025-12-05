@@ -22,7 +22,7 @@
 #include "dev_mode/dev_mode_utils.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
-#include "dev_mode/rebuildAnimation.hpp"
+#include "dev_mode/animation_runtime_refresh.hpp"
 #include "render/scaling_logic.hpp"
 #include "dev_mode/widgets.hpp"
 #include "render/warped_screen_grid.hpp"
@@ -447,7 +447,7 @@ void FrameEditorSession::end() {
             if (reloaded && renderer) {
                 info_to_reload->loadAnimations(renderer);
             }
-            devmode::AnimationRegenerator::refresh_loaded_instances(assets_, info_to_reload);
+            devmode::refresh_loaded_animation_instances(assets_, info_to_reload);
             refreshed_runtime = true;
         } catch (const std::exception& ex) {
             std::cerr << "[FrameEditorSession] Animation reload failed for '" << asset_name_for_cache
@@ -483,7 +483,7 @@ void FrameEditorSession::end() {
             if (ok && renderer) {
                 info_to_reload->loadAnimations(renderer);
             }
-            devmode::AnimationRegenerator::refresh_loaded_instances(saved_assets, info_to_reload);
+            devmode::refresh_loaded_animation_instances(saved_assets, info_to_reload);
         } catch (const std::exception& ex) {
             std::cerr << "[FrameEditorSession] Animation reload failed for '" << asset_name_for_cache
                       << "': " << ex.what() << "\n";

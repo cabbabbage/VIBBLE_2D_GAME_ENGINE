@@ -105,10 +105,6 @@ std::function<std::vector<std::string>()> empty_provider() {
     return []() { return std::vector<std::string>{}; };
 }
 
-std::function<std::vector<SpawnGroupLinkableAreaDescriptor>()> empty_link_provider() {
-    return []() { return std::vector<SpawnGroupLinkableAreaDescriptor>{}; };
-}
-
 SDL_Color dim_color(SDL_Color color, float factor) {
     factor = std::clamp(factor, 0.0f, 1.0f);
     auto apply = [factor](Uint8 channel) {
@@ -585,14 +581,6 @@ std::string trim(const std::string& value) {
 struct SpawnGroupConfig::Entry {
     friend class SpawnGroupConfig;
 
-    using LinkableAreaDescriptor = SpawnGroupLinkableAreaDescriptor;
-    using LinkableAreaProvider = std::function<std::vector<LinkableAreaDescriptor>()>;
-
-    struct LinkedAreaOption {
-        std::string id;
-        std::string label;
-        bool is_child = false;
-};
 
     struct CandidateWidgets {
         std::unique_ptr<DMTextBox> name_box;
@@ -669,15 +657,6 @@ struct SpawnGroupConfig::Entry {
 
         method_widget_ = std::make_unique<CallbackDropdownWidget>(
             "Spawn Method", method_options_, [this](int index) { on_method_changed(index); }, editable_);
-
-        // Deprecated: linked area UI removed. No dropdown or open button.
-        linked_area_widget_.reset();
-        open_area_button_.reset();
-        open_area_widget_.reset();
-
-        // Deprecated: child link options removed from UI.
-        terminate_with_parent_widget_.reset();
-        placed_on_top_parent_widget_.reset();
 
         auto lock_checkbox = std::make_unique<DMCheckbox>("Locked", false);
         lock_widget_ = std::make_unique<CallbackCheckboxWidget>(
@@ -842,38 +821,9 @@ struct SpawnGroupConfig::Entry {
         area_provider_ = provider ? std::move(provider) : empty_provider();
     }
 
-    void set_linkable_asset_areas_provider(LinkableAreaProvider provider) {
-        asset_linkable_area_provider_ = provider ? std::move(provider) : empty_link_provider();
-        refresh_linked_area_options();
-    }
-
-    void set_linkable_room_areas_provider(LinkableAreaProvider provider) {
-        room_linkable_area_provider_ = provider ? std::move(provider) : empty_link_provider();
-        refresh_linked_area_options();
-    }
-
-    void set_open_area_handler(std::function<void(const std::string&, const std::string&)> handler,
-                               std::optional<std::string> stack_key) {
-        open_area_handler_ = std::move(handler);
-        if (stack_key.has_value()) {
-            if (stack_key->empty()) {
-                stack_key_.reset();
-            } else {
-                stack_key_ = std::move(*stack_key);
-            }
-        }
-        if (owner_) {
-            owner_->mark_layout_dirty();
-        }
-    }
-
     const std::function<std::vector<std::string>()>& area_names_provider() const {
         return area_provider_;
     }
-
-    void set_stack_key(std::string key) { stack_key_ = std::move(key); }
-
-    const std::optional<std::string>& stack_key() const { return stack_key_; }
 
     void lock_method_to(std::string method) { method_lock_ = std::move(method); }
 
@@ -1055,17 +1005,12 @@ struct SpawnGroupConfig::Entry {
         bool enforce_spacing = entry.is_object() ? entry.value("enforce_spacing", false) : false;
         enforce_widget_->set_value(enforce_spacing);
 
-        // Linked area fields deprecated: ignore any legacy flags/ids and clear internal state.
-        linked_area_id_.clear();
-        linked_area_is_child_ = false;
-        // Ensure no UI exposed for linked-area and no dependent controls are shown.
         update_candidate_graph();
         rebuild_candidate_widgets();
         update_ownership_label();
     }
 
     void refresh_configuration() {
-        update_area_dropdown_from_provider();
         update_ownership_label();
         auto lock = method_lock();
         if (lock) {
@@ -1226,28 +1171,6 @@ struct SpawnGroupConfig::Entry {
                 }
             }
 
-            if (open_area_widget_ && open_area_handler_ && !area_link_target_.empty()) {
-                rows.push_back({open_area_widget_.get()});
-            }
-
-            if (linked_area_widget_) {
-                const bool has_options = linked_area_option_labels_.size() > 1;
-                const bool has_selection = !linked_area_id_.empty();
-                if (has_options || has_selection) {
-                    rows.push_back({linked_area_widget_.get()});
-                    if (show_child_link_options_) {
-                        if (terminate_with_parent_widget_) {
-                            rows.push_back({terminate_with_parent_widget_.get()});
-                        }
-                        if (placed_on_top_parent_widget_) {
-                            rows.push_back({placed_on_top_parent_widget_.get()});
-                        }
-                    }
-                }
-            }
-
-            // enforce_widget_ moved into Advanced Options
-
             if (delete_widget_) {
                 rows.push_back({delete_widget_.get()});
             }
@@ -1357,40 +1280,6 @@ private:
                 ownership_label_widget_->set_color(SDL_Color{0, 0, 0, 0});
             }
             ownership_label_widget_->set_subtle(false);
-        }
-    }
-
-    void update_area_dropdown_from_provider() { update_area_link_target(); }
-
-    void update_area_link_target() {
-        std::string previous_target = area_link_target_;
-        std::string new_target;
-        const auto& entry = entry_view();
-        if (entry.is_object()) {
-            new_target = safe_string(entry, "area", std::string{});
-            if (new_target.empty() && !linked_area_id_.empty()) {
-                new_target = linked_area_id_;
-            }
-        }
-        area_link_target_ = std::move(new_target);
-        if ((previous_target.empty() != area_link_target_.empty()) && owner_) {
-            owner_->mark_layout_dirty();
-        }
-    }
-
-    void on_terminate_with_parent_changed(bool value) {
-        if (!editable_ || linked_area_id_.empty() || !linked_area_is_child_) return;
-        if (auto* entry = mutable_entry()) {
-            (*entry)["terminate_with_parent"] = value;
-            notify_change(false, false, false);
-        }
-    }
-
-    void on_place_on_top_parent_changed(bool value) {
-        if (!editable_ || linked_area_id_.empty() || !linked_area_is_child_) return;
-        if (auto* entry = mutable_entry()) {
-            (*entry)["placed_on_top_parent"] = value;
-            notify_change(false, false, false);
         }
     }
 
@@ -1648,38 +1537,6 @@ private:
         }
     }
 
-    void refresh_linked_area_options() {
-        // Deprecated: linked area options removed.
-        linked_area_options_.clear();
-        linked_area_option_labels_.clear();
-        if (linked_area_widget_) {
-            linked_area_widget_->set_options(std::vector<std::string>{}, 0);
-            linked_area_widget_->set_editable(false);
-        }
-    }
-
-    void update_linked_area_dropdown_from_selection() {
-        // Deprecated: no dropdown to update.
-        if (linked_area_widget_) {
-            linked_area_widget_->set_options(std::vector<std::string>{}, 0);
-            linked_area_widget_->set_editable(false);
-        }
-        linked_area_is_child_ = false;
-        linked_area_id_.clear();
-        update_area_link_target();
-    }
-
-    void update_child_link_option_visibility() {
-        // Deprecated: child link options not used.
-        show_child_link_options_ = false;
-        if (terminate_with_parent_widget_) terminate_with_parent_widget_->set_editable(false);
-        if (placed_on_top_parent_widget_) placed_on_top_parent_widget_->set_editable(false);
-    }
-
-    void on_linked_area_changed(int) {
-        // Deprecated: ignore changes.
-    }
-
     void on_min_changed(const std::string& text) {
         if (!editable_) return;
         if (min_widget_ && min_widget_->box() && min_widget_->box()->is_editing()) {
@@ -1827,7 +1684,6 @@ private:
     std::string ownership_label_text_{};
     std::optional<SDL_Color> ownership_color_{};
     std::function<std::vector<std::string>()> area_provider_{};
-    std::optional<std::string> stack_key_{};
     std::optional<std::string> method_lock_{};
     bool quantity_hidden_ = false;
     std::unique_ptr<CandidateEditorPieGraphWidget> candidate_graph_{};
@@ -1859,21 +1715,6 @@ private:
 
     std::vector<std::string> method_options_{};
     std::unique_ptr<CallbackDropdownWidget> method_widget_{};
-
-    std::unique_ptr<DMButton> open_area_button_{};
-    std::unique_ptr<ButtonWidget> open_area_widget_{};
-    std::function<void(const std::string&, const std::string&)> open_area_handler_{};
-    std::string area_link_target_{};
-    std::unique_ptr<CallbackDropdownWidget> linked_area_widget_{};
-    std::unique_ptr<CallbackCheckboxWidget> terminate_with_parent_widget_{};
-    std::unique_ptr<CallbackCheckboxWidget> placed_on_top_parent_widget_{};
-    std::vector<LinkedAreaOption> linked_area_options_{};
-    std::vector<std::string> linked_area_option_labels_{};
-    LinkableAreaProvider asset_linkable_area_provider_ = empty_link_provider();
-    LinkableAreaProvider room_linkable_area_provider_ = empty_link_provider();
-    std::string linked_area_id_{};
-    bool linked_area_is_child_ = false;
-    bool show_child_link_options_ = false;
 
     std::unique_ptr<CallbackCheckboxWidget> enforce_widget_{};
     std::unique_ptr<CallbackCheckboxWidget> resolve_geometry_widget_{};
@@ -2745,30 +2586,6 @@ void SpawnGroupConfig::EntryController::clear_ownership_label() {
 void SpawnGroupConfig::EntryController::set_area_names_provider(std::function<std::vector<std::string>()> provider) {
     if (!entry_) return;
     entry_->set_area_names_provider(std::move(provider));
-}
-
-void SpawnGroupConfig::EntryController::set_linkable_asset_areas_provider(
-    std::function<std::vector<SpawnGroupLinkableAreaDescriptor>()> provider) {
-    if (!entry_) return;
-    entry_->set_linkable_asset_areas_provider(std::move(provider));
-}
-
-void SpawnGroupConfig::EntryController::set_linkable_room_areas_provider(
-    std::function<std::vector<SpawnGroupLinkableAreaDescriptor>()> provider) {
-    if (!entry_) return;
-    entry_->set_linkable_room_areas_provider(std::move(provider));
-}
-
-void SpawnGroupConfig::EntryController::set_stack_key(std::string key) {
-    if (!entry_) return;
-    entry_->set_stack_key(std::move(key));
-}
-
-void SpawnGroupConfig::EntryController::set_open_area_handler(
-    std::function<void(const std::string&, const std::string&)> handler,
-    std::optional<std::string> stack_key) {
-    if (!entry_) return;
-    entry_->set_open_area_handler(std::move(handler), std::move(stack_key));
 }
 
 void SpawnGroupConfig::EntryController::lock_method_to(const std::string& method) {

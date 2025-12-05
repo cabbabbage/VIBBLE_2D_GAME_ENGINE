@@ -36,10 +36,6 @@ fs::path LoadingScreen::loading_content_root() const {
     return project_root() / "SRC" / "LOADING CONTENT";
 }
 
-fs::path LoadingScreen::legacy_loading_content_root() const {
-    return project_root() / "SRC" / "loading_screen_content";
-}
-
 std::vector<fs::path> LoadingScreen::list_images_in(const fs::path& dir, bool recursive) const {
     std::vector<fs::path> out;
     if (dir.empty() || !fs::exists(dir)) return out;
@@ -156,11 +152,7 @@ void LoadingScreen::init() {
         message_.clear();
 
         fs::path active_root = loading_content_root();
-        auto images = list_images_in(active_root, false);
-        if (images.empty()) {
-                active_root = legacy_loading_content_root();
-                images = list_images_in(active_root, true);
-        }
+        auto images = list_images_in(active_root, true);
 
         if (!images.empty()) {
                 std::mt19937 rng{std::random_device{}()};

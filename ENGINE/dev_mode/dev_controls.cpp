@@ -27,7 +27,6 @@
 #include "asset/asset_info.hpp"
 #include "dm_styles.hpp"
 #include "draw_utils.hpp"
-#include "room_overlay_renderer.hpp"
 #include "widgets.hpp"
 #include "dev_controls_persistence.hpp"
 #include "render/render.hpp"
@@ -223,128 +222,6 @@ std::string make_unique_asset_area_name(const AssetInfo& info, const std::string
 
 }
 
-void DevControls::RoomAreaCache::set_listener(Listener listener) {
-    listener_ = std::move(listener);
-}
-
-void DevControls::RoomAreaCache::invalidate() {
-    dirty_ = true;
-}
-
-const DevControls::RoomAreaCache::PolygonList&
-DevControls::RoomAreaCache::ensure_from_json(const nlohmann::json* root,
-                                             std::optional<SDL_Point> default_anchor,
-                                             std::optional<std::pair<int, int>> room_dimensions) {
-    if (root != last_source_) {
-        dirty_ = true;
-    }
-    if (!dirty_) {
-        return cached_;
-    }
-    cached_.clear();
-    last_source_ = root;
-    if (root) {
-        try {
-            if (root->contains("areas") && (*root)["areas"].is_array()) {
-                const int target_width = room_dimensions ? std::max(0, room_dimensions->first) : 0;
-                const int target_height = room_dimensions ? std::max(0, room_dimensions->second) : 0;
-                auto scale_component = [](int value, double factor) {
-                    return static_cast<int>(std::llround(static_cast<double>(value) * factor));
-                };
-                for (const auto& item : (*root)["areas"]) {
-                    if (!item.is_object()) continue;
-                    const std::string name = item.contains("name") && item["name"].is_string()
-                                                ? item["name"].get<std::string>()
-                                                : std::string{};
-                    if (name.empty()) continue;
-                    const std::string type; // legacy area type ignored
-                    RoomAreaSerialization::Kind kind =
-                            RoomAreaSerialization::infer_kind_from_entry(item, type, name);
-                    if (!RoomAreaSerialization::is_supported_kind(kind)) {
-                        continue;
-                    }
-                    // Optional visibility
-                    if (item.contains("visible") && item["visible"].is_boolean() && !item["visible"].get<bool>()) {
-                        continue;
-                    }
-                    const auto& pts = item.contains("points") ? item["points"] : nlohmann::json();
-                    if (!pts.is_array() || pts.size() < 3) continue;
-
-                    if (default_anchor.has_value()) {
-                        SDL_Point fallback = *default_anchor;
-                        auto anchor = RoomAreaSerialization::resolve_anchor(item, fallback, kind);
-                        const bool scale_to_room = item.value("scale_to_room", false);
-                        const int stored_width = item.value("origional_width", 0);
-                        const int stored_height = item.value("origional_height", 0);
-                        const bool can_scale = scale_to_room && stored_width > 0 && stored_height > 0 &&
-                                               target_width > 0 && target_height > 0;
-                        std::vector<SDL_Point> poly;
-                        if (can_scale) {
-                            const double sx = static_cast<double>(target_width) / static_cast<double>(stored_width);
-                            const double sy = static_cast<double>(target_height) / static_cast<double>(stored_height);
-                            if (anchor.relative_to_center) {
-                                anchor.relative_offset.x = scale_component(anchor.relative_offset.x, sx);
-                                anchor.relative_offset.y = scale_component(anchor.relative_offset.y, sy);
-                                anchor.world.x = fallback.x + anchor.relative_offset.x;
-                                anchor.world.y = fallback.y + anchor.relative_offset.y;
-                            }
-                            auto relative_points = RoomAreaSerialization::decode_relative_points(item);
-                            poly.reserve(relative_points.size());
-                            for (const auto& rel : relative_points) {
-                                const int dx = scale_component(rel.x, sx);
-                                const int dy = scale_component(rel.y, sy);
-                                poly.push_back(SDL_Point{anchor.world.x + dx, anchor.world.y + dy});
-                            }
-                        } else {
-                            poly = RoomAreaSerialization::decode_points(item, anchor.world);
-                        }
-                        if (poly.size() >= 3) {
-                            Polygon entry;
-                            entry.name = name;
-                            entry.points = std::move(poly);
-                            entry.anchor = anchor.world;
-                            entry.z = item.value("z", 0);
-                            entry.visible = true;
-                            cached_.push_back(std::move(entry));
-                        }
-                    } else {
-                        int ax = 0;
-                        int ay = 0;
-                        if (item.contains("anchor") && item["anchor"].is_object()) {
-                            ax = item["anchor"].value("x", 0);
-                            ay = item["anchor"].value("y", 0);
-                        }
-                        std::vector<SDL_Point> poly;
-                        poly.reserve(pts.size());
-                        for (const auto& p : pts) {
-                            if (!p.is_object()) continue;
-                            int x = p.value("x", 0);
-                            int y = p.value("y", 0);
-                            poly.push_back(SDL_Point{ax + x, ay + y});
-                        }
-                        if (poly.size() >= 3) {
-                            Polygon entry;
-                            entry.name = name;
-                            entry.points = std::move(poly);
-                            entry.anchor = SDL_Point{ ax, ay };
-                            entry.z = item.value("z", 0);
-                            entry.visible = true;
-                            cached_.push_back(std::move(entry));
-                        }
-                    }
-                }
-            }
-        } catch (...) {
-            cached_.clear();
-        }
-    }
-    dirty_ = false;
-    ++generation_;
-    if (listener_) {
-        listener_(cached_, generation_);
-    }
-    return cached_;
-}
 
 class RegenerateRoomPopup {
 public:
@@ -511,7 +388,6 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     room_editor_ = std::make_unique<RoomEditor>(assets_, screen_w_, screen_h_);
     if (room_editor_) {
         room_editor_->set_manifest_store(&manifest_store_);
-        room_editor_->set_room_assets_saved_callback([this]() { notify_room_area_data_changed(); });
         // Hide top header/footer while sliding containers are visible
         room_editor_->set_header_visibility_callback([this](bool visible) {
             sliding_headers_hidden_ = visible;
@@ -865,9 +741,6 @@ void DevControls::set_current_room(Room* room, bool force_refresh) {
             << (room ? room->room_name : std::string("<null>"));
         dev_mode_trace(oss.str());
     }
-    selected_room_area_name_.reset();
-    hovered_room_area_name_.reset();
-    // Legacy panel removed
     current_room_ = room;
 
     dev_selected_room_ = room;
@@ -886,7 +759,6 @@ void DevControls::set_current_room(Room* room, bool force_refresh) {
         }
     }
 
-    notify_room_area_data_changed();
     dev_mode_trace("[DevControls] set_current_room complete");
 }
 
@@ -934,7 +806,6 @@ void DevControls::set_map_context(nlohmann::json* map_info, const std::string& m
     }
     asset_filter_.set_map_info(map_info_json_);
     configure_header_button_sets();
-    notify_room_area_data_changed();
 }
 
 bool DevControls::is_pointer_over_dev_ui(int x, int y) const {
@@ -1522,71 +1393,6 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         return;
     }
 
-    if (mode_ == Mode::RoomEditor && assets_ && current_room_) {
-        const auto& area_list = room_area_polygons();
-        auto point_in_poly = [](const std::vector<SDL_Point>& poly, SDL_Point pt) -> bool {
-            bool inside = false;
-            const size_t n = poly.size();
-            for (size_t i = 0, j = n - 1; i < n; j = i++) {
-                const int xi = poly[i].x;
-                const int yi = poly[i].y;
-                const int xj = poly[j].x;
-                const int yj = poly[j].y;
-                const bool intersect = ((yi > pt.y) != (yj > pt.y)) &&
-                                       (pt.x < (xj - xi) * (pt.y - yi) / (double)(yj - yi + 1e-12) + xi);
-                if (intersect) inside = !inside;
-            }
-            return inside;
-        };
-
-        if (pointer_event || pointer_relevant) {
-            SDL_Point sp = pointer;
-            SDL_Point world = sp;
-            if (input_) {
-                if (auto mapped = input_->screen_to_world(sp)) {
-                    world = *mapped;
-                } else if (assets_) {
-                    SDL_FPoint mapped = assets_->getView().screen_to_map(sp);
-                    world = SDL_Point{static_cast<int>(std::lround(mapped.x)), static_cast<int>(std::lround(mapped.y))};
-                }
-            } else if (assets_) {
-                SDL_FPoint mapped = assets_->getView().screen_to_map(sp);
-                world = SDL_Point{static_cast<int>(std::lround(mapped.x)), static_cast<int>(std::lround(mapped.y))};
-            }
-
-            int hover = -1;
-            for (int i = static_cast<int>(area_list.size()) - 1; i >= 0; --i) {
-                if (point_in_poly(area_list[i].points, world)) { hover = i; break; }
-            }
-
-            if (hover >= 0 && hover < static_cast<int>(area_list.size())) {
-                const auto& hovered = area_list[hover];
-                hovered_room_area_name_ = hovered.name;
-                if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT && event.button.clicks <= 1) {
-                    selected_room_area_name_ = hovered.name;
-                    if (input_) {
-                        input_->consumeEvent(event);
-                    }
-                    return;
-                }
-                if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {
-                    selected_room_area_name_ = hovered.name;
-                    if (input_) {
-                        input_->consumeEvent(event);
-                    }
-                    return;
-                }
-            } else {
-                if (pointer_event) {
-                    hovered_room_area_name_.reset();
-                }
-                if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT && event.button.clicks <= 1) {
-                    selected_room_area_name_.reset();
-                }
-            }
-        }
-    }
-
     if (depthcue_drag_state_ == DepthCueDragState::None) {
         if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT &&
             camera_panel_ && camera_panel_->is_blur_section_visible() && assets_ && enabled_) {
@@ -1960,106 +1766,6 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         if (frame_editor_session_ && frame_editor_session_->is_active()) {
             frame_editor_session_->render(renderer);
         }
-        // Draw room area overlays (always visible in Room mode)
-        if (renderer && assets_ && current_room_) {
-            const WarpedScreenGrid& cam = assets_->getView();
-            SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
-            SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
-            SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-            Uint8 pr=0,pg=0,pb=0,pa=0; SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
-
-            auto color_for_area_name = [](const std::string& name) -> SDL_Color {
-                // Deterministic color from name
-                static const SDL_Color palette[] = {
-                    SDL_Color{255,140,0,96},   // orange
-                    SDL_Color{0,120,255,96},   // blue
-                    SDL_Color{0,200,0,96},     // green
-                    SDL_Color{180,0,220,96},   // purple
-                    SDL_Color{255,0,0,96},     // red
-                    SDL_Color{255,220,0,96}    // yellow
-                };
-                unsigned int h = 2166136261u;
-                for (unsigned char c : name) { h ^= c; h *= 16777619u; }
-                return palette[h % (sizeof(palette)/sizeof(palette[0]))];
-            };
-
-            const auto& area_list = room_area_polygons();
-            // Sort by z-index ascending for drawing order
-            std::vector<int> order; order.reserve(area_list.size());
-            for (size_t i = 0; i < area_list.size(); ++i) order.push_back(static_cast<int>(i));
-            std::sort(order.begin(), order.end(), [&](int a, int b){ return area_list[a].z < area_list[b].z; });
-
-            const std::string selected_name = selected_room_area_name_.value_or(std::string{});
-            const std::string hovered_name = hovered_room_area_name_.value_or(std::string{});
-
-            for (int idx : order) {
-                const auto& poly = area_list[idx];
-                if (poly.points.size() < 3) continue;
-                SDL_Color base = color_for_area_name(poly.name);
-                const bool is_selected = !selected_name.empty() && poly.name == selected_name;
-                const bool is_hovered = !hovered_name.empty() && poly.name == hovered_name;
-
-                SDL_Color fill = dm_draw::LightenColor(base, is_selected ? 0.35f : (is_hovered ? 0.2f : 0.05f));
-                fill.a = is_selected ? 160 : (is_hovered ? 120 : 72);
-
-                std::vector<SDL_Vertex> vertices;
-                vertices.reserve(poly.points.size());
-                for (const SDL_Point& p : poly.points) {
-                    SDL_FPoint sp = cam.map_to_screen(p);
-                    SDL_Vertex v{};
-                    v.position.x = sp.x;
-                    v.position.y = sp.y;
-                    v.color = fill;
-                    vertices.push_back(v);
-                }
-                if (vertices.size() >= 3) {
-                    std::vector<int> indices;
-                    indices.reserve((vertices.size() - 2) * 3);
-                    for (size_t i = 1; i + 1 < vertices.size(); ++i) {
-                        indices.push_back(0);
-                        indices.push_back(static_cast<int>(i));
-                        indices.push_back(static_cast<int>(i + 1));
-                    }
-                    SDL_RenderGeometry(renderer, nullptr, vertices.data(), static_cast<int>(vertices.size()), indices.data(), static_cast<int>(indices.size()));
-                }
-
-                SDL_Color outline = dm_draw::LightenColor(base, is_selected ? 0.25f : (is_hovered ? 0.12f : 0.0f));
-                outline.a = is_selected ? 255 : (is_hovered ? 230 : base.a);
-                SDL_SetRenderDrawColor(renderer, outline.r, outline.g, outline.b, outline.a);
-                for (size_t i = 0, n = poly.points.size(); i < n; ++i) {
-                    const SDL_Point& a = poly.points[i];
-                    const SDL_Point& b = poly.points[(i+1) % n];
-                    SDL_FPoint as = cam.map_to_screen(a);
-                    SDL_FPoint bs = cam.map_to_screen(b);
-                    SDL_RenderDrawLine(renderer,
-                                       static_cast<int>(std::lround(as.x)), static_cast<int>(std::lround(as.y)),
-                                       static_cast<int>(std::lround(bs.x)), static_cast<int>(std::lround(bs.y)));
-                }
-
-                if (is_selected) {
-                    SDL_FPoint anchor = cam.map_to_screen(poly.anchor);
-                    const int arm = 6;
-                    SDL_SetRenderDrawColor(renderer, outline.r, outline.g, outline.b, outline.a);
-                    SDL_RenderDrawLine(renderer,
-                        static_cast<int>(std::lround(anchor.x)) - arm,
-                        static_cast<int>(std::lround(anchor.y)),
-                        static_cast<int>(std::lround(anchor.x)) + arm,
-                        static_cast<int>(std::lround(anchor.y)));
-                    SDL_RenderDrawLine(renderer,
-                        static_cast<int>(std::lround(anchor.x)),
-                        static_cast<int>(std::lround(anchor.y)) - arm,
-                        static_cast<int>(std::lround(anchor.x)),
-                        static_cast<int>(std::lround(anchor.y)) + arm);
-                }
-            }
-            SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
-            SDL_SetRenderDrawBlendMode(renderer, prev_mode);
-        }
-    } else if (renderer && mode_ == Mode::RoomEditor) {
-
-        if (renderer && assets_) {
-            // Legacy overlay and panel rendering removed in favor of asset-based Area editing.
-        }
     }
     if (renderer && map_mode_ui_ && map_mode_ui_->is_light_panel_visible() && assets_) {
         const WarpedScreenGrid& cam = assets_->getView();
@@ -2356,8 +2062,6 @@ void DevControls::reset_click_state() {
 
 void DevControls::clear_selection() {
     if (room_editor_) room_editor_->clear_selection();
-    selected_room_area_name_.reset();
-    hovered_room_area_name_.reset();
 }
 
 void DevControls::purge_asset(Asset* asset) {
@@ -3286,69 +2990,6 @@ void DevControls::open_regenerate_room_popup() {
                             },
                             screen_w_,
                             screen_h_);
-}
-
-void DevControls::set_room_area_cache_listener(RoomAreaCache::Listener listener) {
-    room_area_cache_.set_listener(std::move(listener));
-}
-
-std::size_t DevControls::room_area_cache_generation() const {
-    return room_area_cache_.generation();
-}
-
-void DevControls::notify_room_area_data_changed() {
-    room_area_cache_.invalidate();
-}
-
-const DevControls::RoomAreaCache::PolygonList& DevControls::room_area_polygons() {
-    const nlohmann::json* root = nullptr;
-    std::optional<SDL_Point> default_anchor;
-    std::optional<std::pair<int, int>> room_dimensions;
-    if (current_room_) {
-        root = &current_room_->assets_data();
-        SDL_Point anchor{ current_room_->map_origin.first, current_room_->map_origin.second };
-        if (current_room_->room_area) {
-            anchor = current_room_->room_area->get_center();
-            auto bounds = current_room_->room_area->get_bounds();
-            const int width = std::max(0, std::get<2>(bounds) - std::get<0>(bounds));
-            const int height = std::max(0, std::get<3>(bounds) - std::get<1>(bounds));
-            if (width > 0 && height > 0) {
-                room_dimensions = std::make_pair(width, height);
-            }
-        } else if (root && root->is_object()) {
-            int min_w = root->value("min_width", 0);
-            int max_w = root->value("max_width", min_w);
-            int min_h = root->value("min_height", 0);
-            int max_h = root->value("max_height", min_h);
-            int width = std::max(min_w, max_w);
-            int height = std::max(min_h, max_h);
-            if ((width <= 0 || height <= 0) && root->contains("radius")) {
-                int radius = root->value("radius", 0);
-                if (radius > 0) {
-                    int diameter = radius * 2;
-                    if (width <= 0) width = diameter;
-                    if (height <= 0) height = diameter;
-                }
-            }
-            if (width > 0 && height > 0) {
-                room_dimensions = std::make_pair(width, height);
-            }
-        }
-        default_anchor = anchor;
-    }
-    const auto& list = room_area_cache_.ensure_from_json(root, default_anchor, room_dimensions);
-    auto has_name = [&list](const std::string& name) {
-        return std::any_of(list.begin(), list.end(), [&](const RoomAreaCache::Polygon& poly) {
-            return poly.name == name;
-        });
-    };
-    if (selected_room_area_name_ && !has_name(*selected_room_area_name_)) {
-        selected_room_area_name_.reset();
-    }
-    if (hovered_room_area_name_ && !has_name(*hovered_room_area_name_)) {
-        hovered_room_area_name_.reset();
-    }
-    return list;
 }
 
 void DevControls::toggle_map_light_panel() {

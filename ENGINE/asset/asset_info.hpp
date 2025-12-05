@@ -183,6 +183,9 @@ class AssetInfo {
 
     void set_spawn_groups(const nlohmann::json& groups);
 
+    // Reload a single cached light texture from disk and replace the in-memory texture.
+    bool rebuild_light_texture(SDL_Renderer* renderer, std::size_t light_index);
+
         private:
     void load_base_properties(const nlohmann::json &data);
     void generate_lights(SDL_Renderer* renderer);

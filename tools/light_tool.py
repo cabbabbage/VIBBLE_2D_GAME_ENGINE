@@ -119,18 +119,13 @@ def parse_light_entry(raw: Any) -> Optional[LightDefinition]:
 
     radius = max(1, read_int(raw, "radius", 64))
 
-    fall_off_value = read_int(raw, "fall_off", 50)
-    # Support legacy spelling "falloff" if present
-    if "falloff" in raw:
-        fall_off_value = read_int(raw, "falloff", fall_off_value)
-    fall_off_value = max(0, fall_off_value)
+    fall_off_value = max(0, read_int(raw, "fall_off", 50))
 
     flare = max(0, read_int(raw, "flare", 0))
     intensity = max(1, min(255, read_int(raw, "light_intensity", 255)))
-    legacy_flicker = max(0, min(100, read_int(raw, "flicker", 0)))
-    flicker_speed = max(0, min(100, read_int(raw, "flicker_speed", legacy_flicker)))
+    flicker_speed = max(0, min(100, read_int(raw, "flicker_speed", 0)))
     flicker_smoothness = max(
-        0, min(100, read_int(raw, "flicker_smoothness", legacy_flicker))
+        0, min(100, read_int(raw, "flicker_smoothness", 100))
     )
     offset_x = read_int(raw, "offset_x", 0)
     offset_y = read_int(raw, "offset_y", 0)

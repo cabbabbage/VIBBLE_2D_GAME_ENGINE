@@ -31,9 +31,7 @@ class AssetInfoUI;
 class RenderAsset;
 class AssetList;
 
-namespace devmode {
-class AnimationRegenerator;
-}
+
 
 struct RenderObject {
     SDL_Texture* texture = nullptr;
@@ -291,7 +289,6 @@ private:
     friend class RenderAsset;
     friend class FrameEditorSession;
     friend class Assets;
-    friend class devmode::AnimationRegenerator;
     friend class CompositeAssetRenderer;
     WarpedScreenGrid* window = nullptr;
     bool highlighted = false;

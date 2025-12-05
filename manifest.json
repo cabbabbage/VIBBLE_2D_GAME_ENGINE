@@ -269,7 +269,7 @@
             255
           ],
           "light_intensity": 71,
-          "needs_rebuild": true,
+          "needs_rebuild": false,
           "offset_x": 22,
           "offset_y": -645,
           "radius": 29,
@@ -291,7 +291,7 @@
             255
           ],
           "light_intensity": 255,
-          "needs_rebuild": true,
+          "needs_rebuild": false,
           "offset_x": 26,
           "offset_y": -728,
           "radius": 331,
@@ -1699,7 +1699,7 @@
             255
           ],
           "light_intensity": 209,
-          "needs_rebuild": true,
+          "needs_rebuild": false,
           "offset_x": 0,
           "offset_y": 0,
           "radius": 2599,
@@ -1722,7 +1722,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 20.0
+        "scale_percentage": 79.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -3050,7 +3050,7 @@
             51
           ],
           "light_intensity": 130,
-          "needs_rebuild": true,
+          "needs_rebuild": false,
           "offset_x": 9,
           "offset_y": -116,
           "radius": 48,
@@ -3547,7 +3547,7 @@
             255
           ],
           "light_intensity": 255,
-          "needs_rebuild": true,
+          "needs_rebuild": false,
           "offset_x": 143,
           "offset_y": -732,
           "radius": 54,
@@ -3569,7 +3569,7 @@
             255
           ],
           "light_intensity": 254,
-          "needs_rebuild": true,
+          "needs_rebuild": false,
           "offset_x": 135,
           "offset_y": -714,
           "radius": 216,
@@ -3591,7 +3591,7 @@
             255
           ],
           "light_intensity": 184,
-          "needs_rebuild": true,
+          "needs_rebuild": false,
           "offset_x": 132,
           "offset_y": -729,
           "radius": 1927,
@@ -3613,7 +3613,7 @@
             255
           ],
           "light_intensity": 90,
-          "needs_rebuild": true,
+          "needs_rebuild": false,
           "offset_x": 132,
           "offset_y": -735,
           "radius": 797,

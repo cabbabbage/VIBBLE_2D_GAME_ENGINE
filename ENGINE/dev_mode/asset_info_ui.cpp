@@ -58,7 +58,7 @@
 #include "dev_mode/manifest_asset_utils.hpp"
 #include "dev_mode/asset_paths.hpp"
 
-#include "dev_mode/rebuildAnimation.hpp"
+#include "dev_mode/animation_runtime_refresh.hpp"
 #include "utils/rebuild_queue.hpp"
 
 namespace asset_paths = devmode::asset_paths;
@@ -1764,6 +1764,29 @@ void AssetInfoUI::mark_light_for_rebuild(std::size_t light_index) {
     }
     vibble::RebuildQueueCoordinator coordinator;
     coordinator.request_light_entry(info_->name, static_cast<int>(light_index));
+    coordinator.run_asset_tool();
+
+    SDL_Renderer* renderer = assets_ ? assets_->renderer() : nullptr;
+    if (renderer) {
+        info_->rebuild_light_texture(renderer, light_index);
+    }
+
+    // Propagate updated light textures to live assets
+    apply_to_assets_with_info([&](Asset* asset) {
+        if (!asset || !asset->info) return;
+        if (renderer) {
+            asset->info->light_sources = info_->light_sources;
+        }
+        asset->clear_render_caches();
+        if (assets_) {
+            assets_->notify_light_map_asset_moved(asset);
+        }
+    });
+
+    if (assets_) {
+        assets_->mark_active_assets_dirty();
+        assets_->notify_light_map_static_assets_changed();
+    }
 }
 
 void AssetInfoUI::mark_lighting_asset_for_rebuild() {
@@ -1772,6 +1795,30 @@ void AssetInfoUI::mark_lighting_asset_for_rebuild() {
     }
     vibble::RebuildQueueCoordinator coordinator;
     coordinator.request_light(info_->name);
+    coordinator.run_asset_tool();
+
+    SDL_Renderer* renderer = assets_ ? assets_->renderer() : nullptr;
+    if (renderer) {
+        for (std::size_t i = 0; i < info_->light_sources.size(); ++i) {
+            info_->rebuild_light_texture(renderer, i);
+        }
+    }
+
+    apply_to_assets_with_info([&](Asset* asset) {
+        if (!asset || !asset->info) return;
+        if (renderer) {
+            asset->info->light_sources = info_->light_sources;
+        }
+        asset->clear_render_caches();
+        if (assets_) {
+            assets_->notify_light_map_asset_moved(asset);
+        }
+    });
+
+    if (assets_) {
+        assets_->mark_active_assets_dirty();
+        assets_->notify_light_map_static_assets_changed();
+    }
 }
 
 void AssetInfoUI::sync_target_shading_settings() {
@@ -2240,7 +2287,7 @@ void AssetInfoUI::refresh_loaded_asset_instances() {
     }
 
     if (assets_) {
-        devmode::AnimationRegenerator::refresh_loaded_instances(assets_, info_);
+        devmode::refresh_loaded_animation_instances(assets_, info_);
     }
 
     if (assets_ && !info_->name.empty()) {
@@ -2259,7 +2306,7 @@ void AssetInfoUI::refresh_loaded_asset_instances() {
                 continue;
             }
 
-            devmode::AnimationRegenerator::refresh_loaded_instances(assets_, lib_info);
+            devmode::refresh_loaded_animation_instances(assets_, lib_info);
         }
     }
 }

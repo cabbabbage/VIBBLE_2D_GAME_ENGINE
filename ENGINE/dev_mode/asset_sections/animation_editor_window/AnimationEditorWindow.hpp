@@ -117,6 +117,9 @@ class AnimationEditorWindow {
     void persist_header_metadata(float speed_multiplier, bool crop_frames);
     std::vector<float> speed_multiplier_options() const;
     bool rebuild_animation_from_sources(const std::shared_ptr<AssetInfo>& info, const std::string& animation_id);
+    bool rebuild_animation_via_pipeline(const std::shared_ptr<AssetInfo>& info,
+                      const std::string& animation_id);
+    bool rebuild_all_animations_via_pipeline(const std::shared_ptr<AssetInfo>& info);
 
   private:
     bool visible_ = false;
@@ -131,6 +134,7 @@ class AnimationEditorWindow {
     std::unique_ptr<AnimationInspectorPanel> inspector_panel_;
     std::unique_ptr<AnimationListContextMenu> list_context_menu_;
     std::unique_ptr<DMButton> add_button_;
+    std::unique_ptr<DMButton> build_button_;
     std::unique_ptr<DMButton> controller_button_;
     std::unique_ptr<DMDropdown> speed_dropdown_;
     std::unique_ptr<DMCheckbox> crop_checkbox_;

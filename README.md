@@ -150,9 +150,6 @@ The `AnimationUpdate` class provides the restricted public interface for custom 
 - **AnimationUpdate(Asset* self, Assets* assets)**  
   Creates an `AnimationUpdate` instance tied to a specific asset and assets manager.
 
-- **AnimationUpdate(Asset* self, Assets* assets, double path_bias)**  
-  Alternative constructor (path_bias parameter is unused; legacy support only).
-
 ### Debug Control
 - **void set_debug_enabled(bool enabled)**  
   Enables or disables debug logging for movement planning and pathing. Useful for development and troubleshooting AI behaviors.

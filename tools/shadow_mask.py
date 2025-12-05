@@ -348,9 +348,6 @@ def main(argv=None) -> int:
     if not input_path or not output_path or not settings:
         return 1
     settings_dict = settings.as_dict()
-    if meta_path is None and len(argv) >= 9:
-        # Support legacy positional arg order (meta as 8th argument)
-        meta_path = Path(argv[8])
     ok = ShadowMaskGenerator.generate_preview(input_path, output_path, settings_dict, meta_path)
     return 0 if ok else 2
 

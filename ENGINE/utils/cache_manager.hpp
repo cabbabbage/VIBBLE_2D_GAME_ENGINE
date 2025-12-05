@@ -28,11 +28,6 @@ namespace CacheManager {
     bool load_metadata(const std::string& meta_file, json& out_json);
     bool save_metadata(const std::string& meta_file, const json& meta);
 
-    // PNG saving
-    bool save_png(SDL_Surface* surface, const std::string& path);
-    bool save_png_from_pixels(const uint8_t* rgba_pixels, int width, int height, const std::string& path);
-    bool save_surface_as_png(SDL_Surface* surface, const std::string& path);
-
     // Texture conversion
     SDL_Texture* surface_to_texture(SDL_Renderer* renderer, SDL_Surface* surface);
 

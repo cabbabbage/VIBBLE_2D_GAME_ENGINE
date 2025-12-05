@@ -41,7 +41,6 @@ class MainMenu {
     void drawVignette(Uint8 alpha) const;
     void renderAnimatedBackground(SDL_Texture* tex) const;
     std::filesystem::path loading_content_root() const;
-    std::filesystem::path legacy_loading_content_root() const;
     std::vector<std::filesystem::path> list_loading_images(const std::filesystem::path& root, bool recursive) const;
     std::filesystem::path pick_loading_image() const;
 

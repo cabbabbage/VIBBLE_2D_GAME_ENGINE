@@ -240,9 +240,6 @@ AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets)
     }
 }
 
-AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets, double)
-    : AnimationUpdate(self, assets) {}
-
 void AnimationUpdate::auto_move(SDL_Point rel_checkpoint,
                                 int visited_thresh_px,
                                 std::optional<int> checkpoint_resolution,

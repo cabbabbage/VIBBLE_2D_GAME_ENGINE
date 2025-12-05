@@ -68,7 +68,6 @@ bool segment_leaves_playable_area(const Assets* assets, SDL_Point from, SDL_Poin
 class AnimationUpdate {
 public:
     AnimationUpdate(Asset* self, Assets* assets);
-    AnimationUpdate(Asset* self, Assets* assets, double path_bias);
     void set_debug_enabled(bool enabled);
     bool debug_enabled() const;
 
