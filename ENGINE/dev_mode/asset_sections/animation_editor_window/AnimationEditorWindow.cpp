@@ -1978,70 +1978,25 @@ void AnimationEditorWindow::open_controller() {
     }
 }
 
-void AnimationEditorWindow::clear_animation_cache(const std::filesystem::path& cache_root,
-                                                  const std::string& asset_name,
-                                                  const std::string& animation_id) {
-    if (asset_name.empty() || animation_id.empty()) {
-        return;
-    }
-    std::error_code ec;
-    const auto anim_dir = cache_root / asset_name / "animations" / animation_id;
-    std::filesystem::remove_all(anim_dir, ec);
-    ec.clear();
-    const auto meta_file =
-        cache_root / ".asset_cache" / "animations" / asset_name / (animation_id + ".json");
-    std::filesystem::remove(meta_file, ec);
-}
-
-bool AnimationEditorWindow::regenerate_via_asset_tool(const std::shared_ptr<AssetInfo>& info,
-                                                      const std::string& animation_id) {
-    if (!info) {
-        return false;
-    }
-    const std::string asset_name = info->name;
-    if (asset_name.empty()) {
-        return false;
-    }
-
-    const std::filesystem::path project_root = std::filesystem::path(manifest::manifest_path()).parent_path();
-    const std::filesystem::path cache_root = project_root / "cache";
-    clear_animation_cache(cache_root, asset_name, animation_id);
-
-    vibble::RebuildQueueCoordinator coordinator;
-    coordinator.request_animation(asset_name, animation_id);
-    if (!coordinator.run_asset_tool()) {
-        set_status_message("asset_tool.py failed; see logs for details.", 240);
-        return false;
-    }
-
-    bool reloaded = false;
-    try {
-        reloaded = info->reload_animations_from_disk();
-    } catch (const std::exception& ex) {
-        std::cerr << "[AnimationEditor] reload_animations_from_disk failed for '" << asset_name
-                  << "': " << ex.what() << "\n";
-        reloaded = false;
-    }
-
-    SDL_Renderer* renderer = assets_ ? assets_->renderer() : nullptr;
-    if (renderer && reloaded) {
-        info->loadAnimations(renderer);
-        devmode::AnimationRegenerator::refresh_loaded_instances(assets_, info);
-    }
-
-    return reloaded;
-}
-
 bool AnimationEditorWindow::rebuild_animation_from_sources(const std::shared_ptr<AssetInfo>& info,
                                                            const std::string& animation_id) {
     if (!info) {
         return false;
     }
-    if (assets_) {
-        auto result = devmode::AnimationRegenerator::regenerate_animation(assets_, info, animation_id);
-        return result.python_success && (result.reloaded || result.refreshed_instances);
+    auto result = devmode::AnimationRegenerator::regenerate_animation(assets_, info, animation_id);
+    if (!result.python_success) {
+        set_status_message("asset_tool.py failed; see logs for details.", 240);
+        return false;
     }
-    return regenerate_via_asset_tool(info, animation_id);
+    if (!assets_) {
+        set_status_message("Animation rebuild queued; restart or run Rebuild Animation to refresh runtime instances.", 240);
+        return true;
+    }
+    if (!(result.reloaded || result.refreshed_instances)) {
+        set_status_message("Animation rebuild completed but runtime reload failed.", 240);
+        return false;
+    }
+    return true;
 }
 
 std::optional<std::filesystem::path> AnimationEditorWindow::pick_gif() const {

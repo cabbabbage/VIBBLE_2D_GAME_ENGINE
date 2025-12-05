@@ -2650,15 +2650,15 @@ float RoomEditor::compute_reference_screen_height(const WarpedScreenGrid& cam, f
         return reference_screen_height;
     }
 
-    SDL_Texture* player_final = player_asset->get_final_texture();
     SDL_Texture* player_frame = player_asset->get_current_frame();
     int pw = player_asset->cached_w;
     int ph = player_asset->cached_h;
-    if ((pw == 0 || ph == 0) && player_final) {
-        SDL_QueryTexture(player_final, nullptr, nullptr, &pw, &ph);
-    }
     if ((pw == 0 || ph == 0) && player_frame) {
         SDL_QueryTexture(player_frame, nullptr, nullptr, &pw, &ph);
+    }
+    if ((pw == 0 || ph == 0) && player_asset->info) {
+        pw = player_asset->info->original_canvas_width;
+        ph = player_asset->info->original_canvas_height;
     }
     if (pw != 0) player_asset->cached_w = pw;
     if (ph != 0) player_asset->cached_h = ph;
@@ -2686,15 +2686,18 @@ bool RoomEditor::compute_asset_screen_bounds(const WarpedScreenGrid& cam,
         return false;
     }
 
-    SDL_Texture* tex = asset->get_final_texture();
-    if (!tex) {
-        tex = asset->get_current_frame();
-    }
+    SDL_Texture* tex = asset->get_current_frame();
 
     int fw = asset->cached_w;
     int fh = asset->cached_h;
     if ((fw == 0 || fh == 0) && tex) {
         SDL_QueryTexture(tex, nullptr, nullptr, &fw, &fh);
+        if (asset->cached_w == 0) asset->cached_w = fw;
+        if (asset->cached_h == 0) asset->cached_h = fh;
+    }
+    if ((fw == 0 || fh == 0) && asset->info) {
+        fw = asset->info->original_canvas_width;
+        fh = asset->info->original_canvas_height;
         if (asset->cached_w == 0) asset->cached_w = fw;
         if (asset->cached_h == 0) asset->cached_h = fh;
     }

@@ -1821,9 +1821,6 @@ void Assets::force_shaded_assets_rerender() {
         }
         visited.insert(asset);
         asset->clear_render_caches();
-        if (asset->get_final_texture()) {
-            asset->set_final_texture(nullptr);
-        }
 };
 
     for (Asset* asset : all) {

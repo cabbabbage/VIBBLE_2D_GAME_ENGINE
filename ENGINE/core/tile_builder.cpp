@@ -213,8 +213,7 @@ void build_grid_tiles(SDL_Renderer* renderer,
         auto sprite_world = compute_sprite_world_rect(a);
         if (!sprite_world) continue;
 
-        SDL_Texture* texture = a->get_final_texture();
-        if (!texture) texture = a->get_current_frame();
+        SDL_Texture* texture = a->get_current_frame();
         if (!texture) continue;
 
         int tex_w = 0;

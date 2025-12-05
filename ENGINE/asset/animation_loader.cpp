@@ -725,18 +725,6 @@ void AnimationLoader::load(Animation& animation,
                           << " loading from cache_folder=" << cache_folder
                           << " variant_count=" << variant_count << "\n";
 
-                // Check for .ready marker to ensure Python finished writing
-                const fs::path ready_marker = cache_folder_path / ".ready";
-                std::error_code ec;
-                bool ready_exists = fs::exists(ready_marker, ec);
-                if (!ready_exists || ec) {
-                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                  << " .ready marker not found, cache may not be complete\n";
-                        // Signal that cache is invalid so it gets regenerated
-                        cache_invalid_detected = true;
-                        // Continue anyway, but warn
-                }
-
                 // Build paths for each variant
                 std::vector<VariantLayerPaths> variant_paths;
                 variant_paths.reserve(variant_count);
@@ -843,7 +831,6 @@ void AnimationLoader::load(Animation& animation,
                         free_surface_lists(foreground_surfaces);
                         free_surface_lists(background_surfaces);
                         free_surface_lists(mask_surfaces);
-                        cache_invalid_detected = true;
                         flush_diagnostics();
                         return;
                 }

@@ -155,7 +155,6 @@ class Asset {
     bool is_current_animation_last_frame() const;
     bool is_current_animation_looping() const;
     const AnimationFrame* current_animation_frame() const { return current_frame; }
-    std::uint64_t final_texture_revision() const { return final_texture_revision_; }
     void add_child(Asset* asset_child);
 
     struct ScaleUsageStats {
@@ -187,9 +186,7 @@ class Asset {
     const AnimationFrame* last_rendered_frame() const { return last_rendered_frame_; }
     void set_last_rendered_frame(const AnimationFrame* frame) { last_rendered_frame_ = frame; }
     void reset_last_rendered_frame() { last_rendered_frame_ = nullptr; }
-    SDL_Texture* get_final_texture() const;
     SDL_Texture* get_texture();
-    void set_final_texture(SDL_Texture* tex);
     void set_camera(WarpedScreenGrid* v) { window = v; }
     void set_assets(Assets* a);
     Assets* get_assets() const { return assets_; }
@@ -307,7 +304,6 @@ private:
     float frame_progress = 0.0f;
     int  shading_group = 0;
     bool shading_group_set = false;
-    SDL_Texture* final_texture = nullptr;
     Assets* assets_ = nullptr;
     std::unique_ptr<AssetController>   controller_;
     std::unique_ptr<AssetList> neighbors;
@@ -357,7 +353,6 @@ private:
     TransformSmoothingState scale_smoothing_{};
     TransformSmoothingState alpha_smoothing_{};
 
-    std::uint64_t final_texture_revision_ = 0;
     const AnimationFrame* last_rendered_frame_ = nullptr;
 
     // Tracks whether finalize_setup() has already run for this asset

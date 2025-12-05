@@ -90,7 +90,6 @@ void AnimationRegenerator::refresh_loaded_instances(Assets* assets,
         asset->rebuild_animation_runtime();
         asset->clear_render_caches();
         // asset->clear_downscale_cache();
-        asset->set_final_texture(nullptr);
         asset->current_frame = nullptr;
         asset->frame_progress = 0.0f;
         asset->static_frame = false;
@@ -132,8 +131,8 @@ AnimationRegenerationResult AnimationRegenerator::regenerate_animation(
     const std::string& animation_id) {
     AnimationRegenerationResult result{};
 
-    if (!assets || !info) {
-        std::cerr << "[AnimationRegenerator] Missing assets or asset info; skipping regeneration\n";
+    if (!info) {
+        std::cerr << "[AnimationRegenerator] Missing asset info; skipping regeneration\n";
         return result;
     }
     if (animation_id.empty()) {
@@ -164,6 +163,12 @@ AnimationRegenerationResult AnimationRegenerator::regenerate_animation(
         return result;
     }
     result.reloaded = true;
+
+    if (!assets) {
+        std::cout << "[AnimationRegenerator] Assets unavailable; queued rebuild without refreshing runtime instances for "
+                  << asset_name << "\n";
+        return result;
+    }
 
     SDL_Renderer* renderer = assets->renderer();
     if (!renderer) {

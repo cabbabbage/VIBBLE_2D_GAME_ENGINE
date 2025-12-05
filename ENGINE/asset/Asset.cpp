@@ -173,10 +173,6 @@ Asset::~Asset() {
         }
         // clear_downscale_cache();
         clear_render_caches();
-        if (final_texture) {
-                SDL_DestroyTexture(final_texture);
-                final_texture = nullptr;
-        }
         if (composite_texture_) {
                 SDL_DestroyTexture(composite_texture_);
                 composite_texture_ = nullptr;
@@ -214,7 +210,6 @@ Asset::Asset(const Asset& o)
 , frame_progress(o.frame_progress)
 , shading_group(o.shading_group)
 , shading_group_set(o.shading_group_set)
-, final_texture(o.final_texture)
 , assets_(o.assets_)
 , spawn_id(o.spawn_id)
 , spawn_method(o.spawn_method)
@@ -228,7 +223,6 @@ Asset::Asset(const Asset& o)
 , last_scaled_h_(0)
 , last_scaled_camera_scale_(-1.0f)
 , last_scale_usage_()
-, final_texture_revision_(o.final_texture_revision_)
 , last_rendered_frame_(nullptr)
 , scale_variant_state_(o.scale_variant_state_)
 , base_bounds_local_(o.base_bounds_local_)
@@ -286,8 +280,6 @@ Asset& Asset::operator=(const Asset& o) {
         frame_progress       = o.frame_progress;
 	shading_group        = o.shading_group;
 	shading_group_set    = o.shading_group_set;
-        final_texture        = o.final_texture;
-        final_texture_revision_ = o.final_texture_revision_;
         last_rendered_frame_   = nullptr;
         assets_              = o.assets_;
         spawn_id             = o.spawn_id;
@@ -915,43 +907,6 @@ void Asset::ClearFlipOverrideForSpawnId(const std::string& id) {
         s_flip_overrides_.erase(id);
 }
 
-void Asset::set_final_texture(SDL_Texture* tex) {
-        int new_w = 0;
-        int new_h = 0;
-        if (tex) {
-                if (SDL_QueryTexture(tex, nullptr, nullptr, &new_w, &new_h) != 0) {
-                        new_w = 0;
-                        new_h = 0;
-                }
-        }
-
-        const bool texture_changed = (tex != final_texture);
-        const bool size_changed    = (new_w != cached_w) || (new_h != cached_h);
-
-        if (texture_changed) {
-                if (final_texture) {
-                        SDL_DestroyTexture(final_texture);
-                }
-                final_texture = tex;
-                if (size_changed) {
-                        // clear_downscale_cache();
-                }
-        } else if (size_changed) {
-                // clear_downscale_cache();
-        }
-
-        invalidate_downscale_cache();
-
-        if (tex) {
-                cached_w = new_w;
-                cached_h = new_h;
-        } else {
-                cached_w = 0;
-                cached_h = 0;
-        }
-}
-
-SDL_Texture* Asset::get_final_texture() const { return final_texture; }
 int  Asset::get_shading_group() const { return shading_group; }
 bool Asset::is_shading_group_set() const { return shading_group_set; }
 
@@ -979,10 +934,6 @@ Area Asset::get_area(const std::string& name) const {
 void Asset::deactivate() {
         // clear_downscale_cache();
         clear_render_caches();
-        if (final_texture) {
-                SDL_DestroyTexture(final_texture);
-                final_texture = nullptr;
-        }
         visibility_stamp = 0;
 }
 
@@ -1026,8 +977,6 @@ void Asset::reset_mask_render_metadata() {
 }
 
 void Asset::invalidate_downscale_cache() {
-        ++final_texture_revision_;
-
         last_scaled_texture_      = nullptr;
         last_scaled_source_       = nullptr;
         last_scaled_w_            = 0;
@@ -1043,13 +992,6 @@ void Asset::invalidate_downscale_cache() {
 void Asset::refresh_cached_dimensions() {
         int width = 0;
         int height = 0;
-
-        if (final_texture) {
-                if (SDL_QueryTexture(final_texture, nullptr, nullptr, &width, &height) != 0) {
-                        width = 0;
-                        height = 0;
-                }
-        }
 
         if ((width <= 0 || height <= 0)) {
                 SDL_Texture* frame = get_current_variant_texture();

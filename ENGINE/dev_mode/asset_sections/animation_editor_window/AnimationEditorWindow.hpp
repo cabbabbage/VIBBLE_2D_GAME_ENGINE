@@ -117,10 +117,6 @@ class AnimationEditorWindow {
     void persist_header_metadata(float speed_multiplier, bool crop_frames);
     std::vector<float> speed_multiplier_options() const;
     bool rebuild_animation_from_sources(const std::shared_ptr<AssetInfo>& info, const std::string& animation_id);
-    bool regenerate_via_asset_tool(const std::shared_ptr<AssetInfo>& info, const std::string& animation_id);
-    void clear_animation_cache(const std::filesystem::path& cache_root,
-                               const std::string& asset_name,
-                               const std::string& animation_id);
 
   private:
     bool visible_ = false;

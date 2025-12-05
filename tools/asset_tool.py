@@ -21,8 +21,8 @@ from shadow_mask import ShadowMaskGenerator, ShadowMaskSettings
 
 
 def normalize_variant_steps(steps):
-    # Always use fixed variants: 100%, 75%, 50%, 25%.
-    return [1.0, 0.75, 0.5, 0.25]
+    # Always use fixed variants: 100%, 75%, 50%, 25%, 10%.
+    return [1.0, 0.75, 0.5, 0.25, 0.1]
 
 
 def _configure_logger() -> logging.Logger:

@@ -768,10 +768,16 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                 int fw = target_asset_->cached_w;
                 int fh = target_asset_->cached_h;
                 if ((fw <= 0 || fh <= 0)) {
-                    if (SDL_Texture* ft = target_asset_->get_final_texture()) {
-                        SDL_QueryTexture(ft, nullptr, nullptr, &fw, &fh);
+                    if (SDL_Texture* frame = target_asset_->get_current_frame()) {
+                        SDL_QueryTexture(frame, nullptr, nullptr, &fw, &fh);
                     }
                 }
+                if ((fw <= 0 || fh <= 0) && target_asset_->info) {
+                    fw = target_asset_->info->original_canvas_width;
+                    fh = target_asset_->info->original_canvas_height;
+                }
+                if (target_asset_->cached_w == 0 && fw > 0) target_asset_->cached_w = fw;
+                if (target_asset_->cached_h == 0 && fh > 0) target_asset_->cached_h = fh;
                 if (fw <= 0) fw = 1;
                 if (fh <= 0) fh = 1;
 
@@ -1202,9 +1208,8 @@ float AssetInfoUI::compute_player_screen_height(const WarpedScreenGrid& cam) con
     Asset* player_asset = assets_->player;
     if (!player_asset) return 1.0f;
 
-    SDL_Texture* player_final = player_asset->get_final_texture();
-    SDL_Texture* player_frame = nullptr;
-    if (player_asset->info && player_asset->info->animations.count(player_asset->current_animation)) {
+    SDL_Texture* player_frame = player_asset->get_current_frame();
+    if (!player_frame && player_asset->info && player_asset->info->animations.count(player_asset->current_animation)) {
         AnimationFrame* frame = player_asset->info->animations[player_asset->current_animation].get_first_frame();
         if (frame && !frame->variants.empty()) {
             player_frame = frame->get_base_texture(0);
@@ -1212,11 +1217,12 @@ float AssetInfoUI::compute_player_screen_height(const WarpedScreenGrid& cam) con
     }
     int pw = player_asset->cached_w;
     int ph = player_asset->cached_h;
-    if ((pw == 0 || ph == 0) && player_final) {
-        SDL_QueryTexture(player_final, nullptr, nullptr, &pw, &ph);
-    }
     if ((pw == 0 || ph == 0) && player_frame) {
         SDL_QueryTexture(player_frame, nullptr, nullptr, &pw, &ph);
+    }
+    if ((pw == 0 || ph == 0) && player_asset->info) {
+        pw = player_asset->info->original_canvas_width;
+        ph = player_asset->info->original_canvas_height;
     }
     if (pw != 0) player_asset->cached_w = pw;
     if (ph != 0) player_asset->cached_h = ph;
@@ -1255,10 +1261,16 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const WarpedScreenGrid& 
             int fw = target_asset_->cached_w;
             int fh = target_asset_->cached_h;
             if ((fw <= 0 || fh <= 0)) {
-                if (SDL_Texture* ft = target_asset_->get_final_texture()) {
-                    SDL_QueryTexture(ft, nullptr, nullptr, &fw, &fh);
+                if (SDL_Texture* frame = target_asset_->get_current_frame()) {
+                    SDL_QueryTexture(frame, nullptr, nullptr, &fw, &fh);
                 }
             }
+            if ((fw <= 0 || fh <= 0) && target_asset_->info) {
+                fw = target_asset_->info->original_canvas_width;
+                fh = target_asset_->info->original_canvas_height;
+            }
+            if (target_asset_->cached_w == 0 && fw > 0) target_asset_->cached_w = fw;
+            if (target_asset_->cached_h == 0 && fh > 0) target_asset_->cached_h = fh;
             if (fw <= 0) fw = 1;
             if (fh <= 0) fh = 1;
 
@@ -1881,20 +1893,8 @@ void AssetInfoUI::regenerate_shadow_masks() {
 
     vibble::RebuildQueueCoordinator coordinator;
     coordinator.request_asset(info_->name);
-
-#if defined(_WIN32)
-    const std::string prefix =
-        "set \"PATH=%PATH%;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.0\\bin\" && ";
-#else
-    const std::string prefix;
-#endif
-
-    std::cout << "[AssetInfoUI] Queueing mask regeneration via asset_tool.py for "
-              << info_->name << "\n";
-    if (!coordinator.run_asset_tool(prefix)) {
-        std::cerr << "[AssetInfoUI] asset_tool.py failed while regenerating masks for "
-                  << info_->name << "\n";
-    }
+    std::cout << "[AssetInfoUI] Marked " << info_->name
+              << " for mask regeneration. Run Rebuild Assets to process queued work." << "\n";
 
     info_->loadAnimations(renderer);
     (void)generate_mask_preview();

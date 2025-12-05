@@ -971,8 +971,7 @@ void ForegroundBackgroundEffectPanel::apply_and_regenerate() {
     if (!assets_) {
         return;
     }
-    SDL_Renderer* renderer = assets_->renderer();
-    if (!renderer) {
+    if (!assets_->renderer()) {
         return;
     }
 
@@ -985,21 +984,7 @@ void ForegroundBackgroundEffectPanel::apply_and_regenerate() {
     cam.set_realism_settings(settings);
     assets_->on_camera_settings_changed();
 
-    // Check if cache directory exists
-    const fs::path cache_dir("cache");
-    std::error_code ec;
-    const bool cache_exists = fs::exists(cache_dir, ec) && fs::is_directory(cache_dir, ec);
-    if (!cache_exists) {
-        std::filesystem::create_directories(cache_dir, ec);
-    }
-
-    // Force regeneration of selected asset by removing its cache if it exists
-    std::error_code del_ec;
-    if (!selected_asset_.empty()) {
-        fs::remove_all(cache_dir / selected_asset_, del_ec);
-    }
-
-    // Always regenerate the selected asset (or all assets if none selected) so Python applies current settings
+    // Always mark the selected asset (or all assets if none selected) so Python applies current settings
     vibble::RebuildQueueCoordinator coordinator;
     if (selected_asset_.empty()) {
         coordinator.request_full_asset_rebuild();
@@ -1007,16 +992,10 @@ void ForegroundBackgroundEffectPanel::apply_and_regenerate() {
         coordinator.request_asset(selected_asset_);
     }
 
-    std::cout << "[DepthCuePanel] Running asset_tool.py via rebuild queue"
-              << (selected_asset_.empty() ? " for all assets" : (" for " + selected_asset_))
-              << "...\n";
-    if (!coordinator.run_asset_tool()) {
-        std::cerr << "[DepthCuePanel] asset_tool.py failed"
-                  << (selected_asset_.empty() ? "" : " for " + selected_asset_)
-                  << "; see logs for details.\n";
-    }
+    std::cout << "[DepthCuePanel] Marked "
+              << (selected_asset_.empty() ? std::string{"all assets"} : selected_asset_)
+              << " for regeneration. Run Rebuild Assets to process queued work.\n";
 
-    assets_->library().loadAllAnimations(renderer);
     saved_fg_ = fg_settings_;
     saved_bg_ = bg_settings_;
     has_unsaved_changes_ = false;
