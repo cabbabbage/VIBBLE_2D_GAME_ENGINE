@@ -1523,6 +1523,39 @@
         "Vibble_eyes"
       ],
       "animations": {
+        "backward": {
+          "crop_frames": false,
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": false,
+            "flipY": false,
+            "reverse": true
+          },
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": true,
+          "rnd_start": false,
+          "source": {
+            "kind": "animation",
+            "name": "forward",
+            "path": ""
+          },
+          "speed_multiplier": 1.0
+        },
         "default": {
           "attack_geometry": [
             {
@@ -1887,6 +1920,29 @@
             "path": "left"
           },
           "speed_multiplier": 1.0
+        },
+        "right": {
+          "crop_frames": false,
+          "derived_modifiers": {
+            "flipMovementX": true,
+            "flipMovementY": false,
+            "flipX": true,
+            "flipY": false,
+            "reverse": false
+          },
+          "flipped_source": true,
+          "inherit_source_movement": true,
+          "loop": true,
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "animation",
+            "name": "left",
+            "path": ""
+          },
+          "speed_multiplier": 1.0
         }
       },
       "anti_tags": [],
@@ -1934,7 +1990,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 43.0
+        "scale_percentage": 29.0
       },
       "spawn_groups": [],
       "start": "default",

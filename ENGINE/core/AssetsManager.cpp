@@ -8,6 +8,7 @@
 #include "asset/asset_info.hpp"
 #include "asset/asset_utils.hpp"
 #include "asset/asset_types.hpp"
+#include "animation_update/animation_runtime.hpp"
 #include "audio/audio_engine.hpp"
 #include "dev_mode/dev_controls.hpp"
 #include "dev_mode/depth_cue_settings.hpp"
@@ -773,9 +774,20 @@ void Assets::update(const Input& input)
     int start_px = player ? player->pos.x : 0;
     int start_py = player ? player->pos.y : 0;
 
-    if (!dev_mode) {
-        // Update player first and capture any movement
-        if (player) player->update();
+    // Update player first and capture any movement
+    if (player) {
+        if (dev_mode) {
+            // In dev mode, only update animations and scale (skip movement/controller logic)
+            if (player->info) {
+                player->update_scale_values();
+            }
+            if (!player->dead && player->anim_runtime_) {
+                player->anim_runtime_->update();
+            }
+        } else {
+            // Full update including movement
+            player->update();
+        }
     }
 
     bool player_moved = false;
@@ -806,13 +818,23 @@ void Assets::update(const Input& input)
     }
 
     // Update non-player assets and accumulate movement commands
-    if (!dev_mode) {
-        // Ensure we have a current buffer of non-player assets to update
-        rebuild_non_player_update_buffer_if_needed();
+    // Ensure we have a current buffer of non-player assets to update
+    rebuild_non_player_update_buffer_if_needed();
 
-        for (Asset* asset : non_player_update_buffer_) {
-            if (!asset) continue;
-            SDL_Point previous_pos{asset->pos.x, asset->pos.y};
+    for (Asset* asset : non_player_update_buffer_) {
+        if (!asset) continue;
+        SDL_Point previous_pos{asset->pos.x, asset->pos.y};
+        
+        if (dev_mode) {
+            // In dev mode, only update animations and scale (skip movement/controller logic)
+            if (asset->info) {
+                asset->update_scale_values();
+            }
+            if (!asset->dead && asset->anim_runtime_) {
+                asset->anim_runtime_->update();
+            }
+        } else {
+            // Full update including movement
             asset->update();
             if (previous_pos.x != asset->pos.x || previous_pos.y != asset->pos.y) {
                 movement_commands_buffer_.push_back(GridMovementCommand{

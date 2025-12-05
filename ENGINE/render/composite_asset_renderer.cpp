@@ -22,10 +22,6 @@ void CompositeAssetRenderer::update(Asset* asset,
                                     float flicker_time_seconds) {
     if (!asset) return;
 
-    // Always refresh scale values before rendering, even in dev mode
-    // (Asset::update() is skipped in dev mode, but we need fresh scale calculations)
-    asset->update_scale_values();
-
     float combined_scale = asset->current_nearest_variant_scale * asset->current_remaining_scale_adjustment;
     if (!std::isfinite(combined_scale) || combined_scale <= 0.0f) {
         combined_scale = 1.0f;
