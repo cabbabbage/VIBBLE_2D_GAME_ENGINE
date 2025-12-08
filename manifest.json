@@ -1,16 +1,337 @@
 {
   "assets": {
+    "Bartender": {
+      "animations": {
+        "back": {
+          "crop_frames": false,
+          "flipped_source": true,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 10,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "back"
+          },
+          "speed_multiplier": 1.0
+        },
+        "default": {
+          "crop_frames": false,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 6,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          },
+          "speed_multiplier": 1.0
+        },
+        "forward": {
+          "crop_frames": false,
+          "flipped_source": true,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 6,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "forward"
+          },
+          "speed_multiplier": 1.0
+        },
+        "left": {
+          "crop_frames": false,
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": true,
+            "flipY": false,
+            "reverse": false
+          },
+          "flipped_source": true,
+          "inherit_source_movement": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 12,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "animation",
+            "name": "right",
+            "path": ""
+          },
+          "speed_multiplier": 1.0
+        },
+        "right": {
+          "crop_frames": false,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 12,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "right"
+          },
+          "speed_multiplier": 1.0
+        }
+      },
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/Bartender",
+      "asset_name": "Bartender",
+      "asset_type": "object",
+      "can_invert": false,
+      "has_shading": false,
+      "lighting_info": [],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
+      "neighbor_search_distance": 500,
+      "render_radius": 0,
+      "size_settings": {
+        "scale_percentage": 100.0
+      },
+      "start": "default",
+      "tags": [],
+      "update_radius": 0
+    },
     "Bench": {
       "animation_children": [],
       "animations": {
         "default": {
           "crop_frames": true,
           "flipped_source": false,
-          "frames": [
-            {
-              "needs_rebuild": false
-            }
-          ],
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -40,7 +361,6 @@
       "asset_directory": "SRC/assets/Bench",
       "asset_name": "Bench",
       "asset_type": "object",
-      "async_children": [],
       "can_invert": false,
       "has_shading": false,
       "lighting_info": [],
@@ -59,7 +379,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 23.0
+        "scale_percentage": 30.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -72,44 +392,6 @@
         "default": {
           "crop_frames": false,
           "flipped_source": false,
-          "frames": [
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            }
-          ],
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -202,44 +484,6 @@
       "animations": {
         "default": {
           "fps": 12,
-          "frames": [
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            }
-          ],
           "locked": false,
           "loop": true,
           "source": {
@@ -270,7 +514,6 @@
             255
           ],
           "light_intensity": 71,
-          "needs_rebuild": false,
           "offset_x": 22,
           "offset_y": -645,
           "radius": 29,
@@ -292,7 +535,6 @@
             255
           ],
           "light_intensity": 255,
-          "needs_rebuild": false,
           "offset_x": 26,
           "offset_y": -728,
           "radius": 331,
@@ -338,14 +580,315 @@
       "tags": [],
       "tillable": false
     },
+    "Carrie": {
+      "animations": {
+        "back": {
+          "crop_frames": false,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 10,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "back"
+          },
+          "speed_multiplier": 1.0
+        },
+        "default": {
+          "crop_frames": false,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          },
+          "speed_multiplier": 1.0
+        },
+        "forward": {
+          "crop_frames": false,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 6,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "forward"
+          },
+          "speed_multiplier": 1.0
+        },
+        "left": {
+          "crop_frames": false,
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": true,
+            "flipY": false,
+            "reverse": false
+          },
+          "flipped_source": true,
+          "inherit_source_movement": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 12,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "animation",
+            "name": "right",
+            "path": ""
+          },
+          "speed_multiplier": 1.0
+        },
+        "right": {
+          "crop_frames": false,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 12,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "right"
+          },
+          "speed_multiplier": 1.0
+        }
+      },
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/Carrie",
+      "asset_name": "Carrie",
+      "asset_type": "object",
+      "can_invert": false,
+      "has_shading": false,
+      "lighting_info": [],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
+      "neighbor_search_distance": 500,
+      "render_radius": 0,
+      "size_settings": {
+        "scale_percentage": 100.0
+      },
+      "start": "default",
+      "tags": [],
+      "update_radius": 0
+    },
     "Casino": {
       "animations": {
         "default": {
-          "frames": [
-            {
-              "needs_rebuild": false
-            }
-          ],
           "locked": false,
           "loop": true,
           "source": {
@@ -357,7 +900,6 @@
       "asset_directory": "SRC/assets/Casino",
       "asset_name": "Casino",
       "asset_type": "object",
-      "lighting_info": [],
       "start": "default"
     },
     "Davey": {
@@ -366,44 +908,6 @@
         "back": {
           "flipped_source": false,
           "fps": 24,
-          "frames": [
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            }
-          ],
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -475,80 +979,6 @@
         "default": {
           "flipped_source": false,
           "fps": 24,
-          "frames": [
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            }
-          ],
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -668,44 +1098,6 @@
         "forward": {
           "flipped_source": false,
           "fps": 24,
-          "frames": [
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            }
-          ],
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -783,44 +1175,6 @@
             "reverse": false
           },
           "flipped_source": true,
-          "frames": [
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            }
-          ],
           "inherit_source_movement": true,
           "loop": true,
           "number_of_frames": 12,
@@ -836,44 +1190,6 @@
         "right": {
           "flipped_source": false,
           "fps": 24,
-          "frames": [
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            }
-          ],
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -977,44 +1293,6 @@
       "animation_children": [],
       "animations": {
         "default": {
-          "frames": [
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            }
-          ],
           "locked": false,
           "loop": true,
           "source": {
@@ -1026,7 +1304,6 @@
       "anti_tags": [],
       "asset_directory": "SRC/assets/Fountain",
       "asset_name": "Fountain",
-      "lighting_info": [],
       "neighbor_search_distance": 500,
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -1046,50 +1323,564 @@
       "tags": [],
       "tillable": false
     },
+    "Frog": {
+      "animations": {
+        "Default": {
+          "crop_frames": false,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "left",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "Default"
+          },
+          "speed_multiplier": 1.0
+        },
+        "Move Forward": {
+          "locked": false,
+          "loop": true,
+          "source": {
+            "kind": "folder",
+            "path": "Move Forward"
+          }
+        },
+        "Move Left": {
+          "locked": false,
+          "loop": true,
+          "source": {
+            "kind": "folder",
+            "path": "Move Left"
+          }
+        },
+        "forward": {
+          "crop_frames": false,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 6,
+          "on_end": "left",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "Move Forward"
+          },
+          "speed_multiplier": 1.0
+        },
+        "left": {
+          "crop_frames": false,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": true,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 12,
+          "on_end": "left",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "Move Left"
+          },
+          "speed_multiplier": 1.0
+        },
+        "right": {
+          "crop_frames": false,
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": true,
+            "flipY": false,
+            "reverse": false
+          },
+          "flipped_source": true,
+          "inherit_source_movement": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 12,
+          "on_end": "left",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "animation",
+            "name": "left",
+            "path": ""
+          },
+          "speed_multiplier": 1.0
+        }
+      },
+      "asset_directory": "SRC/assets/Frog",
+      "asset_name": "Frog",
+      "asset_type": "object",
+      "start": "Default"
+    },
+    "Gary": {
+      "animations": {
+        "back": {
+          "crop_frames": false,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 10,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "back"
+          },
+          "speed_multiplier": 1.0
+        },
+        "default": {
+          "crop_frames": false,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          },
+          "speed_multiplier": 1.0
+        },
+        "forward": {
+          "crop_frames": false,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 6,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "forward"
+          },
+          "speed_multiplier": 1.0
+        },
+        "left": {
+          "crop_frames": false,
+          "derived_modifiers": {
+            "flipMovementX": false,
+            "flipMovementY": false,
+            "flipX": true,
+            "flipY": false,
+            "reverse": false
+          },
+          "flipped_source": true,
+          "inherit_source_movement": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 12,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "animation",
+            "name": "right",
+            "path": ""
+          },
+          "speed_multiplier": 1.0
+        },
+        "right": {
+          "crop_frames": false,
+          "flipped_source": false,
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ],
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 12,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "right"
+          },
+          "speed_multiplier": 1.0
+        }
+      },
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/Gary",
+      "asset_name": "Gary",
+      "asset_type": "object",
+      "can_invert": false,
+      "has_shading": false,
+      "lighting_info": [],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
+      "neighbor_search_distance": 500,
+      "render_radius": 0,
+      "size_settings": {
+        "scale_percentage": 100.0
+      },
+      "start": "default",
+      "tags": [],
+      "update_radius": 0
+    },
     "Grass_1": {
       "animation_children": [],
       "animations": {
         "default": {
           "flipped_source": false,
           "fps": 12,
-          "frames": [
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            }
-          ],
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -1119,7 +1910,6 @@
       "asset_directory": "SRC/assets/Grass_1",
       "asset_name": "Grass_1",
       "asset_type": "texture",
-      "lighting_info": [],
       "neighbor_search_distance": 500,
       "scaling_profile": {
         "generated_at": "2025-11-20T15:18:27Z",
@@ -1160,44 +1950,6 @@
       "animations": {
         "default": {
           "fps": 12,
-          "frames": [
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            }
-          ],
           "locked": false,
           "loop": true,
           "source": {
@@ -1211,7 +1963,6 @@
       "asset_directory": "SRC/assets/Grass_2",
       "asset_name": "Grass_2",
       "asset_type": "texture",
-      "lighting_info": [],
       "neighbor_search_distance": 500,
       "scaling_profile": {
         "generated_at": "2025-11-20T15:18:27Z",
@@ -1253,11 +2004,6 @@
         "default": {
           "crop_frames": true,
           "flipped_source": false,
-          "frames": [
-            {
-              "needs_rebuild": false
-            }
-          ],
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -1306,80 +2052,6 @@
       "animations": {
         "default": {
           "fps": 24,
-          "frames": [
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            }
-          ],
           "locked": false,
           "loop": true,
           "source": {
@@ -1393,7 +2065,6 @@
       "asset_directory": "SRC/assets/Tree_1",
       "asset_name": "Tree_1",
       "asset_type": "boundary",
-      "lighting_info": [],
       "neighbor_search_distance": 500,
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -1406,7 +2077,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 65.0
+        "scale_percentage": 100.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -1419,11 +2090,6 @@
         "default": {
           "flipped_source": false,
           "fps": 12,
-          "frames": [
-            {
-              "needs_rebuild": false
-            }
-          ],
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -1453,7 +2119,6 @@
       "asset_directory": "SRC/assets/Tree_2",
       "asset_name": "Tree_2",
       "asset_type": "boundary",
-      "lighting_info": [],
       "neighbor_search_distance": 500,
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -1466,7 +2131,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 65.0
+        "scale_percentage": 100.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -1478,11 +2143,6 @@
       "animations": {
         "default": {
           "fps": 6,
-          "frames": [
-            {
-              "needs_rebuild": false
-            }
-          ],
           "locked": false,
           "loop": true,
           "source": {
@@ -1499,7 +2159,6 @@
       "asset_name": "Tree_3",
       "asset_type": "object",
       "can_invert": false,
-      "lighting_info": [],
       "neighbor_search_distance": 500,
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -1512,7 +2171,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 65.0
+        "scale_percentage": 100.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -1522,165 +2181,16 @@
     "Vibble": {
       "animation_children": [],
       "animations": {
-        "backward": {
-          "attack_geometry": [
-            {
-              "explosion": [],
-              "melee": [],
-              "projectile": []
-            },
-            {
-              "explosion": [],
-              "melee": [],
-              "projectile": []
-            },
-            {
-              "explosion": [],
-              "melee": [],
-              "projectile": []
-            },
-            {
-              "explosion": [],
-              "melee": [],
-              "projectile": []
-            },
-            {
-              "explosion": [],
-              "melee": [],
-              "projectile": []
-            },
-            {
-              "explosion": [],
-              "melee": [],
-              "projectile": []
-            },
-            {
-              "explosion": [],
-              "melee": [],
-              "projectile": []
-            },
-            {
-              "explosion": [],
-              "melee": [],
-              "projectile": []
-            }
-          ],
-          "child_timelines": [],
-          "crop_frames": false,
-          "derived_modifiers": {
-            "flipMovementX": false,
-            "flipMovementY": false,
-            "flipX": false,
-            "flipY": false,
-            "reverse": true
-          },
-          "flipped_source": false,
-          "frames": [
-            {
-              "needs_rebuild": true
-            }
-          ],
-          "hit_geometry": [
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            }
-          ],
-          "inherit_source_movement": false,
-          "loop": true,
-          "movement": [
-            [
-              0,
-              0,
-              false,
-              [],
-              []
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": 0
-          },
-          "number_of_frames": 1,
-          "on_end": "default",
-          "reverse_source": true,
-          "rnd_start": false,
-          "source": {
-            "kind": "animation",
-            "name": "forward",
-            "path": ""
-          },
-          "speed_multiplier": 1.0
-        },
         "default": {
-          "attack_geometry": [
-            {
-              "explosion": [],
-              "melee": [],
-              "projectile": []
-            }
-          ],
-          "child_timelines": [],
-          "crop_frames": false,
+          "crop_frames": true,
           "flipped_source": false,
-          "frames": [
-            {
-              "needs_rebuild": false
-            }
-          ],
-          "hit_geometry": [
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            }
-          ],
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
           "movement": [
             [
               0,
-              0,
-              false,
-              [],
-              []
+              0
             ]
           ],
           "movement_total": {
@@ -1699,315 +2209,20 @@
           "speed_multiplier": 1.0
         },
         "forward": {
-          "attack_geometry": [
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            }
-          ],
-          "child_timelines": [],
-          "crop_frames": false,
-          "flipped_source": false,
-          "frames": [
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            }
-          ],
-          "hit_geometry": [
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            }
-          ],
-          "inherit_source_movement": false,
           "locked": false,
           "loop": true,
-          "movement": [
-            [
-              0,
-              0,
-              false,
-              null,
-              []
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": 0
-          },
-          "number_of_frames": 1,
-          "on_end": "default",
-          "reverse_source": false,
-          "rnd_start": false,
           "source": {
             "kind": "folder",
-            "name": "",
             "path": "forward"
-          },
-          "speed_multiplier": 1.0
+          }
         },
         "left": {
-          "attack_geometry": [
-            {
-              "explosion": [],
-              "melee": [],
-              "projectile": []
-            },
-            {
-              "explosion": [],
-              "melee": [],
-              "projectile": []
-            },
-            {
-              "explosion": [],
-              "melee": [],
-              "projectile": []
-            },
-            {
-              "explosion": [],
-              "melee": [],
-              "projectile": []
-            },
-            {
-              "explosion": [],
-              "melee": [],
-              "projectile": []
-            },
-            {
-              "explosion": [],
-              "melee": [],
-              "projectile": []
-            },
-            {
-              "explosion": [],
-              "melee": [],
-              "projectile": []
-            },
-            {
-              "explosion": [],
-              "melee": [],
-              "projectile": []
-            }
-          ],
-          "child_timelines": [],
-          "crop_frames": false,
-          "flipped_source": false,
-          "frames": [
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            }
-          ],
-          "hit_geometry": [
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            },
-            {
-              "explosion": null,
-              "melee": null,
-              "projectile": null
-            }
-          ],
-          "inherit_source_movement": false,
           "locked": false,
           "loop": true,
-          "movement": [
-            [
-              0,
-              0,
-              false,
-              null,
-              []
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": 0
-          },
-          "number_of_frames": 1,
-          "on_end": "default",
-          "reverse_source": false,
-          "rnd_start": false,
           "source": {
             "kind": "folder",
-            "name": "",
             "path": "left"
-          },
-          "speed_multiplier": 1.0
-        },
-        "right": {
-          "child_timelines": [],
-          "crop_frames": false,
-          "derived_modifiers": {
-            "flipMovementX": true,
-            "flipMovementY": false,
-            "flipX": true,
-            "flipY": false,
-            "reverse": false
-          },
-          "flipped_source": true,
-          "frames": [
-            {
-              "needs_rebuild": true
-            }
-          ],
-          "inherit_source_movement": true,
-          "loop": true,
-          "number_of_frames": 1,
-          "on_end": "default",
-          "reverse_source": false,
-          "rnd_start": false,
-          "source": {
-            "kind": "animation",
-            "name": "left",
-            "path": ""
-          },
-          "speed_multiplier": 1.0
+          }
         }
       },
       "anti_tags": [],
@@ -2016,30 +2231,7 @@
       "asset_type": "player",
       "can_invert": false,
       "has_shading": false,
-      "lighting_info": [
-        {
-          "behind": false,
-          "falloff": 50,
-          "flare": 0,
-          "flicker": 0,
-          "flicker_smoothness": 100,
-          "flicker_speed": 0,
-          "has_light_source": true,
-          "in_front": true,
-          "light_color": [
-            255,
-            255,
-            255
-          ],
-          "light_intensity": 209,
-          "needs_rebuild": false,
-          "offset_x": 0,
-          "offset_y": 0,
-          "radius": 2599,
-          "render_front_and_back_to_asset_alpha_mask": false,
-          "render_to_dark_mask": true
-        }
-      ],
+      "lighting_info": [],
       "min_distance_all": 0,
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
@@ -2055,7 +2247,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 20.0
+        "scale_percentage": 25.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -2064,79 +2256,8 @@
       "update_radius": 0
     },
     "Vibble_attack_1": {
-      "animations": {
-        "default": {
-          "crop_frames": false,
-          "flipped_source": false,
-          "frames": [
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            }
-          ],
-          "inherit_source_movement": false,
-          "locked": true,
-          "loop": true,
-          "movement": [
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ],
-            [
-              0,
-              0
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": 0
-          },
-          "number_of_frames": 6,
-          "on_end": "default",
-          "reverse_source": false,
-          "rnd_start": false,
-          "source": {
-            "kind": "folder",
-            "name": "",
-            "path": "default"
-          },
-          "speed_multiplier": 1.0
-        }
-      },
       "asset_directory": "SRC/assets/Vibble_attack_1",
-      "asset_name": "Vibble_attack_1",
-      "lighting_info": [],
-      "start": "default"
+      "asset_name": "Vibble_attack_1"
     },
     "Vibble_eyes": {
       "animation_children": [],
@@ -2144,11 +2265,6 @@
         "default": {
           "crop_frames": true,
           "flipped_source": false,
-          "frames": [
-            {
-              "needs_rebuild": false
-            }
-          ],
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -2178,7 +2294,6 @@
       "asset_directory": "SRC/assets/Vibble_eyes",
       "asset_name": "Vibble_eyes",
       "asset_type": "object",
-      "lighting_info": [],
       "neighbor_search_distance": 500,
       "shading_opacity_multiplier": 1.0,
       "shading_parallax_amount": 0.0,
@@ -2191,7 +2306,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 18.0
+        "scale_percentage": 65.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -2211,34 +2326,11 @@
               "projectile": null
             }
           ],
-          "child_timelines": [
-            {
-              "animation": "",
-              "asset": "Candle",
-              "child": 0,
-              "child_index": 0,
-              "frames": [
-                {
-                  "degree": -860.0,
-                  "dx": 0,
-                  "dy": -40,
-                  "render_in_front": true,
-                  "visible": false
-                }
-              ],
-              "mode": "static"
-            }
-          ],
           "children": [
             "Candle"
           ],
           "crop_frames": false,
           "flipped_source": false,
-          "frames": [
-            {
-              "needs_rebuild": false
-            }
-          ],
           "hit_geometry": [
             {
               "explosion": null,
@@ -2344,56 +2436,6 @@
             "reverse": false
           },
           "flipped_source": true,
-          "frames": [
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            }
-          ],
           "inherit_source_movement": true,
           "loop": true,
           "number_of_frames": 16,
@@ -2410,56 +2452,6 @@
         "default": {
           "crop_frames": false,
           "flipped_source": false,
-          "frames": [
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            }
-          ],
           "inherit_source_movement": false,
           "locked": true,
           "loop": true,
@@ -2616,32 +2608,6 @@
           ],
           "crop_frames": true,
           "flipped_source": false,
-          "frames": [
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            }
-          ],
           "hit_geometry": [
             {
               "explosion": null,
@@ -2828,56 +2794,6 @@
           ],
           "crop_frames": false,
           "flipped_source": false,
-          "frames": [
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            }
-          ],
           "hit_geometry": [
             {
               "explosion": null,
@@ -3159,56 +3075,6 @@
             "reverse": false
           },
           "flipped_source": true,
-          "frames": [
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            }
-          ],
           "hit_geometry": [
             {
               "explosion": null,
@@ -3384,56 +3250,6 @@
             "reverse": false
           },
           "flipped_source": true,
-          "frames": [
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            },
-            {
-              "needs_rebuild": true
-            }
-          ],
           "inherit_source_movement": true,
           "loop": true,
           "number_of_frames": 16,
@@ -3471,7 +3287,6 @@
             51
           ],
           "light_intensity": 130,
-          "needs_rebuild": false,
           "offset_x": 9,
           "offset_y": -116,
           "radius": 48,
@@ -3503,16 +3318,10 @@
       "update_radius": 0
     },
     "bottle": {
-      "animation_children": [],
       "animations": {
         "default": {
           "crop_frames": true,
           "flipped_source": false,
-          "frames": [
-            {
-              "needs_rebuild": false
-            }
-          ],
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -3542,31 +3351,18 @@
       "asset_directory": "SRC/assets/bottle",
       "asset_name": "bottle",
       "asset_type": "object",
-      "async_children": [],
-      "can_invert": true,
+      "can_invert": false,
       "has_shading": false,
       "lighting_info": [],
       "min_distance_all": 0,
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
       "render_radius": 0,
-      "shading_opacity_multiplier": 1.0,
-      "shading_parallax_amount": 0.0,
-      "shading_screen_brightness_multiplier": 1.0,
-      "shadow_mask_settings": {
-        "alpha_multiplier": 1.0,
-        "blur_scale": 1.0,
-        "expansion_ratio": 0.800000011920929,
-        "falloff_exponent": 1.0499999523162842,
-        "falloff_start": 0.0
-      },
       "size_settings": {
-        "scale_percentage": 7.0
+        "scale_percentage": 100.0
       },
-      "spawn_groups": [],
       "start": "default",
       "tags": [],
-      "tillable": false,
       "update_radius": 0
     },
     "bottle_2": {
@@ -3574,11 +3370,6 @@
         "default": {
           "crop_frames": true,
           "flipped_source": false,
-          "frames": [
-            {
-              "needs_rebuild": false
-            }
-          ],
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -3602,62 +3393,6 @@
             "path": "default"
           },
           "speed_multiplier": 1.0
-        },
-        "forward": {
-          "frames": [
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            }
-          ]
-        },
-        "left": {
-          "frames": [
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            },
-            {
-              "needs_rebuild": false
-            }
-          ]
         }
       },
       "anti_tags": [],
@@ -3678,17 +3413,27 @@
       "tags": [],
       "update_radius": 0
     },
+    "candle": {
+      "animations": {
+        "default": {
+          "locked": false,
+          "loop": true,
+          "source": {
+            "kind": "folder",
+            "path": "default"
+          }
+        }
+      },
+      "asset_directory": "SRC/assets/candle",
+      "asset_name": "candle",
+      "start": "default"
+    },
     "church": {
       "animation_children": [],
       "animations": {
         "default": {
           "flipped_source": false,
           "fps": 24,
-          "frames": [
-            {
-              "needs_rebuild": false
-            }
-          ],
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -3750,11 +3495,6 @@
         "default": {
           "flipped_source": false,
           "fps": 24,
-          "frames": [
-            {
-              "needs_rebuild": false
-            }
-          ],
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -3833,11 +3573,6 @@
         "default": {
           "flipped_source": false,
           "fps": 24,
-          "frames": [
-            {
-              "needs_rebuild": false
-            }
-          ],
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -3917,11 +3652,6 @@
         "default": {
           "flipped_source": false,
           "fps": 24,
-          "frames": [
-            {
-              "needs_rebuild": false
-            }
-          ],
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -3969,7 +3699,6 @@
             255
           ],
           "light_intensity": 255,
-          "needs_rebuild": false,
           "offset_x": 143,
           "offset_y": -732,
           "radius": 54,
@@ -3991,7 +3720,6 @@
             255
           ],
           "light_intensity": 254,
-          "needs_rebuild": false,
           "offset_x": 135,
           "offset_y": -714,
           "radius": 216,
@@ -4013,7 +3741,6 @@
             255
           ],
           "light_intensity": 184,
-          "needs_rebuild": false,
           "offset_x": 132,
           "offset_y": -729,
           "radius": 1927,
@@ -4035,7 +3762,6 @@
             255
           ],
           "light_intensity": 90,
-          "needs_rebuild": false,
           "offset_x": 132,
           "offset_y": -735,
           "radius": 797,
@@ -4073,11 +3799,6 @@
         "default": {
           "crop_frames": true,
           "flipped_source": false,
-          "frames": [
-            {
-              "needs_rebuild": false
-            }
-          ],
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -4133,71 +3854,20 @@
       "tillable": false,
       "update_radius": 0
     },
-    "top_hat": {
-      "animation_children": [],
+    "town_hall": {
       "animations": {
         "default": {
-          "crop_frames": true,
-          "flipped_source": false,
-          "frames": [
-            {
-              "needs_rebuild": false
-            }
-          ],
-          "inherit_source_movement": false,
           "locked": false,
           "loop": true,
-          "movement": [
-            [
-              0,
-              0
-            ]
-          ],
-          "movement_total": {
-            "dx": 0,
-            "dy": 0
-          },
-          "number_of_frames": 1,
-          "on_end": "default",
-          "reverse_source": false,
-          "rnd_start": false,
           "source": {
             "kind": "folder",
-            "name": "",
             "path": "default"
-          },
-          "speed_multiplier": 1.0
+          }
         }
       },
-      "anti_tags": [],
-      "asset_directory": "SRC/assets/top_hat",
-      "asset_name": "top_hat",
-      "asset_type": "object",
-      "can_invert": false,
-      "has_shading": false,
-      "lighting_info": [],
-      "min_distance_all": 0,
-      "min_same_type_distance": 0,
-      "neighbor_search_distance": 500,
-      "render_radius": 0,
-      "shading_opacity_multiplier": 1.0,
-      "shading_parallax_amount": 0.0,
-      "shading_screen_brightness_multiplier": 1.0,
-      "shadow_mask_settings": {
-        "alpha_multiplier": 1.0,
-        "blur_scale": 1.0,
-        "expansion_ratio": 0.800000011920929,
-        "falloff_exponent": 1.0499999523162842,
-        "falloff_start": 0.0
-      },
-      "size_settings": {
-        "scale_percentage": 16.0
-      },
-      "spawn_groups": [],
-      "start": "default",
-      "tags": [],
-      "tillable": false,
-      "update_radius": 0
+      "asset_directory": "SRC/assets/town_hall",
+      "asset_name": "town_hall",
+      "start": "default"
     },
     "trail": {
       "animation_children": [],
@@ -4205,11 +3875,6 @@
         "default": {
           "flipped_source": false,
           "fps": 24,
-          "frames": [
-            {
-              "needs_rebuild": false
-            }
-          ],
           "inherit_source_movement": false,
           "locked": false,
           "loop": true,
@@ -4624,7 +4289,7 @@
           },
           {
             "brightness": 1.0,
-            "offset": 658.9600219726562,
+            "offset": 658.9600219726563,
             "opacity": 7.659999847412109,
             "scale": 6.590000152587891
           }
@@ -4654,9 +4319,9 @@
         "bar": {
           "curvyness": 2,
           "display_color": [
-            71,
             242,
             36,
+            155,
             255
           ],
           "edge_smoothness": 19,
@@ -4674,9 +4339,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
-            112,
-            31,
             204,
+            102,
+            31,
             255
           ],
           "edge_smoothness": 43,
@@ -4727,9 +4392,9 @@
         "rnd": {
           "curvyness": 2,
           "display_color": [
-            203,
-            242,
+            143,
             36,
+            242,
             255
           ],
           "edge_smoothness": 2,
@@ -4747,9 +4412,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            41,
-            36,
             242,
+            164,
+            36,
             255
           ],
           "edge_smoothness": 101,
@@ -4977,8 +4642,8 @@
                 }
               ],
               "display_name": "lantern",
-              "dx": -1732,
-              "dy": -1732,
+              "dx": -1750,
+              "dy": -1744,
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
@@ -4989,7 +4654,7 @@
               "origional_width": 6904,
               "position": "Exact",
               "priority": 7,
-              "resolution": 3,
+              "resolution": 7,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-5f19831b92c3"
@@ -5006,8 +4671,8 @@
                 }
               ],
               "display_name": "latern_left",
-              "dx": 2766,
-              "dy": -1712,
+              "dx": 2620,
+              "dy": -1732,
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
@@ -5018,7 +4683,7 @@
               "origional_width": 6904,
               "position": "Exact",
               "priority": 8,
-              "resolution": 3,
+              "resolution": 1,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-c54e6f1a557e"
@@ -5151,8 +4816,8 @@
                 }
               ],
               "display_name": "Bench",
-              "dx": -820,
-              "dy": -884,
+              "dx": -1018,
+              "dy": -730,
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
@@ -5163,7 +4828,7 @@
               "origional_width": 6904,
               "position": "Exact",
               "priority": 13,
-              "resolution": 3,
+              "resolution": 7,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-511472b321d6"
@@ -5225,35 +4890,6 @@
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-5a348b912d45"
-            },
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                },
-                {
-                  "chance": 100,
-                  "name": "top_hat"
-                }
-              ],
-              "display_name": "top_hat",
-              "dx": -1564,
-              "dy": -1108,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 6904,
-              "origional_width": 6904,
-              "position": "Exact",
-              "priority": 16,
-              "resolution": 3,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-e2c95ad9e42f"
             }
           ]
         }
