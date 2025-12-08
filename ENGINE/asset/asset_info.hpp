@@ -7,6 +7,7 @@
 #include <map>
 #include <nlohmann/json.hpp>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -140,6 +141,8 @@ class AssetInfo {
     void add_anti_tag(const std::string &tag);
     void remove_anti_tag(const std::string &tag);
     void set_animation_children(const std::vector<std::string>& children);
+    void append_animation_child(const std::string& child);
+    void remove_animation_child_at(std::size_t index);
     void set_async_children(const std::vector<AsyncChildDefinition>& children);
     void set_passable(bool v);
     void set_tillable(bool v);

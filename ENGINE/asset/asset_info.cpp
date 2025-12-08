@@ -1135,6 +1135,38 @@ void AssetInfo::set_animation_children(const std::vector<std::string>& children)
     }
 }
 
+void AssetInfo::append_animation_child(const std::string& child) {
+    if (child.empty()) {
+        return;
+    }
+    animation_children.push_back(child);
+    if (!info_json_.contains("animation_children") || !info_json_["animation_children"].is_array()) {
+        info_json_["animation_children"] = nlohmann::json::array();
+    }
+    info_json_["animation_children"].push_back(child);
+}
+
+void AssetInfo::remove_animation_child_at(std::size_t index) {
+    if (index >= animation_children.size()) {
+        return;
+    }
+    animation_children.erase(animation_children.begin() + static_cast<long>(index));
+    if (!info_json_.contains("animation_children") || !info_json_["animation_children"].is_array()) {
+        info_json_["animation_children"] = animation_children;
+        return;
+    }
+    auto& arr = info_json_["animation_children"];
+    if (!arr.is_array()) {
+        info_json_["animation_children"] = animation_children;
+        return;
+    }
+    if (index < arr.size()) {
+        arr.erase(arr.begin() + static_cast<nlohmann::json::difference_type>(index));
+    } else {
+        info_json_["animation_children"] = animation_children;
+    }
+}
+
     void AssetInfo::set_async_children(const std::vector<AsyncChildDefinition>& children) {
         async_children.clear();
         std::unordered_set<std::string> seen;
