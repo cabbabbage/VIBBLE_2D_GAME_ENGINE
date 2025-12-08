@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include <SDL.h>
 
@@ -68,8 +69,10 @@ private:
     void       advance_child_frames(float dt);
     void       apply_child_frame_data(const AnimationFrame* frame);
     void       sync_child_assets();
+    void       update_async_children(float dt);
     Asset*     spawn_child_asset(Asset::AnimationChildAttachment& slot);
     void       destroy_child_assets();
+    void       handle_async_requests(const std::vector<std::string>& requests);
 
     // Apply a pending one-shot move from the planner
     void       apply_pending_move();

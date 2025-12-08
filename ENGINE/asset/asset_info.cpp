@@ -51,6 +51,83 @@ std::vector<std::string> parse_string_array(const nlohmann::json& json_value) {
     return values;
 }
 
+AnimationChildFrameData parse_async_child_frame(const nlohmann::json& entry) {
+    AnimationChildFrameData data{};
+    data.child_index = -1; // async children are asset-level, not indexed per frame
+
+    auto read_bool = [](const nlohmann::json& v, bool fallback) {
+        if (v.is_boolean()) return v.get<bool>();
+        if (v.is_number_integer()) return v.get<int>() != 0;
+        return fallback;
+    };
+
+    if (entry.is_object()) {
+        try { data.dx = static_cast<int>(entry.value("dx", 0)); } catch (...) { data.dx = 0; }
+        try { data.dy = static_cast<int>(entry.value("dy", 0)); } catch (...) { data.dy = 0; }
+        if (entry.contains("degree") && entry["degree"].is_number()) {
+            try { data.degree = static_cast<float>(entry["degree"].get<double>()); } catch (...) { data.degree = 0.0f; }
+        } else if (entry.contains("rotation") && entry["rotation"].is_number()) {
+            try { data.degree = static_cast<float>(entry["rotation"].get<double>()); } catch (...) { data.degree = 0.0f; }
+        }
+        data.visible = read_bool(entry.value("visible", true), true);
+        data.render_in_front = read_bool(entry.value("render_in_front", true), true);
+        return data;
+    }
+
+    if (entry.is_array() && !entry.empty()) {
+        if (entry.size() >= 1 && entry[0].is_number()) { try { data.dx = entry[0].get<int>(); } catch (...) { data.dx = 0; } }
+        if (entry.size() >= 2 && entry[1].is_number()) { try { data.dy = entry[1].get<int>(); } catch (...) { data.dy = 0; } }
+        if (entry.size() >= 3 && entry[2].is_number()) { try { data.degree = static_cast<float>(entry[2].get<double>()); } catch (...) { data.degree = 0.0f; } }
+        if (entry.size() >= 4) data.visible = read_bool(entry[3], true);
+        if (entry.size() >= 5) data.render_in_front = read_bool(entry[4], true);
+    }
+
+    return data;
+}
+
+nlohmann::json encode_async_child_frames(const std::vector<AnimationChildFrameData>& frames) {
+    nlohmann::json arr = nlohmann::json::array();
+    auto& out = arr.get_ref<nlohmann::json::array_t&>();
+    out.reserve(frames.size());
+    for (const auto& frame : frames) {
+        nlohmann::json obj = nlohmann::json::object();
+        obj["dx"] = frame.dx;
+        obj["dy"] = frame.dy;
+        obj["degree"] = frame.degree;
+        obj["visible"] = frame.visible;
+        obj["render_in_front"] = frame.render_in_front;
+        out.push_back(std::move(obj));
+    }
+    return arr;
+}
+
+std::vector<AsyncChildDefinition> parse_async_children(const nlohmann::json& data) {
+    std::vector<AsyncChildDefinition> result;
+    if (!data.contains("async_children") || !data["async_children"].is_array()) {
+        return result;
+    }
+
+    std::unordered_set<std::string> seen_names;
+    for (const auto& entry : data["async_children"]) {
+        if (!entry.is_object()) continue;
+        AsyncChildDefinition def;
+        def.name = entry.value("name", std::string{});
+        if (def.name.empty()) continue;
+        if (!seen_names.insert(def.name).second) continue;
+        def.asset = entry.value("asset", entry.value("child", std::string{}));
+        def.animation = entry.value("animation", std::string{});
+        if (entry.contains("frames") && entry["frames"].is_array()) {
+            for (const auto& f : entry["frames"]) {
+                def.frames.push_back(parse_async_child_frame(f));
+            }
+        }
+        if (def.valid()) {
+            result.push_back(std::move(def));
+        }
+    }
+    return result;
+}
+
 constexpr int kLightTextureCacheVersion = 3;
 
 std::string light_signature(const LightSource& light) {
@@ -1036,6 +1113,34 @@ void AssetInfo::set_animation_children(const std::vector<std::string>& children)
         info_json_["animation_children"] = std::move(arr);
 }
 
+    void AssetInfo::set_async_children(const std::vector<AsyncChildDefinition>& children) {
+        async_children.clear();
+        std::unordered_set<std::string> seen;
+        async_children.reserve(children.size());
+        for (const auto& entry : children) {
+            if (!entry.valid()) {
+                continue;
+            }
+            if (!seen.insert(entry.name).second) {
+                continue;
+            }
+            async_children.push_back(entry);
+        }
+
+        nlohmann::json arr = nlohmann::json::array();
+        for (const auto& child : async_children) {
+            nlohmann::json obj = nlohmann::json::object();
+            obj["name"] = child.name;
+            obj["asset"] = child.asset;
+            if (!child.animation.empty()) {
+                obj["animation"] = child.animation;
+            }
+            obj["frames"] = encode_async_child_frames(child.frames);
+            arr.push_back(std::move(obj));
+        }
+        info_json_["async_children"] = std::move(arr);
+    }
+
 void AssetInfo::rebuild_tag_cache() {
         tag_lookup_.clear();
         tag_lookup_.reserve(tags.size());
@@ -1347,6 +1452,9 @@ void AssetInfo::initialize_from_json(const nlohmann::json& source) {
                 }
         }
         info_json_["animation_children"] = std::move(animation_children_json);
+
+        async_children = parse_async_children(data);
+        set_async_children(async_children);
 
         load_animations(data);
 

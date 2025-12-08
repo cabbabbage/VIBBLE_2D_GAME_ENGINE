@@ -3710,6 +3710,14 @@ void FrameEditorSession::refresh_child_assets_from_document() {
         }
     }
     child_assets_ = std::move(names);
+    std::unordered_set<std::string> previous_lookup(previous.begin(), previous.end());
+    std::vector<int> new_child_indices;
+    new_child_indices.reserve(child_assets_.size());
+    for (std::size_t i = 0; i < child_assets_.size(); ++i) {
+        if (previous_lookup.find(child_assets_[i]) == previous_lookup.end()) {
+            new_child_indices.push_back(static_cast<int>(i));
+        }
+    }
     remap_child_indices(remap);
     if (target_ && target_->info) {
         target_->info->set_animation_children(child_assets_);
@@ -3720,6 +3728,28 @@ void FrameEditorSession::refresh_child_assets_from_document() {
         assets_->mark_active_assets_dirty();
     }
     sync_child_frames();
+    if (!new_child_indices.empty()) {
+        for (auto& frame : frames_) {
+            if (frame.children.size() < child_assets_.size()) {
+                frame.children.resize(child_assets_.size());
+            }
+            for (int idx : new_child_indices) {
+                if (idx < 0 || static_cast<std::size_t>(idx) >= frame.children.size()) {
+                    continue;
+                }
+                auto& child = frame.children[static_cast<std::size_t>(idx)];
+                if (!child.has_data) {
+                    child.child_index = idx;
+                    child.dx = 0.0f;
+                    child.dy = 0.0f;
+                    child.degree = 0.0f;
+                    child.visible = true;
+                    child.render_in_front = true;
+                    child.has_data = true;
+                }
+            }
+        }
+    }
     child_dropdown_options_cache_.clear();
     rebuild_child_preview_cache();
 }

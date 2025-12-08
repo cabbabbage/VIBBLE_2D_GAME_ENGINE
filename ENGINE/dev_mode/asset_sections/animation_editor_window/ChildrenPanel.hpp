@@ -54,10 +54,11 @@ class ChildrenPanel {
 
   private:
     void refresh_from_document();
+    std::vector<std::string> current_children() const;
     std::vector<std::string> read_local_children(const nlohmann::json& payload) const;
     std::vector<std::string> resolve_inherited_children(const nlohmann::json& payload, int depth = 0) const;
     void commit_children();
-    void refresh_local_children_from_info();
+    void refresh_local_children_from_source();
     void add_child_entry(const std::string& entry);
     void remove_child_entry(size_t index);
     void ensure_search_panel();

@@ -17,6 +17,7 @@
 #include "movement_plan_executor.hpp"
 #include "path_sanitizer.hpp"
 #include "get_best_path.hpp"
+#include "animation_update/child_attachment_math.hpp"
 #include "utils/area.hpp"
 #include "utils/grid.hpp"
 #include "render/warped_screen_grid.hpp"
@@ -86,6 +87,30 @@ void AnimationRuntime::update() {
     if (!self_ || !self_->info || !planner_iface_) {
         return;
     }
+
+    // Consume any queued async child triggers from the planner.
+    const std::vector<std::string> async_requests = planner_iface_->consume_async_requests();
+    if (!async_requests.empty()) {
+        handle_async_requests(async_requests);
+    }
+
+    float dt = 1.0f / 60.0f;
+    if (assets_owner_) {
+        dt = assets_owner_->frame_delta_seconds();
+    }
+    if (!(dt > 0.0f)) {
+        dt = 1.0f / 60.0f;
+    }
+
+    struct AsyncDecay {
+        AnimationRuntime* runtime = nullptr;
+        float dt = 0.0f;
+        ~AsyncDecay() {
+            if (runtime) {
+                runtime->update_async_children(dt);
+            }
+        }
+    } async_decay{ this, dt };
 
     struct SuppressionDecay {
         AnimationRuntime* runtime = nullptr;
@@ -603,6 +628,105 @@ void AnimationRuntime::apply_child_frame_data(const AnimationFrame* frame) {
     sync_child_assets();
 }
 
+void AnimationRuntime::update_async_children(float dt) {
+    if (!self_ || self_->async_children_.empty()) {
+        return;
+    }
+
+    auto compute_attachment_scale = [&]() -> float {
+        float perspective_scale = 1.0f;
+        if (assets_owner_ && self_ && self_->info && self_->info->apply_distance_scaling) {
+            const WarpedScreenGrid& cam = assets_owner_->getView();
+            if (const auto* gp = cam.grid_point_for_asset(self_)) {
+                perspective_scale = std::max(0.0001f, gp->perspective_scale);
+            }
+        }
+        float remainder = self_->current_remaining_scale_adjustment;
+        if (!std::isfinite(remainder) || remainder <= 0.0f) {
+            remainder = 1.0f;
+        }
+        float scale = remainder / std::max(0.0001f, perspective_scale);
+        if (!std::isfinite(scale) || scale <= 0.0f) {
+            scale = 1.0f;
+        }
+        return scale;
+    };
+
+    animation_update::child_attachments::ParentState parent_state;
+    SDL_Point render_pos{ static_cast<int>(std::lround(self_->smoothed_translation_x())),
+                          static_cast<int>(std::lround(self_->smoothed_translation_y())) };
+    parent_state.position = render_pos;
+    parent_state.base_position = animation_update::detail::bottom_middle_for(*self_, render_pos);
+    parent_state.scale = compute_attachment_scale();
+    parent_state.flipped = self_->flipped;
+    parent_state.animation_id = self_->current_animation;
+
+    const float interval = 1.0f / static_cast<float>(kBaseAnimationFps);
+    const float clamped_dt = (dt > 0.0f) ? dt : (1.0f / 60.0f);
+
+    bool any_changed = false;
+    for (auto& instance : self_->async_children_) {
+        auto& slot = instance.slot;
+        const bool prev_visible = slot.visible;
+        const bool prev_front = slot.render_in_front;
+        const float prev_rotation = slot.rotation_degrees;
+        SDL_Point prev_world = slot.world_pos;
+
+        if (!instance.active || !instance.definition || instance.definition->frames.empty() || !slot.animation) {
+            slot.visible = false;
+            slot.was_visible = false;
+            slot.child_index = -1;
+        } else {
+            slot.child_index = 0;
+            instance.frame_progress += clamped_dt;
+            while (instance.frame_progress >= interval &&
+                   instance.frame_cursor + 1 < static_cast<int>(instance.definition->frames.size())) {
+                instance.frame_progress -= interval;
+                ++instance.frame_cursor;
+            }
+
+            if (instance.frame_cursor >= static_cast<int>(instance.definition->frames.size())) {
+                instance.active = false;
+                slot.visible = false;
+                slot.was_visible = false;
+                slot.child_index = -1;
+            } else {
+                const auto& frame_data = instance.definition->frames[static_cast<std::size_t>(instance.frame_cursor)];
+                slot.render_in_front = frame_data.render_in_front;
+                slot.rotation_degrees = mirrored_child_rotation(parent_state.flipped, frame_data.degree);
+                slot.visible = frame_data.visible;
+                if (slot.visible) {
+                    const bool became_visible = !slot.was_visible;
+                    if (became_visible) {
+                        animation_update::child_attachments::restart(slot);
+                    }
+                    const float scaled_dx = static_cast<float>(frame_data.dx) * parent_state.scale;
+                    const float scaled_dy = static_cast<float>(frame_data.dy) * parent_state.scale;
+                    const int dx = parent_state.flipped
+                                       ? -static_cast<int>(std::lround(scaled_dx))
+                                       : static_cast<int>(std::lround(scaled_dx));
+                    const int dy = static_cast<int>(std::lround(scaled_dy));
+                    slot.world_pos.x = parent_state.base_position.x + dx;
+                    slot.world_pos.y = parent_state.base_position.y + dy;
+                }
+                slot.was_visible = slot.visible;
+            }
+        }
+
+        const bool changed = (prev_visible != slot.visible) ||
+                             (prev_front != slot.render_in_front) ||
+                             (std::abs(prev_rotation - slot.rotation_degrees) > 0.001f) ||
+                             (prev_world.x != slot.world_pos.x) ||
+                             (prev_world.y != slot.world_pos.y);
+        any_changed = any_changed || changed;
+    }
+
+    if (any_changed) {
+        self_->mark_composite_dirty();
+    }
+    sync_child_assets();
+}
+
 Asset* AnimationRuntime::spawn_child_asset(Asset::AnimationChildAttachment& slot) {
     if (!assets_owner_ || !self_ || !slot.info) {
         return nullptr;
@@ -643,7 +767,7 @@ void AnimationRuntime::destroy_child_assets() {
         return;
     }
     // Do not delete child assets; park them and clear slot state until they are needed again.
-    for (auto& slot : self_->animation_children_) {
+    auto park_slot = [](Asset::AnimationChildAttachment& slot) {
         slot.child_index = -1;
         slot.visible = false;
         slot.was_visible = false;
@@ -658,41 +782,109 @@ void AnimationRuntime::destroy_child_assets() {
         if (slot.spawned_asset) {
             slot.spawned_asset->set_hidden(true);
         }
+    };
+
+    for (auto& slot : self_->animation_children_) {
+        park_slot(slot);
     }
+
+    for (auto& async_child : self_->async_children_) {
+        park_slot(async_child.slot);
+        async_child.active = false;
+        async_child.frame_cursor = 0;
+        async_child.frame_progress = 0.0f;
+    }
+}
+
+void AnimationRuntime::handle_async_requests(const std::vector<std::string>& requests) {
+    if (!self_) {
+        return;
+    }
+    self_->initialize_async_children();
+    if (self_->async_children_.empty()) {
+        return;
+    }
+
+    AssetLibrary* library = assets_owner_ ? &assets_owner_->library() : nullptr;
+
+    for (const auto& name : requests) {
+        auto it = self_->async_child_lookup_.find(name);
+        if (it == self_->async_child_lookup_.end()) {
+            continue;
+        }
+        Asset::AsyncChildInstance& instance = self_->async_children_[it->second];
+        if (!instance.valid() || !instance.definition || instance.definition->frames.empty()) {
+            continue;
+        }
+
+        auto& slot = instance.slot;
+        slot.child_index = 0;
+        if (!slot.info && library && !slot.asset_name.empty()) {
+            slot.info = library->get(slot.asset_name);
+        }
+        if (!slot.animation && slot.info) {
+            std::string anim_name = instance.definition->animation.empty()
+                                        ? animation_update::detail::kDefaultAnimation
+                                        : instance.definition->animation;
+            auto anim_it = slot.info->animations.find(anim_name);
+            if (anim_it == slot.info->animations.end() && !slot.info->animations.empty()) {
+                anim_it = slot.info->animations.begin();
+            }
+            if (anim_it != slot.info->animations.end()) {
+                slot.animation = &anim_it->second;
+            }
+        }
+        if (slot.animation && !slot.current_frame) {
+            animation_update::child_attachments::restart(slot);
+        }
+        if (!slot.spawned_asset && slot.info) {
+            spawn_child_asset(slot);
+        }
+
+        const int start_frame = self_->current_frame ? std::max(0, self_->current_frame->frame_index) : 0;
+        instance.frame_cursor = std::clamp(start_frame,
+                                           0,
+                                           static_cast<int>(instance.definition->frames.size()) - 1);
+        instance.frame_progress = 0.0f;
+        instance.active = true;
+        slot.was_visible = false;
+        slot.visible = false;
+        slot.render_in_front = true;
+        slot.last_parent_frame_index = -1;
+    }
+
+    self_->mark_composite_dirty();
 }
 
 void AnimationRuntime::sync_child_assets() {
     if (!self_) {
         return;
     }
-    for (auto& slot : self_->animation_children_) {
+    auto sync_slot = [&](Asset::AnimationChildAttachment& slot) {
         if (slot.child_index < 0) {
             if (slot.spawned_asset) {
                 slot.spawned_asset->hidden = true;
                 slot.spawned_asset->alpha_smoothing_.target = 0.0f;
             }
-            continue;
+            return;
         }
         Asset* child = slot.spawned_asset;
         if (!child && slot.info && slot.visible) {
             child = spawn_child_asset(slot);
         }
         if (!child) {
-            continue;
+            return;
         }
         if (child->dead) {
             slot.spawned_asset = nullptr;
-            continue;
+            return;
         }
 
-        // Keep attachment in parent's ownership list.
         if (std::find(self_->asset_children.begin(), self_->asset_children.end(), child) ==
             self_->asset_children.end()) {
             self_->add_child(child);
         }
 
-        // slot.world_pos is the child's base (bottom-middle) position in world coordinates.
-        // Convert to top-left position for the child asset using its dimensions.
         int child_w = slot.cached_w > 0 ? slot.cached_w : child->cached_w;
         int child_h = slot.cached_h > 0 ? slot.cached_h : child->cached_h;
         SDL_Point child_top_left{
@@ -703,11 +895,9 @@ void AnimationRuntime::sync_child_assets() {
         child->grid_resolution = self_->grid_resolution;
         child->depth = self_->depth;
         child->flipped = self_->flipped;
-        // Always hide the spawned asset; it is rendered via the parent's composite package.
         child->hidden = true;
         child->z_offset = self_->z_offset + (slot.render_in_front ? 1 : -1);
         child->set_z_index();
-        // Keep child aligned exactly with parent: disable smoothing and snap to the attachment position.
         TransformSmoothingParams snap{};
         snap.method = TransformSmoothingMethod::None;
         snap.snap_threshold = 0.0f;
@@ -719,6 +909,13 @@ void AnimationRuntime::sync_child_assets() {
         child->alpha_smoothing_.reset(0.0f);
         child->render_package.clear();
         child->scene_mask_lights.clear();
+    };
+
+    for (auto& slot : self_->animation_children_) {
+        sync_slot(slot);
+    }
+    for (auto& instance : self_->async_children_) {
+        sync_slot(instance.slot);
     }
 }
 

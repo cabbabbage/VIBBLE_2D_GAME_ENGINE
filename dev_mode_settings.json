@@ -69,6 +69,7 @@
         },
         "lock": {
             "asset_info": {
+                "animation_children": false,
                 "basic": false,
                 "lighting": false
             },

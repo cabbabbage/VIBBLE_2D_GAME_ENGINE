@@ -1531,6 +1531,7 @@ void AnimationEditorWindow::sync_document_children_from_info() {
     }
 
     document_->replace_animation_children(info_ptr->animation_children);
+    document_->save_to_file(true);
     // Keep any open panels in sync with the refreshed document state
     if (list_panel_) list_panel_->set_document(document_);
     if (inspector_panel_) inspector_panel_->set_document(document_);

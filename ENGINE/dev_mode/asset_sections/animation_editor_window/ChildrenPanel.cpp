@@ -449,13 +449,24 @@ void ChildrenPanel::refresh_from_document() {
     inherited_source_id_.clear();
     inherits_children_ = false;
 
-    if (!info_) {
+    if (!info_ && !document_) {
         request_layout();
         return;
     }
-    local_children_ = info_->animation_children;
+    local_children_ = current_children();
     display_children_ = local_children_;
     request_layout();
+}
+
+std::vector<std::string> ChildrenPanel::current_children() const {
+    // Prefer the document (authoritative for editor state), fall back to AssetInfo.
+    if (document_) {
+        return document_->animation_children();
+    }
+    if (info_) {
+        return info_->animation_children;
+    }
+    return {};
 }
 
 std::vector<std::string> ChildrenPanel::read_local_children(const nlohmann::json& payload) const {
@@ -507,24 +518,88 @@ void ChildrenPanel::commit_children() {
     if (!info_) {
         return;
     }
+
+    // Write to the document first so we can round-trip any sanitization/dedup.
+    if (document_) {
+        document_->replace_animation_children(local_children_);
+        document_->save_to_file(true);
+        local_children_ = document_->animation_children();
+    }
+
+    // Mirror into AssetInfo so runtime/manifest stay consistent with the document.
     info_->set_animation_children(local_children_);
-    info_->commit_manifest();
-    refresh_local_children_from_info();
+    bool committed = info_->commit_manifest();
+    if (!committed && manifest_store_) {
+        // Fallback: resolve manifest key and write directly if the AssetInfo provider isn't wired.
+        std::string manifest_key;
+        if (auto resolved = manifest_store_->resolve_asset_name(info_->name)) {
+            manifest_key = *resolved;
+        } else {
+            // Scan assets for matching asset_name or directory
+            std::string target = info_->name;
+            std::string target_lower;
+            target_lower.reserve(target.size());
+            for (char c : target) target_lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+            for (const auto& view : manifest_store_->assets()) {
+                if (!view || !view.data || !view.data->is_object()) continue;
+                const auto& asset_json = *view.data;
+                std::string asset_name = asset_json.value("asset_name", view.name);
+                std::string candidate = asset_name.empty() ? view.name : asset_name;
+                std::string cand_lower;
+                cand_lower.reserve(candidate.size());
+                for (char c : candidate) cand_lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+                if (cand_lower == target_lower) { manifest_key = view.name; break; }
+                auto dir_it = asset_json.find("asset_directory");
+                if (dir_it != asset_json.end() && dir_it->is_string()) {
+                    try {
+                        std::filesystem::path dir = dir_it->get<std::string>();
+                        std::string folder = dir.filename().string();
+                        std::string folder_lower;
+                        folder_lower.reserve(folder.size());
+                        for (char ch : folder) folder_lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+                        if (folder_lower == target_lower) { manifest_key = view.name; break; }
+                    } catch (...) {
+                    }
+                }
+            }
+        }
+
+        if (!manifest_key.empty()) {
+            auto session = manifest_store_->begin_asset_edit(manifest_key, true);
+            if (session) {
+                nlohmann::json payload = session.data();
+                payload["animation_children"] = nlohmann::json::array();
+                for (const auto& child : local_children_) {
+                    payload["animation_children"].push_back(child);
+                }
+                session.data() = payload;
+                committed = session.commit();
+                manifest_store_->flush();
+            }
+        }
+    }
+
+    // Re-sync from the source of truth to ensure UI and downstream panels
+    // see exactly what was written (including any deduping).
+    refresh_from_document();
+
     if (children_changed_callback_) {
         children_changed_callback_();
     }
+
     nlohmann::json arr = nlohmann::json::array();
     for (const auto& child : local_children_) {
         arr.push_back(child);
     }
     payload_signature_ = arr.dump();
+
+    if (!committed) {
+        request_status("Failed to commit animation children; changes may not persist.");
+    }
 }
 
-void ChildrenPanel::refresh_local_children_from_info() {
-    if (!info_) {
-        return;
-    }
-    local_children_ = info_->animation_children;
+void ChildrenPanel::refresh_local_children_from_source() {
+    local_children_ = current_children();
     if (!inherits_children_) {
         display_children_ = local_children_;
     }
@@ -542,7 +617,7 @@ void ChildrenPanel::add_child_entry(const std::string& entry) {
             }
         }
     }
-    refresh_local_children_from_info();
+    refresh_local_children_from_source();
     if (std::find(local_children_.begin(), local_children_.end(), value) != local_children_.end()) {
         request_status("Child '" + value + "' already in list.");
         return;
@@ -557,7 +632,7 @@ void ChildrenPanel::add_child_entry(const std::string& entry) {
 }
 
 void ChildrenPanel::remove_child_entry(size_t index) {
-    refresh_local_children_from_info();
+    refresh_local_children_from_source();
     if (index >= local_children_.size()) {
         return;
     }

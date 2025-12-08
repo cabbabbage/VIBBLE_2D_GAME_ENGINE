@@ -876,6 +876,107 @@ bool sanitize_movement_children(nlohmann::json& movement_entry, const std::vecto
     return changed;
 }
 
+bool ensure_child_entries(nlohmann::json& movement_entry, std::size_t child_count) {
+    if (child_count == 0) {
+        return false;
+    }
+
+    bool changed = false;
+    nlohmann::json* child_array = nullptr;
+
+    if (movement_entry.is_array()) {
+        child_array = locate_child_array(movement_entry);
+        if (!child_array) {
+            movement_entry.push_back(nlohmann::json::array());
+            child_array = &movement_entry.back();
+            changed = true;
+        }
+    } else if (movement_entry.is_object()) {
+        auto it = movement_entry.find("children");
+        if (it == movement_entry.end() || !it->is_array()) {
+            movement_entry["children"] = nlohmann::json::array();
+            child_array = &movement_entry["children"];
+            changed = true;
+        } else {
+            child_array = &(*it);
+        }
+    } else {
+        return changed;
+    }
+
+    if (!child_array || !child_array->is_array()) {
+        return changed;
+    }
+
+    std::vector<bool> present(child_count, false);
+    for (auto& entry : child_array->get_ref<nlohmann::json::array_t&>()) {
+        int idx = -1;
+        if (!extract_child_index(entry, idx) || idx < 0 || static_cast<std::size_t>(idx) >= child_count) {
+            continue;
+        }
+        const std::size_t slot = static_cast<std::size_t>(idx);
+        present[slot] = true;
+
+        if (entry.is_array()) {
+            auto ensure_index = [&](std::size_t i, nlohmann::json value) {
+                if (entry.size() <= i) {
+                    entry.push_back(std::move(value));
+                    changed = true;
+                }
+            };
+            ensure_index(0, idx);
+            ensure_index(1, 0);
+            ensure_index(2, 0);
+            ensure_index(3, 0.0);
+            ensure_index(4, true);
+            ensure_index(5, true);
+            if (!entry[4].is_boolean()) {
+                entry[4] = true;
+                changed = true;
+            }
+            if (!entry[5].is_boolean()) {
+                entry[5] = true;
+                changed = true;
+            }
+        } else if (entry.is_object()) {
+            if (!entry.contains("child_index") || !entry["child_index"].is_number_integer() || entry["child_index"].get<int>() != idx) {
+                entry["child_index"] = idx;
+                changed = true;
+            }
+            if (!entry.contains("visible") || !entry["visible"].is_boolean()) {
+                entry["visible"] = true;
+                changed = true;
+            }
+            if (!entry.contains("render_in_front") || !entry["render_in_front"].is_boolean()) {
+                entry["render_in_front"] = true;
+                changed = true;
+            }
+            if (!entry.contains("dx")) {
+                entry["dx"] = 0;
+                changed = true;
+            }
+            if (!entry.contains("dy")) {
+                entry["dy"] = 0;
+                changed = true;
+            }
+            if (!entry.contains("degree") && !entry.contains("rotation")) {
+                entry["degree"] = 0.0;
+                changed = true;
+            }
+        }
+    }
+
+    for (std::size_t i = 0; i < present.size(); ++i) {
+        if (present[i]) {
+            continue;
+        }
+        child_array->push_back(nlohmann::json::array({static_cast<int>(i), 0, 0, 0.0, true, true}));
+        changed = true;
+    }
+
+    return changed;
+}
+
 }  // namespace
 
 std::vector<std::string> AnimationDocument::animation_children() const {
@@ -958,9 +1059,9 @@ bool AnimationDocument::rewrite_child_payloads(const std::vector<int>& remap,
         auto movement_it = payload.find("movement");
         if (movement_it != payload.end() && movement_it->is_array()) {
             for (auto& frame_entry : *movement_it) {
-                if (sanitize_movement_children(frame_entry, remap)) {
-                    payload_changed = true;
-                }
+                const bool sanitized = sanitize_movement_children(frame_entry, remap);
+                const bool filled = ensure_child_entries(frame_entry, next_children.size());
+                payload_changed |= (sanitized || filled);
             }
         }
 

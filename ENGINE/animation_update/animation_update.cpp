@@ -406,6 +406,20 @@ bool AnimationUpdate::consume_input_event() {
     return had;
 }
 
+void AnimationUpdate::run_async(const std::string& child_name) {
+    if (child_name.empty()) {
+        return;
+    }
+    pending_async_requests_.push_back(child_name);
+    input_event_ = true;
+}
+
+std::vector<std::string> AnimationUpdate::consume_async_requests() {
+    std::vector<std::string> pending = std::move(pending_async_requests_);
+    pending_async_requests_.clear();
+    return pending;
+}
+
 void AnimationUpdate::set_debug_enabled(bool enabled) {
     debug_enabled_ = enabled;
     if (runtime_) {

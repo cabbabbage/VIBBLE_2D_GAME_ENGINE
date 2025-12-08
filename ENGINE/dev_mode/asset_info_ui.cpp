@@ -434,6 +434,10 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
                 }
             });
             animation_editor_window_->set_info(info_);
+            // Keep the animation-children inspector in sync with the animation document
+            if (animation_children_section_) {
+                animation_children_section_->set_document(animation_editor_window_->document());
+            }
         } catch (const std::exception& ex) {
             SDL_Log("AssetInfoUI: failed to configure animation editor for %s: %s", info_ ? info_->name.c_str() : "<null>", ex.what());
             animation_editor_window_->clear_info();
@@ -1896,6 +1900,15 @@ void AssetInfoUI::sync_animation_children() {
         asset->info->set_animation_children(info_->animation_children);
         asset->initialize_animation_children_recursive();
     });
+
+    // Persist the change immediately so manifest and other views stay in sync.
+    (void)info_->commit_manifest();
+
+    // Refresh the inspector section immediately so newly added children appear without reopening.
+    if (animation_children_section_) {
+        animation_children_section_->build();
+        container_.request_layout();
+    }
 
     if (animation_editor_window_) {
         animation_editor_window_->refresh_children_from_asset_info();
