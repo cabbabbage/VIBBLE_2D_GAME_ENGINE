@@ -3459,6 +3459,26 @@
     "Vibble_attack_1": {
       "animations": {
         "default": {
+          "frames": [
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            },
+            {
+              "needs_rebuild": false
+            }
+          ],
           "locked": false,
           "loop": true,
           "source": {
@@ -5436,6 +5456,11 @@
     "top_hat": {
       "animations": {
         "default": {
+          "frames": [
+            {
+              "needs_rebuild": false
+            }
+          ],
           "locked": false,
           "loop": true,
           "source": {
@@ -5446,6 +5471,7 @@
       },
       "asset_directory": "SRC/assets/top_hat",
       "asset_name": "top_hat",
+      "lighting_info": [],
       "start": "default"
     },
     "town_hall": {
