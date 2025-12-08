@@ -743,6 +743,11 @@ void AnimationChildrenPanel::add_child_entry(const std::string& entry) {
         return;
     }
     local_children_.push_back(value);
+    // Persist immediately so the manifest reflects the new child before any rebuilds.
+    if (info_) {
+        info_->set_animation_children(local_children_);
+        (void)info_->commit_manifest();
+    }
     if (!inherits_children_) {
         display_children_ = local_children_;
     }
@@ -758,6 +763,10 @@ void AnimationChildrenPanel::remove_child_entry(size_t index) {
     }
     std::string removed = local_children_[index];
     local_children_.erase(local_children_.begin() + static_cast<long>(index));
+    if (info_) {
+        info_->set_animation_children(local_children_);
+        (void)info_->commit_manifest();
+    }
     if (!inherits_children_) {
         display_children_ = local_children_;
     }
