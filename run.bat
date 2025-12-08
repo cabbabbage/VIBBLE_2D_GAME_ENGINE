@@ -117,6 +117,11 @@ for /r "%REPO_ROOT%" %%F in (*.txt) do (
     )
 )
 
+echo [run.bat] Deleting all *.ilk files (recursively)...
+for /r "%REPO_ROOT%" %%F in (*.ilk) do (
+    del /q "%%~fF" >nul 2>&1
+)
+
 set "DESKTOP=%USERPROFILE%\Desktop"
 set "SHORTCUT=%DESKTOP%\VI.lnk"
 set "ICONFILE=%REPO_ROOT%\SRC\MISC_CONTENT\vibble.ico"
