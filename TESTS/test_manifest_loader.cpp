@@ -146,4 +146,3 @@ TEST_CASE("manifest store helper removes asset entries") {
     CHECK(written["assets"].is_object());
     CHECK(written["assets"].empty());
 }
-
