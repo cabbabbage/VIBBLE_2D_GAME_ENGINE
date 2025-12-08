@@ -1893,17 +1893,20 @@ void AssetInfoUI::sync_animation_children() {
         return;
     }
 
+    // Persist the change first so JSON/manifest reflect the selection before any rebuilds.
+    info_->set_animation_children(info_->animation_children);
+    (void)info_->commit_manifest();
+
     bool updated_any = apply_to_assets_with_info([&](Asset* asset) {
         if (!asset || !asset->info) {
             return;
         }
-        asset->info->set_animation_children(info_->animation_children);
+        if (asset->info != info_) {
+            asset->info->set_animation_children(info_->animation_children);
+        }
         asset->rebuild_animation_runtime();
         asset->initialize_animation_children_recursive();
     });
-
-    // Persist the change immediately so manifest and other views stay in sync.
-    (void)info_->commit_manifest();
 
     // Refresh the inspector section immediately so newly added children appear without reopening.
     if (animation_children_section_) {
