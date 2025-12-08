@@ -410,7 +410,13 @@ void AnimationUpdate::run_async(const std::string& child_name) {
     if (child_name.empty()) {
         return;
     }
-    pending_async_requests_.push_back(child_name);
+    bool dispatched = false;
+    if (runtime_) {
+        dispatched = runtime_->run_child_animation(child_name);
+    }
+    if (!dispatched) {
+        pending_async_requests_.push_back(child_name);
+    }
     input_event_ = true;
 }
 

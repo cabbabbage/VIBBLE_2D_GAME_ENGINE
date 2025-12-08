@@ -628,14 +628,23 @@ void AnimationChildrenPanel::commit_children() {
         return;
     }
 
-    if (document_) {
-        document_->replace_animation_children(local_children_);
-        document_->save_to_file(true);
-        local_children_ = document_->animation_children();
-    }
+    bool committed = false;
+    try {
+        if (document_) {
+            document_->replace_animation_children(local_children_);
+            document_->save_to_file(true);
+            local_children_ = document_->animation_children();
+        }
 
-    info_->set_animation_children(local_children_);
-    bool committed = info_->commit_manifest();
+        info_->set_animation_children(local_children_);
+        committed = info_->commit_manifest();
+    } catch (const std::exception& ex) {
+        request_status(std::string("Error committing children: ") + ex.what());
+        committed = false;
+    } catch (...) {
+        request_status("Error committing children: unknown failure");
+        committed = false;
+    }
     if (!committed && manifest_store_) {
         std::string manifest_key;
         if (auto resolved = manifest_store_->resolve_asset_name(info_->name)) {
@@ -672,14 +681,22 @@ void AnimationChildrenPanel::commit_children() {
         if (!manifest_key.empty()) {
             auto session = manifest_store_->begin_asset_edit(manifest_key, true);
             if (session) {
-                nlohmann::json payload = session.data();
-                payload["animation_children"] = nlohmann::json::array();
-                for (const auto& child : local_children_) {
-                    payload["animation_children"].push_back(child);
+                try {
+                    nlohmann::json payload = session.data();
+                    payload["animation_children"] = nlohmann::json::array();
+                    for (const auto& child : local_children_) {
+                        payload["animation_children"].push_back(child);
+                    }
+                    session.data() = payload;
+                    committed = session.commit();
+                    manifest_store_->flush();
+                } catch (const std::exception& ex) {
+                    request_status(std::string("Error saving manifest: ") + ex.what());
+                    committed = false;
+                } catch (...) {
+                    request_status("Error saving manifest: unknown failure");
+                    committed = false;
                 }
-                session.data() = payload;
-                committed = session.commit();
-                manifest_store_->flush();
             }
         }
     }

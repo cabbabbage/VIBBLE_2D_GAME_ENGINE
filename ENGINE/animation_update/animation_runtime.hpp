@@ -56,6 +56,10 @@ public:
     void reset_plan_progress();
     void set_debug_enabled(bool enabled);
 
+    // Immediately trigger an async child timeline by name. Returns true when a matching
+    // child attachment was found and restarted.
+    bool run_child_animation(const std::string& name);
+
 private:
     int        effective_grid_resolution(std::optional<int> override_resolution) const;
     SDL_Point  convert_delta_to_world(SDL_Point delta, int resolution) const;
@@ -67,12 +71,14 @@ private:
     void       update_child_attachments(Animation& anim, float dt);
     void       ensure_child_slots(Animation& anim);
     void       advance_child_frames(float dt);
-    void       apply_child_frame_data(const AnimationFrame* frame);
+    void       apply_child_frame_data(Animation& anim, const AnimationFrame* frame, float dt);
     void       sync_child_assets();
-    void       update_async_children(float dt);
+    void       advance_child_timelines(float dt);
     Asset*     spawn_child_asset(Asset::AnimationChildAttachment& slot);
     void       destroy_child_assets();
     void       handle_async_requests(const std::vector<std::string>& requests);
+    Asset::AnimationChildAttachment* find_child_slot(const std::string& name);
+    void       restart_child_timeline(Asset::AnimationChildAttachment& slot);
 
     // Apply a pending one-shot move from the planner
     void       apply_pending_move();
@@ -102,6 +108,7 @@ private:
     bool debug_enabled_ = false;
     bool just_applied_controller_move_ = false;
     int  suppress_root_motion_frames_ = 0;
+    std::vector<AnimationChildFrameData> child_frame_buffer_{};
 
     bool suppress_root_motion_active() const { return suppress_root_motion_frames_ > 0; }
 };

@@ -274,6 +274,109 @@ void Animation::clear_texture_cache() {
     }
 }
 
+const AnimationChildData* Animation::find_child_timeline(std::string_view child_name) const {
+    if (child_name.empty()) {
+        return nullptr;
+    }
+    const auto it = std::find_if(child_data_.begin(), child_data_.end(), [&](const AnimationChildData& entry) {
+        return entry.asset_name == child_name;
+    });
+    return (it == child_data_.end()) ? nullptr : &(*it);
+}
+
+AnimationChildData* Animation::find_child_timeline(std::string_view child_name) {
+    if (child_name.empty()) {
+        return nullptr;
+    }
+    const auto it = std::find_if(child_data_.begin(), child_data_.end(), [&](const AnimationChildData& entry) {
+        return entry.asset_name == child_name;
+    });
+    return (it == child_data_.end()) ? nullptr : &(*it);
+}
+
+void Animation::rebuild_child_timelines_from_frames() {
+    child_data_.clear();
+    if (child_asset_names_.empty() || frames.empty()) {
+        rebuild_child_start_events_from_timelines();
+        return;
+    }
+
+    const std::size_t frame_count = frames.size();
+    child_data_.reserve(child_asset_names_.size());
+    for (std::size_t child_idx = 0; child_idx < child_asset_names_.size(); ++child_idx) {
+        AnimationChildData descriptor;
+        descriptor.asset_name = child_asset_names_[child_idx];
+        descriptor.mode = AnimationChildMode::Static;
+        descriptor.frames.resize(frame_count);
+
+        for (std::size_t frame_idx = 0; frame_idx < frame_count; ++frame_idx) {
+            AnimationChildFrameData frame_sample{};
+            frame_sample.child_index = static_cast<int>(child_idx);
+            frame_sample.render_in_front = true;
+            frame_sample.visible = false;
+            frame_sample.dx = 0;
+            frame_sample.dy = 0;
+            frame_sample.degree = 0.0f;
+
+            AnimationFrame* frame = (frame_idx < frames.size()) ? frames[frame_idx] : nullptr;
+            if (frame) {
+                const auto& legacy_children = frame->children;
+                auto legacy_it = std::find_if(legacy_children.begin(), legacy_children.end(), [&](const AnimationChildFrameData& entry) {
+                    return entry.child_index == static_cast<int>(child_idx);
+                });
+                if (legacy_it != legacy_children.end()) {
+                    frame_sample = *legacy_it;
+                }
+            }
+
+            descriptor.frames[frame_idx] = frame_sample;
+        }
+
+        child_data_.push_back(std::move(descriptor));
+    }
+
+    rebuild_child_start_events_from_timelines();
+}
+
+void Animation::rebuild_child_start_events_from_timelines() {
+    for (AnimationFrame* frame : frames) {
+        if (frame) {
+            frame->child_start_events.clear();
+        }
+    }
+    if (child_data_.empty() || frames.empty()) {
+        return;
+    }
+
+    for (std::size_t child_idx = 0; child_idx < child_data_.size(); ++child_idx) {
+        const AnimationChildData& descriptor = child_data_[child_idx];
+        if (!descriptor.is_static() || descriptor.frames.empty()) {
+            continue;
+        }
+
+        const auto first_visible = std::find_if(descriptor.frames.begin(), descriptor.frames.end(), [](const AnimationChildFrameData& entry) {
+            return entry.visible;
+        });
+        if (first_visible == descriptor.frames.end()) {
+            continue;
+        }
+
+        const std::size_t frame_index = static_cast<std::size_t>(std::distance(descriptor.frames.begin(), first_visible));
+        if (frame_index >= frames.size()) {
+            continue;
+        }
+        AnimationFrame* target_frame = frames[frame_index];
+        if (!target_frame) {
+            continue;
+        }
+        auto& starts = target_frame->child_start_events;
+        const int child_slot = static_cast<int>(child_idx);
+        if (std::find(starts.begin(), starts.end(), child_slot) == starts.end()) {
+            starts.push_back(child_slot);
+        }
+    }
+}
+
 void Animation::adopt_prebuilt_frames(std::vector<FrameCache> caches,
                                       std::vector<SDL_Texture*> base_frames,
                                       std::vector<SDL_Texture*> base_masks,
@@ -321,6 +424,8 @@ void Animation::adopt_prebuilt_frames(std::vector<FrameCache> caches,
             }
             frames.push_back(&frame);
     }
+
+    rebuild_child_timelines_from_frames();
 }
 
 bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool flip_vertical, bool reverse_frames, SDL_Renderer* renderer, AssetInfo& info) {
@@ -465,6 +570,7 @@ bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool fl
         std::reverse(frame_cache_.begin(), frame_cache_.end());
     }
 
+    rebuild_child_timelines_from_frames();
     return !frame_cache_.empty();
 }
 

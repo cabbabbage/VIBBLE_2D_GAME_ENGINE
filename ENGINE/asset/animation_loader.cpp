@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cctype>
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
@@ -49,6 +50,228 @@ void resolve_inherited_movements(AssetInfo& info) {
                 if (has_frames) continue;
                 anim.inherit_movement_from(it->second);
         }
+}
+
+bool json_bool(const nlohmann::json& value, bool fallback) {
+        if (value.is_boolean()) {
+                return value.get<bool>();
+        }
+        if (value.is_number_integer()) {
+                return value.get<int>() != 0;
+        }
+        if (value.is_number()) {
+                return value.get<double>() != 0.0;
+        }
+        if (value.is_string()) {
+                std::string text = value.get<std::string>();
+                std::string lowered;
+                lowered.reserve(text.size());
+                for (unsigned char ch : text) {
+                        lowered.push_back(static_cast<char>(std::tolower(ch)));
+                }
+                if (lowered == "true" || lowered == "1" || lowered == "yes" || lowered == "on") {
+                        return true;
+                }
+                if (lowered == "false" || lowered == "0" || lowered == "no" || lowered == "off") {
+                        return false;
+                }
+        }
+        return fallback;
+}
+
+int json_int(const nlohmann::json& value, int fallback) {
+        if (value.is_number_integer()) {
+                return value.get<int>();
+        }
+        if (value.is_number()) {
+                return static_cast<int>(value.get<double>());
+        }
+        if (value.is_string()) {
+                try {
+                        return std::stoi(value.get<std::string>());
+                } catch (...) {
+                }
+        }
+        return fallback;
+}
+
+float json_float(const nlohmann::json& value, float fallback) {
+        if (value.is_number()) {
+                return static_cast<float>(value.get<double>());
+        }
+        if (value.is_string()) {
+                try {
+                        return std::stof(value.get<std::string>());
+                } catch (...) {
+                }
+        }
+        return fallback;
+}
+
+AnimationChildFrameData make_default_child_frame(int child_index) {
+        AnimationChildFrameData sample{};
+        sample.child_index = child_index;
+        sample.dx = 0;
+        sample.dy = 0;
+        sample.degree = 0.0f;
+        sample.visible = false;
+        sample.render_in_front = true;
+        return sample;
+}
+
+AnimationChildFrameData parse_child_frame_sample(const nlohmann::json& node, int child_index) {
+        AnimationChildFrameData sample = make_default_child_frame(child_index);
+        if (node.is_object()) {
+                sample.dx = json_int(node.value("dx", 0), 0);
+                sample.dy = json_int(node.value("dy", 0), 0);
+                if (node.contains("degree")) {
+                        sample.degree = json_float(node["degree"], 0.0f);
+                } else if (node.contains("rotation")) {
+                        sample.degree = json_float(node["rotation"], 0.0f);
+                }
+                sample.visible = json_bool(node.value("visible", sample.visible), sample.visible);
+                sample.render_in_front = json_bool(node.value("render_in_front", node.value("front", sample.render_in_front)), sample.render_in_front);
+        } else if (node.is_array()) {
+                if (!node.empty() && node[0].is_number()) {
+                        sample.dx = json_int(node[0], 0);
+                }
+                if (node.size() > 1 && node[1].is_number()) {
+                        sample.dy = json_int(node[1], 0);
+                }
+                if (node.size() > 2 && node[2].is_number()) {
+                        sample.degree = json_float(node[2], 0.0f);
+                }
+                if (node.size() > 3) {
+                        sample.visible = json_bool(node[3], sample.visible);
+                }
+                if (node.size() > 4) {
+                        sample.render_in_front = json_bool(node[4], sample.render_in_front);
+                }
+        }
+        return sample;
+}
+
+AnimationChildMode parse_child_mode(const nlohmann::json& node) {
+        if (node.contains("mode") && node["mode"].is_string()) {
+                std::string mode = node["mode"].get<std::string>();
+                std::string lowered;
+                lowered.reserve(mode.size());
+                for (unsigned char ch : mode) {
+                        lowered.push_back(static_cast<char>(std::tolower(ch)));
+                }
+                if (lowered == "async" || lowered == "asynchronous") {
+                        return AnimationChildMode::Async;
+                }
+        }
+        return AnimationChildMode::Static;
+}
+
+bool load_child_timelines_from_json(const nlohmann::json& anim_json, Animation& animation) {
+        auto it = anim_json.find("child_timelines");
+        if (it == anim_json.end() || !it->is_array()) {
+                return false;
+        }
+
+        auto& child_assets = animation.child_assets();
+        std::unordered_map<std::string, int> child_lookup;
+        child_lookup.reserve(child_assets.size());
+        for (std::size_t i = 0; i < child_assets.size(); ++i) {
+                child_lookup[child_assets[i]] = static_cast<int>(i);
+        }
+
+        auto resolve_child_index = [&](const nlohmann::json& node) -> int {
+                int idx = -1;
+                if (node.contains("child") && node["child"].is_number_integer()) {
+                        idx = node["child"].get<int>();
+                } else if (node.contains("child_index") && node["child_index"].is_number_integer()) {
+                        idx = node["child_index"].get<int>();
+                }
+                if (idx >= 0 && static_cast<std::size_t>(idx) < child_assets.size()) {
+                        return idx;
+                }
+                if (node.contains("asset") && node["asset"].is_string()) {
+                        std::string name = node["asset"].get<std::string>();
+                        if (name.empty()) {
+                                return -1;
+                        }
+                        auto lookup = child_lookup.find(name);
+                        if (lookup != child_lookup.end()) {
+                                return lookup->second;
+                        }
+                        child_assets.push_back(name);
+                        int new_index = static_cast<int>(child_assets.size() - 1);
+                        child_lookup.emplace(name, new_index);
+                        return new_index;
+                }
+                return -1;
+        };
+
+        std::unordered_map<int, AnimationChildData> parsed;
+        parsed.reserve(it->size());
+        for (const auto& entry : *it) {
+                if (!entry.is_object()) {
+                        continue;
+                }
+                const int child_idx = resolve_child_index(entry);
+                if (child_idx < 0) {
+                        continue;
+                }
+                AnimationChildData timeline;
+                timeline.asset_name = (static_cast<std::size_t>(child_idx) < child_assets.size()) ? child_assets[static_cast<std::size_t>(child_idx)] : std::string{};
+                timeline.animation_override = entry.value("animation", std::string{});
+                timeline.mode = parse_child_mode(entry);
+                const auto frames_it = entry.find("frames");
+                if (frames_it != entry.end() && frames_it->is_array()) {
+                        for (const auto& sample : *frames_it) {
+                                timeline.frames.push_back(parse_child_frame_sample(sample, child_idx));
+                        }
+                }
+                parsed[child_idx] = std::move(timeline);
+        }
+
+        const std::size_t parent_frame_count = std::max<std::size_t>(1, animation.frames.size());
+        if (child_assets.empty()) {
+                return false;
+        }
+
+        std::vector<AnimationChildData> descriptors;
+        descriptors.reserve(child_assets.size());
+        for (std::size_t idx = 0; idx < child_assets.size(); ++idx) {
+                const int child_index = static_cast<int>(idx);
+                AnimationChildData descriptor;
+                descriptor.asset_name = child_assets[idx];
+
+                const auto parsed_it = parsed.find(child_index);
+                const AnimationChildData* parsed_data = (parsed_it != parsed.end()) ? &parsed_it->second : nullptr;
+                descriptor.mode = parsed_data ? parsed_data->mode : AnimationChildMode::Static;
+                descriptor.animation_override = parsed_data ? parsed_data->animation_override : std::string{};
+
+                if (descriptor.mode == AnimationChildMode::Static) {
+                        descriptor.frames.resize(parent_frame_count, make_default_child_frame(child_index));
+                        if (parsed_data) {
+                                const std::size_t limit = std::min(parsed_data->frames.size(), descriptor.frames.size());
+                                for (std::size_t frame_idx = 0; frame_idx < limit; ++frame_idx) {
+                                        descriptor.frames[frame_idx] = parsed_data->frames[frame_idx];
+                                        descriptor.frames[frame_idx].child_index = child_index;
+                                }
+                        }
+                } else {
+                        if (parsed_data && !parsed_data->frames.empty()) {
+                                descriptor.frames = parsed_data->frames;
+                        }
+                        if (descriptor.frames.empty()) {
+                                descriptor.frames.push_back(make_default_child_frame(child_index));
+                        }
+                        for (auto& frame : descriptor.frames) {
+                                frame.child_index = child_index;
+                        }
+                }
+
+                descriptors.push_back(std::move(descriptor));
+        }
+
+        animation.child_timelines() = std::move(descriptors);
+        return true;
 }
 
 // Count PNG files (0.png, 1.png, 2.png, etc.) in a folder
@@ -1109,6 +1332,11 @@ void AnimationLoader::load(Animation& animation,
 
         animation.movment = any_motion;
         animation.number_of_frames = static_cast<int>(frame_count);
+        if (!load_child_timelines_from_json(anim_json, animation)) {
+                animation.rebuild_child_timelines_from_frames();
+        } else {
+                animation.refresh_child_start_events();
+        }
         if (trigger == "default" && !animation.frames.empty() && !animation.frames[0]->variants.empty()) {
                 base_sprite = animation.frames[0]->variants[0].base_texture;
                 info.preview_texture = animation.frames[0]->variants[0].base_texture;

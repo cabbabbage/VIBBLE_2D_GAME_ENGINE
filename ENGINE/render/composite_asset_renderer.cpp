@@ -276,13 +276,6 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
         }
         emit_child(child_attachment);
     }
-    for (const auto& async_child : asset->async_children()) {
-        const auto& slot = async_child.slot;
-        if (slot.render_in_front) {
-            continue;
-        }
-        emit_child(slot);
-    }
 
     // 3. Base Asset and Depth Cue
     SDL_Texture* base_tex = nullptr;
@@ -374,13 +367,6 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
             continue;
         }
         emit_child(child_attachment);
-    }
-    for (const auto& async_child : asset->async_children()) {
-        const auto& slot = async_child.slot;
-        if (!slot.render_in_front) {
-            continue;
-        }
-        emit_child(slot);
     }
 
     // 6. In-front lights

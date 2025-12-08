@@ -115,17 +115,11 @@ class Asset {
         bool was_visible = false;
         int last_parent_frame_index = -1;
         Asset* spawned_asset = nullptr;
-    };
-
-    struct AsyncChildInstance {
-        std::string name;
-        const AsyncChildDefinition* definition = nullptr;
-        AnimationChildAttachment slot;
-        int frame_cursor = 0;
-        float frame_progress = 0.0f;
-        bool active = false;
-
-        bool valid() const { return definition != nullptr; }
+        const AnimationChildData* timeline = nullptr;
+        AnimationChildMode timeline_mode = AnimationChildMode::Static;
+        bool timeline_active = false;
+        int timeline_frame_cursor = 0;
+        float timeline_frame_progress = 0.0f;
     };
 
     struct BoundsSquare {
@@ -154,7 +148,6 @@ class Asset {
     void rebuild_animation_runtime();
     // Initialize animation child attachments immediately and recursively
     void initialize_animation_children_recursive();
-    void initialize_async_children();
     bool is_finalized() const { return finalized_; }
     void on_scale_factor_changed();
 
@@ -264,7 +257,6 @@ class Asset {
 
     std::vector<Asset*> asset_children;
     const std::vector<AnimationChildAttachment>& animation_children() const { return animation_children_; }
-    const std::vector<AsyncChildInstance>& async_children() const { return async_children_; }
     int depth = 0;
     bool is_shaded = false;
     bool dead = false;
@@ -319,9 +311,6 @@ private:
     std::unique_ptr<AssetList> neighbors;
     AssetList* impassable_naighbors = nullptr;
     std::vector<AnimationChildAttachment> animation_children_;
-    std::vector<AsyncChildInstance> async_children_;
-    std::unordered_map<std::string, std::size_t> async_child_lookup_;
-    bool async_children_initialized_ = false;
     bool animation_children_initialized_ = false;
     bool initializing_animation_children_ = false;
     std::optional<TilingInfo> tiling_info_{};

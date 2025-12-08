@@ -1111,6 +1111,28 @@ void AssetInfo::set_animation_children(const std::vector<std::string>& children)
                 arr.push_back(name);
         }
         info_json_["animation_children"] = std::move(arr);
+
+    // Keep per-animation child lists aligned with the canonical set so runtime
+    // attachment slots exist even before timelines reference them.
+    for (auto& [anim_id, anim] : animations) {
+        std::vector<std::string> merged;
+        merged.reserve(animation_children.size() + anim.child_assets().size());
+        std::unordered_set<std::string> anim_seen;
+        for (const auto& name : animation_children) {
+            if (name.empty()) continue;
+            if (anim_seen.insert(name).second) {
+                merged.push_back(name);
+            }
+        }
+        for (const auto& name : anim.child_assets()) {
+            if (name.empty()) continue;
+            if (anim_seen.insert(name).second) {
+                merged.push_back(name);
+            }
+        }
+        anim.child_assets() = std::move(merged);
+        anim.rebuild_child_timelines_from_frames();
+    }
 }
 
     void AssetInfo::set_async_children(const std::vector<AsyncChildDefinition>& children) {
@@ -1428,12 +1450,29 @@ void AssetInfo::initialize_from_json(const nlohmann::json& source) {
                         for (const auto& item : anim_payloads->items()) {
                                 if (!item.value().is_object()) continue;
                                 auto it_children = item.value().find("children");
-                                if (it_children == item.value().end() || !it_children->is_array()) continue;
-                                for (const auto& entry : *it_children) {
+                                if (it_children != item.value().end() && it_children->is_array()) {
+                                    for (const auto& entry : *it_children) {
                                         if (!entry.is_string()) continue;
                                         std::string name = entry.get<std::string>();
                                         if (name.empty() || !seen.insert(name).second) continue;
                                         animation_children.push_back(std::move(name));
+                                    }
+                                }
+
+                                auto it_timelines = item.value().find("child_timelines");
+                                if (it_timelines != item.value().end() && it_timelines->is_array()) {
+                                    for (const auto& entry : *it_timelines) {
+                                        if (!entry.is_object()) continue;
+                                        std::string name;
+                                        if (entry.contains("asset") && entry["asset"].is_string()) {
+                                            name = entry["asset"].get<std::string>();
+                                        }
+                                        if (name.empty()) {
+                                            continue;
+                                        }
+                                        if (!seen.insert(name).second) continue;
+                                        animation_children.push_back(std::move(name));
+                                    }
                                 }
                         }
                 }

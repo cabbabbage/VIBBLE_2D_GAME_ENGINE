@@ -16,6 +16,10 @@
 #include "dev_mode/pan_and_zoom.hpp"
 #include "animation_update/combat_geometry.hpp"
 
+#ifndef FRAME_EDITOR_ACCESS
+#define FRAME_EDITOR_ACCESS private
+#endif
+
 class Assets;
 class Asset;
 class AssetInfo;
@@ -25,6 +29,7 @@ class Input;
 struct SDL_Renderer;
 class DMButton;
 class DMDropdown;
+struct AnimationChildFrameData;
 
 namespace animation_editor {
 class AnimationDocument;
@@ -68,7 +73,7 @@ public:
     void set_snap_resolution(int r);
     void set_grid_overlay_enabled_transient(bool enabled);
 
-private:
+FRAME_EDITOR_ACCESS:
     bool target_is_alive() const;
 
     struct ChildFrame {
@@ -274,7 +279,7 @@ private:
     // Track whether we have unsaved document writes
     bool pending_save_ = false;
 
-private:
+FRAME_EDITOR_ACCESS:
     void load_animation_data(const std::string& animation_id);
     void switch_animation(const std::string& animation_id);
     void ensure_widgets() const;
@@ -419,7 +424,7 @@ private:
     void end_attack_drag(bool commit);
     float attachment_scale() const;
 
-private:
+FRAME_EDITOR_ACCESS:
     void render_directory_panel(SDL_Renderer* renderer);
     void render_navigation_panel(SDL_Renderer* renderer);
     void render_toolbox(SDL_Renderer* renderer);
@@ -433,6 +438,12 @@ private:
                                  const ChildPreviewContext& ctx,
                                  float scale_override) const;
     float mirrored_child_rotation(bool parent_is_flipped, float degree) const;
+    void apply_child_timelines_from_payload(const nlohmann::json& payload);
+    nlohmann::json build_child_timelines_payload(const nlohmann::json& existing_payload) const;
+    static ChildFrame child_frame_from_timeline_sample(const nlohmann::json& sample, int child_index);
+    static nlohmann::json child_frame_to_json(const ChildFrame& frame);
+    static bool timeline_entry_is_static(const nlohmann::json& entry);
+    AnimationChildFrameData build_child_frame_descriptor(const MovementFrame& frame, std::size_t child_index) const;
 };
 
 inline std::vector<FrameEditorSession::MovementFrame>

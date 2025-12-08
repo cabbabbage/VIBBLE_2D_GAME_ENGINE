@@ -4,6 +4,7 @@
 #include <SDL_ttf.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
@@ -15,6 +16,8 @@
 #include "animation_update/animation_update.hpp"
 #include "animation_update/child_attachment_math.hpp"
 #include "asset/Asset.hpp"
+#include "asset/animation.hpp"
+#include "asset/animation_frame_variant.hpp"
 #include "asset/asset_info.hpp"
 #include "core/AssetsManager.hpp"
 #include "dev_mode/asset_sections/animation_editor_window/AnimationDocument.hpp"
@@ -29,6 +32,9 @@
 #include "render/warped_screen_grid.hpp"
 #include "utils/grid.hpp"
 #include "utils/input.hpp"
+
+FrameEditorSession::FrameEditorSession() = default;
+FrameEditorSession::~FrameEditorSession() = default;
 
 namespace {
     constexpr int   kNavPreviewHeight = 96;
@@ -180,9 +186,6 @@ namespace {
     }
 }
 
-FrameEditorSession::FrameEditorSession() = default;
-FrameEditorSession::~FrameEditorSession() = default;
-
 void FrameEditorSession::begin(Assets* assets,
                                Asset* asset,
                                std::shared_ptr<animation_editor::AnimationDocument> document,
@@ -322,6 +325,16 @@ void FrameEditorSession::load_animation_data(const std::string& animation_id) {
     animation_id_ = animation_id;
     auto payload_dump = document_->animation_payload(animation_id_);
     last_payload_loaded_ = payload_dump.has_value() && !payload_dump->empty();
+    nlohmann::json parsed_payload;
+    bool parsed_payload_valid = false;
+    if (payload_dump && !payload_dump->empty()) {
+        parsed_payload = nlohmann::json::parse(*payload_dump, nullptr, false);
+        if (parsed_payload.is_object()) {
+            parsed_payload_valid = true;
+        } else {
+            parsed_payload = nlohmann::json::object();
+        }
+    }
     frames_ = parse_movement_frames_json(payload_dump.value_or(std::string{}));
     child_assets_ = document_->animation_children();
     if (target_ && target_->info) {
@@ -363,6 +376,9 @@ void FrameEditorSession::load_animation_data(const std::string& animation_id) {
     }
     // After padding/resizing, ensure newly added frames receive child placeholders.
     sync_child_frames();
+    if (parsed_payload_valid) {
+        apply_child_timelines_from_payload(parsed_payload);
+    }
     // Pull the latest runtime frame data so edits made elsewhere (or in previous sessions)
     // are reflected before we start editing.
     hydrate_frames_from_animation();
@@ -3608,79 +3624,6 @@ void FrameEditorSession::rebuild_rel_positions() {
         rel_positions_.push_back(curr);
     }
 }
-
-void FrameEditorSession::sync_child_frames() {
-    if (child_assets_.empty()) {
-        for (auto& frame : frames_) {
-            frame.children.clear();
-        }
-        selected_child_index_ = 0;
-        return;
-    }
-    for (auto& frame : frames_) {
-        std::vector<ChildFrame> normalized(child_assets_.size());
-        for (std::size_t i = 0; i < normalized.size(); ++i) {
-            normalized[i].child_index = static_cast<int>(i);
-            normalized[i].visible = false; // default hidden until explicitly enabled
-            normalized[i].render_in_front = true;
-            normalized[i].has_data = false;
-        }
-        for (const auto& existing : frame.children) {
-            if (existing.child_index < 0 ||
-                existing.child_index >= static_cast<int>(normalized.size())) {
-                continue;
-            }
-            normalized[existing.child_index] = existing;
-        }
-        frame.children = std::move(normalized);
-    }
-    if (selected_child_index_ >= static_cast<int>(child_assets_.size())) {
-        selected_child_index_ = static_cast<int>(child_assets_.size()) - 1;
-    }
-    if (selected_child_index_ < 0) {
-        selected_child_index_ = 0;
-    }
-    ensure_child_frames_initialized();
-}
-
-void FrameEditorSession::ensure_child_frames_initialized() {
-    if (child_assets_.empty()) {
-        return;
-    }
-    const std::size_t child_count = child_assets_.size();
-    std::vector<ChildFrame> last_known(child_count);
-    std::vector<bool> has_last(child_count, false);
-    for (auto& frame : frames_) {
-        if (frame.children.size() < child_count) {
-            frame.children.resize(child_count);
-            for (std::size_t i = 0; i < child_count; ++i) {
-                frame.children[i].child_index = static_cast<int>(i);
-                frame.children[i].has_data = false;
-            }
-        }
-        for (std::size_t i = 0; i < child_count; ++i) {
-            auto& child = frame.children[i];
-            child.child_index = static_cast<int>(i);
-            if (!child.has_data && has_last[i]) {
-                child = last_known[i];
-                child.child_index = static_cast<int>(i);
-                child.has_data = true;
-            } else if (!child.has_data && !has_last[i]) {
-                child.visible = false;
-                child.render_in_front = true;
-                child.dx = 0.0f;
-                child.dy = 0.0f;
-                child.degree = 0.0f;
-            }
-            if (child.has_data) {
-                last_known[i] = child;
-                last_known[i].has_data = true;
-                has_last[i] = true;
-            }
-        }
-    }
-}
-
 void FrameEditorSession::refresh_child_assets_from_document() {
     if (!document_) {
         return;
@@ -3906,6 +3849,17 @@ void FrameEditorSession::apply_frames_to_animation() {
     }
     // Keep the runtime animation's child bindings in sync with the document.
     anim->child_assets() = child_assets_;
+    std::unordered_map<std::string, const AnimationChildData*> timeline_by_name;
+    const auto& existing_timelines = anim->child_timelines();
+    timeline_by_name.reserve(existing_timelines.size());
+    for (const auto& descriptor : existing_timelines) {
+        if (descriptor.asset_name.empty()) {
+            continue;
+        }
+        if (timeline_by_name.find(descriptor.asset_name) == timeline_by_name.end()) {
+            timeline_by_name.emplace(descriptor.asset_name, &descriptor);
+        }
+    }
     const std::size_t frame_count = frames_.size();
     const std::size_t primary_path_index = anim->default_movement_path_index();
     for (std::size_t path_index = 0; path_index < anim->movement_path_count(); ++path_index) {
@@ -3978,6 +3932,41 @@ void FrameEditorSession::apply_frames_to_animation() {
             }
         }
     }
+
+    std::vector<AnimationChildData> rebuilt_timelines;
+    rebuilt_timelines.reserve(child_assets_.size());
+    for (std::size_t child_idx = 0; child_idx < child_assets_.size(); ++child_idx) {
+        AnimationChildData descriptor;
+        descriptor.asset_name = child_assets_[child_idx];
+        const AnimationChildData* previous = nullptr;
+        auto prev_it = timeline_by_name.find(descriptor.asset_name);
+        if (prev_it != timeline_by_name.end()) {
+            previous = prev_it->second;
+        }
+        descriptor.animation_override = previous ? previous->animation_override : std::string{};
+        descriptor.mode = previous ? previous->mode : AnimationChildMode::Static;
+        if (descriptor.mode == AnimationChildMode::Static) {
+            const std::size_t timeline_frame_count = frame_count == 0 ? 1 : frame_count;
+            descriptor.frames.clear();
+            descriptor.frames.reserve(timeline_frame_count);
+            if (frame_count == 0) {
+                AnimationChildFrameData sample{};
+                sample.child_index = static_cast<int>(child_idx);
+                sample.visible = false;
+                sample.render_in_front = true;
+                descriptor.frames.push_back(sample);
+            } else {
+                for (const auto& movement_frame : frames_) {
+                    descriptor.frames.push_back(build_child_frame_descriptor(movement_frame, child_idx));
+                }
+            }
+        } else if (previous) {
+            descriptor.frames = previous->frames;
+        }
+        rebuilt_timelines.push_back(std::move(descriptor));
+    }
+    anim->child_timelines() = std::move(rebuilt_timelines);
+    anim->refresh_child_start_events();
 }
 
 void FrameEditorSession::sync_child_asset_visibility() {
@@ -4193,6 +4182,11 @@ void FrameEditorSession::persist_changes() {
     payload["movement"] = std::move(movement);
     payload["hit_geometry"] = std::move(hit_geometry);
     payload["attack_geometry"] = std::move(attack_geometry);
+    if (child_assets_.empty()) {
+        payload.erase("child_timelines");
+    } else {
+        payload["child_timelines"] = build_child_timelines_payload(payload);
+    }
 
     std::string serialized = payload.dump();
     const bool changed = document_payload_cache_.empty() || serialized != document_payload_cache_;
@@ -4288,6 +4282,31 @@ SDL_FRect FrameEditorSession::child_preview_rect(SDL_FPoint child_world,
 
 float FrameEditorSession::mirrored_child_rotation(bool parent_is_flipped, float degree) const {
     return ::mirrored_child_rotation(parent_is_flipped, degree);
+}
+
+ 
+
+AnimationChildFrameData FrameEditorSession::build_child_frame_descriptor(const MovementFrame& frame,
+                                                                         std::size_t child_index) const {
+    AnimationChildFrameData descriptor{};
+    descriptor.child_index = static_cast<int>(child_index);
+    descriptor.dx = 0;
+    descriptor.dy = 0;
+    descriptor.degree = 0.0f;
+    descriptor.visible = false;
+    descriptor.render_in_front = true;
+    if (child_index < frame.children.size()) {
+        const ChildFrame& child = frame.children[child_index];
+        if (child.has_data) {
+            descriptor.child_index = (child.child_index >= 0) ? child.child_index : static_cast<int>(child_index);
+            descriptor.dx = static_cast<int>(std::lround(child.dx));
+            descriptor.dy = static_cast<int>(std::lround(child.dy));
+            descriptor.degree = child.degree;
+            descriptor.visible = child.visible;
+            descriptor.render_in_front = child.render_in_front;
+        }
+    }
+    return descriptor;
 }
 
 void FrameEditorSession::persist_mode_changes(Mode mode) {

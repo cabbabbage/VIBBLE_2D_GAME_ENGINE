@@ -245,6 +245,12 @@ Asset::Asset(const Asset& o)
         alpha_smoothing_          = o.alpha_smoothing_;
         animation_children_       = o.animation_children_;
         finalized_                = o.finalized_;
+        for (auto& slot : animation_children_) {
+                slot.timeline = nullptr;
+                slot.timeline_active = false;
+                slot.timeline_frame_cursor = 0;
+                slot.timeline_frame_progress = 0.0f;
+        }
 }
 
 Asset& Asset::operator=(const Asset& o) {
@@ -307,6 +313,12 @@ Asset& Asset::operator=(const Asset& o) {
         grid_id_                  = o.grid_id_;
         animation_children_initialized_ = o.animation_children_initialized_;
         initializing_animation_children_ = false;
+        for (auto& slot : animation_children_) {
+                slot.timeline = nullptr;
+                slot.timeline_active = false;
+                slot.timeline_frame_cursor = 0;
+                slot.timeline_frame_progress = 0.0f;
+        }
         return *this;
 }
 
@@ -551,28 +563,7 @@ bool Asset::is_current_animation_looping() const {
 void Asset::add_child(Asset* asset_child) {
         if (!asset_child || !asset_child->info) return;
         if (info) {
-                for (const auto& ci : info->asset_children) {
-                        if (!ci.spawn_group.is_object()) {
-                                continue;
-                        }
-                        std::string child_spawn_id;
-                        try {
-                                if (ci.spawn_group.contains("spawn_id") && ci.spawn_group["spawn_id"].is_string()) {
-                                        child_spawn_id = ci.spawn_group["spawn_id"].get<std::string>();
-                                }
-                        } catch (...) {
-                                child_spawn_id.clear();
-                        }
-
-                        if (!child_spawn_id.empty() && child_spawn_id == asset_child->spawn_id) {
-                                int z_offset = ci.z_offset;
-                                if (ci.placed_on_top_parent && z_offset <= 0) {
-                                        z_offset = 1;
-                                }
-                                asset_child->set_z_offset(z_offset);
-                                break;
-                        }
-                }
+                // Spawn group logic removed; retain simple z_offset/top placement behavior if needed via other means.
         }
         asset_child->parent = this;
         if (!asset_child->get_assets()) asset_child->set_assets(this->assets_);
@@ -595,8 +586,6 @@ void Asset::set_assets(Assets* a) {
     neighbor_lists_initialized_ = false;
     last_neighbor_origin_ = SDL_Point{ std::numeric_limits<int>::min(), std::numeric_limits<int>::min() };
 
-        // Initialize asset-scoped async children once assets are available.
-        initialize_async_children();
 }
 
 void Asset::set_tiling_info(std::optional<TilingInfo> info) {
@@ -612,10 +601,9 @@ void Asset::rebuild_animation_runtime() {
 }
 
 void Asset::initialize_animation_children_recursive() {
-        if (animation_children_initialized_ || initializing_animation_children_) {
+        if (initializing_animation_children_) {
                 return;
         }
-        initializing_animation_children_ = true;
 
         if (!info || !assets_) {
                 initializing_animation_children_ = false;
@@ -624,6 +612,37 @@ void Asset::initialize_animation_children_recursive() {
         }
 
         const auto child_names = collect_animation_child_names(*info);
+
+        bool needs_refresh = !animation_children_initialized_;
+        if (!needs_refresh) {
+                std::vector<std::string> current_names;
+                current_names.reserve(animation_children_.size());
+                for (const auto& slot : animation_children_) {
+                        if (slot.child_index >= 0 && !slot.asset_name.empty()) {
+                                current_names.push_back(slot.asset_name);
+                        }
+                }
+                if (current_names.size() != child_names.size()) {
+                        needs_refresh = true;
+                } else {
+                        for (std::size_t i = 0; i < child_names.size(); ++i) {
+                                if (child_names[i] != current_names[i]) {
+                                        needs_refresh = true;
+                                        break;
+                                }
+                        }
+                }
+        }
+
+        if (!needs_refresh) {
+                return;
+        }
+
+        initializing_animation_children_ = true;
+
+        try {
+                animation_children_initialized_ = false;
+
         if (child_names.empty()) {
                 animation_children_initialized_ = true;
                 initializing_animation_children_ = false;
@@ -706,7 +725,12 @@ void Asset::initialize_animation_children_recursive() {
                                 static_cast<int>(std::lround(smoothed_translation_x())),
                                 static_cast<int>(std::lround(smoothed_translation_y()))
                         };
-                        Asset* child = assets_->spawn_asset(slot.asset_name, spawn_pos);
+                        Asset* child = nullptr;
+                        try {
+                                child = assets_->spawn_asset(slot.asset_name, spawn_pos);
+                        } catch (...) {
+                                child = nullptr;
+                        }
                         if (child) {
                                 child->parent = this;
                                 child->depth = depth;
@@ -719,7 +743,7 @@ void Asset::initialize_animation_children_recursive() {
                                         add_child(child);
                                 }
                                 slot.spawned_asset = child;
-                                child->initialize_animation_children_recursive();
+                                try { child->initialize_animation_children_recursive(); } catch (...) {}
                         }
                 }
         }
@@ -731,93 +755,28 @@ void Asset::initialize_animation_children_recursive() {
                 slot.visible = false;
                 slot.was_visible = false;
                 slot.last_parent_frame_index = -1;
+                slot.timeline = nullptr;
+                slot.timeline_active = false;
+                slot.timeline_frame_cursor = 0;
+                slot.timeline_frame_progress = 0.0f;
                 if (slot.spawned_asset) {
                         slot.spawned_asset->set_hidden(true);
                 }
         }
 
+        if (animation_children_.size() > child_names.size()) {
+                animation_children_.resize(child_names.size());
+        }
+
         animation_children_initialized_ = true;
         initializing_animation_children_ = false;
+        } catch (...) {
+                // If anything goes wrong, mark as not initialized but avoid crashing.
+                animation_children_initialized_ = false;
+                initializing_animation_children_ = false;
+        }
 }
 
-void Asset::initialize_async_children() {
-        if (async_children_initialized_) {
-                return;
-        }
-        async_children_initialized_ = false;
-        async_children_.clear();
-        async_child_lookup_.clear();
-
-        if (!info || !assets_) {
-                return;
-        }
-
-        AssetLibrary* library = assets_ ? &assets_->library() : nullptr;
-        async_children_.reserve(info->async_children.size());
-        for (const auto& def : info->async_children) {
-                if (!def.valid()) {
-                        continue;
-                }
-
-                AsyncChildInstance instance;
-                instance.name = def.name;
-                instance.definition = &def;
-                instance.slot.child_index = 0;
-                instance.slot.asset_name = def.asset;
-                instance.slot.visible = false;
-                instance.slot.was_visible = false;
-                instance.slot.render_in_front = true;
-                instance.slot.last_parent_frame_index = -1;
-
-                if (library && !instance.slot.asset_name.empty()) {
-                        instance.slot.info = library->get(instance.slot.asset_name);
-                }
-
-                if (instance.slot.info) {
-                        const std::string anim_name = def.animation.empty()
-                                ? animation_update::detail::kDefaultAnimation
-                                : def.animation;
-                        auto anim_it = instance.slot.info->animations.find(anim_name);
-                        if (anim_it == instance.slot.info->animations.end() && !instance.slot.info->animations.empty()) {
-                                anim_it = instance.slot.info->animations.begin();
-                        }
-                        if (anim_it != instance.slot.info->animations.end()) {
-                                instance.slot.animation = &anim_it->second;
-                        }
-                }
-
-                if (instance.slot.animation && !instance.slot.current_frame) {
-                        animation_update::child_attachments::restart(instance.slot);
-                }
-
-                if (!instance.slot.spawned_asset && instance.slot.info && assets_) {
-                        SDL_Point spawn_pos{
-                                static_cast<int>(std::lround(smoothed_translation_x())),
-                                static_cast<int>(std::lround(smoothed_translation_y()))
-                        };
-                        Asset* child = assets_->spawn_asset(instance.slot.asset_name, spawn_pos);
-                        if (child) {
-                                child->parent = this;
-                                child->depth = depth;
-                                child->grid_resolution = grid_resolution;
-                                child->set_z_offset(z_offset);
-                                child->set_z_index();
-                                child->set_hidden(true);
-                                if (std::find(asset_children.begin(), asset_children.end(), child) ==
-                                    asset_children.end()) {
-                                        add_child(child);
-                                }
-                                instance.slot.spawned_asset = child;
-                                child->initialize_animation_children_recursive();
-                        }
-                }
-
-                async_child_lookup_[instance.name] = async_children_.size();
-                async_children_.push_back(std::move(instance));
-        }
-
-        async_children_initialized_ = true;
-}
 
 void Asset::ensure_animation_runtime(bool force_recreate) {
     if (!assets_) {
@@ -831,7 +790,6 @@ void Asset::ensure_animation_runtime(bool force_recreate) {
     if (force_recreate) {
         animation_children_initialized_ = false;
         initializing_animation_children_ = false;
-                async_children_initialized_ = false;
     }
     anim_runtime_ = std::make_unique<AnimationRuntime>(this, assets_);
     anim_ = std::make_unique<AnimationUpdate>(this, assets_);

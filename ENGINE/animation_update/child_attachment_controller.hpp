@@ -26,6 +26,7 @@ void advance_frames(std::vector<Asset::AnimationChildAttachment>& slots,
                     float dt);
 void apply_frame_data(std::vector<Asset::AnimationChildAttachment>& slots,
                       const ParentState& parent_state,
-                      const AnimationFrame* frame);
+                      const AnimationFrame* frame,
+                      const std::vector<AnimationChildFrameData>* override_children = nullptr);
 
 } // namespace animation_update::child_attachments

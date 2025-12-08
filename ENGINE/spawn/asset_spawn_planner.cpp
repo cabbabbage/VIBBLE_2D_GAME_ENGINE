@@ -23,17 +23,21 @@ AssetSpawnPlanner::AssetSpawnPlanner(const std::vector<nlohmann::json>& json_sou
     nlohmann::json merged;
     merged["spawn_groups"] = nlohmann::json::array();
     for (size_t si = 0; si < source_jsons_.size(); ++si) {
-
-        nlohmann::json js = source_jsons_[si];
-        auto& groups = devmode::spawn::ensure_spawn_groups_array(js);
-        if (!groups.is_array()) continue;
-        for (size_t ai = 0; ai < groups.size(); ++ai) {
-            merged["spawn_groups"].push_back(groups[ai]);
-            SourceRef ref;
-            ref.source_index = static_cast<int>(si);
-            ref.entry_index  = static_cast<int>(ai);
-            ref.key = "spawn_groups";
-            assets_provenance_.push_back(std::move(ref));
+        try {
+            nlohmann::json js = source_jsons_[si];
+            auto& groups = devmode::spawn::ensure_spawn_groups_array(js);
+            if (!groups.is_array()) continue;
+            for (size_t ai = 0; ai < groups.size(); ++ai) {
+                merged["spawn_groups"].push_back(groups[ai]);
+                SourceRef ref;
+                ref.source_index = static_cast<int>(si);
+                ref.entry_index  = static_cast<int>(ai);
+                ref.key = "spawn_groups";
+                assets_provenance_.push_back(std::move(ref));
+            }
+        } catch (...) {
+            // Skip malformed spawn source to avoid crashing load
+            continue;
         }
     }
 

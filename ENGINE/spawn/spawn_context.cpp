@@ -121,57 +121,24 @@ Asset* SpawnContext::spawnAssetInternal(const std::string& name,
                                                    "': resolved area has no points");
                                 continue;
                         }
-                        nlohmann::json j;
-                        if (asset_child_info->spawn_group.is_array()) {
-                                const auto& arr = asset_child_info->spawn_group;
-                                if (!arr.empty()) {
-                                        j["spawn_groups"] = arr;
-                                }
-                        } else if (asset_child_info->spawn_group.is_object()) {
-                                nlohmann::json group = asset_child_info->spawn_group;
-                                if (!asset_child_info->area_name.empty()) {
-                                        group["linked_area"] = asset_child_info->area_name;
-                                        group["link_to_area"] = true;
-                                }
-                                group["placed_on_top_parent"] = asset_child_info->placed_on_top_parent;
-                                group["z_offset"] = asset_child_info->z_offset;
-                                j["spawn_groups"] = nlohmann::json::array();
-                                j["spawn_groups"].push_back(std::move(group));
-                        }
-
-                        if (!j.contains("spawn_groups") || !j["spawn_groups"].is_array() || j["spawn_groups"].empty()) {
-                                vibble::log::debug(std::string{"[Spawn] No spawn group data for child area '"} +
-                                                   asset_child_info->area_name + "' on parent '" + parent_name +
-                                                   "'; skipping" );
-                                continue;
-                        }
-
-                        vibble::log::debug(std::string{"[Spawn] Using spawn groups for child area '"} +
-                                           asset_child_info->area_name + "' on parent '" + parent_name + "'");
+                        // Spawn group system removed; no auto-spawning of children here.
                         resolved_child_areas.insert_or_assign(asset_child_info->area_name, childArea);
-                        AssetSpawnPlanner childPlanner(std::vector<nlohmann::json>{ j },
-                                                       childArea,
-                                                       *asset_library_);
-                        AssetSpawner childSpawner(asset_library_, exclusion_zones_);
-                        childSpawner.set_map_grid_settings(map_grid_settings_);
-                        childSpawner.spawn_children(childArea, resolved_child_areas, &childPlanner);
-                        auto kids = childSpawner.extract_all_assets();
+                        std::vector<Asset*> kids;
                         vibble::log::debug(std::string{"[Spawn] Parent '"} + parent_name +
                                            "' child area '" + asset_child_info->area_name + "' produced " +
                                            std::to_string(kids.size()) + " asset(s)");
-                        for (auto& uptr : kids) {
-                                if (!uptr || !uptr->info) continue;
-                                uptr->parent = raw;
+                        for (auto* child : kids) {
+                                if (!child || !child->info) continue;
+                                child->parent = raw;
                                 int z_offset = asset_child_info->z_offset;
                                 if (asset_child_info->placed_on_top_parent && z_offset <= 0) {
                                         z_offset = 1;
                                 }
-                                uptr->set_z_offset(z_offset);
-                                uptr->set_hidden(false);
-                                uptr->set_owning_room_name(raw->owning_room_name());
+                                child->set_z_offset(z_offset);
+                                child->set_hidden(false);
+                                child->set_owning_room_name(raw->owning_room_name());
 
-                                raw->asset_children.push_back(uptr.get());
-                                all_.push_back(std::move(uptr));
+                                raw->asset_children.push_back(child);
                                 if (!raw->asset_children.empty()) {
                                         Asset* asset_child_ptr = raw->asset_children.back();
                                         if (asset_child_ptr && asset_child_ptr->info) {

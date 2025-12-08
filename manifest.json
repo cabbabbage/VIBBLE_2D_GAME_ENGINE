@@ -40,6 +40,7 @@
       "asset_directory": "SRC/assets/Bench",
       "asset_name": "Bench",
       "asset_type": "object",
+      "async_children": [],
       "can_invert": false,
       "has_shading": false,
       "lighting_info": [],
@@ -58,7 +59,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 30.0
+        "scale_percentage": 23.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -1564,6 +1565,7 @@
               "projectile": []
             }
           ],
+          "child_timelines": [],
           "crop_frames": false,
           "derived_modifiers": {
             "flipMovementX": false,
@@ -1627,6 +1629,7 @@
               0,
               0,
               false,
+              [],
               []
             ]
           ],
@@ -1653,6 +1656,7 @@
               "projectile": []
             }
           ],
+          "child_timelines": [],
           "crop_frames": false,
           "flipped_source": false,
           "frames": [
@@ -1675,6 +1679,7 @@
               0,
               0,
               false,
+              [],
               []
             ]
           ],
@@ -1736,6 +1741,7 @@
               "projectile": null
             }
           ],
+          "child_timelines": [],
           "crop_frames": false,
           "flipped_source": false,
           "frames": [
@@ -1876,6 +1882,7 @@
               "projectile": []
             }
           ],
+          "child_timelines": [],
           "crop_frames": false,
           "flipped_source": false,
           "frames": [
@@ -1974,6 +1981,7 @@
           "speed_multiplier": 1.0
         },
         "right": {
+          "child_timelines": [],
           "crop_frames": false,
           "derived_modifiers": {
             "flipMovementX": true,
@@ -2201,6 +2209,24 @@
               "explosion": null,
               "melee": null,
               "projectile": null
+            }
+          ],
+          "child_timelines": [
+            {
+              "animation": "",
+              "asset": "Candle",
+              "child": 0,
+              "child_index": 0,
+              "frames": [
+                {
+                  "degree": -860.0,
+                  "dx": 0,
+                  "dy": -40,
+                  "render_in_front": true,
+                  "visible": false
+                }
+              ],
+              "mode": "static"
             }
           ],
           "children": [
@@ -3516,6 +3542,7 @@
       "asset_directory": "SRC/assets/bottle",
       "asset_name": "bottle",
       "asset_type": "object",
+      "async_children": [],
       "can_invert": true,
       "has_shading": false,
       "lighting_info": [],
@@ -3534,7 +3561,7 @@
         "falloff_start": 0.0
       },
       "size_settings": {
-        "scale_percentage": 46.0
+        "scale_percentage": 7.0
       },
       "spawn_groups": [],
       "start": "default",
@@ -4597,7 +4624,7 @@
           },
           {
             "brightness": 1.0,
-            "offset": 658.9600219726563,
+            "offset": 658.9600219726562,
             "opacity": 7.659999847412109,
             "scale": 6.590000152587891
           }
@@ -4627,9 +4654,9 @@
         "bar": {
           "curvyness": 2,
           "display_color": [
-            31,
-            204,
-            31,
+            71,
+            242,
+            36,
             255
           ],
           "edge_smoothness": 19,
@@ -4647,9 +4674,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
+            112,
+            31,
             204,
-            31,
-            31,
             255
           ],
           "edge_smoothness": 43,
@@ -4700,9 +4727,9 @@
         "rnd": {
           "curvyness": 2,
           "display_color": [
+            203,
             242,
-            85,
-            145,
+            36,
             255
           ],
           "edge_smoothness": 2,
@@ -4720,9 +4747,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
+            41,
             36,
             242,
-            151,
             255
           ],
           "edge_smoothness": 101,
@@ -4950,8 +4977,8 @@
                 }
               ],
               "display_name": "lantern",
-              "dx": -1750,
-              "dy": -1744,
+              "dx": -1732,
+              "dy": -1732,
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
@@ -4962,7 +4989,7 @@
               "origional_width": 6904,
               "position": "Exact",
               "priority": 7,
-              "resolution": 7,
+              "resolution": 3,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-5f19831b92c3"
@@ -4979,8 +5006,8 @@
                 }
               ],
               "display_name": "latern_left",
-              "dx": 2620,
-              "dy": -1732,
+              "dx": 2766,
+              "dy": -1712,
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
@@ -4991,7 +5018,7 @@
               "origional_width": 6904,
               "position": "Exact",
               "priority": 8,
-              "resolution": 1,
+              "resolution": 3,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-c54e6f1a557e"
@@ -5124,8 +5151,8 @@
                 }
               ],
               "display_name": "Bench",
-              "dx": -1018,
-              "dy": -730,
+              "dx": -820,
+              "dy": -884,
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
@@ -5136,7 +5163,7 @@
               "origional_width": 6904,
               "position": "Exact",
               "priority": 13,
-              "resolution": 7,
+              "resolution": 3,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-511472b321d6"
@@ -5211,8 +5238,8 @@
                 }
               ],
               "display_name": "top_hat",
-              "dx": -2228,
-              "dy": -1060,
+              "dx": -1564,
+              "dy": -1108,
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
@@ -5222,7 +5249,8 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "resolution": 7,
+              "priority": 16,
+              "resolution": 3,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-e2c95ad9e42f"
