@@ -58,7 +58,7 @@
 #include "dev_mode/manifest_asset_utils.hpp"
 #include "dev_mode/asset_paths.hpp"
 
-#include "dev_mode/rebuildAnimation.hpp"
+#include "dev_mode/animation_runtime_refresh.hpp"
 #include "utils/rebuild_queue.hpp"
 
 namespace asset_paths = devmode::asset_paths;
@@ -434,6 +434,10 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
                 }
             });
             animation_editor_window_->set_info(info_);
+            // Keep the animation-children inspector in sync with the animation document
+            if (animation_children_section_) {
+                animation_children_section_->set_document(animation_editor_window_->document());
+            }
         } catch (const std::exception& ex) {
             SDL_Log("AssetInfoUI: failed to configure animation editor for %s: %s", info_ ? info_->name.c_str() : "<null>", ex.what());
             animation_editor_window_->clear_info();
@@ -768,10 +772,16 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                 int fw = target_asset_->cached_w;
                 int fh = target_asset_->cached_h;
                 if ((fw <= 0 || fh <= 0)) {
-                    if (SDL_Texture* ft = target_asset_->get_final_texture()) {
-                        SDL_QueryTexture(ft, nullptr, nullptr, &fw, &fh);
+                    if (SDL_Texture* frame = target_asset_->get_current_frame()) {
+                        SDL_QueryTexture(frame, nullptr, nullptr, &fw, &fh);
                     }
                 }
+                if ((fw <= 0 || fh <= 0) && target_asset_->info) {
+                    fw = target_asset_->info->original_canvas_width;
+                    fh = target_asset_->info->original_canvas_height;
+                }
+                if (target_asset_->cached_w == 0 && fw > 0) target_asset_->cached_w = fw;
+                if (target_asset_->cached_h == 0 && fh > 0) target_asset_->cached_h = fh;
                 if (fw <= 0) fw = 1;
                 if (fh <= 0) fh = 1;
 
@@ -888,7 +898,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                     lighting_section_->update_light_offsets(static_cast<std::size_t>(light_drag_index_), final_off_x, final_off_y);
                 }
                 set_light_hover(light_drag_index_);
-                this->notify_light_sources_modified(true);
+                this->notify_light_sources_modified(false);
                 (void)info_->commit_manifest();
                 return true;
             } else if (e.type == SDL_MOUSEMOTION) {
@@ -1202,9 +1212,8 @@ float AssetInfoUI::compute_player_screen_height(const WarpedScreenGrid& cam) con
     Asset* player_asset = assets_->player;
     if (!player_asset) return 1.0f;
 
-    SDL_Texture* player_final = player_asset->get_final_texture();
-    SDL_Texture* player_frame = nullptr;
-    if (player_asset->info && player_asset->info->animations.count(player_asset->current_animation)) {
+    SDL_Texture* player_frame = player_asset->get_current_frame();
+    if (!player_frame && player_asset->info && player_asset->info->animations.count(player_asset->current_animation)) {
         AnimationFrame* frame = player_asset->info->animations[player_asset->current_animation].get_first_frame();
         if (frame && !frame->variants.empty()) {
             player_frame = frame->get_base_texture(0);
@@ -1212,11 +1221,12 @@ float AssetInfoUI::compute_player_screen_height(const WarpedScreenGrid& cam) con
     }
     int pw = player_asset->cached_w;
     int ph = player_asset->cached_h;
-    if ((pw == 0 || ph == 0) && player_final) {
-        SDL_QueryTexture(player_final, nullptr, nullptr, &pw, &ph);
-    }
     if ((pw == 0 || ph == 0) && player_frame) {
         SDL_QueryTexture(player_frame, nullptr, nullptr, &pw, &ph);
+    }
+    if ((pw == 0 || ph == 0) && player_asset->info) {
+        pw = player_asset->info->original_canvas_width;
+        ph = player_asset->info->original_canvas_height;
     }
     if (pw != 0) player_asset->cached_w = pw;
     if (ph != 0) player_asset->cached_h = ph;
@@ -1255,10 +1265,16 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const WarpedScreenGrid& 
             int fw = target_asset_->cached_w;
             int fh = target_asset_->cached_h;
             if ((fw <= 0 || fh <= 0)) {
-                if (SDL_Texture* ft = target_asset_->get_final_texture()) {
-                    SDL_QueryTexture(ft, nullptr, nullptr, &fw, &fh);
+                if (SDL_Texture* frame = target_asset_->get_current_frame()) {
+                    SDL_QueryTexture(frame, nullptr, nullptr, &fw, &fh);
                 }
             }
+            if ((fw <= 0 || fh <= 0) && target_asset_->info) {
+                fw = target_asset_->info->original_canvas_width;
+                fh = target_asset_->info->original_canvas_height;
+            }
+            if (target_asset_->cached_w == 0 && fw > 0) target_asset_->cached_w = fw;
+            if (target_asset_->cached_h == 0 && fh > 0) target_asset_->cached_h = fh;
             if (fw <= 0) fw = 1;
             if (fh <= 0) fh = 1;
 
@@ -1340,11 +1356,11 @@ void AssetInfoUI::refresh_target_asset_scale() {
     const bool target_valid = validate_target_asset();
     Asset* validated_target = target_asset_;
 
-    const auto refresh_asset = [&](Asset* asset) {
+    const auto refresh_asset = [&](Asset* asset, bool force_update = false) {
         if (!asset || !asset->info) {
             return false;
         }
-        if (!asset_matches_current_info(asset)) {
+        if (!force_update && !asset_matches_current_info(asset)) {
             return false;
         }
         asset->info->set_scale_factor(info_->scale_factor);
@@ -1362,13 +1378,13 @@ void AssetInfoUI::refresh_target_asset_scale() {
     }
 
     if (target_valid && validated_target) {
-        if (refresh_asset(validated_target)) {
+        if (refresh_asset(validated_target, true)) {
             refreshed_any = true;
         }
     }
 
     if (current_target && current_target != validated_target) {
-        if (refresh_asset(current_target)) {
+        if (refresh_asset(current_target, true)) {
             refreshed_any = true;
         }
     }
@@ -1746,6 +1762,69 @@ void AssetInfoUI::notify_light_sources_modified(bool purge_light_cache) {
     std::filesystem::remove_all(cache_dir, ec);
 }
 
+void AssetInfoUI::mark_light_for_rebuild(std::size_t light_index) {
+    if (!info_) {
+        return;
+    }
+    vibble::RebuildQueueCoordinator coordinator;
+    coordinator.request_light_entry(info_->name, static_cast<int>(light_index));
+    coordinator.run_asset_tool();
+
+    SDL_Renderer* renderer = assets_ ? assets_->renderer() : nullptr;
+    if (renderer) {
+        info_->rebuild_light_texture(renderer, light_index);
+    }
+
+    // Propagate updated light textures to live assets
+    apply_to_assets_with_info([&](Asset* asset) {
+        if (!asset || !asset->info) return;
+        if (renderer) {
+            asset->info->light_sources = info_->light_sources;
+        }
+        asset->clear_render_caches();
+        if (assets_) {
+            assets_->notify_light_map_asset_moved(asset);
+        }
+    });
+
+    if (assets_) {
+        assets_->mark_active_assets_dirty();
+        assets_->notify_light_map_static_assets_changed();
+    }
+}
+
+void AssetInfoUI::mark_lighting_asset_for_rebuild() {
+    if (!info_) {
+        return;
+    }
+    vibble::RebuildQueueCoordinator coordinator;
+    coordinator.request_light(info_->name);
+    coordinator.run_asset_tool();
+
+    SDL_Renderer* renderer = assets_ ? assets_->renderer() : nullptr;
+    if (renderer) {
+        for (std::size_t i = 0; i < info_->light_sources.size(); ++i) {
+            info_->rebuild_light_texture(renderer, i);
+        }
+    }
+
+    apply_to_assets_with_info([&](Asset* asset) {
+        if (!asset || !asset->info) return;
+        if (renderer) {
+            asset->info->light_sources = info_->light_sources;
+        }
+        asset->clear_render_caches();
+        if (assets_) {
+            assets_->notify_light_map_asset_moved(asset);
+        }
+    });
+
+    if (assets_) {
+        assets_->mark_active_assets_dirty();
+        assets_->notify_light_map_static_assets_changed();
+    }
+}
+
 void AssetInfoUI::sync_target_shading_settings() {
     if (!info_) {
         return;
@@ -1809,6 +1888,38 @@ void AssetInfoUI::sync_target_tags() {
     }
 }
 
+void AssetInfoUI::sync_animation_children() {
+    if (!info_) {
+        return;
+    }
+
+    bool updated_any = apply_to_assets_with_info([&](Asset* asset) {
+        if (!asset || !asset->info) {
+            return;
+        }
+        asset->info->set_animation_children(info_->animation_children);
+        asset->rebuild_animation_runtime();
+        asset->initialize_animation_children_recursive();
+    });
+
+    // Persist the change immediately so manifest and other views stay in sync.
+    (void)info_->commit_manifest();
+
+    // Refresh the inspector section immediately so newly added children appear without reopening.
+    if (animation_children_section_) {
+        animation_children_section_->build();
+        container_.request_layout();
+    }
+
+    if (animation_editor_window_) {
+        animation_editor_window_->refresh_children_from_asset_info();
+    }
+
+    if (updated_any && assets_) {
+        assets_->mark_active_assets_dirty();
+    }
+}
+
 void AssetInfoUI::sync_target_basic_render_settings(bool type_changed) {
     if (!info_) {
         return;
@@ -1865,20 +1976,8 @@ void AssetInfoUI::regenerate_shadow_masks() {
 
     vibble::RebuildQueueCoordinator coordinator;
     coordinator.request_asset(info_->name);
-
-#if defined(_WIN32)
-    const std::string prefix =
-        "set \"PATH=%PATH%;C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.0\\bin\" && ";
-#else
-    const std::string prefix;
-#endif
-
-    std::cout << "[AssetInfoUI] Queueing mask regeneration via asset_tool.py for "
-              << info_->name << "\n";
-    if (!coordinator.run_asset_tool(prefix)) {
-        std::cerr << "[AssetInfoUI] asset_tool.py failed while regenerating masks for "
-                  << info_->name << "\n";
-    }
+    std::cout << "[AssetInfoUI] Marked " << info_->name
+              << " for mask regeneration. Run Rebuild Assets to process queued work." << "\n";
 
     info_->loadAnimations(renderer);
     (void)generate_mask_preview();
@@ -2224,7 +2323,7 @@ void AssetInfoUI::refresh_loaded_asset_instances() {
     }
 
     if (assets_) {
-        devmode::AnimationRegenerator::refresh_loaded_instances(assets_, info_);
+        devmode::refresh_loaded_animation_instances(assets_, info_);
     }
 
     if (assets_ && !info_->name.empty()) {
@@ -2243,7 +2342,7 @@ void AssetInfoUI::refresh_loaded_asset_instances() {
                 continue;
             }
 
-            devmode::AnimationRegenerator::refresh_loaded_instances(assets_, lib_info);
+            devmode::refresh_loaded_animation_instances(assets_, lib_info);
         }
     }
 }

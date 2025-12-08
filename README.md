@@ -118,6 +118,24 @@ cmake --build --preset windows-vcpkg-release --target engine_tests
 ENGINE/engine_tests.exe
 ```
 
+## Animation Rebuild Workflow
+
+- Each animation frame in `manifest.json` now carries a `needs_rebuild` flag under the animation's `frames` array. The flag covers all variants (normal/foreground/background/mask) for that frame.
+- Use `tools/set_rebuild_values.py` to mark work:
+  - `python tools/set_rebuild_values.py all` marks every frame for rebuild.
+  - `python tools/set_rebuild_values.py asset <asset>` marks all frames for one asset.
+  - `python tools/set_rebuild_values.py animation <asset> <animation>` marks all frames in one animation.
+  - `python tools/set_rebuild_values.py frame <asset> <animation> <index>` marks a single frame.
+- Run `python tools/asset_tool.py` to rebuild all frames flagged in the manifest; the tool clears `needs_rebuild` back to `false` after successful generation.
+- C++ call sites now toggle `needs_rebuild` via the helper script and then invoke `asset_tool.py`; there is no rebuild queue or per-animation cache fingerprinting anymore.
+
+## Lighting Rebuild Workflow
+
+- Each light definition in `manifest.json` now carries a `needs_rebuild` flag under its entry in the asset's `lighting_info` array.
+- Use `python tools/set_rebuild_values.py lighting_all` to mark every light in the manifest, `lighting_asset <asset>` to mark every light for one asset, or `lighting_light <asset> <index>` to flag a specific light definition by index.
+- Run `python tools/light_tool.py` to regenerate the `.png` cache for all assets that still expose `needs_rebuild` entries; successful runs reset those flags so future runs skip unchanged lights.
+- Dev Mode now marks the right light definitions automatically whenever you change intensity, radius, falloff, or color, or when you add/remove lights, so manual flagging is rare. Flicker, offset, and rendering-layer tweaks no longer trigger cache regenerations.
+
 Tests cover core systems like asset loading, manifest parsing, and rendering prerequisites.
 
 ## License
@@ -131,9 +149,6 @@ The `AnimationUpdate` class provides the restricted public interface for custom 
 ### Constructors
 - **AnimationUpdate(Asset* self, Assets* assets)**  
   Creates an `AnimationUpdate` instance tied to a specific asset and assets manager.
-
-- **AnimationUpdate(Asset* self, Assets* assets, double path_bias)**  
-  Alternative constructor (path_bias parameter is unused; legacy support only).
 
 ### Debug Control
 - **void set_debug_enabled(bool enabled)**  

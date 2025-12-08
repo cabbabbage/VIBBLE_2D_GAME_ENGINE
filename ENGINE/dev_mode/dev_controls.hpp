@@ -58,36 +58,6 @@ public:
     void set_map_info(nlohmann::json* map_info, MapLightPanel::SaveCallback on_save);
     void set_map_context(nlohmann::json* map_info, const std::string& map_path);
 
-    struct RoomAreaCache {
-        struct Polygon {
-            std::string name;
-            std::vector<SDL_Point> points;
-            SDL_Point anchor{0, 0};
-            int z = 0;
-            bool visible = true;
-};
-        using PolygonList  = std::vector<Polygon>;
-        using Listener     = std::function<void(const PolygonList&, std::size_t)>;
-
-        void set_listener(Listener listener);
-        void invalidate();
-        const PolygonList& ensure_from_json(const nlohmann::json* root,
-                                            std::optional<SDL_Point> default_anchor = std::nullopt,
-                                            std::optional<std::pair<int, int>> room_dimensions = std::nullopt);
-        std::size_t generation() const { return generation_; }
-
-    private:
-        PolygonList cached_;
-        const nlohmann::json* last_source_ = nullptr;
-        bool dirty_ = true;
-        std::size_t generation_ = 0;
-        Listener listener_;
-};
-
-    void set_room_area_cache_listener(RoomAreaCache::Listener listener);
-    std::size_t room_area_cache_generation() const;
-    void notify_room_area_data_changed();
-
     Room* resolve_current_room(Room* detected_room);
 
     void set_enabled(bool enabled);
@@ -211,8 +181,6 @@ private:
 
     bool persist_map_info_to_disk();
 
-    const RoomAreaCache::PolygonList& room_area_polygons();
-
     Assets* assets_ = nullptr;
     Input* input_ = nullptr;
     std::vector<Asset*>* active_assets_ = nullptr;
@@ -254,11 +222,6 @@ private:
 
     std::unique_ptr<SingleSpawnGroupModal> map_assets_modal_;
     std::unique_ptr<SingleSpawnGroupModal> boundary_assets_modal_;
-    std::optional<std::string> selected_room_area_name_;
-    std::optional<std::string> hovered_room_area_name_;
-
-    RoomAreaCache room_area_cache_;
-
     // Grid header state
     bool grid_overlay_enabled_ = false;
     bool snap_to_grid_enabled_ = false;

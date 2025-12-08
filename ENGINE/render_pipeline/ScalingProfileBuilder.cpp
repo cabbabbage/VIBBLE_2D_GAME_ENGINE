@@ -234,7 +234,7 @@ std::string iso_timestamp_now() {
 
 bool BuildScalingProfiles(const ScalingProfileBuildOptions& options) {
     (void)options;
-    vibble::log::info("[ScalingProfileBuilder] Dynamic scaling profiles disabled; using fixed variants (100/75/50/25).");
+    vibble::log::info("[ScalingProfileBuilder] Dynamic scaling profiles disabled; using fixed variants (100/75/50/25/10).");
     return true;
 #if 0
     const double aspect = (options.screen_aspect > 0.0) ? options.screen_aspect : kDefaultAspect;

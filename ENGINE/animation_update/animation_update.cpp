@@ -240,9 +240,6 @@ AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets)
     }
 }
 
-AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets, double)
-    : AnimationUpdate(self, assets) {}
-
 void AnimationUpdate::auto_move(SDL_Point rel_checkpoint,
                                 int visited_thresh_px,
                                 std::optional<int> checkpoint_resolution,
@@ -407,6 +404,26 @@ bool AnimationUpdate::consume_input_event() {
     const bool had = input_event_;
     input_event_ = false;
     return had;
+}
+
+void AnimationUpdate::run_async(const std::string& child_name) {
+    if (child_name.empty()) {
+        return;
+    }
+    bool dispatched = false;
+    if (runtime_) {
+        dispatched = runtime_->run_child_animation(child_name);
+    }
+    if (!dispatched) {
+        pending_async_requests_.push_back(child_name);
+    }
+    input_event_ = true;
+}
+
+std::vector<std::string> AnimationUpdate::consume_async_requests() {
+    std::vector<std::string> pending = std::move(pending_async_requests_);
+    pending_async_requests_.clear();
+    return pending;
 }
 
 void AnimationUpdate::set_debug_enabled(bool enabled) {

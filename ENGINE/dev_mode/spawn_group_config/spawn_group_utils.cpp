@@ -74,17 +74,29 @@ std::string generate_spawn_id() {
 }
 
 nlohmann::json& ensure_spawn_groups_array(nlohmann::json& root) {
+    // Be liberal: coerce non-object values into an object so we never throw
+    // when the caller hands us unexpected manifest fragments (e.g., legacy
+    // spawn data removed from AssetInfo).
     if (root.is_array()) {
         return root;
     }
+
+    if (!root.is_object()) {
+        root = nlohmann::json::object();
+    }
+
     if (root.contains("spawn_groups") && root["spawn_groups"].is_array()) {
         return root["spawn_groups"];
     }
+
     root["spawn_groups"] = nlohmann::json::array();
     return root["spawn_groups"];
 }
 
 const nlohmann::json* find_spawn_groups_array(const nlohmann::json& root) {
+    if (root.is_array()) {
+        return &root;
+    }
     if (root.contains("spawn_groups") && root["spawn_groups"].is_array()) {
         return &root["spawn_groups"];
     }

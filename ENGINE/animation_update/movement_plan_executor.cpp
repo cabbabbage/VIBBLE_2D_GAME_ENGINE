@@ -1,4 +1,4 @@
-﻿#include "stride_player.hpp"
+#include "movement_plan_executor.hpp"
 
 #include <vector>
 
@@ -8,7 +8,7 @@
 #include "asset/animation_frame.hpp"
 #include "animation_update.hpp"
 
-bool StridePlayer::tick(AnimationRuntime& up, Plan& plan,
+bool MovementPlanExecutor::tick(AnimationRuntime& up, Plan& plan,
                         std::size_t& stride_index, int& stride_frame_counter) {
     Asset* self = up.self_;
     if (!self || !self->info) {

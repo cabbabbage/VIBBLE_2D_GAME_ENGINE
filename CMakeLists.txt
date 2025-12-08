@@ -55,6 +55,10 @@ list(REMOVE_DUPLICATES ENGINE_SRC)
 
 add_executable(engine ${ENGINE_SRC})
 
+# Exclude old shim files from the build
+set(SHIM_FILES stride_player.hpp stride_player.cpp)
+list(REMOVE_ITEM ENGINE_SRC ${SHIM_FILES})
+
 # Unity build (jumbo) for faster compiles
 option(ENABLE_UNITY_BUILD "Enable unity builds for faster compilation" OFF)
 if(ENABLE_UNITY_BUILD)
@@ -190,6 +194,7 @@ add_executable(engine_tests
     ENGINE/asset/surface_utils.cpp
     ENGINE/asset/animation_cloner.cpp
     ENGINE/animation_update/child_attachment_controller.cpp
+    ENGINE/dev_mode/frame_editor_session_child_timelines.cpp
     ENGINE/dev_mode/core/dev_json_store.cpp
     ENGINE/dev_mode/core/manifest_store.cpp
     ENGINE/dev_mode/manifest_asset_utils.cpp
@@ -219,6 +224,8 @@ target_include_directories(engine_tests
 target_compile_definitions(engine_tests PRIVATE
     DEV_MODE_DISABLE_JSON_DEBOUNCE=1
     PROJECT_ROOT="${TEST_ROOT}"
+    FRAME_EDITOR_TEST_PUBLIC_ACCESS=1
+    FRAME_EDITOR_ACCESS=public
 )
 
 target_link_libraries(engine_tests

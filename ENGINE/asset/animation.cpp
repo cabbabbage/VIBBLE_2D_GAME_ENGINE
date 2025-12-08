@@ -28,6 +28,69 @@
 
 namespace fs = std::filesystem;
 
+namespace {
+
+// Applies the appropriate SDL texture scale mode based on asset settings.
+inline void apply_scale_mode(SDL_Texture* tex, const AssetInfo& info) {
+#if SDL_VERSION_ATLEAST(2, 0, 12)
+    if (tex) {
+        SDL_SetTextureScaleMode(tex, info.smooth_scaling ? SDL_ScaleModeBest : SDL_ScaleModeNearest);
+    }
+#else
+    (void)tex;
+    (void)info;
+#endif
+}
+
+struct VariantLayerPaths {
+    std::filesystem::path normal;
+    std::filesystem::path foreground;
+    std::filesystem::path background;
+    std::filesystem::path mask;
+};
+
+VariantLayerPaths build_variant_paths(const std::string& cache_root,
+                                      const std::vector<float>& variant_steps,
+                                      std::size_t variant_idx) {
+    VariantLayerPaths out;
+    const std::string folder = render_pipeline::ScalingLogic::VariantFolder(cache_root, variant_steps, variant_idx);
+    std::filesystem::path base(folder);
+    out.normal     = base / "normal";
+    out.foreground = base / "foreground";
+    out.background = base / "background";
+    out.mask       = base / "mask";
+    return out;
+}
+
+SDL_Texture* load_texture_from_path(SDL_Renderer* renderer,
+                                    const std::filesystem::path& path,
+                                    int& out_w,
+                                    int& out_h) {
+    out_w = 0;
+    out_h = 0;
+    SDL_Texture* tex = nullptr;
+    SDL_Surface* surf = CacheManager::load_surface(path.generic_string());
+    if (!surf) {
+        return nullptr;
+    }
+    tex = CacheManager::surface_to_texture(renderer, surf);
+    if (tex) {
+        out_w = surf->w;
+        out_h = surf->h;
+    }
+    SDL_FreeSurface(surf);
+    return tex;
+}
+
+void destroy_texture(SDL_Texture*& tex) {
+    if (tex) {
+        SDL_DestroyTexture(tex);
+        tex = nullptr;
+    }
+}
+
+} // namespace
+
 Animation::Animation() = default;
 
 Animation::OnEndDirective Animation::classify_on_end(std::string_view value) {
@@ -36,6 +99,7 @@ Animation::OnEndDirective Animation::classify_on_end(std::string_view value) {
     for (char ch : value) {
         lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
     }
+
     if (lowered.empty() || lowered == "default") {
         return OnEndDirective::Default;
     }
@@ -49,6 +113,132 @@ Animation::OnEndDirective Animation::classify_on_end(std::string_view value) {
         return OnEndDirective::Reverse;
     }
     return OnEndDirective::Animation;
+}
+
+bool Animation::rebuild_frame(int frame_index,
+                              SDL_Renderer* renderer,
+                              const AssetInfo& info,
+                              const std::string& animation_id) {
+    if (!renderer || frame_index < 0 || animation_id.empty()) {
+        return false;
+    }
+
+    const std::size_t idx = static_cast<std::size_t>(frame_index);
+    if (idx >= frame_cache_.size()) {
+        return false;
+    }
+
+    std::vector<float> variant_steps = variant_steps_;
+    if (variant_steps.empty()) {
+        variant_steps = info.scale_variants;
+    }
+    if (variant_steps.empty()) {
+        variant_steps.push_back(1.0f);
+    }
+
+    Animation::FrameCache& cache_entry = frame_cache_[idx];
+    cache_entry.resize(variant_steps.size());
+
+    // Build cache roots
+    const std::string cache_root = (std::filesystem::path("cache") / info.name / "animations").lexically_normal().generic_string();
+
+    bool success = true;
+
+    for (std::size_t variant_idx = 0; variant_idx < variant_steps.size(); ++variant_idx) {
+        const VariantLayerPaths paths = build_variant_paths(cache_root, variant_steps, variant_idx);
+
+        const std::filesystem::path base_path = paths.normal / (std::to_string(idx) + ".png");
+        int base_w = 0, base_h = 0;
+        SDL_Texture* base_tex = load_texture_from_path(renderer, base_path, base_w, base_h);
+        if (!base_tex) {
+            success = false;
+            continue;
+        }
+        apply_scale_mode(base_tex, info);
+
+        int fg_w = 0, fg_h = 0;
+        SDL_Texture* fg_tex = load_texture_from_path(renderer, paths.foreground / (std::to_string(idx) + ".png"), fg_w, fg_h);
+        if (fg_tex) {
+            apply_scale_mode(fg_tex, info);
+        }
+
+        int bg_w = 0, bg_h = 0;
+        SDL_Texture* bg_tex = load_texture_from_path(renderer, paths.background / (std::to_string(idx) + ".png"), bg_w, bg_h);
+        if (bg_tex) {
+            apply_scale_mode(bg_tex, info);
+        }
+
+        SDL_Texture* mask_tex = nullptr;
+        int mask_w = 0, mask_h = 0;
+        if (info.is_shaded) {
+            mask_tex = load_texture_from_path(renderer, paths.mask / (std::to_string(idx) + ".png"), mask_w, mask_h);
+            if (mask_tex) {
+                apply_scale_mode(mask_tex, info);
+            }
+            if (!mask_tex) {
+                success = false;
+            }
+        }
+
+        // Destroy old textures before replacing
+        destroy_texture(cache_entry.textures[variant_idx]);
+        destroy_texture(cache_entry.foreground_textures[variant_idx]);
+        destroy_texture(cache_entry.background_textures[variant_idx]);
+        destroy_texture(cache_entry.mask_textures[variant_idx]);
+
+        cache_entry.textures[variant_idx] = base_tex;
+        cache_entry.widths[variant_idx] = base_w;
+        cache_entry.heights[variant_idx] = base_h;
+        cache_entry.foreground_textures[variant_idx] = fg_tex;
+        cache_entry.background_textures[variant_idx] = bg_tex;
+        cache_entry.mask_textures[variant_idx] = mask_tex;
+        cache_entry.mask_widths[variant_idx] = mask_w;
+        cache_entry.mask_heights[variant_idx] = mask_h;
+    }
+
+    // Refresh frame variants for every movement path frame with this index
+    for (auto& path : movement_paths_) {
+        if (idx >= path.size()) {
+            continue;
+        }
+        AnimationFrame& frame = path[idx];
+        frame.variants.clear();
+        frame.variants.reserve(variant_steps.size());
+        for (std::size_t v = 0; v < variant_steps.size(); ++v) {
+            FrameVariant variant;
+            variant.varient = static_cast<int>(v);
+            variant.base_texture = cache_entry.textures[v];
+            variant.foreground_texture = (v < cache_entry.foreground_textures.size()) ? cache_entry.foreground_textures[v] : nullptr;
+            variant.background_texture = (v < cache_entry.background_textures.size()) ? cache_entry.background_textures[v] : nullptr;
+            variant.shadow_mask_texture = (v < cache_entry.mask_textures.size()) ? cache_entry.mask_textures[v] : nullptr;
+            frame.variants.push_back(variant);
+        }
+    }
+
+    // Update preview texture when rebuilding first frame
+    if (idx == 0 && !frame_cache_.empty() && !frame_cache_[0].textures.empty()) {
+        preview_texture = frame_cache_[0].textures[0];
+    }
+
+    return success;
+}
+
+bool Animation::rebuild_animation(SDL_Renderer* renderer,
+                                  const AssetInfo& info,
+                                  const std::string& animation_id) {
+    if (!renderer || animation_id.empty()) {
+        return false;
+    }
+    const std::size_t frame_count = frame_cache_.size();
+    if (frame_count == 0) {
+        return false;
+    }
+
+    bool ok = true;
+    for (std::size_t i = 0; i < frame_count; ++i) {
+        ok = rebuild_frame(static_cast<int>(i), renderer, info, animation_id) && ok;
+    }
+    return ok;
 }
 
 void Animation::clear_texture_cache() {
@@ -81,6 +271,109 @@ void Animation::clear_texture_cache() {
     frame_cache_.clear();
     if (audio_clip.chunk) {
         audio_clip.chunk.reset();
+    }
+}
+
+const AnimationChildData* Animation::find_child_timeline(std::string_view child_name) const {
+    if (child_name.empty()) {
+        return nullptr;
+    }
+    const auto it = std::find_if(child_data_.begin(), child_data_.end(), [&](const AnimationChildData& entry) {
+        return entry.asset_name == child_name;
+    });
+    return (it == child_data_.end()) ? nullptr : &(*it);
+}
+
+AnimationChildData* Animation::find_child_timeline(std::string_view child_name) {
+    if (child_name.empty()) {
+        return nullptr;
+    }
+    const auto it = std::find_if(child_data_.begin(), child_data_.end(), [&](const AnimationChildData& entry) {
+        return entry.asset_name == child_name;
+    });
+    return (it == child_data_.end()) ? nullptr : &(*it);
+}
+
+void Animation::rebuild_child_timelines_from_frames() {
+    child_data_.clear();
+    if (child_asset_names_.empty() || frames.empty()) {
+        rebuild_child_start_events_from_timelines();
+        return;
+    }
+
+    const std::size_t frame_count = frames.size();
+    child_data_.reserve(child_asset_names_.size());
+    for (std::size_t child_idx = 0; child_idx < child_asset_names_.size(); ++child_idx) {
+        AnimationChildData descriptor;
+        descriptor.asset_name = child_asset_names_[child_idx];
+        descriptor.mode = AnimationChildMode::Static;
+        descriptor.frames.resize(frame_count);
+
+        for (std::size_t frame_idx = 0; frame_idx < frame_count; ++frame_idx) {
+            AnimationChildFrameData frame_sample{};
+            frame_sample.child_index = static_cast<int>(child_idx);
+            frame_sample.render_in_front = true;
+            frame_sample.visible = false;
+            frame_sample.dx = 0;
+            frame_sample.dy = 0;
+            frame_sample.degree = 0.0f;
+
+            AnimationFrame* frame = (frame_idx < frames.size()) ? frames[frame_idx] : nullptr;
+            if (frame) {
+                const auto& legacy_children = frame->children;
+                auto legacy_it = std::find_if(legacy_children.begin(), legacy_children.end(), [&](const AnimationChildFrameData& entry) {
+                    return entry.child_index == static_cast<int>(child_idx);
+                });
+                if (legacy_it != legacy_children.end()) {
+                    frame_sample = *legacy_it;
+                }
+            }
+
+            descriptor.frames[frame_idx] = frame_sample;
+        }
+
+        child_data_.push_back(std::move(descriptor));
+    }
+
+    rebuild_child_start_events_from_timelines();
+}
+
+void Animation::rebuild_child_start_events_from_timelines() {
+    for (AnimationFrame* frame : frames) {
+        if (frame) {
+            frame->child_start_events.clear();
+        }
+    }
+    if (child_data_.empty() || frames.empty()) {
+        return;
+    }
+
+    for (std::size_t child_idx = 0; child_idx < child_data_.size(); ++child_idx) {
+        const AnimationChildData& descriptor = child_data_[child_idx];
+        if (!descriptor.is_static() || descriptor.frames.empty()) {
+            continue;
+        }
+
+        const auto first_visible = std::find_if(descriptor.frames.begin(), descriptor.frames.end(), [](const AnimationChildFrameData& entry) {
+            return entry.visible;
+        });
+        if (first_visible == descriptor.frames.end()) {
+            continue;
+        }
+
+        const std::size_t frame_index = static_cast<std::size_t>(std::distance(descriptor.frames.begin(), first_visible));
+        if (frame_index >= frames.size()) {
+            continue;
+        }
+        AnimationFrame* target_frame = frames[frame_index];
+        if (!target_frame) {
+            continue;
+        }
+        auto& starts = target_frame->child_start_events;
+        const int child_slot = static_cast<int>(child_idx);
+        if (std::find(starts.begin(), starts.end(), child_slot) == starts.end()) {
+            starts.push_back(child_slot);
+        }
     }
 }
 
@@ -131,6 +424,8 @@ void Animation::adopt_prebuilt_frames(std::vector<FrameCache> caches,
             }
             frames.push_back(&frame);
     }
+
+    rebuild_child_timelines_from_frames();
 }
 
 bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool flip_vertical, bool reverse_frames, SDL_Renderer* renderer, AssetInfo& info) {
@@ -275,6 +570,7 @@ bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool fl
         std::reverse(frame_cache_.begin(), frame_cache_.end());
     }
 
+    rebuild_child_timelines_from_frames();
     return !frame_cache_.empty();
 }
 

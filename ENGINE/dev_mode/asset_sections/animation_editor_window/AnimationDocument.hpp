@@ -49,6 +49,9 @@ class AnimationDocument {
     void ensure_document_initialized();
     void rebuild_animation_cache();
     void mark_dirty() const;
+    bool rewrite_child_payloads(const std::vector<int>& index_remap,
+                  const std::vector<std::string>& next_children,
+                  const std::vector<std::string>& previous_children);
 
   private:
     std::filesystem::path info_path_;

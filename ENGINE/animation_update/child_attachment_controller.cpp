@@ -117,7 +117,8 @@ void advance_frames(std::vector<Asset::AnimationChildAttachment>& slots,
 
 void apply_frame_data(std::vector<Asset::AnimationChildAttachment>& slots,
                       const ParentState& parent_state,
-                      const AnimationFrame* frame) {
+                      const AnimationFrame* frame,
+                      const std::vector<AnimationChildFrameData>* override_children) {
     if (slots.empty()) {
         return;
     }
@@ -144,13 +145,17 @@ void apply_frame_data(std::vector<Asset::AnimationChildAttachment>& slots,
             continue;
         }
     }
-    if (!frame) {
+    const std::vector<AnimationChildFrameData>* child_entries = override_children;
+    if (!child_entries && frame) {
+        child_entries = &frame->children;
+    }
+    if (!child_entries) {
         for (auto& slot : slots) {
             slot.was_visible = slot.visible;
         }
         return;
     }
-    for (const auto& child_data : frame->children) {
+    for (const auto& child_data : *child_entries) {
         if (child_data.child_index < 0 ||
             child_data.child_index >= static_cast<int>(slots.size())) {
             if constexpr (kChildAttachmentDebug) {

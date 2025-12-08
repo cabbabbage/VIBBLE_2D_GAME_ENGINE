@@ -880,6 +880,10 @@ int main(int argc, char* argv[]) {
                 rebuild_queue.request_full_light_rebuild();
         }
 
+        if (!rebuild_queue.validate_manifest_cache()) {
+                vibble::log::warn("[Main] Cache validation step failed.");
+        }
+
         if (rebuild_queue.has_pending_asset_work()) {
                 vibble::log::info("[Main] Processing queued asset rebuilds via asset_tool.py...");
                 if (rebuild_queue.run_asset_tool()) {

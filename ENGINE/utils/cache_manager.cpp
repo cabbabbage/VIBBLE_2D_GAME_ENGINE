@@ -107,40 +107,4 @@ std::optional<nlohmann::json> load_metadata(const std::string& meta_file) {
     return std::nullopt;
 }
 
-// PNG saving functions (deprecated - now handled by Python)
-bool save_png(SDL_Surface* surface, const std::string& path) {
-    if (!surface || path.empty()) {
-        return false;
-    }
-    std::filesystem::create_directories(std::filesystem::path(path).parent_path());
-    int result = IMG_SavePNG(surface, path.c_str());
-    if (result != 0) {
-        std::cerr << "Failed to save PNG to " << path << ": " << IMG_GetError() << std::endl;
-        return false;
-    }
-    return true;
-}
-
-bool save_png_from_pixels(const uint8_t* rgba_pixels, int width, int height, const std::string& path) {
-    if (!rgba_pixels || width <= 0 || height <= 0 || path.empty()) {
-        return false;
-    }
-    SDL_Surface* surface = SDL_CreateRGBSurfaceFrom(
-        (void*)rgba_pixels,
-        width, height, 32, width * 4,
-        0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000
-    );
-    if (!surface) {
-        std::cerr << "Failed to create surface from pixels: " << SDL_GetError() << std::endl;
-        return false;
-    }
-    bool result = save_png(surface, path);
-    SDL_FreeSurface(surface);
-    return result;
-}
-
-bool save_surface_as_png(SDL_Surface* surface, const std::string& path) {
-    return save_png(surface, path);
-}
-
 } // namespace CacheManager

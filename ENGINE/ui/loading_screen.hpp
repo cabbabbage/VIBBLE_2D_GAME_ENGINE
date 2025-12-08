@@ -26,7 +26,6 @@ class LoadingScreen {
     std::filesystem::path current_texture_path_;
     std::filesystem::path project_root() const;
     std::filesystem::path loading_content_root() const;
-    std::filesystem::path legacy_loading_content_root() const;
     std::vector<std::filesystem::path> list_images_in(const std::filesystem::path& dir, bool recursive) const;
     std::string pick_random_message_from_csv(const std::filesystem::path& csv_path);
     void draw_text(TTF_Font* font, const std::string& txt, int x, int y, SDL_Color col);

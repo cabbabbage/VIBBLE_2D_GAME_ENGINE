@@ -40,11 +40,16 @@ public:
 
 
     std::vector<AnimationChildFrameData> children; //children are the same for every variant
+    std::vector<int> child_start_events;           // child indices that auto-start on this parent frame
     animation_update::FrameHitGeometry hit_geometry;
     animation_update::FrameAttackGeometry attack_geometry;
 
     const std::vector<AnimationChildFrameData>& get_children() const {
         return children;
+    }
+
+    const std::vector<int>& get_child_start_events() const {
+        return child_start_events;
     }
 
     const animation_update::FrameHitGeometry& get_hit_geometry() const {

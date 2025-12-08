@@ -4,16 +4,20 @@
 #include <SDL_ttf.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <unordered_set>
+#include <unordered_map>
 #include <utility>
 
 #include "animation_update/animation_update.hpp"
 #include "animation_update/child_attachment_math.hpp"
 #include "asset/Asset.hpp"
+#include "asset/animation.hpp"
+#include "asset/animation_frame_variant.hpp"
 #include "asset/asset_info.hpp"
 #include "core/AssetsManager.hpp"
 #include "dev_mode/asset_sections/animation_editor_window/AnimationDocument.hpp"
@@ -22,12 +26,15 @@
 #include "dev_mode/dev_mode_utils.hpp"
 #include "dev_mode/dm_styles.hpp"
 #include "dev_mode/draw_utils.hpp"
-#include "dev_mode/rebuildAnimation.hpp"
+#include "dev_mode/animation_runtime_refresh.hpp"
 #include "render/scaling_logic.hpp"
 #include "dev_mode/widgets.hpp"
 #include "render/warped_screen_grid.hpp"
 #include "utils/grid.hpp"
 #include "utils/input.hpp"
+
+FrameEditorSession::FrameEditorSession() = default;
+FrameEditorSession::~FrameEditorSession() = default;
 
 namespace {
     constexpr int   kNavPreviewHeight = 96;
@@ -179,9 +186,6 @@ namespace {
     }
 }
 
-FrameEditorSession::FrameEditorSession() = default;
-FrameEditorSession::~FrameEditorSession() = default;
-
 void FrameEditorSession::begin(Assets* assets,
                                Asset* asset,
                                std::shared_ptr<animation_editor::AnimationDocument> document,
@@ -229,6 +233,7 @@ void FrameEditorSession::begin(Assets* assets,
     curve_enabled_ = false;
     selected_hitbox_type_index_ = 1;
     selected_attack_type_index_ = 1;
+    selected_attack_vector_indices_.fill(-1);
     hitbox_dragging_ = false;
     active_hitbox_handle_ = HitHandle::None;
     hitbox_drag_moved_ = false;
@@ -320,6 +325,16 @@ void FrameEditorSession::load_animation_data(const std::string& animation_id) {
     animation_id_ = animation_id;
     auto payload_dump = document_->animation_payload(animation_id_);
     last_payload_loaded_ = payload_dump.has_value() && !payload_dump->empty();
+    nlohmann::json parsed_payload;
+    bool parsed_payload_valid = false;
+    if (payload_dump && !payload_dump->empty()) {
+        parsed_payload = nlohmann::json::parse(*payload_dump, nullptr, false);
+        if (parsed_payload.is_object()) {
+            parsed_payload_valid = true;
+        } else {
+            parsed_payload = nlohmann::json::object();
+        }
+    }
     frames_ = parse_movement_frames_json(payload_dump.value_or(std::string{}));
     child_assets_ = document_->animation_children();
     if (target_ && target_->info) {
@@ -361,9 +376,13 @@ void FrameEditorSession::load_animation_data(const std::string& animation_id) {
     }
     // After padding/resizing, ensure newly added frames receive child placeholders.
     sync_child_frames();
+    if (parsed_payload_valid) {
+        apply_child_timelines_from_payload(parsed_payload);
+    }
     // Pull the latest runtime frame data so edits made elsewhere (or in previous sessions)
     // are reflected before we start editing.
     hydrate_frames_from_animation();
+    ensure_child_frames_initialized();
     rebuild_rel_positions();
 
     selected_index_ = 0;
@@ -371,6 +390,8 @@ void FrameEditorSession::load_animation_data(const std::string& animation_id) {
     dragging_scrollbar_thumb_ = false;
     child_dropdown_options_cache_.clear();
     animation_dropdown_options_cache_.clear();
+    selected_attack_vector_indices_.fill(-1);
+    clamp_attack_selection();
 
     target_->current_animation = animation_id_;
     update_asset_preview_frame();
@@ -382,24 +403,14 @@ void FrameEditorSession::load_animation_data(const std::string& animation_id) {
 void FrameEditorSession::end() {
     if (!active_) return;
 
+    const bool target_alive = target_is_alive();
+
     // Capture any pending edits before we start tearing down session state.
+    // This serializes frame data to JSON and saves to the document.
     persist_changes();
     
-    // Save local copies of critical data before clearing
-    const bool has_assets = (assets_ != nullptr);
-    const bool target_still_alive = has_assets && target_ && assets_->contains_asset(target_);
-    std::shared_ptr<AssetInfo> info_to_reload;
-    std::string asset_name_for_cache;
-    
-    if (target_still_alive && target_->info) {
-        info_to_reload = target_->info;
-        if (info_to_reload) {
-            asset_name_for_cache = info_to_reload->name;
-        }
-    }
-    
     // Restore camera and overlay state
-    if (has_assets) {
+    if (assets_ != nullptr) {
         WarpedScreenGrid& cam = assets_->getView();
         cam.set_realism_enabled(prev_realism_enabled_);
         cam.set_parallax_enabled(prev_parallax_enabled_);
@@ -407,60 +418,36 @@ void FrameEditorSession::end() {
         pan_zoom_.cancel(cam);
     }
     
-    // If the target asset has been deleted externally, do not dereference it.
-    if (target_ && target_still_alive) {
+    // Restore target asset visibility if it still exists
+    if (target_alive) {
         apply_child_hidden_state(true);
         target_->set_hidden(prev_asset_hidden_);
+    } else {
+        child_hidden_cache_.clear();
+        last_applied_show_asset_state_ = true;
     }
     
+    // Clean up editor state
     end_hitbox_drag(false);
     end_attack_drag(false);
     child_hidden_cache_.clear();
     last_applied_show_asset_state_ = true;
     
-    const bool had_pending_save = pending_save_;
     // Save document to disk if there are pending changes
     if (pending_save_ && document_) {
         pending_save_ = false;
-        // Avoid firing document saved callbacks while closing; we handle reloads explicitly below.
         document_->save_to_file(false);
     }
 
-    // Save critical locals before clearing session data
+    // Save callbacks before clearing session data
     auto saved_host = host_;
     auto saved_animation_id = animation_id_;
-    std::vector<std::string> animations_to_reload;
-    {
-        std::unordered_set<std::string> seen;
-        for (const auto& id : edited_animation_ids_) {
-            if (!id.empty() && seen.insert(id).second) {
-                animations_to_reload.push_back(id);
-            }
-        }
-    }
-    const bool had_edits = had_pending_save || !animations_to_reload.empty();
-    bool refreshed_runtime = false;
-    if (info_to_reload && assets_ && had_edits) {
-        try {
-            SDL_Renderer* renderer = assets_->renderer();
-            const bool reloaded = info_to_reload->reload_animations_from_disk();
-            if (reloaded && renderer) {
-                info_to_reload->loadAnimations(renderer);
-            }
-            devmode::AnimationRegenerator::refresh_loaded_instances(assets_, info_to_reload);
-            refreshed_runtime = true;
-        } catch (const std::exception& ex) {
-            std::cerr << "[FrameEditorSession] Animation reload failed for '" << asset_name_for_cache
-                      << "': " << ex.what() << "\n";
-        } catch (...) {
-            std::cerr << "[FrameEditorSession] Animation reload failed for '" << asset_name_for_cache
-                      << "' (unknown error)\n";
-        }
-    }
 
-    // Clear session data
+    // Clear all session data - NO texture rebuilds or animation reloads needed
+    // Frame editor only modifies animation frame metadata (movement, children, hit/attack geometry),
+    // not texture assets. Changes are persisted to JSON via persist_changes() above.
+    // Runtime will lazy-load animation data on next playback.
     active_ = false;
-    Assets* saved_assets = assets_;
     assets_ = nullptr;
     target_ = nullptr;
     document_.reset();
@@ -475,29 +462,12 @@ void FrameEditorSession::end() {
     edited_animation_ids_.clear();
     last_payload_loaded_ = false;
 
-    // Reload animations AFTER session is closed if we could not refresh before teardown.
-    if (info_to_reload && saved_assets && had_edits && !refreshed_runtime) {
-        try {
-            const bool ok = info_to_reload->reload_animations_from_disk();
-            SDL_Renderer* renderer = saved_assets->renderer();
-            if (ok && renderer) {
-                info_to_reload->loadAnimations(renderer);
-            }
-            devmode::AnimationRegenerator::refresh_loaded_instances(saved_assets, info_to_reload);
-        } catch (const std::exception& ex) {
-            std::cerr << "[FrameEditorSession] Animation reload failed for '" << asset_name_for_cache
-                      << "': " << ex.what() << "\n";
-        } catch (...) {
-            std::cerr << "[FrameEditorSession] Animation reload failed for '" << asset_name_for_cache
-                      << "' (unknown error)\n";
-        }
-    }
-
-    // Reopen animation editor window AFTER reloading animations
+    // Invoke host callback to reopen animation editor window
     if (saved_host) {
         saved_host->on_live_frame_editor_closed(saved_animation_id);
     }
 
+    // Invoke exit callback
     if (on_end_) {
         auto cb = std::move(on_end_);
         on_end_ = {};
@@ -867,11 +837,13 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         if (handle_button(btn_attack_add_remove_, [this]() {
                 const std::string type = this->current_attack_type();
                 this->end_attack_drag(false);
-                if (this->current_attack_vector()) {
-                    this->delete_attack_vector_for_type(type);
-                } else {
-                    this->ensure_attack_vector_for_type(type);
-                }
+                this->ensure_attack_vector_for_type(type);
+                this->refresh_attack_form();
+                this->persist_changes();
+            })) return true;
+        if (handle_button(btn_attack_delete_, [this]() {
+                this->end_attack_drag(false);
+                this->delete_current_attack_vector();
                 this->refresh_attack_form();
                 this->persist_changes();
             })) return true;
@@ -1055,6 +1027,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                     }
                 }
                 if (changed) {
+                    child->has_data = true;
                     rebuild_rel_positions();
                     const bool should_smooth_child = child_offset_changed &&
                                                      smooth_enabled_ &&
@@ -1155,6 +1128,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                 int idx = std::clamp(dd_attack_type_->selected(), 0, static_cast<int>(attack_type_labels_.size()) - 1);
                 if (idx != selected_attack_type_index_) {
                     selected_attack_type_index_ = idx;
+                    clamp_attack_selection();
                     refresh_attack_form();
                 }
             }
@@ -1333,6 +1307,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                 const float unflipped_x = target_->flipped ? -desired_rel.x : desired_rel.x;
                 child->dx = static_cast<float>(std::round(unflipped_x * inv_scale));
                 child->dy = static_cast<float>(std::round(desired_rel.y * inv_scale));
+                child->has_data = true;
                 const bool should_smooth_child = smooth_enabled_ && selected_index_ > 0;
                 if (should_smooth_child) {
                     smooth_child_offsets(selected_child_index_, selected_index_);
@@ -1380,6 +1355,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
                 delta = -delta;
             }
             child->degree += delta;
+            child->has_data = true;
             persist_changes();
             return true;
         }
@@ -1585,6 +1561,7 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
         dm_draw::DrawBeveledRect(renderer, toolbox_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
         if (dd_attack_type_) dd_attack_type_->render(renderer);
         if (btn_attack_add_remove_) btn_attack_add_remove_->render(renderer);
+        if (btn_attack_delete_) btn_attack_delete_->render(renderer);
         if (btn_attack_copy_next_) btn_attack_copy_next_->render(renderer);
         if (tb_attack_start_x_) tb_attack_start_x_->render(renderer);
         if (tb_attack_start_y_) tb_attack_start_y_->render(renderer);
@@ -1763,6 +1740,9 @@ void FrameEditorSession::ensure_widgets() const {
     }
     if (!btn_attack_add_remove_) {
         btn_attack_add_remove_ = std::make_unique<DMButton>("Add Attack", &DMStyles::AccentButton(), 150, DMButton::height());
+    }
+    if (!btn_attack_delete_) {
+        btn_attack_delete_ = std::make_unique<DMButton>("Delete Attack", &DMStyles::DeleteButton(), 150, DMButton::height());
     }
     if (!btn_attack_copy_next_) {
         btn_attack_copy_next_ = std::make_unique<DMButton>("Copy To Next", &header, 150, DMButton::height());
@@ -2183,18 +2163,26 @@ void FrameEditorSession::rebuild_layout() const {
             dd_attack_type_->set_rect(place_row(h));
             register_toolbox_widget(dd_attack_type_.get());
         }
-        if (btn_attack_add_remove_ || btn_attack_copy_next_) {
+        if (btn_attack_add_remove_ || btn_attack_delete_ || btn_attack_copy_next_) {
             const int row_h = DMButton::height();
             SDL_Rect row = place_row(row_h);
-            const int button_width = (row.w - gap) / 2;
-            if (btn_attack_add_remove_) {
-                btn_attack_add_remove_->set_rect(SDL_Rect{ row.x, row.y, button_width, row_h });
-                register_toolbox_widget(btn_attack_add_remove_.get());
-            }
-            if (btn_attack_copy_next_) {
-                btn_attack_copy_next_->set_rect(SDL_Rect{ row.x + button_width + gap, row.y, button_width, row_h });
-                register_toolbox_widget(btn_attack_copy_next_.get());
-            }
+            int button_count = 0;
+            if (btn_attack_add_remove_) ++button_count;
+            if (btn_attack_delete_) ++button_count;
+            if (btn_attack_copy_next_) ++button_count;
+            button_count = std::max(1, button_count);
+            const int total_gaps = (button_count - 1) * gap;
+            const int button_width = (row.w - total_gaps) / button_count;
+            int tx = row.x;
+            auto place_btn = [&](DMButton* btn) {
+                if (!btn) return;
+                btn->set_rect(SDL_Rect{ tx, row.y, button_width, row_h });
+                register_toolbox_widget(btn);
+                tx += button_width + gap;
+            };
+            place_btn(btn_attack_add_remove_.get());
+            place_btn(btn_attack_delete_.get());
+            place_btn(btn_attack_copy_next_.get());
         }
         auto place_pair = [&](DMTextBox* left, DMTextBox* right) {
             if (!left && !right) return;
@@ -2605,23 +2593,27 @@ animation_update::FrameAttackGeometry::Vector* FrameEditorSession::current_attac
     if (frames_.empty()) return nullptr;
     const int frame_index = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
     auto& frame = frames_[frame_index];
-    return frame.attack.find_vector(current_attack_type());
+    clamp_attack_selection();
+    const int vector_index = current_attack_vector_index();
+    if (vector_index < 0) return nullptr;
+    return frame.attack.vector_at(current_attack_type(), static_cast<std::size_t>(vector_index));
 }
 
 const animation_update::FrameAttackGeometry::Vector* FrameEditorSession::current_attack_vector() const {
     if (frames_.empty()) return nullptr;
     const int frame_index = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
     const auto& frame = frames_[frame_index];
-    return frame.attack.find_vector(current_attack_type());
+    const_cast<FrameEditorSession*>(this)->clamp_attack_selection();
+    const int vector_index = current_attack_vector_index();
+    if (vector_index < 0) return nullptr;
+    return frame.attack.vector_at(current_attack_type(), static_cast<std::size_t>(vector_index));
 }
 
 animation_update::FrameAttackGeometry::Vector* FrameEditorSession::ensure_attack_vector_for_type(const std::string& type) {
     if (frames_.empty()) return nullptr;
     const int frame_index = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
     auto& frame = frames_[frame_index];
-    if (auto* existing = frame.attack.find_vector(type)) {
-        return existing;
-    }
+    const std::size_t existing_count = frame.attack.count_for_type(type);
     animation_update::FrameAttackGeometry::Vector vec;
     vec.type = type;
     vec.start_x = 0.0f;
@@ -2631,18 +2623,19 @@ animation_update::FrameAttackGeometry::Vector* FrameEditorSession::ensure_attack
     vec.end_x = 0.0f;
     vec.end_y = 0.0f;
     vec.damage = 0;
-    frame.attack.vectors.push_back(vec);
-    return frame.attack.find_vector(type);
+    animation_update::FrameAttackGeometry::Vector& created = frame.attack.add_vector(type, vec);
+    set_current_attack_vector_index(static_cast<int>(existing_count));
+    return &created;
 }
 
-void FrameEditorSession::delete_attack_vector_for_type(const std::string& type) {
+void FrameEditorSession::delete_current_attack_vector() {
     if (frames_.empty()) return;
     const int frame_index = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
     auto& frame = frames_[frame_index];
-    auto& vectors = frame.attack.vectors;
-    vectors.erase(std::remove_if(vectors.begin(), vectors.end(), [&](const auto& v) {
-        return v.type == type;
-    }), vectors.end());
+    const int index = current_attack_vector_index();
+    if (index < 0) return;
+    frame.attack.erase_vector(current_attack_type(), static_cast<std::size_t>(index));
+    clamp_attack_selection();
 }
 
 std::string FrameEditorSession::current_attack_type() const {
@@ -2650,10 +2643,40 @@ std::string FrameEditorSession::current_attack_type() const {
     return std::string{kDamageTypeNames[idx]};
 }
 
+int FrameEditorSession::current_attack_vector_index() const {
+    const int type_idx = std::clamp(selected_attack_type_index_, 0, static_cast<int>(kDamageTypeNames.size()) - 1);
+    return selected_attack_vector_indices_[static_cast<std::size_t>(type_idx)];
+}
+
+void FrameEditorSession::set_current_attack_vector_index(int index) {
+    const int type_idx = std::clamp(selected_attack_type_index_, 0, static_cast<int>(kDamageTypeNames.size()) - 1);
+    selected_attack_vector_indices_[static_cast<std::size_t>(type_idx)] = index;
+}
+
+void FrameEditorSession::clamp_attack_selection() {
+    if (frames_.empty()) {
+        set_current_attack_vector_index(-1);
+        return;
+    }
+    const int frame_index = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
+    auto& frame = frames_[frame_index];
+    const std::string type = current_attack_type();
+    const std::size_t count = frame.attack.count_for_type(type);
+    if (count == 0) {
+        set_current_attack_vector_index(-1);
+        return;
+    }
+    int idx = current_attack_vector_index();
+    if (idx < 0) idx = 0;
+    if (idx >= static_cast<int>(count)) idx = static_cast<int>(count - 1);
+    set_current_attack_vector_index(idx);
+}
+
 void FrameEditorSession::refresh_attack_form() const {
     if (mode_ != Mode::AttackGeometry) {
         return;
     }
+    const_cast<FrameEditorSession*>(this)->clamp_attack_selection();
     const auto* vec = current_attack_vector();
     auto sync_field = [&](DMTextBox* tb, std::string& cache, const std::string& value) {
         if (!tb || tb->is_editing()) return;
@@ -2680,7 +2703,10 @@ void FrameEditorSession::refresh_attack_form() const {
         sync_field(tb_attack_damage_.get(), last_attack_damage_text_, "0");
     }
     if (btn_attack_add_remove_) {
-        btn_attack_add_remove_->set_text(vec ? "Delete Attack" : "Add Attack");
+        btn_attack_add_remove_->set_text("Add Attack");
+    }
+    if (btn_attack_delete_) {
+        btn_attack_delete_->set_text("Delete Attack");
     }
 }
 
@@ -2691,15 +2717,21 @@ void FrameEditorSession::copy_attack_vector_to_next_frame() {
         return;
     }
     const std::string type = current_attack_type();
-    const auto* source = current_attack_vector();
-    if (!source) return;
-    auto& dest_frame = frames_[next_index];
-    auto* dest = dest_frame.attack.find_vector(type);
-    if (!dest) {
-        dest_frame.attack.vectors.push_back(*source);
-    } else {
-        *dest = *source;
+    const int frame_index = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
+    const auto& src_vectors = frames_[frame_index].attack.vectors;
+    std::vector<animation_update::FrameAttackGeometry::Vector> to_copy;
+    to_copy.reserve(src_vectors.size());
+    for (const auto& v : src_vectors) {
+        if (v.type == type) {
+            to_copy.push_back(v);
+        }
     }
+    auto& dest_frame = frames_[next_index];
+    auto& dest_vecs = dest_frame.attack.vectors;
+    dest_vecs.erase(std::remove_if(dest_vecs.begin(), dest_vecs.end(), [&](const auto& v) {
+        return v.type == type;
+    }), dest_vecs.end());
+    dest_vecs.insert(dest_vecs.end(), to_copy.begin(), to_copy.end());
     persist_changes();
 }
 
@@ -2743,7 +2775,8 @@ void FrameEditorSession::apply_current_mode_to_all_frames() {
             const int frame_index = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
             const auto& frame = frames_[frame_index];
             const int child_index = std::clamp(selected_child_index_, 0, static_cast<int>(frame.children.size()) - 1);
-            const ChildFrame src = frame.children.empty() ? ChildFrame{} : frame.children[child_index];
+            ChildFrame src = frame.children.empty() ? ChildFrame{} : frame.children[child_index];
+            src.has_data = true;
             for (auto& f : frames_) {
                 if (child_index >= 0 && child_index < static_cast<int>(f.children.size())) {
                     auto& d = f.children[child_index];
@@ -2752,6 +2785,7 @@ void FrameEditorSession::apply_current_mode_to_all_frames() {
                     d.degree = src.degree;
                     d.visible = src.visible;
                     d.render_in_front = src.render_in_front;
+                    d.has_data = true;
                 }
             }
             persist_mode_changes(Mode::Children);
@@ -2775,13 +2809,19 @@ void FrameEditorSession::apply_current_mode_to_all_frames() {
         }
         case Mode::AttackGeometry: {
             const std::string type = current_attack_type();
-            const auto* source = current_attack_vector();
+            const int frame_index = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
+            const auto& source_vecs = frames_[frame_index].attack.vectors;
+            std::vector<animation_update::FrameAttackGeometry::Vector> type_vecs;
+            type_vecs.reserve(source_vecs.size());
+            for (const auto& v : source_vecs) {
+                if (v.type == type) {
+                    type_vecs.push_back(v);
+                }
+            }
             for (auto& f : frames_) {
                 auto& vecs = f.attack.vectors;
                 vecs.erase(std::remove_if(vecs.begin(), vecs.end(), [&](const auto& v) { return v.type == type; }), vecs.end());
-                if (source) {
-                    vecs.push_back(*source);
-                }
+                vecs.insert(vecs.end(), type_vecs.begin(), type_vecs.end());
             }
             refresh_attack_form();
             persist_mode_changes(Mode::AttackGeometry);
@@ -3186,13 +3226,9 @@ void FrameEditorSession::end_hitbox_drag(bool commit) {
 bool FrameEditorSession::begin_attack_drag(SDL_Point mp) {
     if (!active_ || !assets_ || !target_ || frames_.empty() || mode_ != Mode::AttackGeometry) return false;
 
-    const std::string type = current_attack_type();
-    const auto* vec = current_attack_vector();
-    if (!vec || type.empty()) return false;
-
-    bool hovered_start = false;
-    bool hovered_control = false;
-    bool hovered_end = false;
+    const int frame_index = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
+    auto& frame = frames_[frame_index];
+    const std::string current_type = current_attack_type();
 
     const WarpedScreenGrid& cam = assets_->getView();
     SDL_Point anchor = asset_anchor_world();
@@ -3204,28 +3240,89 @@ bool FrameEditorSession::begin_attack_drag(SDL_Point mp) {
         };
         return cam.map_to_screen_f(world);
     };
-    SDL_FPoint start_screen = to_screen(vec->start_x, vec->start_y);
-    SDL_FPoint control_screen = to_screen(vec->control_x, vec->control_y);
-    SDL_FPoint end_screen = to_screen(vec->end_x, vec->end_y);
-
+    
     auto point_hit = [&](SDL_FPoint p, float radius) -> bool {
         const float dx = static_cast<float>(mp.x) - p.x;
         const float dy = static_cast<float>(mp.y) - p.y;
         return dx * dx + dy * dy <= radius * radius;
     };
     const float node_radius = kAttackNodeRadius;
-    hovered_start = point_hit(start_screen, node_radius);
-    hovered_control = point_hit(control_screen, node_radius);
-    hovered_end = point_hit(end_screen, node_radius);
 
-    if (hovered_start) {
-        active_attack_handle_ = AttackHandle::Start;
-    } else if (hovered_control) {
-        active_attack_handle_ = AttackHandle::Control;
-    } else if (hovered_end) {
-        active_attack_handle_ = AttackHandle::End;
+    // First pass: check if we clicked on any vector of the current type to potentially select it
+    int type_counter = 0;
+    int clicked_vector_index = -1;
+    AttackHandle clicked_handle = AttackHandle::None;
+    
+    for (const auto& vec : frame.attack.vectors) {
+        if (vec.type != current_type) continue;
+        
+        SDL_FPoint start_screen = to_screen(vec.start_x, vec.start_y);
+        SDL_FPoint control_screen = to_screen(vec.control_x, vec.control_y);
+        SDL_FPoint end_screen = to_screen(vec.end_x, vec.end_y);
+        
+        if (point_hit(start_screen, node_radius)) {
+            clicked_vector_index = type_counter;
+            clicked_handle = AttackHandle::Start;
+            break;
+        } else if (point_hit(control_screen, node_radius)) {
+            clicked_vector_index = type_counter;
+            clicked_handle = AttackHandle::Control;
+            break;
+        } else if (point_hit(end_screen, node_radius)) {
+            clicked_vector_index = type_counter;
+            clicked_handle = AttackHandle::End;
+            break;
+        }
+        ++type_counter;
+    }
+
+    // If we didn't click on a specific handle, check for clicking on curve segments
+    if (clicked_vector_index < 0) {
+        type_counter = 0;
+        constexpr int segments = 16;
+        constexpr float segment_hit_radius = 8.0f;
+        
+        for (const auto& vec : frame.attack.vectors) {
+            if (vec.type != current_type) continue;
+            
+            SDL_FPoint start_screen = to_screen(vec.start_x, vec.start_y);
+            SDL_FPoint control_screen = to_screen(vec.control_x, vec.control_y);
+            SDL_FPoint end_screen = to_screen(vec.end_x, vec.end_y);
+            
+            // Check if mouse is near the curve
+            for (int i = 0; i <= segments; ++i) {
+                const float t = static_cast<float>(i) / static_cast<float>(segments);
+                const float u = 1.0f - t;
+                SDL_FPoint curve_point{
+                    u * u * start_screen.x + 2.0f * u * t * control_screen.x + t * t * end_screen.x,
+                    u * u * start_screen.y + 2.0f * u * t * control_screen.y + t * t * end_screen.y
+                };
+                if (point_hit(curve_point, segment_hit_radius)) {
+                    clicked_vector_index = type_counter;
+                    clicked_handle = AttackHandle::Segment;
+                    break;
+                }
+            }
+            if (clicked_vector_index >= 0) break;
+            ++type_counter;
+        }
+    }
+
+    // If we clicked on a vector, select it
+    if (clicked_vector_index >= 0) {
+        set_current_attack_vector_index(clicked_vector_index);
+        clamp_attack_selection();
+        refresh_attack_form();
+        active_attack_handle_ = clicked_handle;
     } else {
         active_attack_handle_ = AttackHandle::None;
+        return false;
+    }
+
+    const auto* vec = current_attack_vector();
+    if (!vec) {
+        active_attack_handle_ = AttackHandle::None;
+        return false;
     }
 
     SDL_FPoint mouse_local{};
@@ -3298,7 +3395,7 @@ void FrameEditorSession::end_attack_drag(bool commit) {
         return;
     }
     if (!attack_drag_moved_ && (handle == AttackHandle::Start || handle == AttackHandle::End)) {
-        delete_attack_vector_for_type(current_attack_type());
+        delete_current_attack_vector();
     }
     refresh_attack_form();
     persist_changes();
@@ -3509,6 +3606,7 @@ void FrameEditorSession::smooth_child_offsets(int child_index, int adjusted_inde
         auto& child = children[child_index];
         child.dx = static_cast<float>(std::round(redistributed[i].x));
         child.dy = static_cast<float>(std::round(redistributed[i].y));
+        child.has_data = true;
     }
     persist_changes();
 }
@@ -3526,39 +3624,6 @@ void FrameEditorSession::rebuild_rel_positions() {
         rel_positions_.push_back(curr);
     }
 }
-
-void FrameEditorSession::sync_child_frames() {
-    if (child_assets_.empty()) {
-        for (auto& frame : frames_) {
-            frame.children.clear();
-        }
-        selected_child_index_ = 0;
-        return;
-    }
-    for (auto& frame : frames_) {
-        std::vector<ChildFrame> normalized(child_assets_.size());
-        for (std::size_t i = 0; i < normalized.size(); ++i) {
-            normalized[i].child_index = static_cast<int>(i);
-            normalized[i].visible = false; // default hidden until explicitly enabled
-            normalized[i].render_in_front = true;
-        }
-        for (const auto& existing : frame.children) {
-            if (existing.child_index < 0 ||
-                existing.child_index >= static_cast<int>(normalized.size())) {
-                continue;
-            }
-            normalized[existing.child_index] = existing;
-        }
-        frame.children = std::move(normalized);
-    }
-    if (selected_child_index_ >= static_cast<int>(child_assets_.size())) {
-        selected_child_index_ = static_cast<int>(child_assets_.size()) - 1;
-    }
-    if (selected_child_index_ < 0) {
-        selected_child_index_ = 0;
-    }
-}
-
 void FrameEditorSession::refresh_child_assets_from_document() {
     if (!document_) {
         return;
@@ -3572,7 +3637,31 @@ void FrameEditorSession::refresh_child_assets_from_document() {
     if (names == child_assets_) {
         return;
     }
+    const std::vector<std::string> previous = child_assets_;
+    std::vector<int> remap(previous.size(), -1);
+    if (!previous.empty()) {
+        std::unordered_map<std::string, int> new_index;
+        new_index.reserve(names.size());
+        for (size_t i = 0; i < names.size(); ++i) {
+            new_index[names[i]] = static_cast<int>(i);
+        }
+        for (size_t i = 0; i < previous.size(); ++i) {
+            auto it = new_index.find(previous[i]);
+            if (it != new_index.end()) {
+                remap[i] = it->second;
+            }
+        }
+    }
     child_assets_ = std::move(names);
+    std::unordered_set<std::string> previous_lookup(previous.begin(), previous.end());
+    std::vector<int> new_child_indices;
+    new_child_indices.reserve(child_assets_.size());
+    for (std::size_t i = 0; i < child_assets_.size(); ++i) {
+        if (previous_lookup.find(child_assets_[i]) == previous_lookup.end()) {
+            new_child_indices.push_back(static_cast<int>(i));
+        }
+    }
+    remap_child_indices(remap);
     if (target_ && target_->info) {
         target_->info->set_animation_children(child_assets_);
         target_->initialize_animation_children_recursive();
@@ -3582,6 +3671,28 @@ void FrameEditorSession::refresh_child_assets_from_document() {
         assets_->mark_active_assets_dirty();
     }
     sync_child_frames();
+    if (!new_child_indices.empty()) {
+        for (auto& frame : frames_) {
+            if (frame.children.size() < child_assets_.size()) {
+                frame.children.resize(child_assets_.size());
+            }
+            for (int idx : new_child_indices) {
+                if (idx < 0 || static_cast<std::size_t>(idx) >= frame.children.size()) {
+                    continue;
+                }
+                auto& child = frame.children[static_cast<std::size_t>(idx)];
+                if (!child.has_data) {
+                    child.child_index = idx;
+                    child.dx = 0.0f;
+                    child.dy = 0.0f;
+                    child.degree = 0.0f;
+                    child.visible = true;
+                    child.render_in_front = true;
+                    child.has_data = true;
+                }
+            }
+        }
+    }
     child_dropdown_options_cache_.clear();
     rebuild_child_preview_cache();
 }
@@ -3657,6 +3768,10 @@ const FrameEditorSession::ChildFrame* FrameEditorSession::current_child_frame() 
     return &frame.children[selected_child_index_];
 }
 
+bool FrameEditorSession::target_is_alive() const {
+    return assets_ && target_ && assets_->contains_asset(target_);
+}
+
 Animation* FrameEditorSession::current_animation_mutable() const {
     if (!target_ || !target_->info) {
         return nullptr;
@@ -3715,6 +3830,7 @@ void FrameEditorSession::hydrate_frames_from_animation() {
                 child.degree = child_src.degree;
                 child.visible = child_src.visible;
                 child.render_in_front = child_src.render_in_front;
+                child.has_data = true;
             }
         }
         if (!last_payload_loaded_ && dst.hit.boxes.empty() && !src.hit_geometry.boxes.empty()) {
@@ -3733,6 +3849,17 @@ void FrameEditorSession::apply_frames_to_animation() {
     }
     // Keep the runtime animation's child bindings in sync with the document.
     anim->child_assets() = child_assets_;
+    std::unordered_map<std::string, const AnimationChildData*> timeline_by_name;
+    const auto& existing_timelines = anim->child_timelines();
+    timeline_by_name.reserve(existing_timelines.size());
+    for (const auto& descriptor : existing_timelines) {
+        if (descriptor.asset_name.empty()) {
+            continue;
+        }
+        if (timeline_by_name.find(descriptor.asset_name) == timeline_by_name.end()) {
+            timeline_by_name.emplace(descriptor.asset_name, &descriptor);
+        }
+    }
     const std::size_t frame_count = frames_.size();
     const std::size_t primary_path_index = anim->default_movement_path_index();
     for (std::size_t path_index = 0; path_index < anim->movement_path_count(); ++path_index) {
@@ -3805,10 +3932,49 @@ void FrameEditorSession::apply_frames_to_animation() {
             }
         }
     }
+
+    std::vector<AnimationChildData> rebuilt_timelines;
+    rebuilt_timelines.reserve(child_assets_.size());
+    for (std::size_t child_idx = 0; child_idx < child_assets_.size(); ++child_idx) {
+        AnimationChildData descriptor;
+        descriptor.asset_name = child_assets_[child_idx];
+        const AnimationChildData* previous = nullptr;
+        auto prev_it = timeline_by_name.find(descriptor.asset_name);
+        if (prev_it != timeline_by_name.end()) {
+            previous = prev_it->second;
+        }
+        descriptor.animation_override = previous ? previous->animation_override : std::string{};
+        descriptor.mode = previous ? previous->mode : AnimationChildMode::Static;
+        if (descriptor.mode == AnimationChildMode::Static) {
+            const std::size_t timeline_frame_count = frame_count == 0 ? 1 : frame_count;
+            descriptor.frames.clear();
+            descriptor.frames.reserve(timeline_frame_count);
+            if (frame_count == 0) {
+                AnimationChildFrameData sample{};
+                sample.child_index = static_cast<int>(child_idx);
+                sample.visible = false;
+                sample.render_in_front = true;
+                descriptor.frames.push_back(sample);
+            } else {
+                for (const auto& movement_frame : frames_) {
+                    descriptor.frames.push_back(build_child_frame_descriptor(movement_frame, child_idx));
+                }
+            }
+        } else if (previous) {
+            descriptor.frames = previous->frames;
+        }
+        rebuilt_timelines.push_back(std::move(descriptor));
+    }
+    anim->child_timelines() = std::move(rebuilt_timelines);
+    anim->refresh_child_start_events();
 }
 
 void FrameEditorSession::sync_child_asset_visibility() {
-    if (!target_) return;
+    if (!target_is_alive()) {
+        child_hidden_cache_.clear();
+        last_applied_show_asset_state_ = show_animation_ && show_child_;
+        return;
+    }
     const bool desired_show = show_animation_ && show_child_;
     if (desired_show != last_applied_show_asset_state_) {
         if (!desired_show) {
@@ -3829,11 +3995,13 @@ void FrameEditorSession::sync_child_asset_visibility() {
 }
 
 void FrameEditorSession::cache_child_hidden_states() {
-    if (!target_) return;
+    if (!target_is_alive()) return;
     std::function<void(Asset*)> recurse = [&](Asset* parent) {
         if (!parent) return;
+        if (assets_ && !assets_->contains_asset(parent)) return;
         for (Asset* child : parent->asset_children) {
             if (!child) continue;
+            if (assets_ && !assets_->contains_asset(child)) continue;
             child_hidden_cache_[child] = child->is_hidden();
             recurse(child);
         }
@@ -3842,11 +4010,13 @@ void FrameEditorSession::cache_child_hidden_states() {
 }
 
 void FrameEditorSession::apply_child_hidden_state(bool show_children) {
-    if (!target_) return;
+    if (!target_is_alive()) return;
     std::function<void(Asset*)> recurse = [&](Asset* parent) {
         if (!parent) return;
+        if (assets_ && !assets_->contains_asset(parent)) return;
         for (Asset* child : parent->asset_children) {
             if (!child) continue;
+            if (assets_ && !assets_->contains_asset(child)) continue;
             if (show_children) {
                 auto it = child_hidden_cache_.find(child);
                 const bool desired = (it != child_hidden_cache_.end()) ? it->second : child->is_hidden();
@@ -3898,9 +4068,10 @@ void FrameEditorSession::persist_changes() {
     if (!document_ || animation_id_.empty()) {
         return;
     }
+    ensure_child_frames_initialized();
     // Keep runtime data in sync with the editor copy so re-entry shows the latest edits.
     apply_frames_to_animation();
-    if (target_ && target_->info) {
+    if (target_is_alive() && target_->info) {
         target_->info->set_animation_children(child_assets_);
         for (auto& entry : target_->info->animations) {
             entry.second.child_assets() = child_assets_;
@@ -3984,23 +4155,26 @@ void FrameEditorSession::persist_changes() {
         // Serialize attack vectors keyed by type
         nlohmann::json attack_entry = nlohmann::json::object();
         for (const char* type : kDamageTypeNames) {
-            const auto* vec = f.attack.find_vector(type);
-            if (!vec ||
-                !std::isfinite(vec->start_x) || !std::isfinite(vec->start_y) ||
-                !std::isfinite(vec->end_x) || !std::isfinite(vec->end_y)) {
-                attack_entry[type] = nullptr;
-                continue;
+            nlohmann::json type_array = nlohmann::json::array();
+            for (const auto& vec : f.attack.vectors) {
+                if (vec.type != type) continue;
+                if (!std::isfinite(vec.start_x) || !std::isfinite(vec.start_y) ||
+                    !std::isfinite(vec.end_x) || !std::isfinite(vec.end_y) ||
+                    !std::isfinite(vec.control_x) || !std::isfinite(vec.control_y)) {
+                    continue;
+                }
+                type_array.push_back(nlohmann::json{
+                    {"start_x", vec.start_x},
+                    {"start_y", vec.start_y},
+                    {"control_x", vec.control_x},
+                    {"control_y", vec.control_y},
+                    {"end_x", vec.end_x},
+                    {"end_y", vec.end_y},
+                    {"damage", vec.damage},
+                    {"type", vec.type}
+                });
             }
-            attack_entry[type] = nlohmann::json{
-                {"start_x", vec->start_x},
-                {"start_y", vec->start_y},
-                {"control_x", vec->control_x},
-                {"control_y", vec->control_y},
-                {"end_x", vec->end_x},
-                {"end_y", vec->end_y},
-                {"damage", vec->damage},
-                {"type", type}
-            };
+            attack_entry[type] = std::move(type_array);
         }
         attack_geometry.push_back(std::move(attack_entry));
     }
@@ -4008,6 +4182,11 @@ void FrameEditorSession::persist_changes() {
     payload["movement"] = std::move(movement);
     payload["hit_geometry"] = std::move(hit_geometry);
     payload["attack_geometry"] = std::move(attack_geometry);
+    if (child_assets_.empty()) {
+        payload.erase("child_timelines");
+    } else {
+        payload["child_timelines"] = build_child_timelines_payload(payload);
+    }
 
     std::string serialized = payload.dump();
     const bool changed = document_payload_cache_.empty() || serialized != document_payload_cache_;
@@ -4028,6 +4207,29 @@ void FrameEditorSession::persist_changes() {
     // Save without firing document callbacks so we do not trigger live rebuilds
     // (which can invalidate textures) while the frame editor session is running.
     document_->save_to_file(false);
+}
+
+void FrameEditorSession::remap_child_indices(const std::vector<int>& remap) {
+    if (frames_.empty()) {
+        return;
+    }
+    if (remap.empty()) {
+        for (auto& frame : frames_) {
+            for (auto& child : frame.children) {
+                child.child_index = -1;
+            }
+        }
+        return;
+    }
+    for (auto& frame : frames_) {
+        for (auto& child : frame.children) {
+            if (child.child_index < 0 || child.child_index >= static_cast<int>(remap.size())) {
+                child.child_index = -1;
+                continue;
+            }
+            child.child_index = remap[child.child_index];
+        }
+    }
 }
 
 ChildPreviewContext FrameEditorSession::build_child_preview_context() const {
@@ -4082,6 +4284,31 @@ float FrameEditorSession::mirrored_child_rotation(bool parent_is_flipped, float 
     return ::mirrored_child_rotation(parent_is_flipped, degree);
 }
 
+ 
+
+AnimationChildFrameData FrameEditorSession::build_child_frame_descriptor(const MovementFrame& frame,
+                                                                         std::size_t child_index) const {
+    AnimationChildFrameData descriptor{};
+    descriptor.child_index = static_cast<int>(child_index);
+    descriptor.dx = 0;
+    descriptor.dy = 0;
+    descriptor.degree = 0.0f;
+    descriptor.visible = false;
+    descriptor.render_in_front = true;
+    if (child_index < frame.children.size()) {
+        const ChildFrame& child = frame.children[child_index];
+        if (child.has_data) {
+            descriptor.child_index = (child.child_index >= 0) ? child.child_index : static_cast<int>(child_index);
+            descriptor.dx = static_cast<int>(std::lround(child.dx));
+            descriptor.dy = static_cast<int>(std::lround(child.dy));
+            descriptor.degree = child.degree;
+            descriptor.visible = child.visible;
+            descriptor.render_in_front = child.render_in_front;
+        }
+    }
+    return descriptor;
+}
+
 void FrameEditorSession::persist_mode_changes(Mode mode) {
     // Mark document dirty and persist changes relevant to the given mode.
     // For now, persist_changes() handles all modes uniformly.
@@ -4096,6 +4323,7 @@ void FrameEditorSession::select_frame(int index) {
     selected_index_ = clamped;
     update_asset_preview_frame();
     ensure_selected_thumb_visible();
+    clamp_attack_selection();
     refresh_hitbox_form();
     refresh_attack_form();
 }
@@ -4162,8 +4390,14 @@ void FrameEditorSession::render_attack_geometry(SDL_Renderer* renderer) const {
     };
 
     const std::string current_type = current_attack_type();
+    int current_type_counter = 0;
+    const int selected_idx = current_attack_vector_index();
     for (const auto& vec : frame.attack.vectors) {
-        const bool selected = (vec.type == current_type);
+        bool selected = false;
+        if (vec.type == current_type) {
+            selected = (current_type_counter == selected_idx && selected_idx >= 0);
+            ++current_type_counter;
+        }
         SDL_FPoint start_screen = to_screen(vec.start_x, vec.start_y);
         SDL_FPoint control_screen = to_screen(vec.control_x, vec.control_y);
         SDL_FPoint end_screen = to_screen(vec.end_x, vec.end_y);

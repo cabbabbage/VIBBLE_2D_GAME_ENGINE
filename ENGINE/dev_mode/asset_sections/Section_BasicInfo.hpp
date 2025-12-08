@@ -240,7 +240,7 @@ inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
     if (!is_expanded() || !target || !target->info) return;
     Assets* assets = ui_ ? ui_->assets() : nullptr;
 
-    SDL_Texture* tex = target->get_final_texture();
+    SDL_Texture* tex = target->get_current_frame();
     int fw = target->cached_w;
     int fh = target->cached_h;
     if ((fw == 0 || fh == 0) && tex) {

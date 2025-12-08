@@ -51,6 +51,83 @@ std::vector<std::string> parse_string_array(const nlohmann::json& json_value) {
     return values;
 }
 
+AnimationChildFrameData parse_async_child_frame(const nlohmann::json& entry) {
+    AnimationChildFrameData data{};
+    data.child_index = -1; // async children are asset-level, not indexed per frame
+
+    auto read_bool = [](const nlohmann::json& v, bool fallback) {
+        if (v.is_boolean()) return v.get<bool>();
+        if (v.is_number_integer()) return v.get<int>() != 0;
+        return fallback;
+    };
+
+    if (entry.is_object()) {
+        try { data.dx = static_cast<int>(entry.value("dx", 0)); } catch (...) { data.dx = 0; }
+        try { data.dy = static_cast<int>(entry.value("dy", 0)); } catch (...) { data.dy = 0; }
+        if (entry.contains("degree") && entry["degree"].is_number()) {
+            try { data.degree = static_cast<float>(entry["degree"].get<double>()); } catch (...) { data.degree = 0.0f; }
+        } else if (entry.contains("rotation") && entry["rotation"].is_number()) {
+            try { data.degree = static_cast<float>(entry["rotation"].get<double>()); } catch (...) { data.degree = 0.0f; }
+        }
+        data.visible = read_bool(entry.value("visible", true), true);
+        data.render_in_front = read_bool(entry.value("render_in_front", true), true);
+        return data;
+    }
+
+    if (entry.is_array() && !entry.empty()) {
+        if (entry.size() >= 1 && entry[0].is_number()) { try { data.dx = entry[0].get<int>(); } catch (...) { data.dx = 0; } }
+        if (entry.size() >= 2 && entry[1].is_number()) { try { data.dy = entry[1].get<int>(); } catch (...) { data.dy = 0; } }
+        if (entry.size() >= 3 && entry[2].is_number()) { try { data.degree = static_cast<float>(entry[2].get<double>()); } catch (...) { data.degree = 0.0f; } }
+        if (entry.size() >= 4) data.visible = read_bool(entry[3], true);
+        if (entry.size() >= 5) data.render_in_front = read_bool(entry[4], true);
+    }
+
+    return data;
+}
+
+nlohmann::json encode_async_child_frames(const std::vector<AnimationChildFrameData>& frames) {
+    nlohmann::json arr = nlohmann::json::array();
+    auto& out = arr.get_ref<nlohmann::json::array_t&>();
+    out.reserve(frames.size());
+    for (const auto& frame : frames) {
+        nlohmann::json obj = nlohmann::json::object();
+        obj["dx"] = frame.dx;
+        obj["dy"] = frame.dy;
+        obj["degree"] = frame.degree;
+        obj["visible"] = frame.visible;
+        obj["render_in_front"] = frame.render_in_front;
+        out.push_back(std::move(obj));
+    }
+    return arr;
+}
+
+std::vector<AsyncChildDefinition> parse_async_children(const nlohmann::json& data) {
+    std::vector<AsyncChildDefinition> result;
+    if (!data.contains("async_children") || !data["async_children"].is_array()) {
+        return result;
+    }
+
+    std::unordered_set<std::string> seen_names;
+    for (const auto& entry : data["async_children"]) {
+        if (!entry.is_object()) continue;
+        AsyncChildDefinition def;
+        def.name = entry.value("name", std::string{});
+        if (def.name.empty()) continue;
+        if (!seen_names.insert(def.name).second) continue;
+        def.asset = entry.value("asset", entry.value("child", std::string{}));
+        def.animation = entry.value("animation", std::string{});
+        if (entry.contains("frames") && entry["frames"].is_array()) {
+            for (const auto& f : entry["frames"]) {
+                def.frames.push_back(parse_async_child_frame(f));
+            }
+        }
+        if (def.valid()) {
+            result.push_back(std::move(def));
+        }
+    }
+    return result;
+}
+
 constexpr int kLightTextureCacheVersion = 3;
 
 std::string light_signature(const LightSource& light) {
@@ -62,52 +139,6 @@ std::string light_signature(const LightSource& light) {
         << light.flicker_speed << '|'
         << light.flicker_smoothness;
     return oss.str();
-}
-
-float compute_light_fade_exponent(const LightSource& light) {
-    const float falloff_norm =
-        std::clamp(static_cast<float>(light.fall_off) / 100.0f, 0.0f, 1.0f);
-    return 0.6f + 3.4f * falloff_norm;
-}
-
-SDL_Surface* build_light_surface(const LightSource& light) {
-    const int radius   = std::max(1, light.radius);
-    const int diameter = std::max(1, radius * 2);
-    SDL_Surface* surface =
-        SDL_CreateRGBSurfaceWithFormat(0, diameter, diameter, 32, SDL_PIXELFORMAT_RGBA8888);
-    if (!surface) {
-        return nullptr;
-    }
-
-    if (SDL_LockSurface(surface) != 0) {
-        SDL_FreeSurface(surface);
-        return nullptr;
-    }
-
-    auto* pixels = static_cast<std::uint32_t*>(surface->pixels);
-    const int stride = surface->pitch / 4;
-    SDL_PixelFormat* format = surface->format;
-    const float center = static_cast<float>(diameter) * 0.5f;
-    const float fade_exponent = compute_light_fade_exponent(light);
-    const float radius_f = static_cast<float>(radius);
-
-    for (int y = 0; y < diameter; ++y) {
-        for (int x = 0; x < diameter; ++x) {
-            const float dx = (static_cast<float>(x) + 0.5f) - center;
-            const float dy = (static_cast<float>(y) + 0.5f) - center;
-            const float dist = std::sqrt(dx * dx + dy * dy);
-            float ratio = (radius_f > 0.0f) ? dist / radius_f : 0.0f;
-            ratio       = std::clamp(ratio, 0.0f, 1.0f);
-            const float base = std::max(0.0f, 1.0f - ratio);
-            const float alpha_ratio = std::pow(base, fade_exponent);
-            const auto alpha = static_cast<std::uint8_t>(std::clamp(
-                std::lround(alpha_ratio * 255.0f), 0L, 255L));
-            pixels[y * stride + x] = SDL_MapRGBA(format, 255, 255, 255, alpha);
-        }
-    }
-
-    SDL_UnlockSurface(surface);
-    return surface;
 }
 
 void destroy_light_textures(std::vector<LightSource>& lights) {
@@ -184,60 +215,6 @@ bool load_cached_light_textures(const fs::path& cache_dir,
         lights[i].texture = tex;
         lights[i].cached_w = w;
         lights[i].cached_h = h;
-    }
-    return true;
-}
-
-bool build_and_cache_light_textures(const fs::path& cache_dir,
-                                    SDL_Renderer* renderer,
-                                    std::vector<LightSource>& lights,
-                                    const std::vector<std::string>& signatures) {
-    if (!renderer) {
-        return false;
-    }
-
-    std::error_code ec;
-    fs::remove_all(cache_dir, ec);
-    ec.clear();
-    if (!fs::exists(cache_dir) && !fs::create_directories(cache_dir, ec)) {
-        return false;
-    }
-
-    for (std::size_t i = 0; i < lights.size(); ++i) {
-        SDL_Surface* surface = build_light_surface(lights[i]);
-        if (!surface) {
-            destroy_light_textures(lights);
-            fs::remove_all(cache_dir, ec);
-            return false;
-        }
-
-        const fs::path png_path = cache_dir / ("light_" + std::to_string(i) + ".png");
-        if (!CacheManager::save_surface_as_png(surface, png_path.generic_string())) {
-            SDL_FreeSurface(surface);
-            destroy_light_textures(lights);
-            fs::remove_all(cache_dir, ec);
-            return false;
-        }
-
-        SDL_Texture* tex = CacheManager::surface_to_texture(renderer, surface);
-        const int w = surface->w;
-        const int h = surface->h;
-        SDL_FreeSurface(surface);
-        if (!tex) {
-            destroy_light_textures(lights);
-            fs::remove_all(cache_dir, ec);
-            return false;
-        }
-        SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
-        lights[i].texture = tex;
-        lights[i].cached_w = w;
-        lights[i].cached_h = h;
-    }
-
-    if (!save_light_cache_metadata(cache_dir / "metadata.json", signatures)) {
-        destroy_light_textures(lights);
-        fs::remove_all(cache_dir, ec);
-        return false;
     }
     return true;
 }
@@ -909,21 +886,58 @@ void AssetInfo::generate_lights(SDL_Renderer* renderer) {
 		return try_load_cached_lights(cache_dir, renderer, light_sources, signatures);
 	};
 
-	bool loaded = load_from_cache();
-	if (!loaded) {
-		if (regenerate_lights_via_python(name)) {
-			loaded = load_from_cache();
-		}
-	}
+    bool loaded = load_from_cache();
+    if (!loaded && regenerate_lights_via_python(name)) {
+        loaded = load_from_cache();
+    }
 
-	if (loaded) {
-		return;
-	}
+    if (loaded) {
+        return;
+    }
 
-	if (!build_and_cache_light_textures(cache_dir, renderer, light_sources, signatures)) {
-		clear_light_textures();
-		std::cerr << "[AssetInfo] Failed to rebuild light texture cache for '" << name << "'\n";
-	}
+    clear_light_textures();
+    std::cerr << "[AssetInfo] Missing light cache for '" << name
+              << "' after python regeneration; run tools/light_tool.py manually.\n";
+}
+
+bool AssetInfo::rebuild_light_texture(SDL_Renderer* renderer, std::size_t light_index) {
+    if (!renderer) {
+        return false;
+    }
+    if (light_index >= light_sources.size()) {
+        return false;
+    }
+
+    LightSource& light = light_sources[light_index];
+
+    // Destroy existing texture before reloading
+    if (light.texture) {
+        SDL_DestroyTexture(light.texture);
+        light.texture = nullptr;
+        light.cached_w = 0;
+        light.cached_h = 0;
+    }
+
+    const std::filesystem::path png_path = std::filesystem::path("cache") / name / "lights" / ("light_" + std::to_string(light_index) + ".png");
+    SDL_Surface* surf = CacheManager::load_surface(png_path.generic_string());
+    if (!surf) {
+        return false;
+    }
+
+    SDL_Texture* tex = CacheManager::surface_to_texture(renderer, surf);
+    const int w = surf->w;
+    const int h = surf->h;
+    SDL_FreeSurface(surf);
+
+    if (!tex) {
+        return false;
+    }
+
+    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+    light.texture = tex;
+    light.cached_w = w;
+    light.cached_h = h;
+    return true;
 }
 
 bool AssetInfo::commit_manifest() {
@@ -1097,7 +1111,57 @@ void AssetInfo::set_animation_children(const std::vector<std::string>& children)
                 arr.push_back(name);
         }
         info_json_["animation_children"] = std::move(arr);
+
+    // Keep per-animation child lists aligned with the canonical set so runtime
+    // attachment slots exist even before timelines reference them.
+    for (auto& [anim_id, anim] : animations) {
+        std::vector<std::string> merged;
+        merged.reserve(animation_children.size() + anim.child_assets().size());
+        std::unordered_set<std::string> anim_seen;
+        for (const auto& name : animation_children) {
+            if (name.empty()) continue;
+            if (anim_seen.insert(name).second) {
+                merged.push_back(name);
+            }
+        }
+        for (const auto& name : anim.child_assets()) {
+            if (name.empty()) continue;
+            if (anim_seen.insert(name).second) {
+                merged.push_back(name);
+            }
+        }
+        anim.child_assets() = std::move(merged);
+        anim.rebuild_child_timelines_from_frames();
+    }
 }
+
+    void AssetInfo::set_async_children(const std::vector<AsyncChildDefinition>& children) {
+        async_children.clear();
+        std::unordered_set<std::string> seen;
+        async_children.reserve(children.size());
+        for (const auto& entry : children) {
+            if (!entry.valid()) {
+                continue;
+            }
+            if (!seen.insert(entry.name).second) {
+                continue;
+            }
+            async_children.push_back(entry);
+        }
+
+        nlohmann::json arr = nlohmann::json::array();
+        for (const auto& child : async_children) {
+            nlohmann::json obj = nlohmann::json::object();
+            obj["name"] = child.name;
+            obj["asset"] = child.asset;
+            if (!child.animation.empty()) {
+                obj["animation"] = child.animation;
+            }
+            obj["frames"] = encode_async_child_frames(child.frames);
+            arr.push_back(std::move(obj));
+        }
+        info_json_["async_children"] = std::move(arr);
+    }
 
 void AssetInfo::rebuild_tag_cache() {
         tag_lookup_.clear();
@@ -1386,12 +1450,29 @@ void AssetInfo::initialize_from_json(const nlohmann::json& source) {
                         for (const auto& item : anim_payloads->items()) {
                                 if (!item.value().is_object()) continue;
                                 auto it_children = item.value().find("children");
-                                if (it_children == item.value().end() || !it_children->is_array()) continue;
-                                for (const auto& entry : *it_children) {
+                                if (it_children != item.value().end() && it_children->is_array()) {
+                                    for (const auto& entry : *it_children) {
                                         if (!entry.is_string()) continue;
                                         std::string name = entry.get<std::string>();
                                         if (name.empty() || !seen.insert(name).second) continue;
                                         animation_children.push_back(std::move(name));
+                                    }
+                                }
+
+                                auto it_timelines = item.value().find("child_timelines");
+                                if (it_timelines != item.value().end() && it_timelines->is_array()) {
+                                    for (const auto& entry : *it_timelines) {
+                                        if (!entry.is_object()) continue;
+                                        std::string name;
+                                        if (entry.contains("asset") && entry["asset"].is_string()) {
+                                            name = entry["asset"].get<std::string>();
+                                        }
+                                        if (name.empty()) {
+                                            continue;
+                                        }
+                                        if (!seen.insert(name).second) continue;
+                                        animation_children.push_back(std::move(name));
+                                    }
                                 }
                         }
                 }
@@ -1410,6 +1491,9 @@ void AssetInfo::initialize_from_json(const nlohmann::json& source) {
                 }
         }
         info_json_["animation_children"] = std::move(animation_children_json);
+
+        async_children = parse_async_children(data);
+        set_async_children(async_children);
 
         load_animations(data);
 

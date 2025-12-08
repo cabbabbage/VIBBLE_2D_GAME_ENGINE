@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include <SDL.h>
 
@@ -11,7 +12,7 @@
 #include "stride_types.hpp"
 #include "path_sanitizer.hpp"
 #include "get_best_path.hpp"
-#include "stride_player.hpp"
+#include "movement_plan_executor.hpp"
 
 namespace vibble::grid {
 class Grid;
@@ -25,7 +26,7 @@ class AnimationUpdate; // planner (public-facing)
 
 class PathSanitizer;
 class GetBestPath;
-class StridePlayer;
+class MovementPlanExecutor;
 
 // Non-public executor: advances frames, applies movement, handles path following.
 class AnimationRuntime {
@@ -41,7 +42,7 @@ public:
     // Query current active path index for an animation
     std::size_t path_index_for(const std::string& anim_id) const;
 
-    // Internal helpers used by StridePlayer
+    // Internal helpers used by MovementPlanExecutor
     vibble::grid::Grid& grid() const;
     bool path_blocked(SDL_Point from, SDL_Point to, const Asset* ignored, std::vector<const Asset*>* blockers = nullptr) const;
     bool handle_blocked_path(SDL_Point from, SDL_Point to, const std::vector<const Asset*>& blockers);
@@ -55,6 +56,10 @@ public:
     void reset_plan_progress();
     void set_debug_enabled(bool enabled);
 
+    // Immediately trigger an async child timeline by name. Returns true when a matching
+    // child attachment was found and restarted.
+    bool run_child_animation(const std::string& name);
+
 private:
     int        effective_grid_resolution(std::optional<int> override_resolution) const;
     SDL_Point  convert_delta_to_world(SDL_Point delta, int resolution) const;
@@ -66,16 +71,20 @@ private:
     void       update_child_attachments(Animation& anim, float dt);
     void       ensure_child_slots(Animation& anim);
     void       advance_child_frames(float dt);
-    void       apply_child_frame_data(const AnimationFrame* frame);
+    void       apply_child_frame_data(Animation& anim, const AnimationFrame* frame, float dt);
     void       sync_child_assets();
+    void       advance_child_timelines(float dt);
     Asset*     spawn_child_asset(Asset::AnimationChildAttachment& slot);
     void       destroy_child_assets();
+    void       handle_async_requests(const std::vector<std::string>& requests);
+    Asset::AnimationChildAttachment* find_child_slot(const std::string& name);
+    void       restart_child_timeline(Asset::AnimationChildAttachment& slot);
 
     // Apply a pending one-shot move from the planner
     void       apply_pending_move();
 
 private:
-    friend class StridePlayer;
+    friend class MovementPlanExecutor;
 
     Asset*  self_         = nullptr;
     Assets* assets_owner_ = nullptr;
@@ -90,7 +99,7 @@ private:
     // Executors that can also re-plan when blocked
     PathSanitizer  sanitizer_{};
     GetBestPath    planner_{};
-    StridePlayer   player_{};
+    MovementPlanExecutor   executor_{};
 
     // Active movement path per animation id
     std::unordered_map<std::string, std::size_t> active_paths_{};
@@ -99,6 +108,7 @@ private:
     bool debug_enabled_ = false;
     bool just_applied_controller_move_ = false;
     int  suppress_root_motion_frames_ = 0;
+    std::vector<AnimationChildFrameData> child_frame_buffer_{};
 
     bool suppress_root_motion_active() const { return suppress_root_motion_frames_ > 0; }
 };

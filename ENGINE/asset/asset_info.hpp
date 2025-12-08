@@ -26,6 +26,16 @@ struct ChildInfo {
     nlohmann::json spawn_group;
 };
 
+// Asset-level, fire-and-forget animation child definition.
+struct AsyncChildDefinition {
+    std::string name;                  // unique id for run_async lookups
+    std::string asset;                 // child asset id
+    std::string animation;             // optional animation override on the child asset
+    std::vector<AnimationChildFrameData> frames; // per-tick offsets/visibility
+
+    bool valid() const { return !name.empty() && !asset.empty() && !frames.empty(); }
+};
+
 struct MappingOption {
 	std::string animation;
 	float percent;
@@ -76,6 +86,8 @@ class AssetInfo {
     std::vector<std::string> anti_tags;
     // Children that participate in animation frames (shared across all animations for this asset).
     std::vector<std::string> animation_children;
+    // Asset-scoped async children that can be triggered at runtime via run_async(name).
+    std::vector<AsyncChildDefinition> async_children;
     bool is_light_source = false;
     bool moving_asset = false;
     std::vector<float>  scale_variants;
@@ -128,6 +140,7 @@ class AssetInfo {
     void add_anti_tag(const std::string &tag);
     void remove_anti_tag(const std::string &tag);
     void set_animation_children(const std::vector<std::string>& children);
+    void set_async_children(const std::vector<AsyncChildDefinition>& children);
     void set_passable(bool v);
     void set_tillable(bool v);
     Area* find_area(const std::string& name);
@@ -182,6 +195,9 @@ class AssetInfo {
 };
 
     void set_spawn_groups(const nlohmann::json& groups);
+
+    // Reload a single cached light texture from disk and replace the in-memory texture.
+    bool rebuild_light_texture(SDL_Renderer* renderer, std::size_t light_index);
 
         private:
     void load_base_properties(const nlohmann::json &data);

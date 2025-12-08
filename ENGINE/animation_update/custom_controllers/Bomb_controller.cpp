@@ -20,6 +20,10 @@ void BombController::update(const Input&) {
         return;
     }
     Asset* player = assets_->player;
+    // Player can be absent if spawn data fails to generate one; bail out instead of crashing.
+    if (!player || player == self_ || player->dead || !player->active) {
+        return;
+    }
 
     int distance_sq = (self_->pos.x - player->pos.x) * (self_->pos.x - player->pos.x) +
                           (self_->pos.y - player->pos.y) * (self_->pos.y - player->pos.y);

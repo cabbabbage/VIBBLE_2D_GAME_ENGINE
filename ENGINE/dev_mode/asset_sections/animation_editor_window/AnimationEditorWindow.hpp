@@ -61,6 +61,9 @@ class AnimationEditorWindow {
 
     void set_on_document_saved(std::function<void()> callback);
     void set_on_animation_properties_changed(std::function<void(const std::string&, const nlohmann::json&)> callback);
+    void refresh_children_from_asset_info();
+
+    std::shared_ptr<AnimationDocument> document() const { return document_; }
 
     // Wiring to in-world frame editor session
     void set_assets(Assets* assets) { assets_ = assets; }
@@ -87,6 +90,7 @@ class AnimationEditorWindow {
     bool handle_header_event(const SDL_Event& e);
     void set_status_message(const std::string& message, int frames = 300);
     void open_frame_editor(const std::string& animation_id);
+    void sync_document_children_from_info();
     Asset* resolve_frame_editor_asset();
     void create_animation_via_prompt();
     void reload_document();
@@ -117,10 +121,9 @@ class AnimationEditorWindow {
     void persist_header_metadata(float speed_multiplier, bool crop_frames);
     std::vector<float> speed_multiplier_options() const;
     bool rebuild_animation_from_sources(const std::shared_ptr<AssetInfo>& info, const std::string& animation_id);
-    bool regenerate_via_asset_tool(const std::shared_ptr<AssetInfo>& info, const std::string& animation_id);
-    void clear_animation_cache(const std::filesystem::path& cache_root,
-                               const std::string& asset_name,
-                               const std::string& animation_id);
+    bool rebuild_animation_via_pipeline(const std::shared_ptr<AssetInfo>& info,
+                      const std::string& animation_id);
+    bool rebuild_all_animations_via_pipeline(const std::shared_ptr<AssetInfo>& info);
 
   private:
     bool visible_ = false;
@@ -135,6 +138,7 @@ class AnimationEditorWindow {
     std::unique_ptr<AnimationInspectorPanel> inspector_panel_;
     std::unique_ptr<AnimationListContextMenu> list_context_menu_;
     std::unique_ptr<DMButton> add_button_;
+    std::unique_ptr<DMButton> build_button_;
     std::unique_ptr<DMButton> controller_button_;
     std::unique_ptr<DMDropdown> speed_dropdown_;
     std::unique_ptr<DMCheckbox> crop_checkbox_;

@@ -68,7 +68,6 @@ bool segment_leaves_playable_area(const Assets* assets, SDL_Point from, SDL_Poin
 class AnimationUpdate {
 public:
     AnimationUpdate(Asset* self, Assets* assets);
-    AnimationUpdate(Asset* self, Assets* assets, double path_bias);
     void set_debug_enabled(bool enabled);
     bool debug_enabled() const;
 
@@ -95,6 +94,9 @@ public:
 
     void set_animation(const std::string& animation_id);
 
+    // Trigger a fire-and-forget async child playback by name (asset-level definition).
+    void run_async(const std::string& child_name);
+
     // Read-only access for diagnostics/render overlays
     const Plan* current_plan() const { return &plan_; }
 
@@ -111,6 +113,7 @@ private:
     };
     MoveRequest consume_move_request();
     bool consume_input_event();
+    std::vector<std::string> consume_async_requests();
 
 private:
     friend class AnimationRuntime;
@@ -143,6 +146,7 @@ private:
     bool        input_event_ = false;
     bool        move_pending_ = false;
     MoveRequest pending_move_{};
+    std::vector<std::string> pending_async_requests_{};
     bool        debug_enabled_ = false;
     // Internal helpers implemented in .cpp
     vibble::grid::Grid& grid() const;

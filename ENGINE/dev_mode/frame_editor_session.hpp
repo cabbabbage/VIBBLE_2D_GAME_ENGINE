@@ -16,6 +16,10 @@
 #include "dev_mode/pan_and_zoom.hpp"
 #include "animation_update/combat_geometry.hpp"
 
+#ifndef FRAME_EDITOR_ACCESS
+#define FRAME_EDITOR_ACCESS private
+#endif
+
 class Assets;
 class Asset;
 class AssetInfo;
@@ -25,6 +29,7 @@ class Input;
 struct SDL_Renderer;
 class DMButton;
 class DMDropdown;
+struct AnimationChildFrameData;
 
 namespace animation_editor {
 class AnimationDocument;
@@ -68,7 +73,9 @@ public:
     void set_snap_resolution(int r);
     void set_grid_overlay_enabled_transient(bool enabled);
 
-private:
+FRAME_EDITOR_ACCESS:
+    bool target_is_alive() const;
+
     struct ChildFrame {
         int child_index = -1;
         float dx = 0.0f;
@@ -76,6 +83,7 @@ private:
         float degree = 0.0f;
         bool visible = true;
         bool render_in_front = true;
+        bool has_data = false;
     };
     struct MovementFrame {
         float dx = 0.0f;
@@ -166,6 +174,7 @@ private:
     // Attack geometry widgets
     mutable std::unique_ptr<class DMDropdown> dd_attack_type_;
     mutable std::unique_ptr<class DMButton> btn_attack_add_remove_;
+    mutable std::unique_ptr<class DMButton> btn_attack_delete_;
     mutable std::unique_ptr<class DMButton> btn_attack_copy_next_;
     mutable std::unique_ptr<class DMTextBox> tb_attack_start_x_;
     mutable std::unique_ptr<class DMTextBox> tb_attack_start_y_;
@@ -258,6 +267,7 @@ private:
 
     // Attack vector editing state
     int selected_attack_type_index_ = 1;
+    std::array<int, kDamageTypeNames.size()> selected_attack_vector_indices_{ { -1, -1, -1 } };
     enum class AttackHandle { None, Start, Control, End, Segment };
     AttackHandle active_attack_handle_ = AttackHandle::None;
     bool attack_dragging_ = false;
@@ -269,7 +279,7 @@ private:
     // Track whether we have unsaved document writes
     bool pending_save_ = false;
 
-private:
+FRAME_EDITOR_ACCESS:
     void load_animation_data(const std::string& animation_id);
     void switch_animation(const std::string& animation_id);
     void ensure_widgets() const;
@@ -291,6 +301,7 @@ private:
                                 std::vector<SDL_FPoint>& redistributed,
                                 int last_index) const;
     void rebuild_rel_positions();
+    void ensure_child_frames_initialized();
     void smooth_child_offsets(int child_index, int adjusted_index);
     void persist_changes();
     // Persist only the section relevant to the given mode.
@@ -306,6 +317,7 @@ private:
     }
     static std::vector<MovementFrame> parse_movement_frames_json(const std::string& payload_json);
     void sync_child_frames();
+    void remap_child_indices(const std::vector<int>& remap);
     ChildFrame* current_child_frame();
     const ChildFrame* current_child_frame() const;
     void refresh_child_assets_from_document();
@@ -399,8 +411,11 @@ private:
     animation_update::FrameAttackGeometry::Vector* current_attack_vector();
     const animation_update::FrameAttackGeometry::Vector* current_attack_vector() const;
     animation_update::FrameAttackGeometry::Vector* ensure_attack_vector_for_type(const std::string& type);
-    void delete_attack_vector_for_type(const std::string& type);
+    void delete_current_attack_vector();
     std::string current_attack_type() const;
+    int current_attack_vector_index() const;
+    void set_current_attack_vector_index(int index);
+    void clamp_attack_selection();
     void refresh_attack_form() const;
     void copy_attack_vector_to_next_frame();
     void render_attack_geometry(SDL_Renderer* renderer) const;
@@ -409,7 +424,7 @@ private:
     void end_attack_drag(bool commit);
     float attachment_scale() const;
 
-private:
+FRAME_EDITOR_ACCESS:
     void render_directory_panel(SDL_Renderer* renderer);
     void render_navigation_panel(SDL_Renderer* renderer);
     void render_toolbox(SDL_Renderer* renderer);
@@ -423,6 +438,12 @@ private:
                                  const ChildPreviewContext& ctx,
                                  float scale_override) const;
     float mirrored_child_rotation(bool parent_is_flipped, float degree) const;
+    void apply_child_timelines_from_payload(const nlohmann::json& payload);
+    nlohmann::json build_child_timelines_payload(const nlohmann::json& existing_payload) const;
+    static ChildFrame child_frame_from_timeline_sample(const nlohmann::json& sample, int child_index);
+    static nlohmann::json child_frame_to_json(const ChildFrame& frame);
+    static bool timeline_entry_is_static(const nlohmann::json& entry);
+    AnimationChildFrameData build_child_frame_descriptor(const MovementFrame& frame, std::size_t child_index) const;
 };
 
 inline std::vector<FrameEditorSession::MovementFrame>
@@ -522,12 +543,12 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
         }
     };
 
-    auto upsert_attack_vector = [&](MovementFrame& frame,
+    auto append_attack_vector = [&](MovementFrame& frame,
                                     const std::string& type,
                                     const nlohmann::json& node) {
-        if (node.is_null()) return;
+        if (type.empty() || node.is_null()) return;
         animation_update::FrameAttackGeometry::Vector vec;
-        vec.type = type.empty() ? std::string{"melee"} : type;
+        vec.type = type;
         if (node.is_object()) {
             vec.start_x = read_float(node.value("start_x", 0.0f));
             vec.start_y = read_float(node.value("start_y", 0.0f));
@@ -556,11 +577,7 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
         } else {
             return;
         }
-        if (auto* existing = frame.attack.find_vector(vec.type)) {
-            *existing = vec;
-        } else {
-            frame.attack.vectors.push_back(vec);
-        }
+        frame.attack.add_vector(vec.type, vec);
     };
 
     std::size_t frame_index = 0;
@@ -613,6 +630,7 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
                             child.render_in_front = child_entry[5].get<int>() != 0;
                         }
                     }
+                    child.has_data = true;
                     f.children.push_back(child);
                 }
             }
@@ -637,6 +655,7 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
                     }
                     child.visible = child_entry.value("visible", true);
                     child.render_in_front = child_entry.value("render_in_front", true);
+                    child.has_data = true;
                 } else if (child_entry.is_array()) {
                     try { child.child_index = child_entry[0].get<int>(); } catch (...) { child.child_index = -1; }
                     if (child_entry.size() > 1 && child_entry[1].is_number()) {
@@ -663,6 +682,7 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
                             }
                         }
                     }
+                    child.has_data = true;
                     f.children.push_back(child);
                 }
             }
@@ -689,16 +709,11 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
             if (attack_entry.is_object()) {
                 for (const char* type : kDamageTypeNames) {
                     auto it = attack_entry.find(type);
-                    if (it != attack_entry.end()) {
-                        upsert_attack_vector(f, type, *it);
+                    if (it == attack_entry.end() || !it->is_array()) continue;
+                    for (const auto& vec_node : *it) {
+                        append_attack_vector(f, type, vec_node);
                     }
                 }
-            } else if (attack_entry.is_array()) {
-                for (const auto& vec_node : attack_entry) {
-                    upsert_attack_vector(f, "melee", vec_node);
-                }
-            } else if (!attack_entry.is_null()) {
-                upsert_attack_vector(f, "melee", attack_entry);
             }
         }
 

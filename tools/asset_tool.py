@@ -1,50 +1,28 @@
 #!/usr/bin/env python3
-"""Asset cache generation tool driven by tools/rebuild_requests.json.
-
-Behavior overview:
-
-        - Reads tools/rebuild_requests.json (via rebuild_queue.RebuildQueue) to
-            determine which assets/animations require work. When the JSON contains an
-            empty "assets" list it means "process every asset"; when it contains a
-            list of asset objects, each entry may also include an "animations" list to
-            target specific animations.
-        - Foreground/background effects are still parsed via EffectsParser using a
-            cache file under <cache_root>.
-        - When no explicit asset list is queued, fall back to the historical
-            behavior: regenerate everything if the global effects changed, otherwise
-            only regenerate assets whose basic_asset_info snippets changed.
-        - For each asset/animation we still honor the cached animation signature to
-            skip unchanged content even if the queue requested it explicitly.
-        - Finished animations are removed from the JSON queue; when all animations
-            for an asset (or a full rebuild) complete successfully, the corresponding
-            asset entry is cleared as well.
-"""
+"""Asset frame rebuild tool driven solely by manifest needs_rebuild flags."""
 
 import json
 import logging
+import math
+import multiprocessing
 import os
+import shutil
 import sys
 import time
-import math
-import shutil
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Set
+from typing import Dict, List, Optional, Tuple
 
 from PIL import Image
-import multiprocessing
-from concurrent.futures import ProcessPoolExecutor, as_completed
 
-from basic_asset_info import Asset
 from apply_color_effects import ApplyEffects
-from effects import Effects, EffectsParser
-from cache_helper import compare_and_update_json, stable_hash
-from rebuild_queue import QueueMode, RebuildQueue
+from effects import EffectsParser
 from shadow_mask import ShadowMaskGenerator, ShadowMaskSettings
 
 
 def normalize_variant_steps(steps):
-    # Always use fixed variants: 100%, 75%, 50%, 25%.
-    return [1.0, 0.75, 0.5, 0.25]
+    # Always use fixed variants: 100%, 75%, 50%, 25%, 10%.
+    return [1.0, 0.75, 0.5, 0.25, 0.1]
 
 
 def _configure_logger() -> logging.Logger:
@@ -60,43 +38,8 @@ def _configure_logger() -> logging.Logger:
 LOGGER = _configure_logger()
 
 
-def _dir_has_files(path: Path) -> bool:
-    """Return True if the directory exists and contains at least one entry."""
-    try:
-        return path.exists() and path.is_dir() and any(path.iterdir())
-    except Exception:
-        return False
-
-
-def find_assets_missing_animation_cache(manifest_path: str, cache_root: Path) -> List[str]:
-    """Identify manifest assets whose animation caches do not exist yet."""
-    try:
-        with open(manifest_path, "r", encoding="utf-8") as fh:
-            manifest = json.load(fh)
-    except Exception as exc:
-        LOGGER.warning("Failed to read manifest '%s' while checking caches: %s", manifest_path, exc)
-        return []
-
-    assets_block = manifest.get("assets", {})
-    if not isinstance(assets_block, dict):
-        return []
-
-    missing: List[str] = []
-    for name in assets_block.keys():
-        if not name:
-            continue
-        anim_dir = cache_root / name / "animations"
-        meta_dir = cache_root / ".asset_cache" / "animations" / name
-        if not (_dir_has_files(anim_dir) and _dir_has_files(meta_dir)):
-            missing.append(str(name))
-
-    return missing
-
 # Global per worker to avoid constructing ApplyEffects for every frame
 _APPLY_EFFECTS: Optional[ApplyEffects] = None
-
-_ALL_ANIMATIONS = object()
-
 
 SPEED_MULTIPLIERS: Tuple[float, ...] = (0.25, 0.5, 1.0, 2.0, 4.0)
 
@@ -333,47 +276,16 @@ def process_frame_task(task):
 class AssetTool:
     """Main class for asset generation tool."""
 
-    def __init__(self,
-                 manifest_path: str,
-                 cache_root: str,
-                 queue: Optional[RebuildQueue] = None) -> None:
+    def __init__(self, manifest_path: str, cache_root: str) -> None:
         self.manifest_path = os.path.abspath(manifest_path)
         self.cache_root = Path(os.path.abspath(cache_root))
         self.manifest = self.load_manifest()
-        self.queue = queue
-        self.asset_mode = queue.asset_mode() if queue else QueueMode.FULL
 
-        self.asset_animation_filters: Optional[Dict[str, object]] = None
-        if queue and self.asset_mode == QueueMode.PARTIAL:
-            requests = queue.asset_requests()
-            if requests:
-                filters: Dict[str, object] = {}
-                for name, animations in requests.items():
-                    if animations is None:
-                        filters[name] = _ALL_ANIMATIONS
-                    else:
-                        filters[name] = set(animations)
-                self.asset_animation_filters = filters
-            else:
-                self.asset_animation_filters = {}
-        else:
-            self.asset_animation_filters = None
-
-        self.any_asset_errors = False
-
-        # Parse effects with cache located in cache_root
         effects_cache = self.cache_root / "effects_cache.json"
-        self.fg_effects, self.bg_effects, effects_unchanged = EffectsParser(
+        self.fg_effects, self.bg_effects, _effects_unchanged = EffectsParser(
             self.manifest_path, str(effects_cache)
         ).parse()
-        self.effects_changed = not effects_unchanged
 
-        LOGGER.info(
-            "Effects changed: %s",
-            "yes" if self.effects_changed else "no",
-        )
-
-        # One process pool reused across all assets and frames
         cpu_count = multiprocessing.cpu_count()
         self.max_workers = max(1, cpu_count - 1)
         self.executor = ProcessPoolExecutor(max_workers=self.max_workers)
@@ -391,189 +303,68 @@ class AssetTool:
             LOGGER.error("Failed to load manifest '%s': %s", self.manifest_path, exc)
             sys.exit(1)
 
+    def save_manifest(self) -> None:
+        try:
+            with open(self.manifest_path, "w", encoding="utf-8") as f:
+                json.dump(self.manifest, f, indent=2)
+        except Exception as exc:
+            LOGGER.error("Failed to write manifest '%s': %s", self.manifest_path, exc)
+            sys.exit(1)
+
     def _manifest_dir(self) -> Path:
         return Path(os.path.dirname(self.manifest_path))
 
-    def _resolve_asset_src_dir(self, asset: Asset) -> Path:
-        """
-        Resolve the source directory for an asset, relative to manifest dir
-        if the path in the manifest is not absolute.
-        """
-        src = asset.src_path
+    def _resolve_asset_src_dir(self, asset_name: str, asset_meta: Dict) -> Path:
+        """Resolve the source directory for an asset."""
+        src = asset_meta.get("asset_directory", "") if isinstance(asset_meta, dict) else ""
         if not src:
-            return self._manifest_dir() / "SRC" / "assets" / asset.name
+            return self._manifest_dir() / "SRC" / "assets" / asset_name
 
         src_path = Path(src)
         if src_path.is_absolute():
             return src_path
         return self._manifest_dir() / src_path
 
-    def _animation_meta_path(self, asset_name: str, anim_id: str) -> Path:
-        """Location for per-animation cache fingerprints."""
-        return (
-            self.cache_root
-            / ".asset_cache"
-            / "animations"
-            / asset_name
-            / f"{anim_id}.json"
-        )
-
-    def _animation_payloads_for_asset(self, asset: Asset) -> Dict[str, Dict]:
-        payloads = asset.json_entry.get("animations", {})
+    def _animation_payloads_for_asset(self, asset_meta: Dict) -> Dict[str, Dict]:
+        payloads = asset_meta.get("animations", {}) if isinstance(asset_meta, dict) else {}
         if isinstance(payloads, dict) and "animations" in payloads and isinstance(payloads["animations"], dict):
             payloads = payloads["animations"]
         if not isinstance(payloads, dict):
             return {}
         return {k: v for k, v in payloads.items() if isinstance(v, dict)}
 
-    def _compute_animation_signature(
-        self,
-        asset: Asset,
-        anim_id: str,
-        anim_dir: Path,
-        frame_paths: List[Path],
-        orig_w: int,
-        orig_h: int,
-        scale_pcts: List[int],
-        mask_enabled: bool,
-        mask_settings: Optional[Dict],
-        output_frame_count: int,
-        speed_multiplier: float,
-        crop_frames: bool,
-        crop_bounds: Optional[Dict],
-    ) -> Dict:
-        """
-        Build a lightweight fingerprint for an animation so we can skip
-        regenerating unchanged animations.
-        """
-        frame_meta = []
-        for frame_idx, frame_path in enumerate(frame_paths):
-            try:
-                stat_res = frame_path.stat()
-                mtime_ns = getattr(stat_res, "st_mtime_ns", int(stat_res.st_mtime * 1e9))
-                size = stat_res.st_size
-            except OSError:
-                mtime_ns = 0
-                size = -1
+    def _ensure_frame_metadata(self, anim_meta: Dict, frame_count: int) -> List[Dict]:
+        frames = anim_meta.get("frames") if isinstance(anim_meta, dict) else None
+        if not isinstance(frames, list):
+            frames = []
+        if frame_count < 0:
+            frame_count = 0
+        if len(frames) < frame_count:
+            frames.extend({"needs_rebuild": False} for _ in range(frame_count - len(frames)))
+        anim_meta["frames"] = frames
+        return frames
 
-            frame_meta.append(
-                {
-                    "idx": frame_idx,
-                    "size": size,
-                    "mtime_ns": mtime_ns,
-                }
-            )
+    def _frames_requiring_rebuild(self, frames: List[Dict]) -> List[int]:
+        indices: List[int] = []
+        for idx, entry in enumerate(frames):
+            if isinstance(entry, dict) and entry.get("needs_rebuild") is True:
+                indices.append(idx)
+        return indices
 
-        effects_digest = stable_hash(
-            {
-                "foreground": vars(self.fg_effects),
-                "background": vars(self.bg_effects),
-            }
-        )
-
-        signature_payload = {
-            "asset": asset.name,
-            "animation": anim_id,
-            "source": {
-                "dir": str(anim_dir),
-                "frame_count": len(frame_paths),
-                "orig_size": [orig_w, orig_h],
-                "frames_digest": stable_hash(frame_meta),
-            },
-            "output": {"frame_count": output_frame_count},
-            "scales": scale_pcts,
-            "mask": {
-                "enabled": mask_enabled,
-                "settings": mask_settings or {},
-            },
-            "processing": {
-                "speed_multiplier": speed_multiplier,
-                "crop_frames": bool(crop_frames),
-            },
-            "effects_digest": effects_digest,
-        }
-        if crop_frames and crop_bounds:
-            signature_payload["processing"]["crop_bounds"] = crop_bounds
-        signature_payload["digest"] = stable_hash(signature_payload)
-        return signature_payload
-
-    def collect_assets_to_regen(self) -> List[Asset]:
-        """Decide which assets need regeneration for this invocation."""
-        assets_block = self.manifest.get("assets", {})
-        if not isinstance(assets_block, dict):
-            LOGGER.error("Manifest 'assets' block is missing or invalid.")
-            return []
-
-        all_asset_names = list(assets_block.keys())
-
-        result: List[Asset] = []
-        if self.asset_mode == QueueMode.PARTIAL and self.asset_animation_filters is not None:
-            requested_names = list(self.asset_animation_filters.keys())
-            for name in requested_names:
-                if name not in assets_block:
-                    LOGGER.warning(
-                        "Requested asset '%s' is not in manifest; dropping request.",
-                        name,
-                    )
-                    if self.queue:
-                        self.queue.drop_unknown_asset(name)
-                    continue
-                asset = Asset(
-                    name=name,
-                    manifest_path=self.manifest_path,
-                    cache_dir=str(self.cache_root / ".asset_cache"),
-                )
-                result.append(asset)
-            return result
-
-        if self.asset_mode == QueueMode.FULL:
-            LOGGER.info("Queue requested full asset rebuild.")
-            for name in all_asset_names:
-                asset = Asset(
-                    name=name,
-                    manifest_path=self.manifest_path,
-                    cache_dir=str(self.cache_root / ".asset_cache"),
-                )
-                result.append(asset)
-            return result
-
-        if self.effects_changed:
-            LOGGER.info("Effects changed. Regenerating all assets.")
-            for name in all_asset_names:
-                asset = Asset(
-                    name=name,
-                    manifest_path=self.manifest_path,
-                    cache_dir=str(self.cache_root / ".asset_cache"),
-                )
-                result.append(asset)
-            return result
-
-        LOGGER.info("Effects unchanged. Regenerating only assets that need regen.")
-        for name in all_asset_names:
-            asset = Asset(
-                name=name,
-                manifest_path=self.manifest_path,
-                cache_dir=str(self.cache_root / ".asset_cache"),
-            )
-            if asset.needs_regen:
-                result.append(asset)
-
-        return result
-
-    def generate_animation_cache_for_asset(self, asset: Asset) -> None:
-        """Generate cache for a single asset/animation set."""
+    def generate_animation_cache_for_asset(self, asset_name: str, asset_meta: Dict) -> bool:
+        """Regenerate animations for a single asset. Returns True if any work was done."""
         start_time = time.time()
-        asset_src_dir = self._resolve_asset_src_dir(asset)
+        asset_src_dir = self._resolve_asset_src_dir(asset_name, asset_meta)
 
         if not asset_src_dir.exists():
             LOGGER.error(
                 "Source directory for asset '%s' does not exist: %s",
-                asset.name,
+                asset_name,
                 asset_src_dir,
             )
-            return
+            return False
 
-        asset_cache_root = self.cache_root / asset.name / "animations"
+        asset_cache_root = self.cache_root / asset_name / "animations"
         fg_cfg = self.fg_effects
         bg_cfg = self.bg_effects
 
@@ -583,74 +374,41 @@ class AssetTool:
         else:
             animations = [(asset_src_dir, "default")]
 
-        requested_filter: Optional[Set[str]] = None
-        full_asset_request = False
-        if self.asset_mode == QueueMode.PARTIAL and self.asset_animation_filters is not None:
-            filter_value = self.asset_animation_filters.get(asset.name)
-            if filter_value is None:
-                LOGGER.debug("Asset '%s' not present in filter map; skipping.", asset.name)
-                return
-            if filter_value is _ALL_ANIMATIONS:
-                requested_filter = None
-                full_asset_request = True
-            else:
-                requested_filter = set(filter_value)
-
-        if requested_filter is not None:
-            animations = [
-                (path, anim_id)
-                for path, anim_id in animations
-                if anim_id in requested_filter
-            ]
-            if not animations:
-                LOGGER.warning(
-                    "Asset '%s' has no animations matching queue filter %s.",
-                    asset.name,
-                    sorted(requested_filter),
-                )
-                if self.queue:
-                    for anim_id in requested_filter:
-                        self.queue.mark_animation_complete(asset.name, anim_id)
-                    if full_asset_request:
-                        self.queue.mark_asset_complete(asset.name)
-                return
-
-        print(f"[AssetTool] Regenerating asset '{asset.name}' from {asset_src_dir}")
-
-        mask_enabled = bool(asset.is_shaded)
+        mask_enabled = bool(asset_meta.get("has_shading", False))
         mask_settings = None
         if mask_enabled:
-            mask_settings = ShadowMaskSettings.sanitize(asset.shadow_mask_settings).as_dict()
+            mask_settings = ShadowMaskSettings.sanitize(asset_meta.get("shadow_mask_settings", {})).as_dict()
 
-        steps = self.get_normalized_steps_for_asset(asset.name)
+        steps = self.get_normalized_steps_for_asset(asset_name)
         scale_pcts = [round(s * 100) for s in steps]
         scale_pcts = sorted(set(scale_pcts), reverse=True)
 
-        processed_any = False
-        asset_had_errors = False
-        animation_payloads = self._animation_payloads_for_asset(asset)
-        existing_anim_ids = {anim_id for _, anim_id in animations}
-        if requested_filter is not None:
-            missing = requested_filter - existing_anim_ids
-            if missing:
-                LOGGER.warning(
-                    "Asset '%s' missing animations requested in queue: %s",
-                    asset.name,
-                    sorted(missing),
-                )
-                if self.queue:
-                    for anim_id in missing:
-                        self.queue.mark_animation_complete(asset.name, anim_id)
+        animation_payloads = self._animation_payloads_for_asset(asset_meta)
+
+        did_work = False
+        manifest_changed = False
 
         for anim_dir, anim_id in animations:
             frame_paths = list_numeric_frame_paths(anim_dir)
             if not frame_paths:
                 LOGGER.warning(
                     "No frames found for asset '%s' animation '%s' in %s. Skipping.",
-                    asset.name,
+                    asset_name,
                     anim_id,
                     anim_dir,
                 )
+                continue
+
+            anim_meta = animation_payloads.get(anim_id, {})
+            if not isinstance(anim_meta, dict):
+                anim_meta = {}
+            animation_payloads[anim_id] = anim_meta
+            anim_meta_root = anim_meta
+
+            existing_len = len(anim_meta_root.get("frames", [])) if isinstance(anim_meta_root, dict) else 0
+            frames_meta = self._ensure_frame_metadata(anim_meta_root, max(len(frame_paths), existing_len))
+            flagged_frames = self._frames_requiring_rebuild(frames_meta)
+            if not flagged_frames:
                 continue
 
             try:
@@ -659,22 +417,21 @@ class AssetTool:
             except Exception as exc:
                 LOGGER.warning(
                     "Failed to read first frame for asset '%s' animation '%s': %s",
-                    asset.name,
+                    asset_name,
                     anim_id,
                     exc,
                 )
                 continue
 
-            anim_meta = animation_payloads.get(anim_id, {})
-            speed_multiplier = read_speed_multiplier(anim_meta)
-            crop_requested = read_crop_frames(anim_meta)
+            speed_multiplier = read_speed_multiplier(anim_meta_root)
+            crop_requested = read_crop_frames(anim_meta_root)
 
             frame_sequence = build_speed_frame_sequence(len(frame_paths), speed_multiplier)
             output_frame_count = len(frame_sequence)
             if output_frame_count == 0:
                 LOGGER.warning(
                     "No output frames for asset '%s' animation '%s' after speed processing.",
-                    asset.name,
+                    asset_name,
                     anim_id,
                 )
                 continue
@@ -688,43 +445,11 @@ class AssetTool:
             if crop_requested and crop_bounds is None:
                 LOGGER.warning(
                     "Crop requested for asset '%s' animation '%s' but bounds could not be determined; leaving uncropped.",
-                    asset.name,
+                    asset_name,
                     anim_id,
                 )
 
             anim_cache_root = asset_cache_root / anim_id
-            anim_meta_path = self._animation_meta_path(asset.name, anim_id)
-
-            anim_signature = self._compute_animation_signature(
-                asset,
-                anim_id,
-                anim_dir,
-                frame_paths,
-                orig_w,
-                orig_h,
-                scale_pcts,
-                mask_enabled,
-                mask_settings,
-                output_frame_count,
-                speed_multiplier,
-                crop_requested,
-                crop_bounds,
-            )
-
-            cache_match = compare_and_update_json(
-                anim_signature, str(anim_meta_path), write_if_different=False
-            )
-            cache_exists = anim_cache_root.exists()
-
-            if cache_match and cache_exists:
-                print(
-                    f"  Animation '{anim_id}': no changes detected, skipping regeneration."
-                )
-                processed_any = True
-                if self.queue and requested_filter is not None:
-                    self.queue.mark_animation_complete(asset.name, anim_id)
-                continue
-
             if anim_cache_root.exists():
                 shutil.rmtree(anim_cache_root)
 
@@ -789,85 +514,59 @@ class AssetTool:
                         had_errors = True
                         print("      " + result, file=sys.stderr)
 
-            if not had_errors:
-                compare_and_update_json(anim_signature, str(anim_meta_path))
-                processed_any = True
-                if self.queue and requested_filter is not None:
-                    self.queue.mark_animation_complete(asset.name, anim_id)
-            else:
-                asset_had_errors = True
+            if had_errors:
                 LOGGER.warning(
-                    "Animation '%s' had errors during processing; cache fingerprint not updated.",
+                    "Animation '%s' had errors during processing; needs_rebuild flags remain set.",
                     anim_id,
                 )
+                continue
+
+            for idx in flagged_frames:
+                if 0 <= idx < len(frames_meta):
+                    frames_meta[idx]["needs_rebuild"] = False
+            did_work = True
+            manifest_changed = True
 
         elapsed = time.time() - start_time
-        print(f"[AssetTool] Finished asset '{asset.name}' in {elapsed:.2f} seconds")
-        if asset_had_errors:
-            self.any_asset_errors = True
-
-        if self.queue and self.asset_mode == QueueMode.PARTIAL:
-            if full_asset_request and not asset_had_errors:
-                self.queue.mark_asset_complete(asset.name)
-            elif requested_filter is None and not processed_any:
-                self.queue.mark_asset_complete(asset.name)
-        elif self.queue and self.asset_mode == QueueMode.FULL and not asset_had_errors:
-            # Processed per animation; handled after loop via mark_full_asset_rebuild_complete.
-            pass
-
-    def process_assets(self, assets: List[Asset]) -> None:
-        """Regenerate cache for all assets in list."""
-        if not assets:
-            print("No assets need regeneration.")
-            if self.queue and self.asset_mode == QueueMode.FULL:
-                self.queue.mark_full_asset_rebuild_complete()
-            return
-
-        try:
-            for asset in assets:
-                self.generate_animation_cache_for_asset(asset)
-        finally:
-            self.executor.shutdown(wait=True)
-
-        if self.queue and self.asset_mode == QueueMode.FULL and not self.any_asset_errors:
-            self.queue.mark_full_asset_rebuild_complete()
+        print(f"[AssetTool] Finished asset '{asset_name}' in {elapsed:.2f} seconds")
+        if manifest_changed:
+            asset_meta.setdefault("animations", {})
+            if isinstance(asset_meta["animations"], dict):
+                asset_meta["animations"].update(animation_payloads)
+            else:
+                asset_meta["animations"] = animation_payloads
+        return did_work
 
 
 def main():
-    queue = RebuildQueue()
-    manifest_path = str(queue.manifest_path)
-    cache_root_path = Path(queue.cache_root)
-    missing_assets = find_assets_missing_animation_cache(manifest_path, cache_root_path)
+    tools_dir = Path(__file__).resolve().parent
+    repo_root = tools_dir.parent
+    manifest_path = repo_root / "manifest.json"
+    cache_root_path = repo_root / "cache"
 
-    mode = queue.asset_mode()
-    if mode == QueueMode.NONE and missing_assets:
-        LOGGER.info(
-            "Detected %d asset(s) missing animation cache; regenerating: %s",
-            len(missing_assets),
-            ", ".join(sorted(missing_assets)),
-        )
+    tool = AssetTool(str(manifest_path), str(cache_root_path))
 
-        tool = AssetTool(manifest_path, str(cache_root_path), None)
-        tool.asset_mode = QueueMode.PARTIAL
-        tool.asset_animation_filters = {name: _ALL_ANIMATIONS for name in missing_assets}
-        assets_to_regen = [
-            Asset(
-                name=name,
-                manifest_path=manifest_path,
-                cache_dir=str(cache_root_path / ".asset_cache"),
-            )
-            for name in missing_assets
-        ]
-        tool.process_assets(assets_to_regen)
-        return
+    assets_block = tool.manifest.get("assets", {})
+    if not isinstance(assets_block, dict):
+        LOGGER.error("Manifest 'assets' block is missing or invalid.")
+        sys.exit(1)
 
-    if mode == QueueMode.NONE:
-        LOGGER.info("No pending asset rebuild requests; exiting.")
-        return
+    manifest_changed = False
+    try:
+        for asset_name, asset_meta in assets_block.items():
+            if not isinstance(asset_meta, dict):
+                continue
+            did_work = tool.generate_animation_cache_for_asset(asset_name, asset_meta)
+            manifest_changed = manifest_changed or did_work
+    finally:
+        tool.executor.shutdown(wait=True)
 
-    tool = AssetTool(manifest_path, str(cache_root_path), queue)
-    assets_to_regen = tool.collect_assets_to_regen()
-    tool.process_assets(assets_to_regen)
+    if manifest_changed:
+        tool.manifest["assets"] = assets_block
+        tool.save_manifest()
+        LOGGER.info("Updated manifest needs_rebuild flags after rebuilds.")
+    else:
+        LOGGER.info("No frames marked for rebuild; nothing to do.")
 
 
 if __name__ == "__main__":

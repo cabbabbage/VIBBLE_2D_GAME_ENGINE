@@ -60,18 +60,61 @@ struct FrameAttackGeometry {
 
     std::vector<Vector> vectors;
 
-    Vector* find_vector(const std::string& type) {
+    // Returns the number of vectors matching a given type.
+    std::size_t count_for_type(const std::string& type) const {
+        std::size_t count = 0;
+        for (const auto& v : vectors) {
+            if (v.type == type) {
+                ++count;
+            }
+        }
+        return count;
+    }
+
+    // Retrieve the nth vector for a type (0-based). Returns nullptr if missing.
+    Vector* vector_at(const std::string& type, std::size_t type_index) {
+        std::size_t seen = 0;
         for (auto& v : vectors) {
-            if (v.type == type) return &v;
+            if (v.type != type) continue;
+            if (seen == type_index) {
+                return &v;
+            }
+            ++seen;
         }
         return nullptr;
     }
 
-    const Vector* find_vector(const std::string& type) const {
+    const Vector* vector_at(const std::string& type, std::size_t type_index) const {
+        std::size_t seen = 0;
         for (const auto& v : vectors) {
-            if (v.type == type) return &v;
+            if (v.type != type) continue;
+            if (seen == type_index) {
+                return &v;
+            }
+            ++seen;
         }
         return nullptr;
+    }
+
+    // Append a new vector for the given type and return a reference to it.
+    Vector& add_vector(const std::string& type, Vector vec = {}) {
+        vec.type = type;
+        vectors.push_back(vec);
+        return vectors.back();
+    }
+
+    // Remove the nth vector for a type (0-based). Returns true if something was erased.
+    bool erase_vector(const std::string& type, std::size_t type_index) {
+        std::size_t seen = 0;
+        for (auto it = vectors.begin(); it != vectors.end(); ++it) {
+            if (it->type != type) continue;
+            if (seen == type_index) {
+                vectors.erase(it);
+                return true;
+            }
+            ++seen;
+        }
+        return false;
     }
 };
 

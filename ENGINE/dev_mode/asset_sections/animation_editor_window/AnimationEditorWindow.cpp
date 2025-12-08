@@ -50,7 +50,7 @@
 #include "dev_mode/widgets.hpp"
 #include "core/AssetsManager.hpp"
 #include "dev_mode/asset_paths.hpp"
-#include "dev_mode/rebuildAnimation.hpp"
+#include "dev_mode/animation_runtime_refresh.hpp"
 
 namespace {
 
@@ -406,6 +406,7 @@ AnimationEditorWindow::AnimationEditorWindow() {
     list_context_menu_ = std::make_unique<AnimationListContextMenu>();
 
     add_button_ = std::make_unique<DMButton>("Add Animation", &DMStyles::CreateButton(), 160, DMButton::height());
+    build_button_ = std::make_unique<DMButton>("Build Now", &DMStyles::CreateButton(), 120, DMButton::height());
     controller_button_ = std::make_unique<DMButton>("Add Controller", &DMStyles::CreateButton(), 140, DMButton::height());
     const auto speeds = speed_multiplier_options();
     const std::vector<std::string> speed_labels = {"0.25x", "0.5x", "1.0x", "2.0x", "4.0x"};
@@ -679,6 +680,11 @@ void AnimationEditorWindow::layout_children() {
     if (add_button_) {
         add_button_->set_rect(SDL_Rect{left_x, y, add_button_->rect().w, DMButton::height()});
         left_x += add_button_->rect().w + button_gap;
+    }
+
+    if (build_button_) {
+        build_button_->set_rect(SDL_Rect{left_x, y, build_button_->rect().w, DMButton::height()});
+        left_x += build_button_->rect().w + button_gap;
     }
 
     if (controller_button_) {
@@ -1157,6 +1163,10 @@ void AnimationEditorWindow::set_on_animation_properties_changed(std::function<vo
     on_animation_properties_changed_ = std::move(callback);
 }
 
+void AnimationEditorWindow::refresh_children_from_asset_info() {
+    sync_document_children_from_info();
+}
+
 void AnimationEditorWindow::handle_document_saved() {
     if (on_document_saved_) {
         on_document_saved_();
@@ -1194,6 +1204,7 @@ void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
     }
 
     if (add_button_) add_button_->render(renderer);
+    if (build_button_) build_button_->render(renderer);
     if (controller_button_) controller_button_->render(renderer);
     if (speed_dropdown_) speed_dropdown_->render(renderer);
     if (crop_checkbox_) crop_checkbox_->render(renderer);
@@ -1201,6 +1212,9 @@ void AnimationEditorWindow::render_header(SDL_Renderer* renderer) const {
     int label_x = header_rect_.x + DMSpacing::panel_padding();
     if (add_button_) {
         label_x = std::max(label_x, add_button_->rect().x + add_button_->rect().w + DMSpacing::small_gap());
+    }
+    if (build_button_) {
+        label_x = std::max(label_x, build_button_->rect().x + build_button_->rect().w + DMSpacing::small_gap());
     }
     if (controller_button_) {
         label_x = std::max(label_x, controller_button_->rect().x + controller_button_->rect().w + DMSpacing::small_gap());
@@ -1257,6 +1271,18 @@ bool AnimationEditorWindow::handle_header_event(const SDL_Event& e) {
     };
 
     handle_button(add_button_, [this]() { create_animation_via_prompt(); });
+    handle_button(build_button_, [this]() {
+        auto info_ptr = info_.lock();
+        if (!info_ptr) {
+            set_status_message("No asset selected.", 180);
+            return;
+        }
+        if (!rebuild_all_animations_via_pipeline(info_ptr)) {
+            set_status_message("Build failed; see logs.", 240);
+        } else {
+            set_status_message("Rebuilt all animations.", 240);
+        }
+    });
     handle_button(controller_button_, [this]() { handle_controller_button_click(); });
 
     if (!consumed && speed_dropdown_) {
@@ -1492,9 +1518,23 @@ void AnimationEditorWindow::open_frame_editor(const std::string& animation_id) {
         return;
     }
     target_asset_ = runtime_asset;
+    sync_document_children_from_info();
     live_frame_editor_session_active_ = true;
     assets_->begin_frame_editor_session(runtime_asset, document_, preview_provider_, animation_id, this);
     set_visible(false, false /*suspend without closing hooks*/);
+}
+
+void AnimationEditorWindow::sync_document_children_from_info() {
+    auto info_ptr = info_.lock();
+    if (!info_ptr || !document_) {
+        return;
+    }
+
+    document_->replace_animation_children(info_ptr->animation_children);
+    document_->save_to_file(true);
+    // Keep any open panels in sync with the refreshed document state
+    if (list_panel_) list_panel_->set_document(document_);
+    if (inspector_panel_) inspector_panel_->set_document(document_);
 }
 
 void AnimationEditorWindow::on_live_frame_editor_closed(const std::string& animation_id) {
@@ -1978,70 +2018,94 @@ void AnimationEditorWindow::open_controller() {
     }
 }
 
-void AnimationEditorWindow::clear_animation_cache(const std::filesystem::path& cache_root,
-                                                  const std::string& asset_name,
-                                                  const std::string& animation_id) {
-    if (asset_name.empty() || animation_id.empty()) {
-        return;
-    }
-    std::error_code ec;
-    const auto anim_dir = cache_root / asset_name / "animations" / animation_id;
-    std::filesystem::remove_all(anim_dir, ec);
-    ec.clear();
-    const auto meta_file =
-        cache_root / ".asset_cache" / "animations" / asset_name / (animation_id + ".json");
-    std::filesystem::remove(meta_file, ec);
+bool AnimationEditorWindow::rebuild_animation_from_sources(const std::shared_ptr<AssetInfo>& info,
+                                                           const std::string& animation_id) {
+    return rebuild_animation_via_pipeline(info, animation_id);
 }
 
-bool AnimationEditorWindow::regenerate_via_asset_tool(const std::shared_ptr<AssetInfo>& info,
-                                                      const std::string& animation_id) {
+bool AnimationEditorWindow::rebuild_animation_via_pipeline(const std::shared_ptr<AssetInfo>& info,
+                                                           const std::string& animation_id) {
     if (!info) {
+        set_status_message("No asset selected.", 180);
         return false;
     }
-    const std::string asset_name = info->name;
-    if (asset_name.empty()) {
+    if (animation_id.empty()) {
+        set_status_message("No animation id provided.", 180);
         return false;
     }
-
-    const std::filesystem::path project_root = std::filesystem::path(manifest::manifest_path()).parent_path();
-    const std::filesystem::path cache_root = project_root / "cache";
-    clear_animation_cache(cache_root, asset_name, animation_id);
 
     vibble::RebuildQueueCoordinator coordinator;
-    coordinator.request_animation(asset_name, animation_id);
+    coordinator.request_animation(info->name, animation_id);
     if (!coordinator.run_asset_tool()) {
         set_status_message("asset_tool.py failed; see logs for details.", 240);
         return false;
     }
 
-    bool reloaded = false;
-    try {
-        reloaded = info->reload_animations_from_disk();
-    } catch (const std::exception& ex) {
-        std::cerr << "[AnimationEditor] reload_animations_from_disk failed for '" << asset_name
-                  << "': " << ex.what() << "\n";
-        reloaded = false;
+    SDL_Renderer* renderer = assets_ ? assets_->renderer() : nullptr;
+    if (!renderer) {
+        set_status_message("No renderer available to reload animations.", 240);
+        return false;
+    }
+
+    // Refresh animation data/textures from disk/cache
+    info->reload_animations_from_disk();
+    info->loadAnimations(renderer);
+
+    auto it = info->animations.find(animation_id);
+    if (it == info->animations.end()) {
+        set_status_message("Animation not found after rebuild.", 240);
+        return false;
+    }
+
+    if (!it->second.rebuild_animation(renderer, *info, animation_id)) {
+        set_status_message("Failed to rebuild animation textures.", 240);
+        return false;
+    }
+
+    if (assets_) {
+        devmode::refresh_loaded_animation_instances(assets_, info);
+    }
+    if (preview_provider_) {
+        preview_provider_->invalidate_all();
+    }
+    return true;
+}
+
+bool AnimationEditorWindow::rebuild_all_animations_via_pipeline(const std::shared_ptr<AssetInfo>& info) {
+    if (!info) {
+        set_status_message("No asset selected.", 180);
+        return false;
+    }
+
+    vibble::RebuildQueueCoordinator coordinator;
+    coordinator.request_asset(info->name);
+    if (!coordinator.run_asset_tool()) {
+        set_status_message("asset_tool.py failed; see logs for details.", 240);
+        return false;
     }
 
     SDL_Renderer* renderer = assets_ ? assets_->renderer() : nullptr;
-    if (renderer && reloaded) {
-        info->loadAnimations(renderer);
-        devmode::AnimationRegenerator::refresh_loaded_instances(assets_, info);
-    }
-
-    return reloaded;
-}
-
-bool AnimationEditorWindow::rebuild_animation_from_sources(const std::shared_ptr<AssetInfo>& info,
-                                                           const std::string& animation_id) {
-    if (!info) {
+    if (!renderer) {
+        set_status_message("No renderer available to reload animations.", 240);
         return false;
     }
-    if (assets_) {
-        auto result = devmode::AnimationRegenerator::regenerate_animation(assets_, info, animation_id);
-        return result.python_success && (result.reloaded || result.refreshed_instances);
+
+    info->reload_animations_from_disk();
+    info->loadAnimations(renderer);
+
+    bool ok = true;
+    for (auto& [anim_id, anim] : info->animations) {
+        ok = anim.rebuild_animation(renderer, *info, anim_id) && ok;
     }
-    return regenerate_via_asset_tool(info, animation_id);
+
+    if (assets_) {
+        devmode::refresh_loaded_animation_instances(assets_, info);
+    }
+    if (preview_provider_) {
+        preview_provider_->invalidate_all();
+    }
+    return ok;
+
 }
 
 std::optional<std::filesystem::path> AnimationEditorWindow::pick_gif() const {

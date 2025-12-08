@@ -272,10 +272,6 @@ std::filesystem::path MainMenu::loading_content_root() const {
 	return resolve_manifest_path("SRC/LOADING CONTENT");
 }
 
-std::filesystem::path MainMenu::legacy_loading_content_root() const {
-	return resolve_manifest_path("SRC/loading_screen_content");
-}
-
 std::vector<fs::path> MainMenu::list_loading_images(const fs::path& root, bool recursive) const {
 	std::vector<fs::path> out;
 	if (root.empty() || !fs::exists(root)) return out;
@@ -309,10 +305,7 @@ std::vector<fs::path> MainMenu::list_loading_images(const fs::path& root, bool r
 }
 
 fs::path MainMenu::pick_loading_image() const {
-	auto images = list_loading_images(loading_content_root(), false);
-	if (images.empty()) {
-		images = list_loading_images(legacy_loading_content_root(), true);
-	}
+	auto images = list_loading_images(loading_content_root(), true);
 	if (images.empty()) {
 		return {};
 	}
