@@ -37,7 +37,6 @@
 #include "asset_sections/Section_Shading.hpp"
 #include "asset_sections/Section_Spacing.hpp"
 #include "spawn_group_config/SpawnGroupConfig.hpp"
-#include "asset_sections/Section_AnimationChildren.hpp"
 #include "asset_sections/Section_SpawnGroups.hpp"
 #include "map_generation/room.hpp"
 #include "core/AssetsManager.hpp"
@@ -403,9 +402,6 @@ void AssetInfoUI::set_manifest_store(devmode::core::ManifestStore* store) {
     if (spawn_groups_section_) {
         spawn_groups_section_->set_manifest_store(manifest_store_);
     }
-    if (animation_children_section_) {
-        animation_children_section_->set_manifest_store(manifest_store_);
-    }
     if (animation_editor_window_) {
         animation_editor_window_->set_manifest_store(manifest_store_);
     }
@@ -434,10 +430,6 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
                 }
             });
             animation_editor_window_->set_info(info_);
-            // Keep the animation-children inspector in sync with the animation document
-            if (animation_children_section_) {
-                animation_children_section_->set_document(animation_editor_window_->document());
-            }
         } catch (const std::exception& ex) {
             SDL_Log("AssetInfoUI: failed to configure animation editor for %s: %s", info_ ? info_->name.c_str() : "<null>", ex.what());
             animation_editor_window_->clear_info();
@@ -1908,16 +1900,6 @@ void AssetInfoUI::sync_animation_children() {
         asset->initialize_animation_children_recursive();
     });
 
-    // Refresh the inspector section immediately so newly added children appear without reopening.
-    if (animation_children_section_) {
-        animation_children_section_->build();
-        container_.request_layout();
-    }
-
-    if (animation_editor_window_) {
-        animation_editor_window_->refresh_children_from_asset_info();
-    }
-
     if (updated_any && assets_) {
         assets_->mark_active_assets_dirty();
     }
@@ -2177,7 +2159,6 @@ void AssetInfoUI::rebuild_default_sections() {
     basic_info_section_ = nullptr;
     lighting_section_ = nullptr;
     shading_section_ = nullptr;
-    animation_children_section_ = nullptr;
     spawn_groups_section_ = nullptr;
     focused_section_ = nullptr;
 
@@ -2227,14 +2208,6 @@ void AssetInfoUI::rebuild_default_sections() {
     adopt_section(shading_section_);
     finalize_section(shading_section_);
     sections_.push_back(std::move(shading));
-
-    auto animation_children = std::make_unique<Section_AnimationChildren>();
-    animation_children_section_ = animation_children.get();
-    animation_children_section_->set_ui(this);
-    animation_children_section_->set_manifest_store(manifest_store_);
-    adopt_section(animation_children_section_);
-    finalize_section(animation_children_section_);
-    sections_.push_back(std::move(animation_children));
 
     auto spacing = std::make_unique<Section_Spacing>();
     spacing->set_ui(this);

@@ -1518,7 +1518,6 @@ void AnimationEditorWindow::open_frame_editor(const std::string& animation_id) {
         return;
     }
     target_asset_ = runtime_asset;
-    sync_document_children_from_info();
     live_frame_editor_session_active_ = true;
     assets_->begin_frame_editor_session(runtime_asset, document_, preview_provider_, animation_id, this);
     set_visible(false, false /*suspend without closing hooks*/);

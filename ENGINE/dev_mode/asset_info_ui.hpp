@@ -22,7 +22,6 @@ class Section_BasicInfo;
 class SearchAssets;
 class Section_Shading;
 class Section_SpawnGroups;
-class Section_AnimationChildren;
 namespace animation_editor {
 class AnimationEditorWindow;
 }
@@ -122,7 +121,6 @@ class AssetInfoUI {
 
     class Section_Lighting* lighting_section_ = nullptr;
     class Section_Shading* shading_section_ = nullptr;
-    class Section_AnimationChildren* animation_children_section_ = nullptr;
     mutable class Asset* target_asset_ = nullptr;
     mutable SDL_Rect animation_editor_rect_{0,0,0,0};
     int last_screen_w_ = 0;

@@ -337,6 +337,7 @@ void FrameEditorSession::load_animation_data(const std::string& animation_id) {
     }
     frames_ = parse_movement_frames_json(payload_dump.value_or(std::string{}));
     child_assets_ = document_->animation_children();
+    ensure_child_mode_size();
     if (target_ && target_->info) {
         target_->info->set_animation_children(child_assets_);
         target_->initialize_animation_children_recursive();
@@ -506,6 +507,22 @@ void FrameEditorSession::update(const Input& input) {
         if (dd_child_select_->selected() != desired) {
             dd_child_select_->set_selected(desired);
         }
+    }
+    if (tb_child_name_ && !tb_child_name_->is_editing()) {
+        std::string desired = (selected_child_index_ >= 0 && selected_child_index_ < static_cast<int>(child_assets_.size()))
+            ? child_assets_[static_cast<std::size_t>(selected_child_index_)]
+            : std::string{};
+        if (tb_child_name_->value() != desired) {
+            tb_child_name_->set_value(desired);
+        }
+        last_child_name_text_ = tb_child_name_->value();
+    }
+    if (dd_child_mode_) {
+        int desired = child_mode_index(child_mode(selected_child_index_));
+        if (dd_child_mode_->selected() != desired) {
+            dd_child_mode_->set_selected(desired);
+        }
+        last_child_mode_index_ = dd_child_mode_->selected();
     }
     if (dd_animation_select_) {
         int desired = 0;
@@ -956,6 +973,34 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
             }
             return true;
         }
+
+        if (dd_child_mode_ && dd_child_mode_->handle_event(e)) {
+            const int selected = std::clamp(dd_child_mode_->selected(), 0, 1);
+            set_child_mode(selected_child_index_, selected == 0 ? AnimationChildMode::Static : AnimationChildMode::Async);
+            persist_changes();
+            return true;
+        }
+
+        if (tb_child_name_ && tb_child_name_->handle_event(e)) {
+            if (e.type == SDL_KEYUP && (e.key.keysym.sym == SDLK_RETURN || e.key.keysym.sym == SDLK_KP_ENTER)) {
+                add_or_rename_child(tb_child_name_->value());
+            }
+            return true;
+        }
+        auto handle_child_button = [&](std::unique_ptr<DMButton>& btn, auto&& on_click) -> bool {
+            if (!btn) return false;
+            if (!btn->handle_event(e)) return false;
+            if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
+                on_click();
+            }
+            return true;
+        };
+        if (handle_child_button(btn_child_add_, [this]() {
+                add_or_rename_child(tb_child_name_ ? tb_child_name_->value() : std::string{});
+            })) return true;
+        if (handle_child_button(btn_child_remove_, [this]() {
+                remove_selected_child();
+            })) return true;
 
         if (cb_show_child_ && cb_show_child_->handle_event(e)) {
             bool current = cb_show_child_->value();
@@ -1701,6 +1746,16 @@ void FrameEditorSession::ensure_widgets() const {
         }
         dd_child_select_ = std::make_unique<DMDropdown>("Child", child_dropdown_options_cache_, dropdown_index);
     }
+    ensure_child_mode_size();
+    const std::vector<std::string> child_mode_options = {
+        "Static (per-frame)",
+        "Async (timeline)"
+    };
+    int desired_mode_index = child_mode_index(child_mode(selected_child_index_));
+    dd_child_mode_ = std::make_unique<DMDropdown>("Mode", child_mode_options, std::clamp(desired_mode_index, 0, static_cast<int>(child_mode_options.size()) - 1));
+    if (!tb_child_name_) tb_child_name_ = std::make_unique<DMTextBox>("Child Asset", "");
+    if (!btn_child_add_) btn_child_add_ = std::make_unique<DMButton>("Add / Rename", &DMStyles::AccentButton(), 140, DMButton::height());
+    if (!btn_child_remove_) btn_child_remove_ = std::make_unique<DMButton>("Remove", &DMStyles::DeleteButton(), 120, DMButton::height());
     if (hitbox_type_labels_.size() != kDamageTypeNames.size()) {
         hitbox_type_labels_.clear();
         for (const char* type : kDamageTypeNames) {
@@ -1982,6 +2037,15 @@ void FrameEditorSession::rebuild_layout() const {
                 }
             }
 
+            if (dd_child_mode_ && metrics.mode_row_height > 0) {
+                const int row_top = allocate_row(metrics.mode_row_height);
+                if (row_top >= 0) {
+                    const int w = std::max(metrics.mode_dropdown_width, content_width);
+                    dd_child_mode_->set_rect(SDL_Rect{ row_left, row_top, w, metrics.mode_row_height });
+                    register_toolbox_widget(dd_child_mode_.get());
+                }
+            }
+
             // Movement controls row (Smooth/Curve + Totals)
             if (metrics.movement_row_height > 0 && (cb_smooth_ || tb_total_dx_ || tb_total_dy_)) {
                 const int row_top = allocate_row(metrics.movement_row_height);
@@ -2074,6 +2138,28 @@ void FrameEditorSession::rebuild_layout() const {
                     };
                     place_checkbox(cb_child_visible_.get(), metrics.child_visible_checkbox_width);
                     place_checkbox(cb_child_render_front_.get(), metrics.child_render_checkbox_width);
+                }
+            }
+
+            if (metrics.name_row_height > 0 && (tb_child_name_ || btn_child_add_ || btn_child_remove_)) {
+                const int row_top = allocate_row(metrics.name_row_height);
+                if (row_top >= 0) {
+                    int tx = row_left;
+                    if (tb_child_name_) {
+                        const int h = metrics.name_row_height > 0 ? metrics.name_row_height : tb_child_name_->height_for_width(metrics.name_textbox_width);
+                        tb_child_name_->set_rect(SDL_Rect{ tx, row_top, metrics.name_textbox_width, h });
+                        register_toolbox_widget(tb_child_name_.get());
+                        tx += metrics.name_textbox_width + metrics.gap;
+                    }
+                    const int button_h = DMButton::height();
+                    auto place_btn = [&](std::unique_ptr<DMButton>& btn) {
+                        if (!btn) return;
+                        btn->set_rect(SDL_Rect{ tx, row_top, metrics.child_action_button_width, button_h });
+                        register_toolbox_widget(btn.get());
+                        tx += metrics.child_action_button_width + metrics.gap;
+                    };
+                    place_btn(btn_child_add_);
+                    place_btn(btn_child_remove_);
                 }
             }
 
@@ -2413,6 +2499,13 @@ FrameEditorSession::ChildrenToolboxMetrics FrameEditorSession::build_children_to
     metrics.child_render_checkbox_width = cb_child_render_front_
                                               ? std::max(kChildVisibilityCheckboxMinWidth, cb_child_render_front_->preferred_width())
                                               : 0;
+    metrics.mode_dropdown_width = dd_child_mode_ ? std::max(kChildDropdownMinWidth, dd_child_mode_->rect().w) : 0;
+    metrics.mode_row_height = dd_child_mode_ ? dd_child_mode_->preferred_height(metrics.mode_dropdown_width) : 0;
+    metrics.name_textbox_width = tb_child_name_ ? std::max(kChildDropdownMinWidth, kChildrenFieldWidth) : 0;
+    metrics.name_row_height = tb_child_name_ ? tb_child_name_->height_for_width(metrics.name_textbox_width) : 0;
+    metrics.child_action_button_width = std::max({ btn_child_add_ ? btn_child_add_->preferred_width() : 0,
+                                                  btn_child_remove_ ? btn_child_remove_->preferred_width() : 0,
+                                                  120 });
     metrics.show_parent_checkbox_width = cb_show_anim_
                                              ? std::max(kShowAnimCheckboxMinWidth, cb_show_anim_->preferred_width())
                                              : 0;
@@ -2470,13 +2563,24 @@ FrameEditorSession::ChildrenToolboxMetrics FrameEditorSession::build_children_to
 
     metrics.toggle_row_height = toggle_row_width > 0 ? checkbox_height : 0;
 
-    int content_width = std::max({dropdown_row_width, movement_row_width, toggle_row_width, form_row_width});
+    int mode_row_width = metrics.mode_dropdown_width;
+    int name_row_width = metrics.name_textbox_width > 0
+        ? metrics.name_textbox_width + metrics.gap + metrics.child_action_button_width * 2 + metrics.gap
+        : 0;
+    int content_width = std::max({dropdown_row_width, movement_row_width, toggle_row_width, form_row_width, mode_row_width, name_row_width});
     if (dd_child_select_) {
         const int dropdown_width = std::max(content_width, std::max(kChildDropdownMinWidth, dropdown_row_width));
         metrics.dropdown_row_height = dd_child_select_->preferred_height(std::max(dropdown_width, kChildDropdownMinWidth));
         content_width = std::max(content_width, dropdown_width);
     } else {
         metrics.dropdown_row_height = 0;
+    }
+
+    if (dd_child_mode_) {
+        metrics.mode_row_height = std::max(metrics.mode_row_height, DMDropdown::height());
+    }
+    if (tb_child_name_) {
+        metrics.name_row_height = std::max(metrics.name_row_height, DMButton::height());
     }
 
     if (content_width <= 0) {
@@ -2497,9 +2601,11 @@ FrameEditorSession::ChildrenToolboxMetrics FrameEditorSession::build_children_to
         added_row = true;
     };
     add_row(metrics.dropdown_row_height);
+    add_row(metrics.mode_row_height);
     add_row(metrics.movement_row_height);
     add_row(metrics.toggle_row_height);
     add_row(metrics.form_row_height);
+    add_row(metrics.name_row_height);
     // Add bottom Apply-to-all button row
     add_row(DMButton::height());
     metrics.height += metrics.drag_handle_height;
@@ -3653,6 +3759,15 @@ void FrameEditorSession::refresh_child_assets_from_document() {
         }
     }
     child_assets_ = std::move(names);
+    // Remap modes to keep async/static choices stable when list changes
+    std::vector<AnimationChildMode> remapped_modes(child_assets_.size(), AnimationChildMode::Static);
+    for (std::size_t i = 0; i < remap.size(); ++i) {
+        const int to = remap[i];
+        if (to >= 0 && static_cast<std::size_t>(to) < remapped_modes.size() && i < child_modes_.size()) {
+            remapped_modes[static_cast<std::size_t>(to)] = child_modes_[i];
+        }
+    }
+    child_modes_ = std::move(remapped_modes);
     std::unordered_set<std::string> previous_lookup(previous.begin(), previous.end());
     std::vector<int> new_child_indices;
     new_child_indices.reserve(child_assets_.size());
@@ -3935,6 +4050,7 @@ void FrameEditorSession::apply_frames_to_animation() {
 
     std::vector<AnimationChildData> rebuilt_timelines;
     rebuilt_timelines.reserve(child_assets_.size());
+    ensure_child_mode_size();
     for (std::size_t child_idx = 0; child_idx < child_assets_.size(); ++child_idx) {
         AnimationChildData descriptor;
         descriptor.asset_name = child_assets_[child_idx];
@@ -3944,7 +4060,7 @@ void FrameEditorSession::apply_frames_to_animation() {
             previous = prev_it->second;
         }
         descriptor.animation_override = previous ? previous->animation_override : std::string{};
-        descriptor.mode = previous ? previous->mode : AnimationChildMode::Static;
+        descriptor.mode = child_mode(static_cast<int>(child_idx));
         if (descriptor.mode == AnimationChildMode::Static) {
             const std::size_t timeline_frame_count = frame_count == 0 ? 1 : frame_count;
             descriptor.frames.clear();
@@ -3960,8 +4076,10 @@ void FrameEditorSession::apply_frames_to_animation() {
                     descriptor.frames.push_back(build_child_frame_descriptor(movement_frame, child_idx));
                 }
             }
-        } else if (previous) {
-            descriptor.frames = previous->frames;
+        } else {
+            if (previous) {
+                descriptor.frames = previous->frames;
+            }
         }
         rebuilt_timelines.push_back(std::move(descriptor));
     }
@@ -4367,6 +4485,114 @@ void FrameEditorSession::ensure_selected_thumb_visible() {
     const int desired_scroll = left_edge + (thumb_w / 2) - (thumb_viewport_width_ / 2);
     scroll_offset_ = std::clamp(desired_scroll, 0, max_scroll_offset());
     clamp_scroll_offset();
+}
+
+std::vector<int> FrameEditorSession::build_child_index_remap(const std::vector<std::string>& previous,
+                                                             const std::vector<std::string>& next) const {
+    std::vector<int> remap(previous.size(), -1);
+    if (previous.empty() || next.empty()) {
+        return remap;
+    }
+    std::unordered_map<std::string, int> next_lookup;
+    next_lookup.reserve(next.size());
+    for (size_t i = 0; i < next.size(); ++i) {
+        next_lookup[next[i]] = static_cast<int>(i);
+    }
+    for (size_t i = 0; i < previous.size(); ++i) {
+        auto it = next_lookup.find(previous[i]);
+        if (it != next_lookup.end()) {
+            remap[i] = it->second;
+        }
+    }
+    return remap;
+}
+
+void FrameEditorSession::apply_child_list_change(const std::vector<std::string>& next_children) {
+    const std::vector<std::string> previous = child_assets_;
+    const std::vector<int> remap = build_child_index_remap(previous, next_children);
+    child_assets_ = next_children;
+    // Remap modes while preserving defaults for new entries
+    std::vector<AnimationChildMode> next_modes(child_assets_.size(), AnimationChildMode::Static);
+    for (std::size_t i = 0; i < remap.size(); ++i) {
+        const int to = remap[i];
+        if (to >= 0 && static_cast<std::size_t>(to) < next_modes.size()) {
+            if (i < child_modes_.size()) {
+                next_modes[static_cast<std::size_t>(to)] = child_modes_[i];
+            }
+        }
+    }
+    child_modes_ = std::move(next_modes);
+    remap_child_indices(remap);
+    ensure_child_frames_initialized();
+    sync_child_frames();
+    rebuild_child_preview_cache();
+    selected_child_index_ = std::clamp(selected_child_index_, 0, static_cast<int>(child_assets_.size()) - 1);
+    child_dropdown_options_cache_.clear();
+    persist_changes();
+}
+
+void FrameEditorSession::add_or_rename_child(const std::string& raw_name) {
+    auto trim = [](std::string s) {
+        auto not_space = [](unsigned char ch) { return !std::isspace(ch); };
+        s.erase(s.begin(), std::find_if(s.begin(), s.end(), not_space));
+        s.erase(std::find_if(s.rbegin(), s.rend(), not_space).base(), s.end());
+        return s;
+    };
+    std::string name = trim(raw_name);
+    if (name.empty()) {
+        return;
+    }
+    // Deduplicate
+    for (const auto& existing : child_assets_) {
+        if (existing == name) {
+            // If selecting an existing child, just switch selection
+            auto it = std::find(child_assets_.begin(), child_assets_.end(), name);
+            if (it != child_assets_.end()) {
+                select_child(static_cast<int>(std::distance(child_assets_.begin(), it)));
+            }
+            return;
+        }
+    }
+
+    if (selected_child_index_ >= 0 && selected_child_index_ < static_cast<int>(child_assets_.size())) {
+        std::vector<std::string> next = child_assets_;
+        next[static_cast<std::size_t>(selected_child_index_)] = name;
+        apply_child_list_change(next);
+    } else {
+        std::vector<std::string> next = child_assets_;
+        next.push_back(name);
+        apply_child_list_change(next);
+        select_child(static_cast<int>(next.size()) - 1);
+    }
+}
+
+void FrameEditorSession::remove_selected_child() {
+    if (child_assets_.empty()) {
+        return;
+    }
+    if (selected_child_index_ < 0 || selected_child_index_ >= static_cast<int>(child_assets_.size())) {
+        return;
+    }
+    std::vector<std::string> next;
+    next.reserve(child_assets_.size() - 1);
+    for (std::size_t i = 0; i < child_assets_.size(); ++i) {
+        if (static_cast<int>(i) == selected_child_index_) continue;
+        next.push_back(child_assets_[i]);
+    }
+    apply_child_list_change(next);
+    select_child(std::clamp(selected_child_index_ - 1, 0, static_cast<int>(next.size()) - 1));
+}
+
+void FrameEditorSession::set_child_mode(int child_index, AnimationChildMode mode) {
+    ensure_child_mode_size();
+    if (child_index < 0 || static_cast<std::size_t>(child_index) >= child_modes_.size()) {
+        return;
+    }
+    if (child_modes_[static_cast<std::size_t>(child_index)] == mode) {
+        return;
+    }
+    child_modes_[static_cast<std::size_t>(child_index)] = mode;
+    persist_changes();
 }
 
 void FrameEditorSession::render_attack_geometry(SDL_Renderer* renderer) const {

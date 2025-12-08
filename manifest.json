@@ -3359,12 +3359,26 @@
       "animation_children": [],
       "animations": {
         "default": {
+          "attack_geometry": [
+            {
+              "explosion": [],
+              "melee": [],
+              "projectile": []
+            }
+          ],
           "child_timelines": [],
           "crop_frames": true,
           "flipped_source": false,
           "frames": [
             {
               "needs_rebuild": false
+            }
+          ],
+          "hit_geometry": [
+            {
+              "explosion": null,
+              "melee": null,
+              "projectile": null
             }
           ],
           "inherit_source_movement": false,
@@ -3374,9 +3388,7 @@
             [
               0,
               0,
-              [],
-              [],
-              []
+              false
             ]
           ],
           "movement_total": {
@@ -6095,7 +6107,7 @@
           },
           {
             "brightness": 1.0,
-            "offset": 658.9600219726563,
+            "offset": 658.9600219726562,
             "opacity": 7.659999847412109,
             "scale": 6.590000152587891
           }

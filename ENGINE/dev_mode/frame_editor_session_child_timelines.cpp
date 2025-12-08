@@ -2,6 +2,8 @@
 
 #include <cctype>
 
+#include "asset/animation.hpp"
+
 #if defined(FRAME_EDITOR_TEST_PUBLIC_ACCESS)
 class DMButton {};
 class DMDropdown {};
@@ -214,6 +216,7 @@ void FrameEditorSession::apply_child_timelines_from_payload(const nlohmann::json
     if (timelines_it == payload.end() || !timelines_it->is_array()) {
         return;
     }
+    ensure_child_mode_size();
     std::unordered_map<std::string, int> index_by_name;
     index_by_name.reserve(child_assets_.size());
     for (std::size_t i = 0; i < child_assets_.size(); ++i) {
@@ -238,7 +241,9 @@ void FrameEditorSession::apply_child_timelines_from_payload(const nlohmann::json
         if (child_index < 0 || child_index >= static_cast<int>(child_assets_.size())) {
             continue;
         }
-        if (!timeline_entry_is_static(entry)) {
+        const bool is_static = timeline_entry_is_static(entry);
+        child_modes_[static_cast<std::size_t>(child_index)] = is_static ? AnimationChildMode::Static : AnimationChildMode::Async;
+        if (!is_static) {
             continue;
         }
         auto frames_it = entry.find("frames");
@@ -263,6 +268,7 @@ nlohmann::json FrameEditorSession::build_child_timelines_payload(const nlohmann:
     if (child_assets_.empty()) {
         return normalized;
     }
+    ensure_child_mode_size();
     std::unordered_map<std::string, nlohmann::json> by_asset;
     auto it = existing_payload.find("child_timelines");
     if (it != existing_payload.end() && it->is_array()) {
@@ -300,7 +306,7 @@ nlohmann::json FrameEditorSession::build_child_timelines_payload(const nlohmann:
         if (!entry.contains("animation") || !entry["animation"].is_string()) {
             entry["animation"] = std::string{};
         }
-        const bool is_static = timeline_entry_is_static(entry);
+        const bool is_static = child_mode(static_cast<int>(child_idx)) != AnimationChildMode::Async;
         entry["mode"] = is_static ? "static" : "async";
         if (is_static) {
             nlohmann::json frames = nlohmann::json::array();
@@ -327,4 +333,26 @@ nlohmann::json FrameEditorSession::build_child_timelines_payload(const nlohmann:
         normalized.push_back(std::move(entry));
     }
     return normalized;
+}
+
+void FrameEditorSession::ensure_child_mode_size() const {
+    const std::size_t desired = child_assets_.size();
+    if (child_modes_.size() == desired) return;
+    std::vector<AnimationChildMode> next(desired, AnimationChildMode::Static);
+    const std::size_t copy_count = std::min(desired, child_modes_.size());
+    for (std::size_t i = 0; i < copy_count; ++i) {
+        next[i] = child_modes_[i];
+    }
+    child_modes_ = std::move(next);
+}
+
+AnimationChildMode FrameEditorSession::child_mode(int child_index) const {
+    if (child_index < 0 || static_cast<std::size_t>(child_index) >= child_modes_.size()) {
+        return AnimationChildMode::Static;
+    }
+    return child_modes_[static_cast<std::size_t>(child_index)];
+}
+
+int FrameEditorSession::child_mode_index(AnimationChildMode mode) const {
+    return (mode == AnimationChildMode::Async) ? 1 : 0;
 }

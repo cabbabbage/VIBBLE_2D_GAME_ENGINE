@@ -30,6 +30,7 @@ struct SDL_Renderer;
 class DMButton;
 class DMDropdown;
 struct AnimationChildFrameData;
+enum class AnimationChildMode;
 
 namespace animation_editor {
 class AnimationDocument;
@@ -157,6 +158,10 @@ FRAME_EDITOR_ACCESS:
     mutable std::unique_ptr<class DMCheckbox> cb_show_anim_;
     mutable std::unique_ptr<class DMCheckbox> cb_show_child_;
     mutable std::unique_ptr<class DMDropdown> dd_child_select_;
+    mutable std::unique_ptr<class DMDropdown> dd_child_mode_;
+    mutable std::unique_ptr<class DMTextBox> tb_child_name_;
+    mutable std::unique_ptr<class DMButton> btn_child_add_;
+    mutable std::unique_ptr<class DMButton> btn_child_remove_;
     mutable std::unique_ptr<class DMTextBox> tb_child_dx_;
     mutable std::unique_ptr<class DMTextBox> tb_child_dy_;
     mutable std::unique_ptr<class DMTextBox> tb_child_deg_;
@@ -194,6 +199,8 @@ FRAME_EDITOR_ACCESS:
     mutable std::string last_child_dx_text_{};
     mutable std::string last_child_dy_text_{};
     mutable std::string last_child_deg_text_{};
+    mutable std::string last_child_name_text_{};
+    mutable int last_child_mode_index_ = 0;
     mutable bool last_child_visible_value_ = false;
     mutable bool last_child_front_value_ = true;
     mutable bool cb_show_anim_targets_parent_label_ = false;
@@ -241,6 +248,7 @@ FRAME_EDITOR_ACCESS:
     // Camera pan/zoom handler (wheel zoom enabled; panning is blocked by default)
     mutable class PanAndZoom pan_zoom_;
     std::vector<std::string> child_assets_;
+    mutable std::vector<AnimationChildMode> child_modes_;
     std::vector<ChildPreviewSlot> child_preview_slots_;
     std::string document_payload_cache_;
     std::string document_children_signature_;
@@ -331,6 +339,15 @@ FRAME_EDITOR_ACCESS:
     int max_scroll_offset() const;
     void clamp_scroll_offset() const;
     void ensure_selected_thumb_visible();
+        void ensure_child_mode_size() const;
+    std::vector<int> build_child_index_remap(const std::vector<std::string>& previous,
+                                             const std::vector<std::string>& next) const;
+    void apply_child_list_change(const std::vector<std::string>& next_children);
+    void add_or_rename_child(const std::string& name);
+    void remove_selected_child();
+    void set_child_mode(int child_index, AnimationChildMode mode);
+    AnimationChildMode child_mode(int child_index) const;
+    int child_mode_index(AnimationChildMode mode) const;
     void render_hit_geometry(SDL_Renderer* renderer) const;
     bool begin_hitbox_drag(SDL_Point mouse);
     void update_hitbox_drag(SDL_Point mouse);
@@ -364,11 +381,16 @@ FRAME_EDITOR_ACCESS:
         int drag_handle_height = 0;
         // Dropdown row
         int dropdown_row_height = 0;
+        int mode_row_height = 0;
         // Movement controls row (Smooth/Curve + Totals) shared with Movement mode
         int movement_row_height = 0;
+        int mode_dropdown_width = 0;
         int toggle_row_height = 0;
         int form_row_height = 0;
         int textbox_width = 0;
+        int name_row_height = 0;
+        int name_textbox_width = 0;
+        int child_action_button_width = 0;
         int child_dx_height = 0;
         int child_dy_height = 0;
         int child_rotation_height = 0;
