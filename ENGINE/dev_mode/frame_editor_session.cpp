@@ -2499,8 +2499,8 @@ FrameEditorSession::ChildrenToolboxMetrics FrameEditorSession::build_children_to
     metrics.child_render_checkbox_width = cb_child_render_front_
                                               ? std::max(kChildVisibilityCheckboxMinWidth, cb_child_render_front_->preferred_width())
                                               : 0;
-    metrics.mode_dropdown_width = dd_child_mode_ ? std::max(kChildDropdownMinWidth, dd_child_mode_->rect().w) : 0;
-    metrics.mode_row_height = dd_child_mode_ ? dd_child_mode_->preferred_height(metrics.mode_dropdown_width) : 0;
+    metrics.mode_dropdown_width = dd_child_mode_ ? kChildDropdownMinWidth : 0;
+    metrics.mode_row_height = dd_child_mode_ ? dd_child_mode_->preferred_height(kChildDropdownMinWidth) : 0;
     metrics.name_textbox_width = tb_child_name_ ? std::max(kChildDropdownMinWidth, kChildrenFieldWidth) : 0;
     metrics.name_row_height = tb_child_name_ ? tb_child_name_->height_for_width(metrics.name_textbox_width) : 0;
     metrics.child_action_button_width = std::max({ btn_child_add_ ? btn_child_add_->preferred_width() : 0,
@@ -2521,9 +2521,7 @@ FrameEditorSession::ChildrenToolboxMetrics FrameEditorSession::build_children_to
     }
     metrics.form_row_height = form_content_height > 0 ? form_content_height : checkbox_height;
 
-    int dropdown_row_width = dd_child_select_
-        ? std::max(kChildDropdownMinWidth, dd_child_select_->rect().w)
-        : 0;
+    int dropdown_row_width = dd_child_select_ ? kChildDropdownMinWidth : 0;
 
     int toggle_row_width = 0;
     auto append_toggle = [&](int w) {

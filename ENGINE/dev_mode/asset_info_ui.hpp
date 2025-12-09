@@ -15,6 +15,12 @@
 
 class AssetInfo;
 class DockableCollapsible;
+class DMCheckbox;
+class DMDropdown;
+class DMButton;
+class DropdownWidget;
+class CheckboxWidget;
+class ButtonWidget;
 class Input;
 class Area;
 class Assets;
@@ -24,6 +30,8 @@ class Section_Shading;
 class Section_SpawnGroups;
 namespace animation_editor {
 class AnimationEditorWindow;
+class AnimationChildrenPanel;
+class AnimationDocument;
 }
 
 namespace devmode::core {
@@ -107,6 +115,12 @@ class AssetInfoUI {
     void destroy_mask_preview_texture();
     bool load_mask_preview_texture(const std::filesystem::path& png_path);
     std::filesystem::path resolve_mask_preview_frame_path() const;
+    void on_animation_children_changed(const std::vector<std::string>& names);
+    void rebuild_child_timeline_rows();
+    void refresh_child_timeline_state_from_dropdowns();
+    void refresh_child_timeline_controls();
+    void apply_child_timeline_changes();
+    std::shared_ptr<animation_editor::AnimationDocument> animation_document() const;
 
   private:
     bool visible_ = false;
@@ -135,11 +149,24 @@ class AssetInfoUI {
     bool prev_camera_parallax_enabled_ = false;
     std::unique_ptr<SearchAssets> asset_selector_;
     std::unique_ptr<animation_editor::AnimationEditorWindow> animation_editor_window_;
+    animation_editor::AnimationChildrenPanel* animation_children_panel_ = nullptr;
     bool pending_animation_editor_open_ = false;
     bool map_light_panel_auto_opened_ = false;
     bool forcing_high_quality_rendering_ = false;
     devmode::core::ManifestStore* manifest_store_ = nullptr;
     Section_SpawnGroups* spawn_groups_section_ = nullptr;
+    DockableCollapsible* child_timeline_section_ = nullptr;
+
+    std::unique_ptr<DMDropdown> child_timeline_animation_dropdown_;
+    std::unique_ptr<DropdownWidget> child_timeline_animation_widget_;
+    std::unique_ptr<DMDropdown> child_timeline_mode_dropdown_;
+    std::unique_ptr<DropdownWidget> child_timeline_mode_widget_;
+    std::unique_ptr<DMCheckbox> child_timeline_autostart_checkbox_;
+    std::unique_ptr<CheckboxWidget> child_timeline_autostart_widget_;
+    std::unique_ptr<DMButton> child_timeline_apply_button_;
+    std::unique_ptr<ButtonWidget> child_timeline_apply_widget_;
+    std::string child_timeline_selected_animation_;
+    std::string child_timeline_selected_child_;
 
     // Additional controls under Configure Animations
     std::unique_ptr<class DMButton> duplicate_btn_;

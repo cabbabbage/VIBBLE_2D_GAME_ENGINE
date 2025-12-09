@@ -122,6 +122,31 @@ void FrameEditor::update() {
         tools_panel_->set_totals(totals.first, totals.second, true /*avoid overwrite if editing*/);
         tools_panel_->set_show_animation(movement_editor_->show_animation());
     }
+    if (tools_panel_) {
+        // Keep the panel clamped inside the editor bounds so controls remain findable
+        SDL_Rect panel_rect = tools_panel_->rect();
+        SDL_Rect work = bounds_;
+        const int min_w = 200;
+        const int min_h = 160;
+        if (panel_rect.w <= 0 || panel_rect.h <= 0) {
+            // Recover from an invalid rect by snapping to the reserved panel area
+            if (tools_panel_rect_.w > 0 && tools_panel_rect_.h > 0) {
+                panel_rect = tools_panel_rect_;
+            } else {
+                panel_rect = SDL_Rect{work.x + DMSpacing::panel_padding(), work.y + DMSpacing::panel_padding(),
+                                      std::max(min_w, work.w / 3), std::max(min_h, work.h / 2)};
+            }
+            tools_panel_->set_rect(panel_rect);
+        } else {
+            // Clamp to the work area with a small margin
+            const int margin = DMSpacing::panel_padding();
+            int max_x = work.x + work.w - panel_rect.w - margin;
+            int max_y = work.y + work.h - panel_rect.h - margin;
+            panel_rect.x = std::clamp(panel_rect.x, work.x + margin, std::max(work.x + margin, max_x));
+            panel_rect.y = std::clamp(panel_rect.y, work.y + margin, std::max(work.y + margin, max_y));
+            tools_panel_->set_rect(panel_rect);
+        }
+    }
     update_navigation_styles();
 }
 
@@ -481,18 +506,42 @@ void FrameEditor::update_layout() {
     int display_x = prev_x + nav_width + nav_gap;
     int next_x = display_x + display_width + nav_gap;
 
-    // Position tools panel on the right side
-    if (tools_panel_width > 0) {
-        int tools_x = bounds_.x + padding + remaining_width;
-        int tools_height = display_height + gap_display_list + frame_list_height;
-        tools_panel_rect_ = SDL_Rect{tools_x, center_top, tools_panel_width, tools_height};
+    // Position tools panel
+    if (active_mode_ == Mode::Children) {
+        // Dock the tools panel into the mode controls area so children controls are always visible
+        tools_panel_rect_ = mode_controls_rect_;
+        tools_panel_follow_layout_ = true;
     } else {
-        tools_panel_rect_ = SDL_Rect{0, 0, 0, 0};
+        // Position on the right; if space is tight, keep a floating fallback rect
+        if (tools_panel_width > 0) {
+            int tools_x = bounds_.x + padding + remaining_width;
+            int tools_height = display_height + gap_display_list + frame_list_height;
+            tools_panel_rect_ = SDL_Rect{tools_x, center_top, tools_panel_width, tools_height};
+        } else {
+            // Preserve an existing rect if it is valid; otherwise, fall back to a clamped floating rect
+            SDL_Rect existing = tools_panel_ ? tools_panel_->rect() : SDL_Rect{0, 0, 0, 0};
+            if (existing.w > 0 && existing.h > 0) {
+                tools_panel_rect_ = existing;
+            } else {
+                int fallback_w = kToolsPanelWidth;
+                int fallback_h = display_height + gap_display_list + frame_list_height;
+                int fallback_x = bounds_.x + std::max(0, bounds_.w - fallback_w - padding);
+                int fallback_y = bounds_.y + padding;
+                tools_panel_rect_ = SDL_Rect{fallback_x, fallback_y, fallback_w, fallback_h};
+                tools_panel_follow_layout_ = true;
+            }
+        }
     }
 
     if (tools_panel_) {
         tools_panel_->set_work_area_bounds(bounds_);
         if (tools_panel_follow_layout_ && tools_panel_rect_.w > 0 && tools_panel_rect_.h > 0) {
+            tools_panel_->set_rect(tools_panel_rect_);
+        } else if (tools_panel_rect_.w > 0 && tools_panel_rect_.h > 0 && tools_panel_->rect().w <= 0) {
+            tools_panel_->set_rect(tools_panel_rect_);
+        }
+        // Keep docked when children mode so it doesn't float away
+        if (active_mode_ == Mode::Children && tools_panel_rect_.w > 0 && tools_panel_rect_.h > 0) {
             tools_panel_->set_rect(tools_panel_rect_);
         }
     }

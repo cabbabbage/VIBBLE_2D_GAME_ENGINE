@@ -7,6 +7,9 @@
 #include <vector>
 
 #include <SDL.h>
+#include <nlohmann/json.hpp>
+
+#include "../../../../../asset/animation_child_data.hpp"
 
 namespace animation_editor {
 
@@ -56,8 +59,23 @@ class FrameChildrenEditor {
     void select_child(int index);
     void apply_current_to_next();
     void set_child_visible(bool visible);
+    void set_child_mode(AnimationChildMode mode);
+    void add_or_rename_child(const std::string& raw_name);
+    void remove_selected_child();
     void persist_changes();
     void invalidate_child_caches();
+    void ensure_child_mode_size();
+    AnimationChildMode child_mode(int child_index) const;
+    int child_mode_index(AnimationChildMode mode) const;
+    std::vector<int> build_child_index_remap(const std::vector<std::string>& previous,
+                         const std::vector<std::string>& next) const;
+    void remap_child_indices(const std::vector<int>& remap);
+    void apply_child_list_change(const std::vector<std::string>& next_children);
+    bool timeline_entry_is_static(const nlohmann::json& entry) const;
+    ChildFrame child_frame_from_sample(const nlohmann::json& sample, int child_index) const;
+    nlohmann::json child_frame_to_json(const ChildFrame& frame) const;
+    void apply_child_timelines_from_payload(const nlohmann::json& payload);
+    nlohmann::json build_child_timelines_payload(const nlohmann::json& existing_payload);
     MovementFrame* current_frame();
     const MovementFrame* current_frame() const;
     ChildFrame* current_child();
@@ -92,6 +110,7 @@ class FrameChildrenEditor {
     MovementCanvas* canvas_ = nullptr;
     std::string animation_id_;
     std::vector<std::string> child_ids_;
+    std::vector<AnimationChildMode> child_modes_;
     std::vector<MovementFrame> frames_;
     int selected_frame_index_ = 0;
     int selected_child_index_ = 0;

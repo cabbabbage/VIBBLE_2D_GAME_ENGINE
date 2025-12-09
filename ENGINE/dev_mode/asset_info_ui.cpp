@@ -46,11 +46,13 @@
 #include "utils/map_grid_settings.hpp"
 #include "dev_mode/core/manifest_store.hpp"
 #include "asset_sections/animation_editor_window/AnimationEditorWindow.hpp"
+#include "asset_sections/animation_editor_window/AnimationDocument.hpp"
 #include "core/AssetsManager.hpp"
 #include "asset/Asset.hpp"
 #include "render/warped_screen_grid.hpp"
 #include "render/render.hpp"
 #include "search_assets.hpp"
+#include "dev_mode/widgets/AnimationChildrenPanel.hpp"
 #include "draw_utils.hpp"
 #include <SDL_ttf.h>
 #include "dev_mode/manifest_spawn_group_utils.hpp"
@@ -430,6 +432,23 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
                 }
             });
             animation_editor_window_->set_info(info_);
+            if (animation_children_panel_) {
+                animation_children_panel_->set_document(animation_document());
+                animation_children_panel_->set_status_callback([](const std::string& msg, int) {
+                    if (!msg.empty()) {
+                        SDL_Log("[AssetInfoUI] %s", msg.c_str());
+                    }
+                });
+                animation_children_panel_->set_on_children_changed([this](const std::vector<std::string>& names) {
+                    this->on_animation_children_changed(names);
+                });
+                animation_children_panel_->set_on_selection_changed([this](std::optional<std::string> name) {
+                    this->child_timeline_selected_child_ = name.value_or(std::string{});
+                    this->refresh_child_timeline_controls();
+                });
+                animation_children_panel_->refresh();
+            }
+            refresh_child_timeline_controls();
         } catch (const std::exception& ex) {
             SDL_Log("AssetInfoUI: failed to configure animation editor for %s: %s", info_ ? info_->name.c_str() : "<null>", ex.what());
             animation_editor_window_->clear_info();
@@ -502,6 +521,13 @@ void AssetInfoUI::clear_info() {
             SDL_Log("AssetInfoUI: failed to reset animation editor due to unknown error.");
         }
     }
+    if (animation_children_panel_) {
+        animation_children_panel_->set_document(nullptr);
+        animation_children_panel_->refresh();
+    }
+    child_timeline_selected_child_.clear();
+    child_timeline_selected_animation_.clear();
+    refresh_child_timeline_controls();
     for (auto& s : sections_) {
         try {
             s->set_info(nullptr);
@@ -989,6 +1015,8 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
     }
 
     container_.update(input, screen_w, screen_h);
+
+    refresh_child_timeline_state_from_dropdowns();
 
     layout_widgets(screen_w, screen_h);
 
@@ -2153,6 +2181,150 @@ void AssetInfoUI::save_now() const {
     }
     if (info_) (void)info_->commit_manifest();
 }
+
+std::shared_ptr<animation_editor::AnimationDocument> AssetInfoUI::animation_document() const {
+    if (animation_editor_window_) {
+        return animation_editor_window_->document();
+    }
+    return nullptr;
+}
+
+void AssetInfoUI::on_animation_children_changed(const std::vector<std::string>& names) {
+    if (info_) {
+        info_->animation_children = names;
+        sync_animation_children();
+    }
+    if (auto doc = animation_document()) {
+        try {
+            doc->save_to_file();
+        } catch (...) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Failed to save animation document after child change.");
+        }
+    }
+    refresh_child_timeline_controls();
+}
+
+void AssetInfoUI::refresh_child_timeline_state_from_dropdowns() {
+    auto doc = animation_document();
+    if (!child_timeline_animation_dropdown_ || !doc) {
+        return;
+    }
+    const auto animations = doc->animation_ids();
+    if (animations.empty()) {
+        if (!child_timeline_selected_animation_.empty()) {
+            child_timeline_selected_animation_.clear();
+            refresh_child_timeline_controls();
+        }
+        return;
+    }
+    int idx = child_timeline_animation_dropdown_->selected();
+    idx = std::clamp(idx, 0, static_cast<int>(animations.size()) - 1);
+    const std::string& chosen = animations[static_cast<std::size_t>(idx)];
+    if (child_timeline_selected_animation_ != chosen) {
+        child_timeline_selected_animation_ = chosen;
+        refresh_child_timeline_controls();
+    }
+}
+
+void AssetInfoUI::refresh_child_timeline_controls() {
+    if (!child_timeline_section_) {
+        return;
+    }
+    auto doc = animation_document();
+    std::vector<std::string> animations = doc ? doc->animation_ids() : std::vector<std::string>{};
+
+    if (animations.empty()) {
+        child_timeline_selected_animation_.clear();
+    } else if (child_timeline_selected_animation_.empty() ||
+               std::find(animations.begin(), animations.end(), child_timeline_selected_animation_) == animations.end()) {
+        child_timeline_selected_animation_ = animations.front();
+    }
+
+    const bool has_animation = !child_timeline_selected_animation_.empty();
+    const bool has_child = !child_timeline_selected_child_.empty();
+    const bool enable_apply = doc && has_animation && has_child;
+
+    const int animation_index = [&]() {
+        if (!has_animation || animations.empty()) return 0;
+        auto it = std::find(animations.begin(), animations.end(), child_timeline_selected_animation_);
+        if (it == animations.end()) return 0;
+        return static_cast<int>(std::distance(animations.begin(), it));
+    }();
+
+    const std::vector<std::string> animation_options = animations.empty()
+        ? std::vector<std::string>{"(no animations)"}
+        : animations;
+
+    child_timeline_animation_dropdown_ = std::make_unique<DMDropdown>("Animation", animation_options, animation_index);
+    child_timeline_animation_widget_ = std::make_unique<DropdownWidget>(child_timeline_animation_dropdown_.get());
+
+    animation_editor::AnimationDocument::ChildTimelineSettings settings;
+    if (doc && has_animation && has_child) {
+        settings = doc->child_timeline_settings(child_timeline_selected_animation_, child_timeline_selected_child_);
+    }
+
+    const int mode_index = settings.mode == AnimationChildMode::Async ? 1 : 0;
+    child_timeline_mode_dropdown_ = std::make_unique<DMDropdown>("Mode", std::vector<std::string>{"Static", "Async"}, mode_index);
+    child_timeline_mode_widget_ = std::make_unique<DropdownWidget>(child_timeline_mode_dropdown_.get());
+
+    child_timeline_autostart_checkbox_ = std::make_unique<DMCheckbox>("Auto start", settings.auto_start);
+    child_timeline_autostart_widget_ = std::make_unique<CheckboxWidget>(child_timeline_autostart_checkbox_.get());
+
+    if (!child_timeline_apply_button_) {
+        child_timeline_apply_button_ = std::make_unique<DMButton>("Apply", &DMStyles::CreateButton(), 120, DMButton::height());
+    }
+    child_timeline_apply_button_->set_style(enable_apply ? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
+    child_timeline_apply_widget_ = std::make_unique<ButtonWidget>(child_timeline_apply_button_.get(), [this]() { this->apply_child_timeline_changes(); });
+
+    rebuild_child_timeline_rows();
+    container_.request_layout();
+}
+
+void AssetInfoUI::rebuild_child_timeline_rows() {
+    if (!child_timeline_section_) {
+        return;
+    }
+    DockableCollapsible::Rows rows;
+    if (child_timeline_animation_widget_) {
+        rows.push_back({child_timeline_animation_widget_.get()});
+    }
+    DockableCollapsible::Row mode_row;
+    if (child_timeline_mode_widget_) mode_row.push_back(child_timeline_mode_widget_.get());
+    if (child_timeline_autostart_widget_) mode_row.push_back(child_timeline_autostart_widget_.get());
+    if (!mode_row.empty()) {
+        rows.push_back(std::move(mode_row));
+    }
+    if (child_timeline_apply_widget_) {
+        rows.push_back({child_timeline_apply_widget_.get()});
+    }
+    child_timeline_section_->set_rows(rows);
+    child_timeline_section_->set_expanded(true);
+}
+
+void AssetInfoUI::apply_child_timeline_changes() {
+    auto doc = animation_document();
+    if (!doc || child_timeline_selected_child_.empty() || child_timeline_selected_animation_.empty()) {
+        return;
+    }
+
+    const int mode_idx = child_timeline_mode_dropdown_ ? child_timeline_mode_dropdown_->selected() : 0;
+    const AnimationChildMode mode = (mode_idx == 1) ? AnimationChildMode::Async : AnimationChildMode::Static;
+    const bool auto_start = child_timeline_autostart_checkbox_ ? child_timeline_autostart_checkbox_->value() : false;
+
+    const bool changed = doc->set_child_timeline_settings(child_timeline_selected_animation_,
+                                                          child_timeline_selected_child_,
+                                                          mode,
+                                                          auto_start,
+                                                          std::string{});
+    if (changed) {
+        try {
+            doc->save_to_file();
+        } catch (...) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Failed to save animation document after timeline change.");
+        }
+        refresh_child_timeline_controls();
+    }
+}
 void AssetInfoUI::rebuild_default_sections() {
     sections_.clear();
     section_bounds_.clear();
@@ -2161,6 +2333,18 @@ void AssetInfoUI::rebuild_default_sections() {
     shading_section_ = nullptr;
     spawn_groups_section_ = nullptr;
     focused_section_ = nullptr;
+    animation_children_panel_ = nullptr;
+    child_timeline_section_ = nullptr;
+    child_timeline_animation_dropdown_.reset();
+    child_timeline_animation_widget_.reset();
+    child_timeline_mode_dropdown_.reset();
+    child_timeline_mode_widget_.reset();
+    child_timeline_autostart_checkbox_.reset();
+    child_timeline_autostart_widget_.reset();
+    child_timeline_apply_button_.reset();
+    child_timeline_apply_widget_.reset();
+    child_timeline_selected_animation_.clear();
+    child_timeline_selected_child_.clear();
 
     auto adopt_section = [](auto* section) {
         configure_panel_for_container(section);
@@ -2194,6 +2378,19 @@ void AssetInfoUI::rebuild_default_sections() {
     adopt_section(tags.get());
     finalize_section(tags.get());
     sections_.push_back(std::move(tags));
+
+    auto anim_children = std::make_unique<animation_editor::AnimationChildrenPanel>();
+    animation_children_panel_ = anim_children.get();
+    adopt_section(animation_children_panel_);
+    finalize_section(animation_children_panel_);
+    sections_.push_back(std::move(anim_children));
+
+    auto child_timelines = std::make_unique<DockableCollapsible>("Child Timelines", true, DockableCollapsible::kDefaultFloatingContentWidth, DockableCollapsible::kDefaultFloatingContentWidth);
+    child_timeline_section_ = child_timelines.get();
+    adopt_section(child_timeline_section_);
+    finalize_section(child_timeline_section_);
+    sections_.push_back(std::move(child_timelines));
+    rebuild_child_timeline_rows();
 
     auto lighting = std::make_unique<Section_Lighting>();
     lighting->set_ui(this);
@@ -2347,6 +2544,7 @@ void AssetInfoUI::on_animation_document_saved() {
 
     info_->loadAnimations(renderer);
     refresh_loaded_asset_instances();
+    refresh_child_timeline_controls();
 }
 
 bool AssetInfoUI::duplicate_current_asset(const std::string& raw_name) {

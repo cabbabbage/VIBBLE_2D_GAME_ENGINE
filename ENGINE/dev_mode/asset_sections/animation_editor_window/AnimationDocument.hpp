@@ -10,11 +10,20 @@
 
 #include <nlohmann/json.hpp>
 
+#include "asset/animation_child_data.hpp"
+
 namespace animation_editor {
 
 class AnimationDocument {
   public:
     AnimationDocument();
+
+    struct ChildTimelineSettings {
+        AnimationChildMode mode = AnimationChildMode::Static;
+        bool auto_start = false;
+        std::string animation_override;
+        bool found = false;
+    };
 
     void load_from_file(const std::filesystem::path& info_path);
     void load_from_manifest(const nlohmann::json& asset_json, const std::filesystem::path& asset_root, std::function<void(const nlohmann::json&)> persist_callback);
@@ -35,6 +44,12 @@ class AnimationDocument {
     std::vector<std::string> animation_children() const;
     void replace_animation_children(const std::vector<std::string>& children);
     std::string animation_children_signature() const;
+    ChildTimelineSettings child_timeline_settings(const std::string& animation_id, const std::string& child_name) const;
+    bool set_child_timeline_settings(const std::string& animation_id,
+                     const std::string& child_name,
+                     AnimationChildMode mode,
+                     bool auto_start,
+                     const std::string& animation_override);
 
     const std::filesystem::path& info_path() const { return info_path_; }
     const std::filesystem::path& asset_root() const { return asset_root_; }

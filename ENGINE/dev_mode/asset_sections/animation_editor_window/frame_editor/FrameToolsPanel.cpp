@@ -26,10 +26,26 @@ FrameToolsPanel::FrameToolsPanel()
 
     child_dropdown_ = std::make_unique<DMDropdown>("Child", std::vector<std::string>{}, 0);
     child_dropdown_widget_ = std::make_unique<DropdownWidget>(child_dropdown_.get());
+    child_mode_dropdown_ = std::make_unique<DMDropdown>("Mode", std::vector<std::string>{"Static", "Async"}, 0);
+    child_mode_widget_ = std::make_unique<DropdownWidget>(child_mode_dropdown_.get());
     child_apply_button_ = std::make_unique<DMButton>("Apply current frame settings to next", &DMStyles::AccentButton(), 240, DMButton::height());
     child_apply_widget_ = std::make_unique<ButtonWidget>(child_apply_button_.get(), [this]() {
-        if (children_controls_enabled_ && on_child_apply_to_next_) {
+        if (children_controls_enabled_ && has_child_options_ && on_child_apply_to_next_) {
             on_child_apply_to_next_();
+        }
+    });
+    child_name_box_ = std::make_unique<DMTextBox>("Child Asset", "");
+    child_name_widget_ = std::make_unique<TextBoxWidget>(child_name_box_.get(), false);
+    child_add_button_ = std::make_unique<DMButton>("Add / Rename", &DMStyles::AccentButton(), 160, DMButton::height());
+    child_add_widget_ = std::make_unique<ButtonWidget>(child_add_button_.get(), [this]() {
+        if (on_child_add_or_rename_) {
+            on_child_add_or_rename_(child_name_box_ ? child_name_box_->value() : std::string{});
+        }
+    });
+    child_remove_button_ = std::make_unique<DMButton>("Remove", &DMStyles::DeleteButton(), 120, DMButton::height());
+    child_remove_widget_ = std::make_unique<ButtonWidget>(child_remove_button_.get(), [this]() {
+        if (on_child_remove_) {
+            on_child_remove_();
         }
     });
     child_visible_checkbox_ = std::make_unique<DMCheckbox>("Visible", true);
@@ -39,6 +55,8 @@ FrameToolsPanel::FrameToolsPanel()
     last_dy_text_ = dy_box_->value();
     last_checkbox_value_ = show_anim_checkbox_->value();
     last_curve_value_ = curve_checkbox_->value();
+    child_mode_last_index_ = child_mode_dropdown_->selected();
+    last_child_name_text_ = child_name_box_->value();
 
     rebuild_rows();
 }
@@ -61,10 +79,16 @@ void FrameToolsPanel::set_callbacks(std::function<void(bool)> on_toggle_smooth,
 
 void FrameToolsPanel::set_children_callbacks(std::function<void(int)> on_child_selected,
                                              std::function<void()> on_apply_to_next,
-                                             std::function<void(bool)> on_visible_changed) {
+                                             std::function<void(bool)> on_visible_changed,
+                                             std::function<void(int)> on_mode_changed,
+                                             std::function<void(const std::string&)> on_add_or_rename,
+                                             std::function<void()> on_remove_child) {
     on_child_selected_ = std::move(on_child_selected);
     on_child_apply_to_next_ = std::move(on_apply_to_next);
     on_child_visible_ = std::move(on_visible_changed);
+    on_child_mode_changed_ = std::move(on_mode_changed);
+    on_child_add_or_rename_ = std::move(on_add_or_rename);
+    on_child_remove_ = std::move(on_remove_child);
 }
 
 void FrameToolsPanel::set_totals(int dx, int dy, bool avoid_overwrite_if_editing) {
@@ -91,31 +115,53 @@ void FrameToolsPanel::set_show_animation(bool show) {
 void FrameToolsPanel::set_children_state(const std::vector<std::string>& options,
                                          int selected_index,
                                          bool visible,
-                                         bool enabled) {
+                                         bool enabled,
+                                         int mode_index,
+                                         const std::string& current_name) {
     child_options_ = options;
-    const bool has_children = !child_options_.empty();
-    children_controls_enabled_ = enabled && has_children;
-    std::vector<std::string> dropdown_options = has_children ? child_options_
+    has_child_options_ = !child_options_.empty();
+    children_controls_enabled_ = enabled;
+    std::vector<std::string> dropdown_options = has_child_options_ ? child_options_
                                                              : std::vector<std::string>{"(no children configured)"};
     int clamped_index = 0;
-    if (has_children) {
+    if (has_child_options_) {
         clamped_index = std::clamp(selected_index, 0, static_cast<int>(child_options_.size()) - 1);
     }
-    child_selected_index_ = children_controls_enabled_ ? clamped_index : -1;
-    child_dropdown_last_index_ = children_controls_enabled_ ? child_selected_index_ : -1;
-    child_visible_state_ = children_controls_enabled_ ? visible : false;
+    child_selected_index_ = (children_controls_enabled_ && has_child_options_) ? clamped_index : -1;
+    child_dropdown_last_index_ = child_selected_index_;
+    child_visible_state_ = (children_controls_enabled_ && has_child_options_) ? visible : false;
+    child_mode_last_index_ = std::clamp(mode_index, 0, 1);
 
     child_dropdown_ = std::make_unique<DMDropdown>("Child", dropdown_options, clamped_index);
     child_dropdown_widget_ = std::make_unique<DropdownWidget>(child_dropdown_.get());
+    child_mode_dropdown_ = std::make_unique<DMDropdown>("Mode", std::vector<std::string>{"Static", "Async"}, child_mode_last_index_);
+    child_mode_widget_ = std::make_unique<DropdownWidget>(child_mode_dropdown_.get());
     if (child_visible_checkbox_) {
         child_visible_checkbox_->set_value(child_visible_state_);
     }
     if (child_apply_button_) {
-        const DMButtonStyle* style = children_controls_enabled_ ? &DMStyles::AccentButton() : &DMStyles::HeaderButton();
+        const DMButtonStyle* style = (children_controls_enabled_ && has_child_options_) ? &DMStyles::AccentButton() : &DMStyles::HeaderButton();
         child_apply_button_->set_style(style);
     }
     if (mode_ == Mode::Children) {
         rebuild_rows();
+    }
+
+    if (child_name_box_ && !child_name_box_->is_editing()) {
+        const bool should_override = !current_name.empty() || child_name_box_->value().empty();
+        if (should_override) {
+            child_name_box_->set_value(current_name);
+            last_child_name_text_ = child_name_box_->value();
+        }
+    }
+    const bool has_name = child_name_box_ && !child_name_box_->value().empty();
+    const DMButtonStyle* add_style = has_name ? &DMStyles::AccentButton() : &DMStyles::HeaderButton();
+    if (child_add_button_) {
+        child_add_button_->set_style(add_style);
+    }
+    const bool can_remove = has_child_options_;
+    if (child_remove_button_) {
+        child_remove_button_->set_style(can_remove ? &DMStyles::DeleteButton() : &DMStyles::HeaderButton());
     }
 }
 
@@ -186,7 +232,18 @@ bool FrameToolsPanel::handle_event(const SDL_Event& e) {
             }
         }
     } else if (mode_ == Mode::Children) {
-        if (children_controls_enabled_ && child_dropdown_) {
+        if (child_name_box_) {
+            const std::string now = child_name_box_->value();
+            if (now != last_child_name_text_) {
+                last_child_name_text_ = now;
+                const bool has_name = !now.empty();
+                if (child_add_button_) {
+                    child_add_button_->set_style(has_name ? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
+                }
+                consumed = true;
+            }
+        }
+        if (children_controls_enabled_ && has_child_options_ && child_dropdown_) {
             int current = child_dropdown_->selected();
             if (current != child_dropdown_last_index_) {
                 child_dropdown_last_index_ = current;
@@ -196,7 +253,17 @@ bool FrameToolsPanel::handle_event(const SDL_Event& e) {
                 consumed = true;
             }
         }
-        if (children_controls_enabled_ && child_visible_checkbox_) {
+        if (children_controls_enabled_ && has_child_options_ && child_mode_dropdown_) {
+            int current = child_mode_dropdown_->selected();
+            if (current != child_mode_last_index_) {
+                child_mode_last_index_ = current;
+                if (on_child_mode_changed_) {
+                    on_child_mode_changed_(current);
+                }
+                consumed = true;
+            }
+        }
+        if (children_controls_enabled_ && has_child_options_ && child_visible_checkbox_) {
             bool current = child_visible_checkbox_->value();
             if (current != child_visible_state_) {
                 child_visible_state_ = current;
@@ -207,6 +274,13 @@ bool FrameToolsPanel::handle_event(const SDL_Event& e) {
             }
         } else if (!children_controls_enabled_ && child_visible_checkbox_) {
             child_visible_checkbox_->set_value(child_visible_state_);
+        }
+
+        if (child_add_widget_ && child_add_widget_->handle_event(e)) {
+            consumed = true;
+        }
+        if (child_remove_widget_ && child_remove_widget_->handle_event(e)) {
+            consumed = true;
         }
     }
 
@@ -227,8 +301,10 @@ void FrameToolsPanel::rebuild_rows() {
         }
         case Mode::Children: {
             rows.push_back({ child_dropdown_widget_.get() });
+            rows.push_back({ child_mode_widget_.get(), child_visible_widget_.get() });
             rows.push_back({ child_apply_widget_.get() });
-            rows.push_back({ child_visible_widget_.get() });
+            rows.push_back({ child_name_widget_.get() });
+            rows.push_back({ child_add_widget_.get(), child_remove_widget_.get() });
             break;
         }
         case Mode::AttackGeometry:

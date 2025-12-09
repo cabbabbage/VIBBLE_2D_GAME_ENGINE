@@ -1362,6 +1362,117 @@ std::string AnimationDocument::animation_children_signature() const {
     return arr.dump();
 }
 
+namespace {
+const char* mode_to_string(AnimationChildMode mode) {
+    return mode == AnimationChildMode::Async ? "async" : "static";
+}
+}
+
+AnimationDocument::ChildTimelineSettings AnimationDocument::child_timeline_settings(const std::string& animation_id,
+                                                                                    const std::string& child_name) const {
+    ChildTimelineSettings out;
+    auto children = animation_children();
+    auto child_it = std::find(children.begin(), children.end(), child_name);
+    if (child_it == children.end()) {
+        return out;
+    }
+    auto payload_dump = animation_payload(animation_id);
+    if (!payload_dump) {
+        return out;
+    }
+    nlohmann::json payload = parse_payload(*payload_dump, animation_id);
+    const int frame_count = std::max<int>(1, payload.value("number_of_frames", 1));
+    nlohmann::json timelines = payload.contains("child_timelines") ? payload["child_timelines"] : nlohmann::json::array();
+    timelines = normalize_child_timelines(timelines, children, static_cast<std::size_t>(frame_count));
+
+    const int child_index = static_cast<int>(std::distance(children.begin(), child_it));
+    for (const auto& entry : timelines) {
+        if (!entry.is_object()) continue;
+        const std::string asset = entry.value("asset", std::string{});
+        const int idx = entry.value("child", entry.value("child_index", -1));
+        if (!(asset == child_name || idx == child_index)) {
+            continue;
+        }
+        std::string mode_str;
+        if (entry.contains("mode") && entry["mode"].is_string()) {
+            mode_str = entry["mode"].get<std::string>();
+        }
+        std::transform(mode_str.begin(), mode_str.end(), mode_str.begin(), [](unsigned char ch) {
+            return static_cast<char>(std::tolower(ch));
+        });
+        out.mode = (mode_str == "async") ? AnimationChildMode::Async : AnimationChildMode::Static;
+        out.auto_start = entry.value("auto_start", entry.value("autostart", false));
+        out.animation_override = entry.value("animation", std::string{});
+        out.found = true;
+        return out;
+    }
+    return out;
+}
+
+bool AnimationDocument::set_child_timeline_settings(const std::string& animation_id,
+                                                    const std::string& child_name,
+                                                    AnimationChildMode mode,
+                                                    bool auto_start,
+                                                    const std::string& animation_override) {
+    auto anim_it = animations_.find(animation_id);
+    if (anim_it == animations_.end()) {
+        return false;
+    }
+    auto children = animation_children();
+    auto child_it = std::find(children.begin(), children.end(), child_name);
+    if (child_it == children.end()) {
+        return false;
+    }
+
+    nlohmann::json payload = parse_payload(anim_it->second, animation_id);
+    const int frame_count = std::max<int>(1, payload.value("number_of_frames", 1));
+    nlohmann::json timelines = payload.contains("child_timelines") ? payload["child_timelines"] : nlohmann::json::array();
+    timelines = normalize_child_timelines(timelines, children, static_cast<std::size_t>(frame_count));
+
+    const int child_index = static_cast<int>(std::distance(children.begin(), child_it));
+    bool changed = false;
+    for (auto& entry : timelines) {
+        if (!entry.is_object()) continue;
+        const std::string asset = entry.value("asset", std::string{});
+        const int idx = entry.value("child", entry.value("child_index", -1));
+        if (!(asset == child_name || idx == child_index)) {
+            continue;
+        }
+        const std::string desired_mode = mode_to_string(mode);
+        std::string current_mode = entry.value("mode", std::string{});
+        std::transform(current_mode.begin(), current_mode.end(), current_mode.begin(), [](unsigned char ch) {
+            return static_cast<char>(std::tolower(ch));
+        });
+        if (current_mode != desired_mode) {
+            entry["mode"] = desired_mode;
+            changed = true;
+        }
+        if (entry.value("auto_start", entry.value("autostart", false)) != auto_start) {
+            entry["auto_start"] = auto_start;
+            changed = true;
+        }
+        if (entry.value("animation", std::string{}) != animation_override) {
+            entry["animation"] = animation_override;
+            changed = true;
+        }
+        const nlohmann::json frames = sanitize_child_frames(entry.value("frames", nlohmann::json::array()), entry.value("mode", desired_mode), static_cast<std::size_t>(frame_count));
+        if (!entry.contains("frames") || entry["frames"] != frames) {
+            entry["frames"] = frames;
+            changed = true;
+        }
+        break;
+    }
+
+    if (!changed) {
+        return false;
+    }
+
+    payload["child_timelines"] = normalize_child_timelines(timelines, children, static_cast<std::size_t>(frame_count));
+    anim_it->second = serialize_payload(coerce_payload(animation_id, payload));
+    mark_dirty();
+    return true;
+}
+
 void AnimationDocument::ensure_document_initialized() {
     bool mutated = false;
     std::vector<std::string> ids;

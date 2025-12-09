@@ -123,7 +123,12 @@ void FrameChildrenEditor::set_tools_panel(FrameToolsPanel* panel) {
         tools_panel_->set_children_callbacks(
             [this](int index) { this->select_child(index); },
             [this]() { this->apply_current_to_next(); },
-            [this](bool visible) { this->set_child_visible(visible); });
+            [this](bool visible) { this->set_child_visible(visible); },
+            [this](int mode_index) {
+                this->set_child_mode(mode_index == 0 ? AnimationChildMode::Static : AnimationChildMode::Async);
+            },
+            [this](const std::string& name) { this->add_or_rename_child(name); },
+            [this]() { this->remove_selected_child(); });
     }
     refresh_tools_panel();
 }
@@ -477,6 +482,7 @@ void FrameChildrenEditor::reload_from_document() {
     frames_.front().dy = 0.0f;
 
     ensure_child_vectors();
+    apply_child_timelines_from_payload(payload);
     if (child_ids_ != previous_children) {
         child_asset_dir_cache_.clear();
         child_previews_.clear();
@@ -492,8 +498,10 @@ void FrameChildrenEditor::ensure_child_vectors() {
             frame.children.clear();
         }
         selected_child_index_ = 0;
+        child_modes_.clear();
         return;
     }
+    ensure_child_mode_size();
     for (auto& frame : frames_) {
         std::vector<ChildFrame> normalized(child_ids_.size());
         for (std::size_t i = 0; i < normalized.size(); ++i) {
@@ -518,16 +526,325 @@ void FrameChildrenEditor::ensure_child_vectors() {
     }
 }
 
+void FrameChildrenEditor::ensure_child_mode_size() {
+    const std::size_t desired = child_ids_.size();
+    if (child_modes_.size() == desired) return;
+    std::vector<AnimationChildMode> next(desired, AnimationChildMode::Static);
+    const std::size_t copy_count = std::min(desired, child_modes_.size());
+    for (std::size_t i = 0; i < copy_count; ++i) {
+        next[i] = child_modes_[i];
+    }
+    child_modes_ = std::move(next);
+}
+
+AnimationChildMode FrameChildrenEditor::child_mode(int child_index) const {
+    if (child_index < 0 || static_cast<std::size_t>(child_index) >= child_modes_.size()) {
+        return AnimationChildMode::Static;
+    }
+    return child_modes_[static_cast<std::size_t>(child_index)];
+}
+
+int FrameChildrenEditor::child_mode_index(AnimationChildMode mode) const {
+    return (mode == AnimationChildMode::Async) ? 1 : 0;
+}
+
+std::vector<int> FrameChildrenEditor::build_child_index_remap(const std::vector<std::string>& previous,
+                                                             const std::vector<std::string>& next) const {
+    std::vector<int> remap(previous.size(), -1);
+    if (previous.empty() || next.empty()) {
+        return remap;
+    }
+    std::unordered_map<std::string, int> next_lookup;
+    next_lookup.reserve(next.size());
+    for (std::size_t i = 0; i < next.size(); ++i) {
+        next_lookup[next[i]] = static_cast<int>(i);
+    }
+    for (std::size_t i = 0; i < previous.size(); ++i) {
+        auto it = next_lookup.find(previous[i]);
+        if (it != next_lookup.end()) {
+            remap[i] = it->second;
+        }
+    }
+    return remap;
+}
+
+void FrameChildrenEditor::remap_child_indices(const std::vector<int>& remap) {
+    if (remap.empty() || frames_.empty()) {
+        return;
+    }
+    const std::size_t next_count = child_ids_.size();
+    for (auto& frame : frames_) {
+        std::vector<ChildFrame> next(next_count);
+        for (std::size_t i = 0; i < next_count; ++i) {
+            next[i].child_index = static_cast<int>(i);
+            next[i].visible = false;
+            next[i].render_in_front = true;
+        }
+        for (std::size_t i = 0; i < remap.size(); ++i) {
+            const int to = remap[i];
+            if (to < 0 || static_cast<std::size_t>(to) >= next.size()) {
+                continue;
+            }
+            if (i >= frame.children.size()) {
+                continue;
+            }
+            next[static_cast<std::size_t>(to)] = frame.children[i];
+            next[static_cast<std::size_t>(to)].child_index = to;
+        }
+        frame.children = std::move(next);
+    }
+}
+
+bool FrameChildrenEditor::timeline_entry_is_static(const nlohmann::json& entry) const {
+    if (!entry.is_object()) {
+        return true;
+    }
+    auto to_lower = [](const std::string& value) {
+        std::string lowered;
+        lowered.reserve(value.size());
+        for (unsigned char ch : value) {
+            lowered.push_back(static_cast<char>(std::tolower(ch)));
+        }
+        return lowered;
+    };
+    if (entry.contains("mode") && entry["mode"].is_string()) {
+        const std::string lowered = to_lower(entry["mode"].get<std::string>());
+        if (lowered == "async" || lowered == "asynchronous") {
+            return false;
+        }
+    }
+    return true;
+}
+
+FrameChildrenEditor::ChildFrame FrameChildrenEditor::child_frame_from_sample(const nlohmann::json& sample,
+                                                                             int child_index) const {
+    auto read_int = [](const nlohmann::json& value, int fallback) -> int {
+        if (value.is_number_integer()) {
+            try {
+                return value.get<int>();
+            } catch (...) {}
+        } else if (value.is_number()) {
+            try {
+                return static_cast<int>(value.get<double>());
+            } catch (...) {}
+        } else if (value.is_string()) {
+            try {
+                return std::stoi(value.get<std::string>());
+            } catch (...) {}
+        }
+        return fallback;
+    };
+    auto read_float = [](const nlohmann::json& value, float fallback) -> float {
+        if (value.is_number()) {
+            try {
+                return static_cast<float>(value.get<double>());
+            } catch (...) {}
+        } else if (value.is_string()) {
+            try {
+                return std::stof(value.get<std::string>());
+            } catch (...) {}
+        }
+        return fallback;
+    };
+    auto read_bool = [](const nlohmann::json& value, bool fallback) -> bool {
+        if (value.is_boolean()) return value.get<bool>();
+        if (value.is_number_integer()) return value.get<int>() != 0;
+        if (value.is_number()) return value.get<double>() != 0.0;
+        if (value.is_string()) {
+            std::string text = value.get<std::string>();
+            std::transform(text.begin(), text.end(), text.begin(), [](unsigned char ch) {
+                return static_cast<char>(std::tolower(ch));
+            });
+            if (text == "true" || text == "1" || text == "yes" || text == "on") return true;
+            if (text == "false" || text == "0" || text == "no" || text == "off") return false;
+        }
+        return fallback;
+    };
+
+    ChildFrame child;
+    child.child_index = child_index;
+    child.dx = 0.0f;
+    child.dy = 0.0f;
+    child.rotation = 0.0f;
+    child.visible = false;
+    child.render_in_front = true;
+
+    if (sample.is_object()) {
+        if (sample.contains("dx")) child.dx = static_cast<float>(read_int(sample["dx"], 0));
+        if (sample.contains("dy")) child.dy = static_cast<float>(read_int(sample["dy"], 0));
+        if (sample.contains("degree")) {
+            child.rotation = read_float(sample["degree"], 0.0f);
+        } else if (sample.contains("rotation")) {
+            child.rotation = read_float(sample["rotation"], 0.0f);
+        }
+        if (sample.contains("visible")) child.visible = read_bool(sample["visible"], child.visible);
+        if (sample.contains("render_in_front")) child.render_in_front = read_bool(sample["render_in_front"], child.render_in_front);
+    } else if (sample.is_array()) {
+        if (!sample.empty()) child.dx = static_cast<float>(read_int(sample[0], 0));
+        if (sample.size() > 1) child.dy = static_cast<float>(read_int(sample[1], 0));
+        if (sample.size() > 2) child.rotation = read_float(sample[2], 0.0f);
+        if (sample.size() > 3) child.visible = read_bool(sample[3], child.visible);
+        if (sample.size() > 4) child.render_in_front = read_bool(sample[4], child.render_in_front);
+    }
+    return child;
+}
+
+nlohmann::json FrameChildrenEditor::child_frame_to_json(const ChildFrame& frame) const {
+    nlohmann::json sample = nlohmann::json::object();
+    sample["dx"] = static_cast<int>(std::lround(frame.dx));
+    sample["dy"] = static_cast<int>(std::lround(frame.dy));
+    sample["degree"] = static_cast<double>(frame.rotation);
+    sample["visible"] = frame.visible;
+    sample["render_in_front"] = frame.render_in_front;
+    return sample;
+}
+
+void FrameChildrenEditor::apply_child_timelines_from_payload(const nlohmann::json& payload) {
+    if (!payload.is_object()) {
+        return;
+    }
+    if (frames_.empty() || child_ids_.empty()) {
+        return;
+    }
+    auto timelines_it = payload.find("child_timelines");
+    if (timelines_it == payload.end() || !timelines_it->is_array()) {
+        return;
+    }
+    ensure_child_mode_size();
+    std::unordered_map<std::string, int> index_by_name;
+    index_by_name.reserve(child_ids_.size());
+    for (std::size_t i = 0; i < child_ids_.size(); ++i) {
+        index_by_name.emplace(child_ids_[i], static_cast<int>(i));
+    }
+    for (const auto& entry : *timelines_it) {
+        if (!entry.is_object()) {
+            continue;
+        }
+        int child_index = -1;
+        if (entry.contains("child") && entry["child"].is_number_integer()) {
+            child_index = entry["child"].get<int>();
+        } else if (entry.contains("child_index") && entry["child_index"].is_number_integer()) {
+            child_index = entry["child_index"].get<int>();
+        }
+        if ((child_index < 0 || child_index >= static_cast<int>(child_ids_.size())) && entry.contains("asset") && entry["asset"].is_string()) {
+            auto lookup = index_by_name.find(entry["asset"].get<std::string>());
+            if (lookup != index_by_name.end()) {
+                child_index = lookup->second;
+            }
+        }
+        if (child_index < 0 || child_index >= static_cast<int>(child_ids_.size())) {
+            continue;
+        }
+        const bool is_static = timeline_entry_is_static(entry);
+        child_modes_[static_cast<std::size_t>(child_index)] = is_static ? AnimationChildMode::Static : AnimationChildMode::Async;
+        if (!is_static) {
+            continue;
+        }
+        auto frames_it = entry.find("frames");
+        if (frames_it == entry.end() || !frames_it->is_array()) {
+            continue;
+        }
+        const auto& samples = *frames_it;
+        for (std::size_t frame_idx = 0; frame_idx < frames_.size(); ++frame_idx) {
+            if (child_index >= static_cast<int>(frames_[frame_idx].children.size())) {
+                continue;
+            }
+            ChildFrame sample = (frame_idx < samples.size())
+                ? child_frame_from_sample(samples[frame_idx], child_index)
+                : child_frame_from_sample(nlohmann::json::object(), child_index);
+            frames_[frame_idx].children[child_index] = sample;
+        }
+    }
+}
+
+nlohmann::json FrameChildrenEditor::build_child_timelines_payload(const nlohmann::json& existing_payload) {
+    nlohmann::json normalized = nlohmann::json::array();
+    if (child_ids_.empty()) {
+        return normalized;
+    }
+    ensure_child_mode_size();
+    std::unordered_map<std::string, nlohmann::json> by_asset;
+    auto it = existing_payload.find("child_timelines");
+    if (it != existing_payload.end() && it->is_array()) {
+        for (const auto& entry : *it) {
+            if (!entry.is_object()) {
+                continue;
+            }
+            std::string asset = entry.value("asset", std::string{});
+            if (asset.empty()) {
+                int idx = entry.value("child", entry.value("child_index", -1));
+                if (idx >= 0 && static_cast<std::size_t>(idx) < child_ids_.size()) {
+                    asset = child_ids_[static_cast<std::size_t>(idx)];
+                }
+            }
+            if (asset.empty()) {
+                continue;
+            }
+            if (by_asset.find(asset) == by_asset.end()) {
+                by_asset.emplace(asset, entry);
+            }
+        }
+    }
+
+    normalized.get_ref<nlohmann::json::array_t&>().reserve(child_ids_.size());
+    for (std::size_t child_idx = 0; child_idx < child_ids_.size(); ++child_idx) {
+        const std::string& asset_name = child_ids_[child_idx];
+        nlohmann::json entry = nlohmann::json::object();
+        auto existing = by_asset.find(asset_name);
+        if (existing != by_asset.end()) {
+            entry = existing->second;
+        }
+        entry["child"] = static_cast<int>(child_idx);
+        entry["child_index"] = static_cast<int>(child_idx);
+        entry["asset"] = asset_name;
+        if (!entry.contains("animation") || !entry["animation"].is_string()) {
+            entry["animation"] = std::string{};
+        }
+        const bool is_static = child_mode(static_cast<int>(child_idx)) != AnimationChildMode::Async;
+        entry["mode"] = is_static ? "static" : "async";
+        if (is_static) {
+            nlohmann::json frames = nlohmann::json::array();
+            frames.get_ref<nlohmann::json::array_t&>().reserve(frames_.size());
+            for (const auto& movement_frame : frames_) {
+                ChildFrame sample{};
+                if (child_idx < movement_frame.children.size()) {
+                    sample = movement_frame.children[child_idx];
+                }
+                sample.child_index = static_cast<int>(child_idx);
+                frames.push_back(child_frame_to_json(sample));
+            }
+            if (frames.empty()) {
+                ChildFrame sample{};
+                sample.child_index = static_cast<int>(child_idx);
+                sample.visible = false;
+                sample.render_in_front = true;
+                frames.push_back(child_frame_to_json(sample));
+            }
+            entry["frames"] = std::move(frames);
+        } else if (!entry.contains("frames") || !entry["frames"].is_array()) {
+            entry["frames"] = nlohmann::json::array();
+        }
+        normalized.push_back(std::move(entry));
+    }
+    return normalized;
+}
+
 void FrameChildrenEditor::refresh_tools_panel() const {
     if (!tools_panel_) {
         return;
     }
     bool has_children = !child_ids_.empty();
     bool visible = true;
+    int mode_index = 0;
     if (const ChildFrame* child = current_child()) {
         visible = child->visible;
     }
-    tools_panel_->set_children_state(child_ids_, selected_child_index_, visible, has_children);
+    mode_index = child_mode_index(child_mode(selected_child_index_));
+    std::string current_name;
+    if (selected_child_index_ >= 0 && selected_child_index_ < static_cast<int>(child_ids_.size())) {
+        current_name = child_ids_[static_cast<std::size_t>(selected_child_index_)];
+    }
+    tools_panel_->set_children_state(child_ids_, selected_child_index_, visible, true, mode_index, current_name);
 }
 
 void FrameChildrenEditor::select_child(int index) {
@@ -574,6 +891,94 @@ void FrameChildrenEditor::set_child_visible(bool visible) {
         return;
     }
     child->visible = visible;
+    persist_changes();
+}
+
+void FrameChildrenEditor::set_child_mode(AnimationChildMode mode) {
+    ensure_child_mode_size();
+    if (selected_child_index_ < 0 || static_cast<std::size_t>(selected_child_index_) >= child_modes_.size()) {
+        return;
+    }
+    if (child_modes_[static_cast<std::size_t>(selected_child_index_)] == mode) {
+        return;
+    }
+    child_modes_[static_cast<std::size_t>(selected_child_index_)] = mode;
+    persist_changes();
+}
+
+void FrameChildrenEditor::add_or_rename_child(const std::string& raw_name) {
+    auto trim = [](std::string s) {
+        auto not_space = [](unsigned char ch) { return !std::isspace(ch); };
+        s.erase(s.begin(), std::find_if(s.begin(), s.end(), not_space));
+        s.erase(std::find_if(s.rbegin(), s.rend(), not_space).base(), s.end());
+        return s;
+    };
+    std::string name = trim(raw_name);
+    if (name.empty()) {
+        return;
+    }
+    for (const auto& existing : child_ids_) {
+        if (existing == name) {
+            auto it = std::find(child_ids_.begin(), child_ids_.end(), name);
+            if (it != child_ids_.end()) {
+                select_child(static_cast<int>(std::distance(child_ids_.begin(), it)));
+            }
+            return;
+        }
+    }
+
+    if (selected_child_index_ >= 0 && selected_child_index_ < static_cast<int>(child_ids_.size())) {
+        std::vector<std::string> next = child_ids_;
+        next[static_cast<std::size_t>(selected_child_index_)] = name;
+        apply_child_list_change(next);
+    } else {
+        std::vector<std::string> next = child_ids_;
+        next.push_back(name);
+        apply_child_list_change(next);
+        select_child(static_cast<int>(next.size()) - 1);
+    }
+}
+
+void FrameChildrenEditor::remove_selected_child() {
+    if (child_ids_.empty()) {
+        return;
+    }
+    if (selected_child_index_ < 0 || selected_child_index_ >= static_cast<int>(child_ids_.size())) {
+        return;
+    }
+    std::vector<std::string> next;
+    next.reserve(child_ids_.size() - 1);
+    for (std::size_t i = 0; i < child_ids_.size(); ++i) {
+        if (static_cast<int>(i) == selected_child_index_) continue;
+        next.push_back(child_ids_[i]);
+    }
+    int next_selection = next.empty() ? 0 : std::clamp(selected_child_index_ - 1, 0, static_cast<int>(next.size()) - 1);
+    apply_child_list_change(next);
+    select_child(next_selection);
+}
+
+void FrameChildrenEditor::apply_child_list_change(const std::vector<std::string>& next_children) {
+    const std::vector<std::string> previous = child_ids_;
+    const std::vector<int> remap = build_child_index_remap(previous, next_children);
+    child_ids_ = next_children;
+    std::vector<AnimationChildMode> next_modes(child_ids_.size(), AnimationChildMode::Static);
+    for (std::size_t i = 0; i < remap.size(); ++i) {
+        const int to = remap[i];
+        if (to >= 0 && static_cast<std::size_t>(to) < next_modes.size()) {
+            if (i < child_modes_.size()) {
+                next_modes[static_cast<std::size_t>(to)] = child_modes_[i];
+            }
+        }
+    }
+    child_modes_ = std::move(next_modes);
+    remap_child_indices(remap);
+    ensure_child_vectors();
+    if (child_ids_.empty()) {
+        selected_child_index_ = 0;
+    } else {
+        selected_child_index_ = std::clamp(selected_child_index_, 0, static_cast<int>(child_ids_.size()) - 1);
+    }
+    refresh_tools_panel();
     persist_changes();
 }
 
@@ -644,6 +1049,13 @@ void FrameChildrenEditor::persist_changes() {
         total_dy += static_cast<int>(std::lround(frames_[i].dy));
     }
     payload["movement_total"] = nlohmann::json{{"dx", total_dx}, {"dy", total_dy}};
+
+    ensure_child_mode_size();
+    if (child_ids_.empty()) {
+        payload.erase("child_timelines");
+    } else {
+        payload["child_timelines"] = build_child_timelines_payload(payload);
+    }
 
     const std::string updated_payload_dump = payload.dump();
     document_->replace_animation_payload(animation_id_, updated_payload_dump);
