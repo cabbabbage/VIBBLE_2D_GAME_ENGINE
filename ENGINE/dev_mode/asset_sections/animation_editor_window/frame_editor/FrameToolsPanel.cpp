@@ -7,6 +7,13 @@
 #include "dev_mode/dm_styles.hpp"
 
 namespace animation_editor {
+namespace {
+// Helper to check if in any children editing mode
+bool is_children_mode(FrameToolsPanel::Mode mode) {
+    return mode == FrameToolsPanel::Mode::StaticChildren ||
+           mode == FrameToolsPanel::Mode::AsyncChildren;
+}
+}
 
 FrameToolsPanel::FrameToolsPanel()
     : DockableCollapsible("Tools", true /*floatable*/, 32, 32) {
@@ -143,7 +150,7 @@ void FrameToolsPanel::set_children_state(const std::vector<std::string>& options
         const DMButtonStyle* style = (children_controls_enabled_ && has_child_options_) ? &DMStyles::AccentButton() : &DMStyles::HeaderButton();
         child_apply_button_->set_style(style);
     }
-    if (mode_ == Mode::Children) {
+    if (is_children_mode(mode_)) {
         rebuild_rows();
     }
 
@@ -231,7 +238,7 @@ bool FrameToolsPanel::handle_event(const SDL_Event& e) {
                 }
             }
         }
-    } else if (mode_ == Mode::Children) {
+    } else if (is_children_mode(mode_)) {
         if (child_name_box_) {
             const std::string now = child_name_box_->value();
             if (now != last_child_name_text_) {
@@ -299,7 +306,8 @@ void FrameToolsPanel::rebuild_rows() {
             rows.push_back({ dx_w_.get(), dy_w_.get() });
             break;
         }
-        case Mode::Children: {
+        case Mode::StaticChildren:
+        case Mode::AsyncChildren: {
             rows.push_back({ child_dropdown_widget_.get() });
             rows.push_back({ child_mode_widget_.get(), child_visible_widget_.get() });
             rows.push_back({ child_apply_widget_.get() });

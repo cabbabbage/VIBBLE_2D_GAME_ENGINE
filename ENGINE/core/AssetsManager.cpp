@@ -1249,6 +1249,9 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
     raw = world_grid_.create_asset_at_point(std::move(uptr));
     all.push_back(raw);
 
+    // Load light textures from cache
+    ensure_light_textures_loaded(raw);
+
     // Invalidate caches and mark dirty so next cycle rebuilds active lists
     invalidate_max_asset_dimensions();
     mark_active_assets_dirty();
@@ -1263,6 +1266,17 @@ void Assets::rebuild_from_grid_state() {
     initialize_active_assets(camera_.get_screen_center());
     refresh_filtered_active_assets();
     mark_non_player_update_buffer_dirty();
+}
+
+void Assets::ensure_light_textures_loaded(Asset* asset) {
+    if (!asset || !asset->info || !renderer()) {
+        return;
+    }
+
+    // Load all light textures for this asset from cache
+    for (std::size_t i = 0; i < asset->info->light_sources.size(); ++i) {
+        asset->info->rebuild_light_texture(renderer(), i);
+    }
 }
 
 const std::vector<Asset*>& Assets::get_selected_assets() const {

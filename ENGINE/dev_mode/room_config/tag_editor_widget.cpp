@@ -231,6 +231,7 @@ void TagEditorWidget::set_tags(const std::vector<std::string>& tags,
         if (tags_.count(norm)) continue;
         anti_tags_.insert(std::move(norm));
     }
+    show_browse_tags_ = false;
     refresh_recommendations();
     rebuild_buttons();
     reset_toggle_state();
@@ -323,6 +324,16 @@ bool TagEditorWidget::handle_event(const SDL_Event& e) {
             }
         }
     }
+    if (add_as_anti_widget_ && add_as_anti_widget_->rect().w > 0) {
+        if (add_as_anti_widget_->handle_event(e)) {
+            used = true;
+        }
+    }
+    if (browse_tags_widget_ && browse_tags_widget_->rect().w > 0) {
+        if (browse_tags_widget_->handle_event(e)) {
+            used = true;
+        }
+    }
     return used;
 }
 
@@ -358,6 +369,12 @@ void TagEditorWidget::render(SDL_Renderer* r) const {
     }
     if (show_more_anti_btn_ && show_more_anti_btn_->rect().w > 0) {
         show_more_anti_btn_->render(r);
+    }
+    if (add_as_anti_widget_ && add_as_anti_widget_->rect().w > 0) {
+        add_as_anti_widget_->render(r);
+    }
+    if (browse_tags_btn_ && browse_tags_btn_->rect().w > 0) {
+        browse_tags_btn_->render(r);
     }
 }
 
@@ -560,6 +577,18 @@ int TagEditorWidget::layout(int width, int origin_x, int origin_y, bool apply) {
     if (!add_tag_btn_) {
         add_tag_btn_ = std::make_unique<DMButton>("+", &DMStyles::CreateButton(), 36, DMTextBox::height());
     }
+    if (!add_as_anti_checkbox_) {
+        add_as_anti_checkbox_ = std::make_unique<DMCheckbox>("As Anti", false);
+        add_as_anti_widget_ = std::make_unique<CheckboxWidget>(add_as_anti_checkbox_.get());
+    }
+    if (!browse_tags_btn_) {
+        browse_tags_btn_ = std::make_unique<DMButton>("Browse", &DMStyles::WarnButton(), 80, DMTextBox::height());
+        browse_tags_widget_ = std::make_unique<ButtonWidget>(browse_tags_btn_.get(), [this]() {
+            show_browse_tags_ = !show_browse_tags_;
+            update_browse_mode();
+            mark_dirty();
+        });
+    }
     tag_search_box_->set_value(search_input_);
 
     int controls_y = y;
@@ -598,11 +627,36 @@ int TagEditorWidget::layout(int width, int origin_x, int origin_y, bool apply) {
         int button_y = controls_y + button_offset;
         add_tag_btn_->set_rect(SDL_Rect{ add_x, button_y, final_button_width, button_height });
     }
-    int results_spacing = DMSpacing::item_gap();
-    int controls_bottom = controls_y + search_height;
-    int button_bottom = controls_y + button_offset + button_height;
-    int total_height = std::max(controls_bottom, button_bottom);
-    y = total_height + results_spacing;
+    // Layout checkbox and browse button below the search controls
+    int checkbox_y = controls_y + search_height + DMSpacing::small_gap();
+    int checkbox_spacing = DMSpacing::small_gap();
+    
+    if (add_as_anti_checkbox_) {
+        int checkbox_width = add_as_anti_checkbox_->preferred_width();
+        if (checkbox_width > 0) {
+            add_as_anti_checkbox_->set_rect(SDL_Rect{ origin_x, checkbox_y, checkbox_width, DMCheckbox::height() });
+            if (add_as_anti_widget_) {
+                add_as_anti_widget_->set_rect(add_as_anti_checkbox_->rect());
+            }
+        }
+    }
+    
+    int browse_x = origin_x;
+    if (add_as_anti_checkbox_ && add_as_anti_checkbox_->rect().w > 0) {
+        browse_x = origin_x + add_as_anti_checkbox_->rect().w + checkbox_spacing;
+    }
+    
+    if (browse_tags_btn_) {
+        int browse_width = std::min(browse_tags_btn_->preferred_width(), width - (browse_x - origin_x));
+        browse_width = std::max(browse_width, 60);
+        if (apply && browse_width > 0) {
+            browse_tags_btn_->set_rect(SDL_Rect{ browse_x, checkbox_y, browse_width, DMButton::height() });
+        }
+    }
+
+    int controls_height = (checkbox_y - controls_y) + DMButton::height();
+    int total_height = controls_y + controls_height;
+    y = total_height + DMSpacing::item_gap();
 
     if (has_tag_recs) {
         size_t matches = filtered_tag_order_.empty() && search_query_.empty() ? rec_tag_chips_.size() : filtered_tag_order_.size();
@@ -851,9 +905,37 @@ void TagEditorWidget::clear_search() {
 void TagEditorWidget::add_search_text_as_tag() {
     auto normalized = normalize(search_input_);
     if (normalized.empty()) return;
-    if (tags_.count(normalized)) return;
-    add_tag(normalized);
+    bool add_as_anti = add_as_anti_checkbox_ && add_as_anti_checkbox_->value();
+    if (add_as_anti) {
+        if (anti_tags_.count(normalized)) return;
+        add_anti_tag(normalized);
+    } else {
+        if (tags_.count(normalized)) return;
+        add_tag(normalized);
+    }
     clear_search();
+}
+
+void TagEditorWidget::update_browse_mode() {
+    if (show_browse_tags_) {
+        // Show all library tags as browsable recommendations
+        std::vector<std::string> all_tags = TagLibrary::instance().tags();
+        recommended_tags_.clear();
+        recommended_anti_.clear();
+        for (const auto& tag : all_tags) {
+            if (tags_.count(tag)) continue;
+            recommended_tags_.push_back(tag);
+        }
+        for (const auto& tag : all_tags) {
+            if (anti_tags_.count(tag)) continue;
+            recommended_anti_.push_back(tag);
+        }
+    } else {
+        // Restore normal recommendations
+        refresh_recommendations();
+    }
+    rebuild_buttons();
+    mark_dirty();
 }
 
 bool TagEditorWidget::event_targets_rect(const SDL_Event& e, const SDL_Rect& rect) {

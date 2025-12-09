@@ -1473,6 +1473,35 @@ bool AnimationDocument::set_child_timeline_settings(const std::string& animation
     return true;
 }
 
+bool AnimationDocument::reset_child_timeline(const std::string& animation_id, const std::string& child_name) {
+    auto anim_it = animations_.find(animation_id);
+    if (anim_it == animations_.end()) {
+        return false;
+    }
+    auto children = animation_children();
+    auto child_it = std::find(children.begin(), children.end(), child_name);
+    if (child_it == children.end()) {
+        return false;
+    }
+
+    nlohmann::json payload = parse_payload(anim_it->second, animation_id);
+    const int frame_count = std::max<int>(1, payload.value("number_of_frames", 1));
+    nlohmann::json timelines = payload.contains("child_timelines") ? payload["child_timelines"] : nlohmann::json::array();
+    timelines = normalize_child_timelines(timelines, children, static_cast<std::size_t>(frame_count));
+
+    const int child_index = static_cast<int>(std::distance(children.begin(), child_it));
+    if (child_index < 0 || child_index >= static_cast<int>(timelines.size())) {
+        return false;
+    }
+
+    timelines[static_cast<std::size_t>(child_index)] = build_child_timeline_entry(child_index, child_name, nlohmann::json::object(), static_cast<std::size_t>(frame_count));
+
+    payload["child_timelines"] = timelines;
+    anim_it->second = serialize_payload(coerce_payload(animation_id, payload));
+    mark_dirty();
+    return true;
+}
+
 void AnimationDocument::ensure_document_initialized() {
     bool mutated = false;
     std::vector<std::string> ids;

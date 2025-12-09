@@ -178,11 +178,18 @@ namespace {
     const char* mode_display_name(FrameEditorSession::Mode mode) {
         switch (mode) {
             case FrameEditorSession::Mode::Movement:        return "Movement";
-            case FrameEditorSession::Mode::Children:        return "Children";
+            case FrameEditorSession::Mode::StaticChildren:  return "Children (Static)";
+            case FrameEditorSession::Mode::AsyncChildren:   return "Children (Async)";
             case FrameEditorSession::Mode::AttackGeometry:  return "Attack Geometry";
             case FrameEditorSession::Mode::HitGeometry:     return "Hit Geometry";
         }
         return "Unknown";
+    }
+
+    // Helper to check if in any children editing mode
+    bool is_children_mode(FrameEditorSession::Mode mode) {
+        return mode == FrameEditorSession::Mode::StaticChildren ||
+               mode == FrameEditorSession::Mode::AsyncChildren;
     }
 }
 
@@ -276,7 +283,7 @@ void FrameEditorSession::begin(Assets* assets,
             MovementToolboxMetrics metrics = build_movement_toolbox_metrics();
             tool_w = metrics.width;
             tool_h = metrics.height;
-        } else if (mode_ == Mode::Children) {
+        } else if (is_children_mode(mode_)) {
             ChildrenToolboxMetrics metrics = build_children_toolbox_metrics();
             tool_w = metrics.width;
             tool_h = metrics.height;
@@ -560,7 +567,7 @@ void FrameEditorSession::update(const Input& input) {
         if (tb_total_dy_->value() != dys) tb_total_dy_->set_value(dys);
         last_totals_dy_text_ = tb_total_dy_->value();
     }
-    if (mode_ == Mode::Children) {
+    if (is_children_mode(mode_)) {
         const ChildFrame* child = current_child_frame();
         auto sync_text_box = [&](DMTextBox* tb, std::string& cache, float value) {
             if (!tb || tb->is_editing()) return;
@@ -813,7 +820,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         })) return true;
     if (handle_button(btn_children_, [this]() {
             this->persist_mode_changes(this->mode_);
-            this->mode_ = Mode::Children;
+            this->mode_ = Mode::StaticChildren;
             this->end_hitbox_drag(false);
             this->end_attack_drag(false);
         })) return true;
@@ -876,7 +883,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
     }
 
     // Movement tool panel widgets
-    if (mode_ == Mode::Movement || mode_ == Mode::Children) {
+    if (mode_ == Mode::Movement || is_children_mode(mode_)) {
         if (cb_smooth_ && cb_smooth_->handle_event(e)) {
             bool current = cb_smooth_->value();
             if (current != smooth_enabled_) {
@@ -939,7 +946,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         if (mode_ == Mode::Movement) {
             if (handle_button(btn_apply_all_movement_, [this]() { this->apply_current_mode_to_all_frames(); })) return true;
         }
-        if (mode_ == Mode::Children) {
+        if (is_children_mode(mode_)) {
             if (handle_button(btn_apply_all_children_, [this]() { this->apply_current_mode_to_all_frames(); })) return true;
         }
         // If we are in Children mode, do not fall-through; movement controls handled above
@@ -960,7 +967,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         return true;
     }
 
-    if (mode_ == Mode::Children) {
+    if (is_children_mode(mode_)) {
         if (dd_child_select_ && dd_child_select_->handle_event(e)) {
             int current = dd_child_select_->selected();
             if (child_assets_.empty()) {
@@ -1344,7 +1351,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         SDL_Point snapped = vibble::grid::snap_world_to_vertex(world_px, snap_r);
         SDL_FPoint desired_rel{ static_cast<float>(snapped.x - anchor_world.x), static_cast<float>(snapped.y - anchor_world.y) };
 
-        if (mode_ == Mode::Children) {
+        if (is_children_mode(mode_)) {
             // In Children mode, clicks set the selected child's per-frame offset.
             if (auto* child = current_child_frame()) {
                 const float scale = attachment_scale();
@@ -1380,7 +1387,7 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
         return true;
     }
 
-    if (mode_ == Mode::Children &&
+    if (is_children_mode(mode_) &&
         e.type == SDL_KEYDOWN &&
         (e.key.keysym.sym == SDLK_LEFT || e.key.keysym.sym == SDLK_RIGHT)) {
         if (dd_child_select_ && dd_child_select_->focused()) {
@@ -1459,7 +1466,7 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
         SDL_RenderDrawRect(renderer, &dot);
     }
 
-    if (mode_ == Mode::Children && show_child_ && !child_assets_.empty() &&
+    if (is_children_mode(mode_) && show_child_ && !child_assets_.empty() &&
         selected_index_ < static_cast<int>(frames_.size())) {
         const auto& frame = frames_[selected_index_];
         ChildPreviewContext preview_ctx = build_child_preview_context();
@@ -1575,7 +1582,7 @@ void FrameEditorSession::render(SDL_Renderer* renderer) const {
         if (tb_total_dx_) tb_total_dx_->render(renderer);
         if (tb_total_dy_) tb_total_dy_->render(renderer);
         if (btn_apply_all_movement_) btn_apply_all_movement_->render(renderer);
-    } else if (mode_ == Mode::Children && toolbox_rect_.w > 0 && toolbox_rect_.h > 0) {
+    } else if (is_children_mode(mode_) && toolbox_rect_.w > 0 && toolbox_rect_.h > 0) {
         dm_draw::DrawBeveledRect(renderer, toolbox_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
         // Movement controls row (shared)
         if (cb_smooth_) cb_smooth_->render(renderer);
@@ -1710,7 +1717,7 @@ void FrameEditorSession::ensure_widgets() const {
     const int bh = DMButton::height();
     if (!btn_back_) btn_back_ = std::make_unique<DMButton>(u8"\u2190 Back", &DMStyles::DeleteButton(), 96, bh);
     if (!btn_movement_) btn_movement_ = std::make_unique<DMButton>("Movement", mode_ == Mode::Movement ? &tab_active : &header, bw, bh);
-    if (!btn_children_) btn_children_ = std::make_unique<DMButton>("Children", mode_ == Mode::Children ? &tab_active : &header, bw, bh);
+    if (!btn_children_) btn_children_ = std::make_unique<DMButton>("Children", is_children_mode(mode_) ? &tab_active : &header, bw, bh);
     if (!btn_attack_geometry_) btn_attack_geometry_ = std::make_unique<DMButton>("Attack Geometry", mode_ == Mode::AttackGeometry ? &tab_active : &header, bw, bh);
     if (!btn_hit_geometry_) btn_hit_geometry_ = std::make_unique<DMButton>("Hit Geometry", mode_ == Mode::HitGeometry ? &tab_active : &header, bw, bh);
     if (!btn_prev_) btn_prev_ = std::make_unique<DMButton>("<", &header, 40, 40);
@@ -1722,7 +1729,7 @@ void FrameEditorSession::ensure_widgets() const {
     if (!btn_apply_all_attack_) btn_apply_all_attack_ = std::make_unique<DMButton>("Apply To All Frames", &header, 180, DMButton::height());
     if (!cb_smooth_) cb_smooth_ = std::make_unique<DMCheckbox>("Smooth", smooth_enabled_);
     if (!cb_curve_) cb_curve_ = std::make_unique<DMCheckbox>("Curve", curve_enabled_);
-    const bool want_parent_label = (mode_ == Mode::Children);
+    const bool want_parent_label = is_children_mode(mode_);
     if (!cb_show_anim_ || cb_show_anim_targets_parent_label_ != want_parent_label) {
         const bool current = cb_show_anim_ ? cb_show_anim_->value() : show_animation_;
         cb_show_anim_ = std::make_unique<DMCheckbox>(want_parent_label ? "Show Parent" : "Show Animation", current);
@@ -1916,7 +1923,7 @@ void FrameEditorSession::rebuild_layout() const {
         btn->set_style(mode_ == Mode::Movement ? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
     });
     place_button(btn_children_, [&](DMButton* btn) {
-        btn->set_style(mode_ == Mode::Children ? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
+        btn->set_style(is_children_mode(mode_) ? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
     });
     place_button(btn_attack_geometry_, [&](DMButton* btn) {
         btn->set_style(mode_ == Mode::AttackGeometry ? &DMStyles::AccentButton() : &DMStyles::HeaderButton());
@@ -1998,7 +2005,7 @@ void FrameEditorSession::rebuild_layout() const {
                 register_toolbox_widget(btn_apply_all_movement_.get());
             }
         }
-    } else if (mode_ == Mode::Children) {
+    } else if (is_children_mode(mode_)) {
         ChildrenToolboxMetrics metrics = build_children_toolbox_metrics();
         if (metrics.width <= 0 || metrics.height <= 0) {
             toolbox_rect_ = SDL_Rect{ toolbox_pos_.x, toolbox_pos_.y, 0, 0 };
@@ -2874,7 +2881,8 @@ void FrameEditorSession::apply_current_mode_to_all_frames() {
             persist_changes();
             break;
         }
-        case Mode::Children: {
+        case Mode::StaticChildren:
+        case Mode::AsyncChildren: {
             if (child_assets_.empty()) break;
             const int frame_index = std::clamp(selected_index_, 0, static_cast<int>(frames_.size()) - 1);
             const auto& frame = frames_[frame_index];
@@ -2892,7 +2900,7 @@ void FrameEditorSession::apply_current_mode_to_all_frames() {
                     d.has_data = true;
                 }
             }
-            persist_mode_changes(Mode::Children);
+            persist_mode_changes(mode_);
             persist_changes();
             break;
         }

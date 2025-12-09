@@ -22,7 +22,7 @@ def _configure_logger() -> logging.Logger:
         handler = logging.StreamHandler(sys.stderr)
         handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
         logger.addHandler(handler)
-        logger.setLevel(logging.INFO)
+        logger.setLevel(logging.ERROR)
     return logger
 
 
@@ -299,7 +299,6 @@ class LightTool:
     def run(self) -> None:
         assets = self._collect_assets()
         if not assets:
-            print("No light assets need regeneration.")
             return
 
         manifest_changed = False

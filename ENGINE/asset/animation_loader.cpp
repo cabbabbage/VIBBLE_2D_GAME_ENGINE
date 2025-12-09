@@ -220,6 +220,7 @@ bool load_child_timelines_from_json(const nlohmann::json& anim_json, Animation& 
                 timeline.asset_name = (static_cast<std::size_t>(child_idx) < child_assets.size()) ? child_assets[static_cast<std::size_t>(child_idx)] : std::string{};
                 timeline.animation_override = entry.value("animation", std::string{});
                 timeline.mode = parse_child_mode(entry);
+                timeline.auto_start = entry.value("auto_start", entry.value("autostart", false));
                 const auto frames_it = entry.find("frames");
                 if (frames_it != entry.end() && frames_it->is_array()) {
                         for (const auto& sample : *frames_it) {
@@ -245,6 +246,7 @@ bool load_child_timelines_from_json(const nlohmann::json& anim_json, Animation& 
                 const AnimationChildData* parsed_data = (parsed_it != parsed.end()) ? &parsed_it->second : nullptr;
                 descriptor.mode = parsed_data ? parsed_data->mode : AnimationChildMode::Static;
                 descriptor.animation_override = parsed_data ? parsed_data->animation_override : std::string{};
+                descriptor.auto_start = parsed_data ? parsed_data->auto_start : false;
 
                 if (descriptor.mode == AnimationChildMode::Static) {
                         descriptor.frames.resize(parent_frame_count, make_default_child_frame(child_index));

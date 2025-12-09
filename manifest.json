@@ -818,17 +818,17 @@
           "has_light_source": true,
           "in_front": true,
           "light_color": [
-            255,
+            178,
             255,
             255
           ],
-          "light_intensity": 255,
+          "light_intensity": 136,
+          "needs_rebuild": false,
           "offset_x": 31,
           "offset_y": 0,
-          "radius": 1984,
+          "radius": 1798,
           "render_front_and_back_to_asset_alpha_mask": false,
-          "render_to_dark_mask": true,
-          "needs_rebuild": false
+          "render_to_dark_mask": true
         }
       ],
       "neighbor_search_distance": 500,
@@ -3174,6 +3174,61 @@
       "tags": [],
       "tillable": false
     },
+    "Pub": {
+      "animation_children": [],
+      "animations": {
+        "default": {
+          "child_timelines": [],
+          "crop_frames": false,
+          "flipped_source": false,
+          "frames": [
+            {
+              "needs_rebuild": false
+            }
+          ],
+          "inherit_source_movement": false,
+          "locked": false,
+          "loop": true,
+          "movement": [
+            [
+              0,
+              0
+            ]
+          ],
+          "movement_total": {
+            "dx": 0,
+            "dy": 0
+          },
+          "number_of_frames": 1,
+          "on_end": "default",
+          "reverse_source": false,
+          "rnd_start": false,
+          "source": {
+            "kind": "folder",
+            "name": "",
+            "path": "default"
+          },
+          "speed_multiplier": 1.0
+        }
+      },
+      "anti_tags": [],
+      "asset_directory": "SRC/assets/Pub",
+      "asset_name": "Pub",
+      "asset_type": "object",
+      "can_invert": false,
+      "has_shading": false,
+      "lighting_info": [],
+      "min_distance_all": 0,
+      "min_same_type_distance": 0,
+      "neighbor_search_distance": 500,
+      "render_radius": 0,
+      "size_settings": {
+        "scale_percentage": 100.0
+      },
+      "start": "default",
+      "tags": [],
+      "update_radius": 0
+    },
     "Town_Hall": {
       "animation_children": [],
       "animations": {
@@ -3448,10 +3503,67 @@
       "tillable": false
     },
     "Vibble": {
-      "animation_children": [],
+      "animation_children": [
+        "Vibble_eyes"
+      ],
       "animations": {
         "attack": {
-          "child_timelines": [],
+          "child_timelines": [
+            {
+              "animation": "",
+              "asset": "Vibble_eyes",
+              "child": 0,
+              "child_index": 0,
+              "frames": [
+                {
+                  "degree": 0.0,
+                  "dx": 0,
+                  "dy": 0,
+                  "render_in_front": true,
+                  "visible": false
+                },
+                {
+                  "degree": 0.0,
+                  "dx": 0,
+                  "dy": 0,
+                  "render_in_front": true,
+                  "visible": false
+                },
+                {
+                  "degree": 0.0,
+                  "dx": 0,
+                  "dy": 0,
+                  "render_in_front": true,
+                  "visible": false
+                },
+                {
+                  "degree": 0.0,
+                  "dx": 0,
+                  "dy": 0,
+                  "render_in_front": true,
+                  "visible": false
+                },
+                {
+                  "degree": 0.0,
+                  "dx": 0,
+                  "dy": 0,
+                  "render_in_front": true,
+                  "visible": false
+                },
+                {
+                  "degree": 0.0,
+                  "dx": 0,
+                  "dy": 0,
+                  "render_in_front": true,
+                  "visible": false
+                }
+              ],
+              "mode": "static"
+            }
+          ],
+          "children": [
+            "Vibble_eyes"
+          ],
           "crop_frames": false,
           "flipped_source": false,
           "frames": [
@@ -3480,27 +3592,87 @@
           "movement": [
             [
               0,
-              0
+              0,
+              [
+                [
+                  0,
+                  0,
+                  0,
+                  0.0,
+                  true,
+                  true
+                ]
+              ]
             ],
             [
               0,
-              0
+              0,
+              [
+                [
+                  0,
+                  0,
+                  0,
+                  0.0,
+                  true,
+                  true
+                ]
+              ]
             ],
             [
               0,
-              0
+              0,
+              [
+                [
+                  0,
+                  0,
+                  0,
+                  0.0,
+                  true,
+                  true
+                ]
+              ]
             ],
             [
               0,
-              0
+              0,
+              [
+                [
+                  0,
+                  0,
+                  0,
+                  0.0,
+                  true,
+                  true
+                ]
+              ]
             ],
             [
               0,
-              0
+              0,
+              [
+                [
+                  0,
+                  0,
+                  0,
+                  0.0,
+                  true,
+                  true
+                ]
+              ]
             ],
             [
               0,
-              0
+              0,
+              [
+                [
+                  0,
+                  0,
+                  0,
+                  0.0,
+                  true,
+                  true
+                ]
+              ]
             ]
           ],
           "movement_total": {
@@ -3519,7 +3691,27 @@
           "speed_multiplier": 1.0
         },
         "backward": {
-          "child_timelines": [],
+          "child_timelines": [
+            {
+              "animation": "",
+              "asset": "Vibble_eyes",
+              "child": 0,
+              "child_index": 0,
+              "frames": [
+                {
+                  "degree": 0.0,
+                  "dx": 0,
+                  "dy": 0,
+                  "render_in_front": true,
+                  "visible": false
+                }
+              ],
+              "mode": "static"
+            }
+          ],
+          "children": [
+            "Vibble_eyes"
+          ],
           "crop_frames": false,
           "derived_modifiers": {
             "flipMovementX": false,
@@ -3539,7 +3731,17 @@
           "movement": [
             [
               0,
-              0
+              0,
+              [
+                [
+                  0,
+                  0,
+                  0,
+                  0.0,
+                  true,
+                  true
+                ]
+              ]
             ]
           ],
           "movement_total": {
@@ -3565,7 +3767,27 @@
               "projectile": []
             }
           ],
-          "child_timelines": [],
+          "child_timelines": [
+            {
+              "animation": "",
+              "asset": "Vibble_eyes",
+              "child": 0,
+              "child_index": 0,
+              "frames": [
+                {
+                  "degree": 0.0,
+                  "dx": 0,
+                  "dy": 0,
+                  "render_in_front": true,
+                  "visible": false
+                }
+              ],
+              "mode": "static"
+            }
+          ],
+          "children": [
+            "Vibble_eyes"
+          ],
           "crop_frames": true,
           "flipped_source": false,
           "frames": [
@@ -3587,7 +3809,17 @@
             [
               0,
               0,
-              false
+              false,
+              [
+                [
+                  0,
+                  0,
+                  0,
+                  0.0,
+                  true,
+                  true
+                ]
+              ]
             ]
           ],
           "movement_total": {
@@ -3648,7 +3880,27 @@
               "projectile": []
             }
           ],
-          "child_timelines": [],
+          "child_timelines": [
+            {
+              "animation": "",
+              "asset": "Vibble_eyes",
+              "child": 0,
+              "child_index": 0,
+              "frames": [
+                {
+                  "degree": 0.0,
+                  "dx": 0,
+                  "dy": 0,
+                  "render_in_front": true,
+                  "visible": false
+                }
+              ],
+              "mode": "static"
+            }
+          ],
+          "children": [
+            "Vibble_eyes"
+          ],
           "crop_frames": false,
           "flipped_source": false,
           "frames": [
@@ -3726,7 +3978,17 @@
             [
               0,
               0,
-              false
+              false,
+              [
+                [
+                  0,
+                  0,
+                  0,
+                  0.0,
+                  true,
+                  true
+                ]
+              ]
             ]
           ],
           "movement_total": {
@@ -3745,7 +4007,27 @@
           "speed_multiplier": 1.0
         },
         "left": {
-          "child_timelines": [],
+          "child_timelines": [
+            {
+              "animation": "",
+              "asset": "Vibble_eyes",
+              "child": 0,
+              "child_index": 0,
+              "frames": [
+                {
+                  "degree": 0.0,
+                  "dx": 0,
+                  "dy": 0,
+                  "render_in_front": true,
+                  "visible": false
+                }
+              ],
+              "mode": "static"
+            }
+          ],
+          "children": [
+            "Vibble_eyes"
+          ],
           "crop_frames": false,
           "flipped_source": false,
           "frames": [
@@ -3783,7 +4065,16 @@
               0,
               [],
               [],
-              []
+              [
+                [
+                  0,
+                  0,
+                  0,
+                  0.0,
+                  true,
+                  true
+                ]
+              ]
             ]
           ],
           "movement_total": {
@@ -3802,7 +4093,27 @@
           "speed_multiplier": 1.0
         },
         "right": {
-          "child_timelines": [],
+          "child_timelines": [
+            {
+              "animation": "",
+              "asset": "Vibble_eyes",
+              "child": 0,
+              "child_index": 0,
+              "frames": [
+                {
+                  "degree": 0.0,
+                  "dx": 0,
+                  "dy": 0,
+                  "render_in_front": true,
+                  "visible": false
+                }
+              ],
+              "mode": "static"
+            }
+          ],
+          "children": [
+            "Vibble_eyes"
+          ],
           "crop_frames": false,
           "derived_modifiers": {
             "flipMovementX": false,
@@ -3822,7 +4133,17 @@
           "movement": [
             [
               0,
-              0
+              0,
+              [
+                [
+                  0,
+                  0,
+                  0,
+                  0.0,
+                  true,
+                  true
+                ]
+              ]
             ]
           ],
           "movement_total": {
@@ -3845,9 +4166,33 @@
       "asset_directory": "SRC/assets/Vibble",
       "asset_name": "Vibble",
       "asset_type": "player",
+      "async_children": [],
       "can_invert": false,
       "has_shading": false,
-      "lighting_info": [],
+      "lighting_info": [
+        {
+          "behind": false,
+          "falloff": 50,
+          "flare": 0,
+          "flicker": 18,
+          "flicker_smoothness": 34,
+          "flicker_speed": 18,
+          "has_light_source": true,
+          "in_front": false,
+          "light_color": [
+            255,
+            255,
+            255
+          ],
+          "light_intensity": 255,
+          "needs_rebuild": false,
+          "offset_x": 0,
+          "offset_y": 0,
+          "radius": 1206,
+          "render_front_and_back_to_asset_alpha_mask": false,
+          "render_to_dark_mask": true
+        }
+      ],
       "min_distance_all": 0,
       "min_same_type_distance": 0,
       "neighbor_search_distance": 500,
@@ -6221,7 +6566,7 @@
             "enforce_spacing": false,
             "explicit_flip": false,
             "force_flipped": false,
-            "grid_resolution": 7,
+            "grid_resolution": 8,
             "locked": false,
             "max_number": 100,
             "min_number": 100,
@@ -6436,7 +6781,7 @@
           },
           {
             "brightness": 1.0,
-            "offset": 658.9600219726562,
+            "offset": 658.9600219726563,
             "opacity": 7.659999847412109,
             "scale": 6.590000152587891
           }
@@ -6466,9 +6811,9 @@
         "bar": {
           "curvyness": 2,
           "display_color": [
-            223,
+            85,
             242,
-            36,
+            242,
             255
           ],
           "edge_smoothness": 19,
@@ -6486,9 +6831,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
+            31,
+            32,
             204,
-            31,
-            31,
             255
           ],
           "edge_smoothness": 43,
@@ -6539,9 +6884,9 @@
         "rnd": {
           "curvyness": 2,
           "display_color": [
-            85,
-            231,
             242,
+            36,
+            152,
             255
           ],
           "edge_smoothness": 2,
@@ -6589,9 +6934,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            108,
-            204,
-            31,
+            36,
+            199,
+            242,
             255
           ],
           "edge_smoothness": 101,
@@ -6608,31 +6953,6 @@
           "name": "spawn",
           "radius": 3451,
           "spawn_groups": [
-            {
-              "candidates": [
-                {
-                  "chance": 0,
-                  "name": "null"
-                }
-              ],
-              "display_name": "Vibble",
-              "dx": -156,
-              "dy": -1052,
-              "enforce_spacing": false,
-              "explicit_flip": false,
-              "force_flipped": false,
-              "locked": false,
-              "max_number": 1,
-              "min_number": 1,
-              "origional_height": 6904,
-              "origional_width": 6904,
-              "position": "Exact",
-              "priority": 0,
-              "resolution": 5,
-              "resolve_geometry_to_room_size": true,
-              "resolve_quantity_to_room_size": false,
-              "spawn_id": "spn-aa75627185b2"
-            },
             {
               "candidates": [
                 {
@@ -6656,7 +6976,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 1,
+              "priority": 0,
               "resolution": 7,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -6685,7 +7005,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 2,
+              "priority": 1,
               "resolution": 4,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -6714,7 +7034,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 3,
+              "priority": 2,
               "resolution": 1,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -6743,7 +7063,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 4,
+              "priority": 3,
               "resolution": 4,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -6772,7 +7092,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 5,
+              "priority": 4,
               "resolution": 5,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -6801,7 +7121,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 6,
+              "priority": 5,
               "resolution": 4,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -6830,7 +7150,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 7,
+              "priority": 6,
               "resolution": 7,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -6859,7 +7179,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 8,
+              "priority": 7,
               "resolution": 1,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -6888,7 +7208,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 9,
+              "priority": 8,
               "resolution": 3,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -6917,7 +7237,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 10,
+              "priority": 9,
               "resolution": 4,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -6946,7 +7266,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 11,
+              "priority": 10,
               "resolution": 4,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -6975,7 +7295,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 12,
+              "priority": 11,
               "resolution": 7,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -7004,7 +7324,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 13,
+              "priority": 12,
               "resolution": 3,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -7033,7 +7353,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 14,
+              "priority": 13,
               "resolution": 7,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -7062,7 +7382,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 15,
+              "priority": 14,
               "resolution": 1,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -7091,7 +7411,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 16,
+              "priority": 15,
               "resolution": 3,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -7120,7 +7440,7 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 17,
+              "priority": 16,
               "resolution": 3,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
@@ -7149,11 +7469,40 @@
               "origional_height": 6904,
               "origional_width": 6904,
               "position": "Exact",
-              "priority": 18,
+              "priority": 17,
               "resolution": 3,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-552793f8353a"
+            },
+            {
+              "candidates": [
+                {
+                  "chance": 0,
+                  "name": "null"
+                },
+                {
+                  "chance": 100,
+                  "name": "Pub"
+                }
+              ],
+              "display_name": "Pub",
+              "dx": -1412,
+              "dy": -1220,
+              "enforce_spacing": false,
+              "explicit_flip": false,
+              "force_flipped": false,
+              "locked": false,
+              "max_number": 1,
+              "min_number": 1,
+              "origional_height": 6904,
+              "origional_width": 6904,
+              "position": "Exact",
+              "priority": 18,
+              "resolution": 7,
+              "resolve_geometry_to_room_size": true,
+              "resolve_quantity_to_room_size": false,
+              "spawn_id": "spn-eec4c2119964"
             }
           ]
         }

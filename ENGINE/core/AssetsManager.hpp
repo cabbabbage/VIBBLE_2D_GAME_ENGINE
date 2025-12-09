@@ -196,6 +196,10 @@ public:
     // Rebuilds asset catalogs from the grid, refreshing active lists and filters.
     void rebuild_from_grid_state();
 
+    // Ensure light textures are loaded for the given asset from cache.
+    // Called automatically during asset initialization and spawn.
+    void ensure_light_textures_loaded(Asset* asset);
+
     const std::vector<world::Chunk*>& active_chunks() const { return world_grid_.active_chunks(); }
 
 private:

@@ -24,9 +24,10 @@ class FrameEditor {
   public:
     enum class Mode {
         Movement = 0,
-        Children = 1,
-        AttackGeometry = 2,
-        HitGeometry = 3,
+        StaticChildren = 1,
+        AsyncChildren = 2,
+        AttackGeometry = 3,
+        HitGeometry = 4,
 };
 
     using CloseCallback = std::function<void()>;

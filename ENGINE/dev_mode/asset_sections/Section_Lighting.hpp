@@ -456,16 +456,21 @@ private:
     }
 
     void configure_row_sliders(Row& r) {
-        auto configure_regen_slider = [](std::unique_ptr<DMSlider>& slider) {
+        auto configure_rebuild_slider = [](std::unique_ptr<DMSlider>& slider) {
+            if (slider) slider->set_defer_commit_until_unfocus(true);
+        };
+        auto configure_normal_slider = [](std::unique_ptr<DMSlider>& slider) {
             if (slider) slider->set_defer_commit_until_unfocus(false);
         };
-        configure_regen_slider(r.s_intensity);
-        configure_regen_slider(r.s_radius);
-        configure_regen_slider(r.s_falloff);
-        configure_regen_slider(r.s_flicker_speed);
-        configure_regen_slider(r.s_flicker_smoothness);
-        if (r.s_offset_x) r.s_offset_x->set_defer_commit_until_unfocus(false);
-        if (r.s_offset_y) r.s_offset_y->set_defer_commit_until_unfocus(false);
+        // Sliders that trigger texture rebuild: defer commit until unfocus to avoid excessive rebuilds
+        configure_rebuild_slider(r.s_intensity);
+        configure_rebuild_slider(r.s_radius);
+        configure_rebuild_slider(r.s_falloff);
+        // Other sliders: immediate commit
+        configure_normal_slider(r.s_flicker_speed);
+        configure_normal_slider(r.s_flicker_smoothness);
+        configure_normal_slider(r.s_offset_x);
+        configure_normal_slider(r.s_offset_y);
     }
 
     void commit_to_info() {

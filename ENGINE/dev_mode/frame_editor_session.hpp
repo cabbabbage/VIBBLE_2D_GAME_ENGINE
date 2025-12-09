@@ -47,7 +47,7 @@ struct ChildPreviewContext {
 // Non-modal; anchors panels near the target asset and draws gizmos in world space.
 class FrameEditorSession {
 public:
-    enum class Mode { Movement, Children, AttackGeometry, HitGeometry };
+    enum class Mode { Movement, StaticChildren, AsyncChildren, AttackGeometry, HitGeometry };
     static inline constexpr std::array<const char*, 3> kDamageTypeNames = {
         "projectile", "melee", "explosion"
     };

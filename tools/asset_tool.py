@@ -31,7 +31,7 @@ def _configure_logger() -> logging.Logger:
         handler = logging.StreamHandler(sys.stderr)
         handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
         logger.addHandler(handler)
-        logger.setLevel(logging.INFO)
+        logger.setLevel(logging.ERROR)
     return logger
 
 
@@ -436,11 +436,6 @@ class AssetTool:
                 )
                 continue
 
-            print(
-                f"  Animation '{anim_id}': {len(frame_paths)} frames, size {orig_w}x{orig_h}, "
-                f"speed x{speed_multiplier} -> {output_frame_count} cached frame(s)"
-            )
-
             crop_bounds = compute_crop_bounds(frame_paths) if crop_requested else None
             if crop_requested and crop_bounds is None:
                 LOGGER.warning(
@@ -459,10 +454,6 @@ class AssetTool:
                 scale_factor = scale_pct / 100.0
                 target_w = max(1, int(orig_w * scale_factor))
                 target_h = max(1, int(orig_h * scale_factor))
-
-                print(
-                    f"    Scale {scale_pct}% -> {target_w}x{target_h}"
-                )
 
                 scale_dir = anim_cache_root / f"scale_{scale_pct}"
                 normal_dir = scale_dir / "normal"
@@ -528,7 +519,6 @@ class AssetTool:
             manifest_changed = True
 
         elapsed = time.time() - start_time
-        print(f"[AssetTool] Finished asset '{asset_name}' in {elapsed:.2f} seconds")
         if manifest_changed:
             asset_meta.setdefault("animations", {})
             if isinstance(asset_meta["animations"], dict):

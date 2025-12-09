@@ -71,6 +71,13 @@ void InitializeAssets::initialize(Assets& assets,
                     // Leave tiling unset on any failure
                     raw->set_tiling_info(std::nullopt);
                 }
+
+                // Load light textures from cache for this asset
+                try {
+                    assets.ensure_light_textures_loaded(raw);
+                } catch (...) {
+                    // Leave lights unloaded on any failure; continue initialization
+                }
         }
 	find_player(assets);
         // Do not trigger active asset rebuild during construction.

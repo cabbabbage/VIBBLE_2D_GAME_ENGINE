@@ -25,6 +25,12 @@ constexpr int kToolsPanelWidth = 360;
 // Small visual tweaks
 constexpr int kModeControlsYOffset = -4;   // nudge up a bit
 constexpr int kFrameListYOffset    =  4;   // nudge down a bit (frame nav panel)
+
+// Helper to check if in any children editing mode
+bool is_children_mode(FrameEditor::Mode mode) {
+    return mode == FrameEditor::Mode::StaticChildren ||
+           mode == FrameEditor::Mode::AsyncChildren;
+}
 }
 
 FrameEditor::FrameEditor() { ensure_children(); }
@@ -177,7 +183,7 @@ void FrameEditor::render(SDL_Renderer* renderer) const {
         } else {
             // In other modes, still show the preview grid/canvas for context
             movement_editor_->render_canvas_only(renderer);
-            if (active_mode_ == Mode::Children && children_editor_) {
+            if (is_children_mode(active_mode_) && children_editor_) {
                 children_editor_->render(renderer);
             }
             movement_editor_->render_frame_list(renderer);
@@ -213,7 +219,18 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
     for (size_t i = 0; i < mode_buttons_.size(); ++i) {
         auto& button = mode_buttons_[i];
         if (button && button->handle_event(e)) {
-            set_mode(static_cast<Mode>(i));
+            // Map button index to Mode enum value
+            // Button 0 -> Movement, Button 1 -> StaticChildren (default children mode),
+            // Button 2 -> AttackGeometry, Button 3 -> HitGeometry
+            Mode target_mode;
+            switch (i) {
+                case 0: target_mode = Mode::Movement; break;
+                case 1: target_mode = Mode::StaticChildren; break;
+                case 2: target_mode = Mode::AttackGeometry; break;
+                case 3: target_mode = Mode::HitGeometry; break;
+                default: target_mode = Mode::Movement; break;
+            }
+            set_mode(target_mode);
             return true;
         }
     }
@@ -269,7 +286,7 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
         }
     }
 
-    if (!pointer_in_tools && children_editor_ && active_mode_ == Mode::Children) {
+    if (!pointer_in_tools && children_editor_ && is_children_mode(active_mode_)) {
         if (children_editor_->handle_event(e)) {
             return true;
         }
@@ -277,7 +294,7 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
 
     // Keyboard navigation or rotation adjustments
     if (e.type == SDL_KEYDOWN) {
-        if (active_mode_ == Mode::Children && children_editor_) {
+        if (is_children_mode(active_mode_) && children_editor_) {
             if (children_editor_->handle_key_event(e)) {
                 return true;
             }
@@ -409,7 +426,7 @@ void FrameEditor::ensure_children() {
     }
     if (movement_editor_ && movement_editor_->canvas()) {
         movement_editor_->canvas()->set_anchor_follows_movement(active_mode_ == Mode::Movement ||
-                                                                active_mode_ == Mode::Children);
+                                                                is_children_mode(active_mode_));
     }
     update_button_styles();
     update_navigation_styles();
@@ -507,7 +524,7 @@ void FrameEditor::update_layout() {
     int next_x = display_x + display_width + nav_gap;
 
     // Position tools panel
-    if (active_mode_ == Mode::Children) {
+    if (is_children_mode(active_mode_)) {
         // Dock the tools panel into the mode controls area so children controls are always visible
         tools_panel_rect_ = mode_controls_rect_;
         tools_panel_follow_layout_ = true;
@@ -541,7 +558,7 @@ void FrameEditor::update_layout() {
             tools_panel_->set_rect(tools_panel_rect_);
         }
         // Keep docked when children mode so it doesn't float away
-        if (active_mode_ == Mode::Children && tools_panel_rect_.w > 0 && tools_panel_rect_.h > 0) {
+        if (is_children_mode(active_mode_) && tools_panel_rect_.w > 0 && tools_panel_rect_.h > 0) {
             tools_panel_->set_rect(tools_panel_rect_);
         }
     }
@@ -578,12 +595,12 @@ void FrameEditor::set_mode(Mode mode) {
     if (tools_panel_) {
         tools_panel_->set_mode(static_cast<FrameToolsPanel::Mode>(static_cast<int>(active_mode_)));
     }
-    if (children_editor_ && (previous_mode == Mode::Children || active_mode_ == Mode::Children)) {
+    if (children_editor_ && (is_children_mode(previous_mode) || is_children_mode(active_mode_))) {
         children_editor_->refresh_payload_cache_from_document();
     }
     if (movement_editor_ && movement_editor_->canvas()) {
         movement_editor_->canvas()->set_anchor_follows_movement(active_mode_ == Mode::Movement ||
-                                                                active_mode_ == Mode::Children);
+                                                                is_children_mode(active_mode_));
     }
 }
 
@@ -598,7 +615,15 @@ void FrameEditor::update_button_styles() const {
     const DMButtonStyle& active_style = DMStyles::AccentButton();
     const DMButtonStyle& inactive_style = DMStyles::HeaderButton();
     for (size_t i = 0; i < mode_buttons_.size(); ++i) {
-        const DMButtonStyle* style = (static_cast<Mode>(i) == active_mode_) ? &active_style : &inactive_style;
+        // Map button index to Mode check
+        bool is_active = false;
+        switch (i) {
+            case 0: is_active = (active_mode_ == Mode::Movement); break;
+            case 1: is_active = is_children_mode(active_mode_); break;
+            case 2: is_active = (active_mode_ == Mode::AttackGeometry); break;
+            case 3: is_active = (active_mode_ == Mode::HitGeometry); break;
+        }
+        const DMButtonStyle* style = is_active ? &active_style : &inactive_style;
         if (mode_buttons_[i]) {
             mode_buttons_[i]->set_style(style);
         }

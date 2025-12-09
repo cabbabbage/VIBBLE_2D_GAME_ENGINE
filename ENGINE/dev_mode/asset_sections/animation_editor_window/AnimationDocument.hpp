@@ -50,6 +50,7 @@ class AnimationDocument {
                      AnimationChildMode mode,
                      bool auto_start,
                      const std::string& animation_override);
+    bool reset_child_timeline(const std::string& animation_id, const std::string& child_name);
 
     const std::filesystem::path& info_path() const { return info_path_; }
     const std::filesystem::path& asset_root() const { return asset_root_; }

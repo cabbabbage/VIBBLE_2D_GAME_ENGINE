@@ -83,8 +83,16 @@ private:
     std::unique_ptr<DMButton> show_more_anti_btn_;
     std::unique_ptr<DMTextBox> tag_search_box_;
     std::unique_ptr<DMButton> add_tag_btn_;
+    std::unique_ptr<DMCheckbox> add_as_anti_checkbox_;
+    std::unique_ptr<CheckboxWidget> add_as_anti_widget_;
+    std::unique_ptr<DMButton> browse_tags_btn_;
+    std::unique_ptr<ButtonWidget> browse_tags_widget_;
     std::string search_input_;
     std::string search_query_;
+    bool show_browse_tags_ = false;
 
     std::function<void(const std::vector<std::string>&, const std::vector<std::string>&)> on_changed_;
+
+private:
+    void update_browse_mode();
 };

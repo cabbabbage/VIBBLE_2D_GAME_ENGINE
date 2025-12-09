@@ -301,6 +301,14 @@ void SearchAssets::set_extra_results_provider(ExtraResultsProvider provider) {
     }
 }
 
+void SearchAssets::set_asset_filter(AssetFilter filter) {
+    asset_filter_ = std::move(filter);
+    load_assets();
+    if (panel_ && panel_->is_visible()) {
+        filter_assets();
+    }
+}
+
 void SearchAssets::load_assets() {
     all_.clear();
     if (!manifest_store_) {
@@ -309,6 +317,9 @@ void SearchAssets::load_assets() {
     auto manifest_assets = manifest_store_->assets();
     for (const auto& asset_view : manifest_assets) {
         if (!asset_view) {
+            continue;
+        }
+        if (asset_filter_ && (!asset_view.data || !asset_filter_(*asset_view.data))) {
             continue;
         }
         Asset asset;
@@ -324,6 +335,7 @@ void SearchAssets::load_assets() {
                 }
             }
         }
+        asset.payload = asset_view.data;
         all_.push_back(std::move(asset));
     }
 }
@@ -468,6 +480,7 @@ void SearchAssets::set_manifest_store(devmode::core::ManifestStore* manifest_sto
     all_.clear();
     results_.clear();
     tag_data_version_ = 0;
+    load_assets();
 }
 
 void SearchAssets::set_query_for_testing(const std::string& value) {

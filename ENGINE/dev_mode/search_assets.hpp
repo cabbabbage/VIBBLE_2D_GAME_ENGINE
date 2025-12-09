@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <nlohmann/json_fwd.hpp>
 
 #include "FloatingPanelLayoutManager.hpp"
 
@@ -29,6 +30,7 @@ public:
     };
 
     using ExtraResultsProvider = std::function<std::vector<Result>()>;
+    using AssetFilter = std::function<bool(const nlohmann::json&)>;
 
     using Callback = std::function<void(const std::string&)>;
     explicit SearchAssets(devmode::core::ManifestStore* manifest_store = nullptr);
@@ -52,8 +54,9 @@ public:
     void set_query_for_testing(const std::string& value);
     std::vector<std::pair<std::string, bool>> results_for_testing() const;
     void set_extra_results_provider(ExtraResultsProvider provider);
+    void set_asset_filter(AssetFilter filter);
 private:
-    struct Asset { std::string name; std::vector<std::string> tags; };
+    struct Asset { std::string name; std::vector<std::string> tags; const nlohmann::json* payload = nullptr; };
     void load_assets();
     void filter_assets();
     static std::string to_lower(std::string s);
@@ -82,4 +85,5 @@ private:
     bool embedded_ = false;
     SDL_Rect embedded_rect_{0, 0, 0, 0};
     ExtraResultsProvider extra_results_provider_{};
+    AssetFilter asset_filter_{};
 };

@@ -23,7 +23,7 @@
                 "npc": false,
                 "object": true,
                 "player": true,
-                "texture": true
+                "texture": false
             }
         },
         "grid": {
