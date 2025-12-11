@@ -33,6 +33,7 @@ class FrameMovementEditor {
                              const SDL_Rect& frame_list_bounds);
     void set_close_callback(CloseCallback callback);
     void set_preview_provider(std::shared_ptr<PreviewProvider> provider);
+    void set_frame_list_override(int count, const std::string& animation_id, bool preserve_selection);
     void set_frame_changed_callback(FrameChangedCallback callback) { frame_changed_callback_ = std::move(callback); }
 
     void update();
@@ -74,6 +75,11 @@ class FrameMovementEditor {
     void render_variant_header(SDL_Renderer* renderer) const;
     bool handle_variant_header_event(const SDL_Event& e);
     void layout_frame_list();
+    int view_frame_count() const;
+    int map_view_to_actual(int view_index) const;
+    int view_index_for_actual(int actual_index) const;
+    int clamp_view_index(int index) const;
+    void sync_view_selection_from_actual();
     void set_active_variant(int index, bool preserve_view);
     void update_child_frames(bool preserve_view);
     void sync_active_variant_frames();
@@ -122,6 +128,9 @@ class FrameMovementEditor {
     CloseCallback close_callback_;
     std::vector<MovementFrame> frames_;
     std::vector<SDL_Rect> frame_item_rects_;
+    int frame_list_override_count_ = -1;
+    std::string frame_list_override_animation_id_;
+    int display_selected_index_ = 0;
     // Horizontal scrolling state for frame navigator
     int hscroll_offset_px_ = 0;               // current horizontal scroll offset in pixels
     int hscroll_content_px_ = 0;              // total content width in pixels

@@ -28,6 +28,9 @@ class FrameChildrenEditor {
     void set_tools_panel(FrameToolsPanel* panel);
     void set_canvas(MovementCanvas* canvas);
     void set_selected_frame(int index);
+    int selected_child_index() const { return selected_child_index_; }
+    std::string selected_child_id() const;
+    AnimationChildMode selected_child_mode() const;
     void refresh_payload_cache_from_document();
 
     void update();

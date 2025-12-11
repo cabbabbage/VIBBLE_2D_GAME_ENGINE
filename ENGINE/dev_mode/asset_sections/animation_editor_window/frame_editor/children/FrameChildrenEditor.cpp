@@ -150,6 +150,20 @@ void FrameChildrenEditor::set_selected_frame(int index) {
     refresh_tools_panel();
 }
 
+std::string FrameChildrenEditor::selected_child_id() const {
+    if (selected_child_index_ < 0 || selected_child_index_ >= static_cast<int>(child_ids_.size())) {
+        return std::string{};
+    }
+    return child_ids_[static_cast<std::size_t>(selected_child_index_)];
+}
+
+AnimationChildMode FrameChildrenEditor::selected_child_mode() const {
+    if (child_ids_.empty()) {
+        return AnimationChildMode::Static;
+    }
+    return child_mode(selected_child_index_);
+}
+
 void FrameChildrenEditor::refresh_payload_cache_from_document() {
     if (!document_ || animation_id_.empty()) {
         payload_signature_.clear();

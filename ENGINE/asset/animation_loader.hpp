@@ -28,4 +28,7 @@ public:
                      int& original_canvas_height,
                      bool scaling_refresh_pending,
                      LoadDiagnostics* diagnostics = nullptr);
+
+    static bool load_child_timelines_from_json(const nlohmann::json& anim_json,
+                                               Animation& animation);
 };

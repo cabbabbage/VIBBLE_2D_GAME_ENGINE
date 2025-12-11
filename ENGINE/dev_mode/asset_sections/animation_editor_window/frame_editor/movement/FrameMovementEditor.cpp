@@ -183,6 +183,68 @@ std::vector<MovementFrame> default_variant_frames() {
 
 FrameMovementEditor::FrameMovementEditor() { ensure_children(); }
 
+int FrameMovementEditor::view_frame_count() const {
+    if (frames_.empty()) {
+        return 0;
+    }
+    if (frame_list_override_count_ > 0) {
+        return frame_list_override_count_;
+    }
+    return static_cast<int>(frames_.size());
+}
+
+int FrameMovementEditor::map_view_to_actual(int view_index) const {
+    if (frames_.empty()) {
+        return 0;
+    }
+    int view_count = view_frame_count();
+    if (view_count <= 0) {
+        return 0;
+    }
+    view_index = std::clamp(view_index, 0, view_count - 1);
+    const int base_count = static_cast<int>(frames_.size());
+    if (frame_list_override_count_ <= 0 || frame_list_override_count_ <= base_count) {
+        return std::min(view_index, base_count - 1);
+    }
+    if (base_count == 0) {
+        return 0;
+    }
+    return view_index % base_count;
+}
+
+int FrameMovementEditor::view_index_for_actual(int actual_index) const {
+    if (frames_.empty()) {
+        return 0;
+    }
+    int view_count = view_frame_count();
+    if (view_count <= 0) {
+        return 0;
+    }
+    const int base_count = static_cast<int>(frames_.size());
+    actual_index = std::clamp(actual_index, 0, base_count - 1);
+    if (frame_list_override_count_ <= 0 || frame_list_override_count_ <= base_count) {
+        return std::min(actual_index, view_count - 1);
+    }
+    if (display_selected_index_ >= 0 && display_selected_index_ < view_count &&
+        map_view_to_actual(display_selected_index_) == actual_index) {
+        return display_selected_index_;
+    }
+    return actual_index;
+}
+
+int FrameMovementEditor::clamp_view_index(int index) const {
+    int view_count = view_frame_count();
+    if (view_count <= 0) {
+        return 0;
+    }
+    return std::clamp(index, 0, view_count - 1);
+}
+
+void FrameMovementEditor::sync_view_selection_from_actual() {
+    selected_index_ = clamp_index(selected_index_, static_cast<int>(frames_.size()));
+    display_selected_index_ = clamp_view_index(view_index_for_actual(selected_index_));
+}
+
 void FrameMovementEditor::set_document(std::shared_ptr<AnimationDocument> document) {
     if (document_ == document && !frames_.empty()) {
         return;
@@ -214,18 +276,39 @@ void FrameMovementEditor::set_preview_provider(std::shared_ptr<PreviewProvider> 
     preview_provider_ = std::move(provider);
 }
 
+void FrameMovementEditor::set_frame_list_override(int count, const std::string& animation_id, bool preserve_selection) {
+    int normalized_count = (count > 0 && !frames_.empty()) ? count : -1;
+    std::string normalized_id = normalized_count > 0 ? animation_id : std::string{};
+    if (frame_list_override_count_ == normalized_count && frame_list_override_animation_id_ == normalized_id) {
+        return;
+    }
+    frame_list_override_count_ = normalized_count;
+    frame_list_override_animation_id_ = std::move(normalized_id);
+    if (!preserve_selection) {
+        display_selected_index_ = clamp_view_index(display_selected_index_);
+    }
+    sync_view_selection_from_actual();
+    selected_index_ = map_view_to_actual(display_selected_index_);
+    synchronize_selection();
+    layout_frame_list();
+    ensure_selection_visible();
+}
+
 void FrameMovementEditor::update() {
     ensure_children();
     if (canvas_) {
         canvas_->update();
         if (selected_index_ != canvas_->selected_index()) {
             selected_index_ = canvas_->selected_index();
+            sync_view_selection_from_actual();
             synchronize_selection();
         }
         // Hovering over points in the canvas highlights the corresponding frame in the list
         int hover = canvas_->hovered_index();
         if (hover >= 0 && hover < static_cast<int>(frames_.size())) {
-            hovered_frame_index_ = hover;
+            hovered_frame_index_ = view_index_for_actual(hover);
+        } else {
+            hovered_frame_index_ = -1;
         }
         // Keep overlay context synchronized
         if (preview_provider_) {
@@ -315,27 +398,32 @@ bool FrameMovementEditor::handle_event(const SDL_Event& e) {
 }
 
 bool FrameMovementEditor::can_select_previous_frame() const {
-    if (frames_.empty()) return false;
-    return selected_index_ > 0;
+    if (view_frame_count() <= 0) return false;
+    return display_selected_index_ > 0;
 }
 
 bool FrameMovementEditor::can_select_next_frame() const {
-    if (frames_.empty()) return false;
-    return selected_index_ < static_cast<int>(frames_.size()) - 1;
+    int view_count = view_frame_count();
+    if (view_count <= 0) return false;
+    return display_selected_index_ < view_count - 1;
 }
 
 void FrameMovementEditor::select_previous_frame() {
-    selected_index_ = clamp_index(selected_index_, static_cast<int>(frames_.size()));
-    if (selected_index_ <= 0) return;
-    --selected_index_;
+    display_selected_index_ = clamp_view_index(display_selected_index_);
+    if (display_selected_index_ <= 0) return;
+    --display_selected_index_;
+    selected_index_ = map_view_to_actual(display_selected_index_);
     ensure_selection_visible();
     synchronize_selection();
 }
 
 void FrameMovementEditor::select_next_frame() {
-    selected_index_ = clamp_index(selected_index_, static_cast<int>(frames_.size()));
-    if (selected_index_ >= static_cast<int>(frames_.size()) - 1) return;
-    ++selected_index_;
+    int view_count = view_frame_count();
+    display_selected_index_ = clamp_view_index(display_selected_index_);
+    if (view_count <= 0) return;
+    if (display_selected_index_ >= view_count - 1) return;
+    ++display_selected_index_;
+    selected_index_ = map_view_to_actual(display_selected_index_);
     ensure_selection_visible();
     synchronize_selection();
 }
@@ -517,6 +605,7 @@ void FrameMovementEditor::load_frames_from_document() {
     frames_ = variants_[active_variant_index_].frames;
     sanitize_frames(frames_);
     selected_index_ = clamp_index(selected_index_, static_cast<int>(frames_.size()));
+    sync_view_selection_from_actual();
     variant_tabs_.resize(variants_.size());
 
     update_child_frames(false);
@@ -598,10 +687,10 @@ void FrameMovementEditor::ensure_selection_visible() {
     if (frame_item_rects_.empty()) {
         layout_frame_list();
     }
-    if (selected_index_ < 0 || selected_index_ >= static_cast<int>(frame_item_rects_.size())) {
+    if (display_selected_index_ < 0 || display_selected_index_ >= static_cast<int>(frame_item_rects_.size())) {
         return;
     }
-    SDL_Rect item = frame_item_rects_[selected_index_];
+    SDL_Rect item = frame_item_rects_[display_selected_index_];
     // If item is left of viewport, scroll left
     if (item.x < viewport_left) {
         int delta = viewport_left - item.x;
@@ -673,6 +762,7 @@ void FrameMovementEditor::update_layout() {
 
 void FrameMovementEditor::synchronize_selection() {
     selected_index_ = clamp_index(selected_index_, static_cast<int>(frames_.size()));
+    sync_view_selection_from_actual();
     if (canvas_) canvas_->set_selected_index(selected_index_);
     if (properties_panel_) properties_panel_->refresh_from_selection();
     if (frame_changed_callback_) {
@@ -690,6 +780,7 @@ void FrameMovementEditor::mark_dirty() {
         canvas_->set_selected_index(selected_index_);
     }
     if (totals_panel_) totals_panel_->set_frames(frames_);
+    sync_view_selection_from_actual();
     layout_frame_list();
     ensure_selection_visible();
     // Persist immediately on any value change to ensure movement points are saved
@@ -879,11 +970,12 @@ void FrameMovementEditor::render_frame_list(SDL_Renderer* renderer) const {
     const DMButtonStyle& accent_style = DMStyles::AccentButton();
     SDL_Color text_color = DMStyles::Label().color;
     SDL_Color index_text_color = DMStyles::AccentButton().text;
+    const std::string& preview_animation = frame_list_override_animation_id_.empty() ? animation_id_ : frame_list_override_animation_id_;
 
     for (size_t i = 0; i < frame_item_rects_.size(); ++i) {
         const SDL_Rect& item = frame_item_rects_[i];
         SDL_Color fill = list_style.bg;
-        if (static_cast<int>(i) == selected_index_) {
+        if (static_cast<int>(i) == display_selected_index_) {
             fill = accent_style.hover_bg;
         } else if (static_cast<int>(i) == hovered_frame_index_) {
             fill = accent_style.bg;
@@ -894,8 +986,8 @@ void FrameMovementEditor::render_frame_list(SDL_Renderer* renderer) const {
         dm_draw::DrawBeveledRect(renderer, item, radius, bevel, fill_color, fill_color, fill_color, false, 0.0f, 0.0f);
         dm_draw::DrawRoundedOutline(renderer, item, radius, 1, list_style.border);
 
-        if (preview_provider_ && !animation_id_.empty()) {
-            SDL_Texture* texture = preview_provider_->get_frame_texture(renderer, animation_id_, static_cast<int>(i));
+        if (preview_provider_ && !preview_animation.empty()) {
+            SDL_Texture* texture = preview_provider_->get_frame_texture(renderer, preview_animation, static_cast<int>(i));
             if (texture) {
                 int tex_w = 0;
                 int tex_h = 0;
@@ -1161,7 +1253,8 @@ bool FrameMovementEditor::handle_frame_list_event(const SDL_Event& e) {
             }
             int index = index_at_point(p);
             if (index >= 0) {
-                selected_index_ = clamp_index(index, static_cast<int>(frames_.size()));
+                display_selected_index_ = clamp_view_index(index);
+                selected_index_ = map_view_to_actual(display_selected_index_);
                 synchronize_selection();
                 return true;
             }
@@ -1217,7 +1310,12 @@ void FrameMovementEditor::layout_frame_list() {
     frame_item_rects_.clear();
     hovered_frame_index_ = -1;
 
-    if (frame_list_rect_.w <= 0 || frame_list_rect_.h <= 0 || frames_.empty()) {
+    const int count = view_frame_count();
+    display_selected_index_ = clamp_view_index(display_selected_index_);
+    if (hovered_frame_index_ >= count) {
+        hovered_frame_index_ = -1;
+    }
+    if (frame_list_rect_.w <= 0 || frame_list_rect_.h <= 0 || count <= 0) {
         hscroll_content_px_ = 0;
         hscroll_track_rect_ = SDL_Rect{0,0,0,0};
         hscroll_knob_rect_  = SDL_Rect{0,0,0,0};
@@ -1235,8 +1333,6 @@ void FrameMovementEditor::layout_frame_list() {
     // Single-row layout with horizontal scrolling when needed
     int item_height = std::max(kFrameListMinSize, std::min(std::min(kFrameListMaxSize, available_height), kFrameListBaseSize));
     int item_width  = std::max(kFrameListMinSize, std::min(item_height, kFrameListMaxSize));
-
-    const int count = static_cast<int>(frames_.size());
     int content_width = (count > 0) ? (count * item_width + (count - 1) * spacing) : 0;
     hscroll_content_px_ = content_width;
 
@@ -1263,7 +1359,7 @@ void FrameMovementEditor::layout_frame_list() {
     const int start_x = frame_list_rect_.x + padding + centering_offset - hscroll_offset_px_;
     const int start_y = frame_list_rect_.y + padding + kFrameListTitleHeight + std::max(0, (available_height - item_height) / 2);
 
-    frame_item_rects_.reserve(frames_.size());
+    frame_item_rects_.reserve(static_cast<std::size_t>(count));
     for (int i = 0; i < count; ++i) {
         int x = start_x + i * (item_width + spacing);
         SDL_Rect item{x, start_y, item_width, item_height};
@@ -1319,6 +1415,7 @@ void FrameMovementEditor::set_active_variant(int index, bool preserve_view) {
 }
 
 void FrameMovementEditor::update_child_frames(bool preserve_view) {
+    sync_view_selection_from_actual();
     if (canvas_) {
         canvas_->set_frames(frames_, preserve_view);
         canvas_->set_selected_index(selected_index_);

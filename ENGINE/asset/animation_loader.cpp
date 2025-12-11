@@ -22,6 +22,7 @@
 #include <chrono>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <iterator>
@@ -151,130 +152,25 @@ AnimationChildFrameData parse_child_frame_sample(const nlohmann::json& node, int
         return sample;
 }
 
-AnimationChildMode parse_child_mode(const nlohmann::json& node) {
-        if (node.contains("mode") && node["mode"].is_string()) {
-                std::string mode = node["mode"].get<std::string>();
-                std::string lowered;
-                lowered.reserve(mode.size());
-                for (unsigned char ch : mode) {
-                        lowered.push_back(static_cast<char>(std::tolower(ch)));
-                }
-                if (lowered == "async" || lowered == "asynchronous") {
-                        return AnimationChildMode::Async;
-                }
+std::optional<AnimationChildMode> parse_child_mode(const nlohmann::json& node) {
+        if (!node.contains("mode") || !node["mode"].is_string()) {
+                return std::nullopt;
         }
-        return AnimationChildMode::Static;
+        std::string mode = node["mode"].get<std::string>();
+        std::string lowered;
+        lowered.reserve(mode.size());
+        for (unsigned char ch : mode) {
+                lowered.push_back(static_cast<char>(std::tolower(ch)));
+        }
+        if (lowered == "static") {
+                return AnimationChildMode::Static;
+        }
+        if (lowered == "async" || lowered == "asynchronous") {
+                return AnimationChildMode::Async;
+        }
+        return std::nullopt;
 }
 
-bool load_child_timelines_from_json(const nlohmann::json& anim_json, Animation& animation) {
-        auto it = anim_json.find("child_timelines");
-        if (it == anim_json.end() || !it->is_array()) {
-                return false;
-        }
-
-        auto& child_assets = animation.child_assets();
-        std::unordered_map<std::string, int> child_lookup;
-        child_lookup.reserve(child_assets.size());
-        for (std::size_t i = 0; i < child_assets.size(); ++i) {
-                child_lookup[child_assets[i]] = static_cast<int>(i);
-        }
-
-        auto resolve_child_index = [&](const nlohmann::json& node) -> int {
-                int idx = -1;
-                if (node.contains("child") && node["child"].is_number_integer()) {
-                        idx = node["child"].get<int>();
-                } else if (node.contains("child_index") && node["child_index"].is_number_integer()) {
-                        idx = node["child_index"].get<int>();
-                }
-                if (idx >= 0 && static_cast<std::size_t>(idx) < child_assets.size()) {
-                        return idx;
-                }
-                if (node.contains("asset") && node["asset"].is_string()) {
-                        std::string name = node["asset"].get<std::string>();
-                        if (name.empty()) {
-                                return -1;
-                        }
-                        auto lookup = child_lookup.find(name);
-                        if (lookup != child_lookup.end()) {
-                                return lookup->second;
-                        }
-                        child_assets.push_back(name);
-                        int new_index = static_cast<int>(child_assets.size() - 1);
-                        child_lookup.emplace(name, new_index);
-                        return new_index;
-                }
-                return -1;
-        };
-
-        std::unordered_map<int, AnimationChildData> parsed;
-        parsed.reserve(it->size());
-        for (const auto& entry : *it) {
-                if (!entry.is_object()) {
-                        continue;
-                }
-                const int child_idx = resolve_child_index(entry);
-                if (child_idx < 0) {
-                        continue;
-                }
-                AnimationChildData timeline;
-                timeline.asset_name = (static_cast<std::size_t>(child_idx) < child_assets.size()) ? child_assets[static_cast<std::size_t>(child_idx)] : std::string{};
-                timeline.animation_override = entry.value("animation", std::string{});
-                timeline.mode = parse_child_mode(entry);
-                timeline.auto_start = entry.value("auto_start", entry.value("autostart", false));
-                const auto frames_it = entry.find("frames");
-                if (frames_it != entry.end() && frames_it->is_array()) {
-                        for (const auto& sample : *frames_it) {
-                                timeline.frames.push_back(parse_child_frame_sample(sample, child_idx));
-                        }
-                }
-                parsed[child_idx] = std::move(timeline);
-        }
-
-        const std::size_t parent_frame_count = std::max<std::size_t>(1, animation.frames.size());
-        if (child_assets.empty()) {
-                return false;
-        }
-
-        std::vector<AnimationChildData> descriptors;
-        descriptors.reserve(child_assets.size());
-        for (std::size_t idx = 0; idx < child_assets.size(); ++idx) {
-                const int child_index = static_cast<int>(idx);
-                AnimationChildData descriptor;
-                descriptor.asset_name = child_assets[idx];
-
-                const auto parsed_it = parsed.find(child_index);
-                const AnimationChildData* parsed_data = (parsed_it != parsed.end()) ? &parsed_it->second : nullptr;
-                descriptor.mode = parsed_data ? parsed_data->mode : AnimationChildMode::Static;
-                descriptor.animation_override = parsed_data ? parsed_data->animation_override : std::string{};
-                descriptor.auto_start = parsed_data ? parsed_data->auto_start : false;
-
-                if (descriptor.mode == AnimationChildMode::Static) {
-                        descriptor.frames.resize(parent_frame_count, make_default_child_frame(child_index));
-                        if (parsed_data) {
-                                const std::size_t limit = std::min(parsed_data->frames.size(), descriptor.frames.size());
-                                for (std::size_t frame_idx = 0; frame_idx < limit; ++frame_idx) {
-                                        descriptor.frames[frame_idx] = parsed_data->frames[frame_idx];
-                                        descriptor.frames[frame_idx].child_index = child_index;
-                                }
-                        }
-                } else {
-                        if (parsed_data && !parsed_data->frames.empty()) {
-                                descriptor.frames = parsed_data->frames;
-                        }
-                        if (descriptor.frames.empty()) {
-                                descriptor.frames.push_back(make_default_child_frame(child_index));
-                        }
-                        for (auto& frame : descriptor.frames) {
-                                frame.child_index = child_index;
-                        }
-                }
-
-                descriptors.push_back(std::move(descriptor));
-        }
-
-        animation.child_timelines() = std::move(descriptors);
-        return true;
-}
 
 // Count PNG files (0.png, 1.png, 2.png, etc.) in a folder
 int count_png_files(const std::string& folder) {
@@ -1334,8 +1230,13 @@ void AnimationLoader::load(Animation& animation,
 
         animation.movment = any_motion;
         animation.number_of_frames = static_cast<int>(frame_count);
-        if (!load_child_timelines_from_json(anim_json, animation)) {
+        const bool had_existing_timelines = !animation.child_timelines().empty();
+        if (!AnimationLoader::load_child_timelines_from_json(anim_json, animation)) {
+                if (had_existing_timelines) {
+                        animation.refresh_child_start_events();
+                } else {
                 animation.rebuild_child_timelines_from_frames();
+                }
         } else {
                 animation.refresh_child_start_events();
         }
@@ -1378,7 +1279,181 @@ void AnimationLoader::load(Animation& animation,
                 oss << " from " << origin_label << " in " << std::fixed << std::setprecision(3) << elapsed_secs << "s";
                 vibble::log::debug(oss.str());
         }
+
         // Refresh inherited movement paths for any earlier animations whose sources were not yet loaded.
         resolve_inherited_movements(info);
         flush_diagnostics();
 }
+
+bool AnimationLoader::load_child_timelines_from_json(const nlohmann::json& anim_json,
+                                                     Animation& animation) {
+                auto timelines_node = anim_json.find("child_timelines");
+                if (timelines_node == anim_json.end() || !timelines_node->is_array()) {
+                        return false;
+                }
+
+                std::vector<std::string> child_assets = animation.child_assets();
+                std::unordered_map<std::string, int> child_lookup;
+                child_lookup.reserve(child_assets.size());
+                for (std::size_t i = 0; i < child_assets.size(); ++i) {
+                        child_lookup.emplace(child_assets[i], static_cast<int>(i));
+                }
+
+                const auto& existing_timelines = animation.child_timelines();
+                std::unordered_map<std::string, const AnimationChildData*> previous_by_asset;
+                previous_by_asset.reserve(existing_timelines.size());
+                for (const auto& descriptor : existing_timelines) {
+                        if (!descriptor.asset_name.empty()) {
+                                previous_by_asset.emplace(descriptor.asset_name, &descriptor);
+                        }
+                }
+
+                auto resolve_child_index = [&](const nlohmann::json& node) -> int {
+                        int idx = -1;
+                        if (node.contains("child") && node["child"].is_number_integer()) {
+                                idx = node["child"].get<int>();
+                        } else if (node.contains("child_index") && node["child_index"].is_number_integer()) {
+                                idx = node["child_index"].get<int>();
+                        }
+                        if (idx >= 0 && static_cast<std::size_t>(idx) < child_assets.size()) {
+                                return idx;
+                        }
+                        if (node.contains("asset") && node["asset"].is_string()) {
+                                std::string name = node["asset"].get<std::string>();
+                                if (name.empty()) {
+                                        return -1;
+                                }
+                                auto lookup = child_lookup.find(name);
+                                if (lookup != child_lookup.end()) {
+                                        return lookup->second;
+                                }
+                                child_assets.push_back(name);
+                                int new_index = static_cast<int>(child_assets.size() - 1);
+                                child_lookup.emplace(name, new_index);
+                                return new_index;
+                        }
+                        return -1;
+                };
+
+                std::unordered_map<int, AnimationChildData> parsed;
+                parsed.reserve(timelines_node->size());
+                bool fatal_error = false;
+
+                for (const auto& entry : *timelines_node) {
+                        if (!entry.is_object()) {
+                                continue;
+                        }
+                        const int child_idx = resolve_child_index(entry);
+                        if (child_idx < 0) {
+                                std::cout << "[AnimationLoader] child timeline entry missing valid child index.\n";
+                                fatal_error = true;
+                                continue;
+                        }
+
+                        AnimationChildData timeline;
+                        timeline.asset_name = (static_cast<std::size_t>(child_idx) < child_assets.size())
+                                                   ? child_assets[static_cast<std::size_t>(child_idx)]
+                                                   : std::string{};
+                        timeline.animation_override = entry.value("animation", std::string{});
+                        const auto mode = parse_child_mode(entry);
+                        if (!mode) {
+                                std::cout << "[AnimationLoader] child timeline for asset '" << timeline.asset_name
+                                          << "' omitted required mode (static|async).\n";
+                                fatal_error = true;
+                                continue;
+                        }
+                        timeline.mode = *mode;
+                        timeline.auto_start = entry.value("auto_start", entry.value("autostart", false));
+                        const auto frames_it = entry.find("frames");
+                        if (frames_it != entry.end() && frames_it->is_array()) {
+                                for (const auto& sample : *frames_it) {
+                                        timeline.frames.push_back(parse_child_frame_sample(sample, child_idx));
+                                }
+                        }
+                        parsed[child_idx] = std::move(timeline);
+                }
+
+                if (child_assets.empty() || fatal_error) {
+                        return false;
+                }
+
+                const std::size_t parent_frame_count = animation.frames.size();
+                auto make_default_sample = [&](int idx) {
+                        return make_default_child_frame(idx);
+                };
+
+                std::vector<AnimationChildData> descriptors;
+                descriptors.reserve(child_assets.size());
+
+                for (std::size_t idx = 0; idx < child_assets.size(); ++idx) {
+                        const int child_index = static_cast<int>(idx);
+                        const auto parsed_it = parsed.find(child_index);
+                        const AnimationChildData* parsed_data = (parsed_it != parsed.end()) ? &parsed_it->second : nullptr;
+                        const auto prev_it = previous_by_asset.find(child_assets[idx]);
+                        const AnimationChildData* previous = (prev_it != previous_by_asset.end()) ? prev_it->second : nullptr;
+
+                        if (!parsed_data && !previous) {
+                                std::cout << "[AnimationLoader] child timeline for asset '" << child_assets[idx]
+                                          << "' is missing configuration and cannot be inferred.\n";
+                                fatal_error = true;
+                                break;
+                        }
+
+                        AnimationChildData descriptor;
+                        descriptor.asset_name = child_assets[idx];
+                        descriptor.name = previous ? previous->name : std::string{};
+                        descriptor.animation_override = parsed_data ? parsed_data->animation_override
+                                                                    : (previous ? previous->animation_override : std::string{});
+                        descriptor.mode = parsed_data ? parsed_data->mode : previous->mode;
+                        descriptor.auto_start = parsed_data ? parsed_data->auto_start
+                                                            : (previous ? previous->auto_start
+                                                                         : (descriptor.mode == AnimationChildMode::Static));
+
+                        if (descriptor.mode == AnimationChildMode::Static) {
+                                const std::size_t sample_count = (parent_frame_count > 0)
+                                                                         ? parent_frame_count
+                                                                         : ((previous && previous->is_static() && !previous->frames.empty())
+                                                                                ? previous->frames.size()
+                                                                                : static_cast<std::size_t>(1));
+                                descriptor.frames.assign(sample_count, make_default_sample(child_index));
+
+                                if (parsed_data && !parsed_data->frames.empty()) {
+                                        const std::size_t limit = std::min(parsed_data->frames.size(), descriptor.frames.size());
+                                        for (std::size_t frame_idx = 0; frame_idx < limit; ++frame_idx) {
+                                                descriptor.frames[frame_idx] = parsed_data->frames[frame_idx];
+                                                descriptor.frames[frame_idx].child_index = child_index;
+                                        }
+                                } else if (previous && previous->is_static()) {
+                                        const std::size_t limit = std::min(previous->frames.size(), descriptor.frames.size());
+                                        for (std::size_t frame_idx = 0; frame_idx < limit; ++frame_idx) {
+                                                descriptor.frames[frame_idx] = previous->frames[frame_idx];
+                                                descriptor.frames[frame_idx].child_index = child_index;
+                                        }
+                                }
+                        } else {
+                                if (parsed_data && !parsed_data->frames.empty()) {
+                                        descriptor.frames = parsed_data->frames;
+                                        for (auto& sample : descriptor.frames) {
+                                                sample.child_index = child_index;
+                                        }
+                                } else if (previous && previous->is_async() && !previous->frames.empty()) {
+                                        descriptor.frames = previous->frames;
+                                        for (auto& sample : descriptor.frames) {
+                                                sample.child_index = child_index;
+                                        }
+                                } else {
+                                        descriptor.frames.push_back(make_default_sample(child_index));
+                                }
+                        }
+
+                        descriptors.push_back(std::move(descriptor));
+                }
+
+                if (fatal_error) {
+                        return false;
+                }
+
+                animation.child_assets() = std::move(child_assets);
+                animation.child_timelines() = std::move(descriptors);
+                return true;
+        }

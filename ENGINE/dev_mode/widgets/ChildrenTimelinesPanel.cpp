@@ -1,10 +1,10 @@
 #include "ChildrenTimelinesPanel.hpp"
 
 #include <algorithm>
-#include <optional>
 #include <utility>
 
 #include <SDL_log.h>
+#include <SDL_ttf.h>
 
 #include <nlohmann/json.hpp>
 
@@ -21,20 +21,16 @@ namespace {
 constexpr int kDefaultPanelWidth = 360;
 constexpr int kDefaultPanelHeight = 260;
 
-AnimationChildMode mode_from_index(int index) {
-    return index == 1 ? AnimationChildMode::Async : AnimationChildMode::Static;
-}
-
-int index_from_mode(AnimationChildMode mode) {
-    return mode == AnimationChildMode::Async ? 1 : 0;
-}
-
 const DMButtonStyle& enabled_button_style() {
     return DMStyles::AccentButton();
 }
 
 const DMButtonStyle& disabled_button_style() {
     return DMStyles::HeaderButton();
+}
+
+const DMButtonStyle& delete_button_style() {
+    return DMStyles::DeleteButton();
 }
 
 bool is_valid_selection(const std::string& selection) {
@@ -48,6 +44,40 @@ bool manifest_entry_has_animations(const nlohmann::json& entry) {
     auto it = entry.find("animations");
     return it != entry.end() && it->is_object() && !it->empty();
 }
+
+class ChildLabelWidget : public Widget {
+  public:
+    explicit ChildLabelWidget(std::string text) : text_(std::move(text)) {}
+
+    void set_rect(const SDL_Rect& r) override { rect_ = r; }
+    const SDL_Rect& rect() const override { return rect_; }
+    int height_for_width(int) const override { return DMCheckbox::height(); }
+    bool handle_event(const SDL_Event&) override { return false; }
+
+    void render(SDL_Renderer* renderer) const override {
+        if (!renderer) return;
+        const auto& style = DMStyles::Label();
+        TTF_Font* font = TTF_OpenFont(style.font_path.c_str(), style.font_size);
+        if (!font) return;
+        SDL_Surface* surface = TTF_RenderUTF8_Blended(font, text_.c_str(), style.color);
+        if (!surface) {
+            TTF_CloseFont(font);
+            return;
+        }
+        SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+        if (texture) {
+            SDL_Rect dst{rect_.x, rect_.y + (rect_.h - surface->h) / 2, surface->w, surface->h};
+            SDL_RenderCopy(renderer, texture, nullptr, &dst);
+            SDL_DestroyTexture(texture);
+        }
+        SDL_FreeSurface(surface);
+        TTF_CloseFont(font);
+    }
+
+  private:
+    std::string text_{};
+    SDL_Rect rect_{0, 0, 0, DMCheckbox::height()};
+};
 }
 
 ChildrenTimelinesPanel::ChildrenTimelinesPanel()
@@ -56,11 +86,6 @@ ChildrenTimelinesPanel::ChildrenTimelinesPanel()
 
     add_button_ = std::make_unique<DMButton>("Find Assets", &disabled_button_style(), 140, DMButton::height());
     add_widget_ = std::make_unique<ButtonWidget>(add_button_.get(), [this]() { this->open_asset_picker(); });
-
-    remove_button_ = std::make_unique<DMButton>("Remove", &disabled_button_style(), 100, DMButton::height());
-    remove_widget_ = std::make_unique<ButtonWidget>(remove_button_.get(), [this]() { this->remove_child(); });
-    reset_button_ = std::make_unique<DMButton>("Reset Timeline", &disabled_button_style(), 140, DMButton::height());
-    reset_widget_ = std::make_unique<ButtonWidget>(reset_button_.get(), [this]() { this->reset_selected_child_timeline(); });
 
     rebuild_rows();
 }
@@ -106,29 +131,19 @@ bool ChildrenTimelinesPanel::handle_event(const SDL_Event& e) {
     if (!is_visible()) {
         return false;
     }
+    std::vector<bool> previous_async;
+    previous_async.reserve(child_rows_.size());
+    for (const auto& row : child_rows_) {
+        previous_async.push_back(row.async_checkbox ? row.async_checkbox->value() : false);
+    }
+
     bool consumed = DockableCollapsible::handle_event(e);
 
-    if (animation_dropdown_ && !animation_ids_.empty()) {
-        int next_index = std::clamp(animation_dropdown_->selected(), 0, static_cast<int>(animation_ids_.size()) - 1);
-        if (next_index != selected_animation_index_) {
-            select_animation(next_index);
-            consumed = true;
-        }
-    }
-
-    if (child_dropdown_ && !child_names_.empty()) {
-        int next_child = std::clamp(child_dropdown_->selected(), 0, static_cast<int>(child_names_.size()) - 1);
-        if (next_child != selected_child_index_) {
-            select_child(next_child);
-            consumed = true;
-        }
-    }
-
-    if (mode_dropdown_ && selected_child_index_ >= 0) {
-        AnimationChildMode desired = mode_from_index(mode_dropdown_->selected());
-        if (desired != current_mode_) {
-            current_mode_ = desired;
-            apply_selected_child_settings();
+    for (std::size_t i = 0; i < child_rows_.size(); ++i) {
+        const auto& row = child_rows_[i];
+        const bool next = row.async_checkbox ? row.async_checkbox->value() : false;
+        if (i < previous_async.size() && next != previous_async[i]) {
+            apply_child_mode(row.name, next ? AnimationChildMode::Async : AnimationChildMode::Static);
             consumed = true;
         }
     }
@@ -177,26 +192,16 @@ void ChildrenTimelinesPanel::close_overlay() {
 
 void ChildrenTimelinesPanel::rebuild_rows() {
     Rows rows;
-    if (animation_widget_) {
-        rows.push_back({animation_widget_.get()});
-    }
-
     Row controls_row;
     controls_row.push_back(add_widget_.get());
-    controls_row.push_back(remove_widget_.get());
     rows.push_back(std::move(controls_row));
 
-    if (child_widget_) {
-        rows.push_back({child_widget_.get()});
-    }
-
-    if (mode_widget_) {
-        Row config_row;
-        config_row.push_back(mode_widget_.get());
-        if (reset_widget_) {
-            config_row.push_back(reset_widget_.get());
-        }
-        rows.push_back(std::move(config_row));
+    for (auto& row : child_rows_) {
+        Row child_row;
+        if (row.label_widget) child_row.push_back(row.label_widget.get());
+        if (row.async_widget) child_row.push_back(row.async_widget.get());
+        if (row.delete_widget) child_row.push_back(row.delete_widget.get());
+        rows.push_back(std::move(child_row));
     }
 
     set_rows(rows);
@@ -206,113 +211,36 @@ void ChildrenTimelinesPanel::rebuild_rows() {
 void ChildrenTimelinesPanel::sync_from_document() {
     const std::string signature = current_signature();
     if (signature == last_signature_) {
-        sync_selection_controls();
+        sync_child_rows();
         return;
     }
     last_signature_ = signature;
+    child_rows_.clear();
 
-    animation_ids_.clear();
-    child_names_.clear();
-    selected_animation_index_ = -1;
-    selected_child_index_ = -1;
+    const bool can_add = (manifest_store_ != nullptr) && (document_ != nullptr);
+    if (add_button_) add_button_->set_style(can_add ? &enabled_button_style() : &disabled_button_style());
 
     if (!document_) {
-        animation_dropdown_.reset();
-        animation_widget_.reset();
-        child_dropdown_.reset();
-        child_widget_.reset();
-        mode_dropdown_.reset();
-        mode_widget_.reset();
-        reset_button_->set_style(&disabled_button_style());
         rebuild_rows();
         return;
     }
 
-    animation_ids_ = document_->animation_ids();
-    if (!animation_ids_.empty()) {
-        if (selected_animation_index_ < 0 || selected_animation_index_ >= static_cast<int>(animation_ids_.size())) {
-            selected_animation_index_ = 0;
-        }
+    const auto animation_ids = document_->animation_ids();
+    const std::string animation_id = animation_ids.empty() ? std::string{} : animation_ids.front();
+    const auto children = document_->animation_children();
+
+    for (const auto& child : children) {
+        ChildRow row;
+        row.name = child;
+        row.label_widget = std::make_unique<ChildLabelWidget>(child);
+        const AnimationChildMode mode = animation_id.empty() ? AnimationChildMode::Static : child_mode(animation_id, child);
+        row.async_checkbox = std::make_unique<DMCheckbox>("Async", mode == AnimationChildMode::Async);
+        row.async_widget = std::make_unique<CheckboxWidget>(row.async_checkbox.get());
+        row.delete_button = std::make_unique<DMButton>("x", &delete_button_style(), 36, DMButton::height());
+        row.delete_widget = std::make_unique<ButtonWidget>(row.delete_button.get(), [this, child]() { this->remove_child(child); });
+        child_rows_.push_back(std::move(row));
     }
 
-    child_names_ = document_->animation_children();
-    if (!child_names_.empty()) {
-        if (selected_child_index_ < 0 || selected_child_index_ >= static_cast<int>(child_names_.size())) {
-            selected_child_index_ = 0;
-        }
-    }
-
-    sync_animation_dropdown();
-    sync_child_dropdown();
-    sync_selection_controls();
-    rebuild_rows();
-}
-
-void ChildrenTimelinesPanel::sync_animation_dropdown() {
-    std::vector<std::string> options = animation_ids_.empty()
-        ? std::vector<std::string>{"(no animations)"}
-        : animation_ids_;
-    int selected = animation_ids_.empty() ? 0 : std::clamp(selected_animation_index_, 0, static_cast<int>(animation_ids_.size()) - 1);
-    animation_dropdown_ = std::make_unique<DMDropdown>("Animation", options, selected);
-    animation_widget_ = std::make_unique<DropdownWidget>(animation_dropdown_.get());
-}
-
-void ChildrenTimelinesPanel::sync_child_dropdown() {
-    std::vector<std::string> options = child_names_.empty()
-        ? std::vector<std::string>{"(no children)"}
-        : child_names_;
-    int selected = child_names_.empty() ? 0 : std::clamp(selected_child_index_, 0, static_cast<int>(child_names_.size()) - 1);
-    child_dropdown_ = std::make_unique<DMDropdown>("Child", options, selected);
-    child_widget_ = std::make_unique<DropdownWidget>(child_dropdown_.get());
-}
-
-void ChildrenTimelinesPanel::sync_selection_controls() {
-    const bool has_child = selected_child_index_ >= 0 && selected_child_index_ < static_cast<int>(child_names_.size());
-    const bool can_add = manifest_store_ != nullptr;
-    if (add_button_) add_button_->set_style(can_add ? &enabled_button_style() : &disabled_button_style());
-    if (remove_button_) remove_button_->set_style(has_child ? &enabled_button_style() : &disabled_button_style());
-    if (reset_button_) reset_button_->set_style(has_child ? &enabled_button_style() : &disabled_button_style());
-
-    if (!has_child || !document_) {
-        mode_dropdown_.reset();
-        mode_widget_.reset();
-        current_mode_ = AnimationChildMode::Static;
-        return;
-    }
-
-    std::string animation = selected_animation_id();
-    auto child = selected_child_name();
-    if (animation.empty() || !child) {
-        return;
-    }
-
-    auto settings = document_->child_timeline_settings(animation, *child);
-    if (!settings.found) {
-        settings.mode = AnimationChildMode::Static;
-    }
-    current_mode_ = settings.mode;
-
-    mode_dropdown_ = std::make_unique<DMDropdown>("Mode", std::vector<std::string>{"Static", "Async"}, index_from_mode(current_mode_));
-    mode_widget_ = std::make_unique<DropdownWidget>(mode_dropdown_.get());
-}
-
-void ChildrenTimelinesPanel::select_animation(int index) {
-    if (animation_ids_.empty()) {
-        selected_animation_index_ = -1;
-        return;
-    }
-    selected_animation_index_ = std::clamp(index, 0, static_cast<int>(animation_ids_.size()) - 1);
-    last_signature_.clear();
-    sync_from_document();
-}
-
-void ChildrenTimelinesPanel::select_child(int index) {
-    if (child_names_.empty()) {
-        selected_child_index_ = -1;
-        return;
-    }
-    selected_child_index_ = std::clamp(index, 0, static_cast<int>(child_names_.size()) - 1);
-    sync_selection_controls();
     rebuild_rows();
 }
 
@@ -347,6 +275,28 @@ void ChildrenTimelinesPanel::open_asset_picker() {
     });
 }
 
+void ChildrenTimelinesPanel::sync_child_rows() {
+    const bool can_add = (manifest_store_ != nullptr) && (document_ != nullptr);
+    if (add_button_) add_button_->set_style(can_add ? &enabled_button_style() : &disabled_button_style());
+
+    if (!document_) {
+        return;
+    }
+
+    const auto animation_ids = document_->animation_ids();
+    if (animation_ids.empty()) {
+        return;
+    }
+
+    const std::string animation_id = animation_ids.front();
+    for (auto& row : child_rows_) {
+        const AnimationChildMode mode = child_mode(animation_id, row.name);
+        if (row.async_checkbox) {
+            row.async_checkbox->set_value(mode == AnimationChildMode::Async);
+        }
+    }
+}
+
 void ChildrenTimelinesPanel::add_child(const std::string& asset_name) {
     if (!document_) {
         return;
@@ -354,7 +304,6 @@ void ChildrenTimelinesPanel::add_child(const std::string& asset_name) {
     auto children = document_->animation_children();
     auto it = std::find(children.begin(), children.end(), asset_name);
     if (it != children.end()) {
-        select_child(static_cast<int>(std::distance(children.begin(), it)));
         if (status_callback_) status_callback_("Child already exists.", 180);
         return;
     }
@@ -370,94 +319,56 @@ void ChildrenTimelinesPanel::add_child(const std::string& asset_name) {
     }
     last_signature_.clear();
     sync_from_document();
-    select_child(static_cast<int>(children.size()) - 1);
     if (status_callback_) {
         status_callback_(std::string("Added child '") + asset_name + "'.", 180);
     }
 }
 
-void ChildrenTimelinesPanel::remove_child() {
+void ChildrenTimelinesPanel::remove_child(const std::string& child_name) {
     if (!document_) {
         return;
     }
-    if (selected_child_index_ < 0 || selected_child_index_ >= static_cast<int>(child_names_.size())) {
-        if (status_callback_) status_callback_("Select a child to remove.", 180);
+
+    auto children = document_->animation_children();
+    auto it = std::find(children.begin(), children.end(), child_name);
+    if (it == children.end()) {
+        if (status_callback_) status_callback_("Child not found.", 180);
         return;
     }
-    std::vector<std::string> next;
-    next.reserve(child_names_.size() > 0 ? child_names_.size() - 1 : 0);
-    for (std::size_t i = 0; i < child_names_.size(); ++i) {
-        if (static_cast<int>(i) == selected_child_index_) {
-            continue;
-        }
-        next.push_back(child_names_[i]);
-    }
-    const std::string removed = child_names_[static_cast<std::size_t>(selected_child_index_)];
-    document_->replace_animation_children(next);
+
+    children.erase(it);
+    document_->replace_animation_children(children);
     try {
         document_->save_to_file();
     } catch (...) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[ChildrenTimelinesPanel] Failed to save animation document after removing child.");
     }
     if (on_children_changed_) {
-        on_children_changed_(next);
+        on_children_changed_(children);
     }
     last_signature_.clear();
     sync_from_document();
-    if (!next.empty()) {
-        select_child(std::min(selected_child_index_, static_cast<int>(next.size()) - 1));
-    }
     if (status_callback_) {
-        status_callback_(std::string("Removed child '") + removed + "'.", 180);
+        status_callback_(std::string("Removed child '") + child_name + "'.", 180);
     }
 }
 
-void ChildrenTimelinesPanel::reset_selected_child_timeline() {
+void ChildrenTimelinesPanel::apply_child_mode(const std::string& child_name, AnimationChildMode mode) {
     if (!document_) {
-        if (status_callback_) status_callback_("No document loaded.", 180);
         return;
     }
-    std::string animation = selected_animation_id();
-    auto child = selected_child_name();
-    if (animation.empty() || !child) {
-        if (status_callback_) status_callback_("Select a child to reset.", 180);
-        return;
-    }
-    const bool reset = document_->reset_child_timeline(animation, *child);
-    if (reset) {
-        try {
-            document_->save_to_file();
-        } catch (...) {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[ChildrenTimelinesPanel] Failed to save animation document after resetting child timeline.");
-        }
-        last_signature_.clear();
-        sync_from_document();
-        if (status_callback_) status_callback_("Reset child timeline.", 180);
-    } else {
-        if (status_callback_) status_callback_("Reset failed.", 180);
-    }
-}
 
-void ChildrenTimelinesPanel::apply_selected_child_settings() {
-    if (!document_ || selected_child_index_ < 0) {
-        return;
-    }
-    std::string animation = selected_animation_id();
-    auto child = selected_child_name();
-    if (animation.empty() || !child) {
-        return;
-    }
-    // Auto-start is automatically true for Static mode, false for Async mode
-    const bool auto_start = (current_mode_ == AnimationChildMode::Static);
-    bool changed = document_->set_child_timeline_settings(animation, *child, current_mode_, auto_start, std::string{});
+    const bool changed = apply_mode_to_all_animations(child_name, mode);
     if (!changed) {
         return;
     }
+
     try {
         document_->save_to_file();
     } catch (...) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[ChildrenTimelinesPanel] Failed to save animation document after child config change.");
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[ChildrenTimelinesPanel] Failed to save animation document after child mode change.");
     }
+
     last_signature_.clear();
     sync_from_document();
 }
@@ -470,28 +381,27 @@ std::string ChildrenTimelinesPanel::current_signature() const {
     auto animations = document_->animation_ids();
     for (const auto& id : animations) {
         signature.append("|").append(id);
-    }
-    std::string animation = selected_animation_id();
-    if (!animation.empty()) {
-        if (auto payload = document_->animation_payload(animation)) {
-            signature.append("|payload:").append(*payload);
+        if (auto payload = document_->animation_payload(id)) {
+            signature.append(":").append(*payload);
         }
     }
     return signature;
 }
 
-std::string ChildrenTimelinesPanel::selected_animation_id() const {
-    if (selected_animation_index_ < 0 || selected_animation_index_ >= static_cast<int>(animation_ids_.size())) {
-        return std::string{};
+AnimationChildMode ChildrenTimelinesPanel::child_mode(const std::string& animation_id, const std::string& child_name) const {
+    auto settings = document_ ? document_->child_timeline_settings(animation_id, child_name) : AnimationDocument::ChildTimelineSettings{};
+    if (!settings.found) {
+        return AnimationChildMode::Static;
     }
-    return animation_ids_[static_cast<std::size_t>(selected_animation_index_)];
+    return settings.mode;
 }
 
-std::optional<std::string> ChildrenTimelinesPanel::selected_child_name() const {
-    if (selected_child_index_ < 0 || selected_child_index_ >= static_cast<int>(child_names_.size())) {
-        return std::nullopt;
+bool ChildrenTimelinesPanel::apply_mode_to_all_animations(const std::string& child_name, AnimationChildMode mode) {
+    if (!document_) {
+        return false;
     }
-    return child_names_[static_cast<std::size_t>(selected_child_index_)];
+    const bool auto_start = (mode == AnimationChildMode::Static);
+    return document_->set_child_mode_for_all_animations(child_name, mode, auto_start);
 }
 
 } // namespace animation_editor

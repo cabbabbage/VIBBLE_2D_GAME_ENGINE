@@ -1,6 +1,7 @@
 #include "FrameEditor.hpp"
 
 #include <algorithm>
+#include <string>
 
 #include "../../../dm_styles.hpp"
 #include "../../../draw_utils.hpp"
@@ -121,6 +122,37 @@ void FrameEditor::update() {
     if (children_editor_ && movement_editor_) {
         children_editor_->set_selected_frame(movement_editor_->selected_index());
         children_editor_->update();
+    }
+    if (movement_editor_ && children_editor_) {
+        int override_count = -1;
+        std::string override_animation_id;
+        if (active_mode_ == Mode::AsyncChildren && preview_provider_) {
+            std::string child_id = children_editor_->selected_child_id();
+            AnimationChildMode mode = children_editor_->selected_child_mode();
+            if (!child_id.empty() && mode == AnimationChildMode::Async) {
+                auto default_anim_id = [](const std::string& child) {
+                    const std::string suffix = "/default";
+                    if (child.size() >= suffix.size() &&
+                        child.rfind(suffix) == child.size() - suffix.size()) {
+                        return child;
+                    }
+                    return child + suffix;
+                };
+                std::string candidate = default_anim_id(child_id);
+                int child_frames = preview_provider_->get_frame_count(candidate);
+                if (child_frames <= 0) {
+                    child_frames = preview_provider_->get_frame_count(child_id);
+                    if (child_frames > 0) {
+                        candidate = child_id;
+                    }
+                }
+                if (child_frames > 0) {
+                    override_count = child_frames;
+                    override_animation_id = candidate;
+                }
+            }
+        }
+        movement_editor_->set_frame_list_override(override_count, override_animation_id, true);
     }
     // Sync tools panel from movement editor state
     if (tools_panel_ && movement_editor_) {

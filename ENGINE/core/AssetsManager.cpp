@@ -1273,10 +1273,22 @@ void Assets::ensure_light_textures_loaded(Asset* asset) {
         return;
     }
 
-    // Load all light textures for this asset from cache
-    for (std::size_t i = 0; i < asset->info->light_sources.size(); ++i) {
-        asset->info->rebuild_light_texture(renderer(), i);
+    auto* info = asset->info.get();
+    bool needs_regeneration = false;
+
+    for (std::size_t i = 0; i < info->light_sources.size(); ++i) {
+        if (!info->rebuild_light_texture(renderer(), i)) {
+            needs_regeneration = true;
+        }
     }
+
+    if (needs_regeneration && !info->ensure_light_textures(renderer())) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "[Assets] Failed to regenerate light textures for '%s'",
+                    info->name.c_str());
+    }
+
+    asset->mark_composite_dirty();
 }
 
 const std::vector<Asset*>& Assets::get_selected_assets() const {

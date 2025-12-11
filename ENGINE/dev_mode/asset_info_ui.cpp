@@ -1773,13 +1773,15 @@ void AssetInfoUI::notify_light_sources_modified(bool purge_light_cache) {
 
     bool updated_any = apply_to_assets_with_info([&](Asset* asset) {
         if (asset->info) {
-            asset->info->light_sources = info_->light_sources;
+            asset->info->set_lighting(info_->light_sources);
             asset->info->is_light_source = info_->is_light_source;
             asset->info->moving_asset = info_->moving_asset;
         }
         asset->is_shaded = info_->is_shaded;
+        asset->mark_composite_dirty();
         asset->clear_render_caches();
         if (assets_) {
+            assets_->ensure_light_textures_loaded(asset);
             // Ensure any light-map and runtime lighting consumers react immediately
             assets_->notify_light_map_asset_moved(asset);
         }
@@ -1799,6 +1801,14 @@ void AssetInfoUI::notify_light_sources_modified(bool purge_light_cache) {
     std::filesystem::remove_all(cache_dir, ec);
 }
 
+void AssetInfoUI::mark_target_asset_composite_dirty() {
+    if (!assets_ || !target_asset_) {
+        return;
+    }
+    target_asset_->mark_composite_dirty();
+    assets_->mark_active_assets_dirty();
+}
+
 void AssetInfoUI::mark_light_for_rebuild(std::size_t light_index) {
     if (!info_) {
         return;
@@ -1815,8 +1825,10 @@ void AssetInfoUI::mark_light_for_rebuild(std::size_t light_index) {
     // Propagate updated light textures to live assets
     apply_to_assets_with_info([&](Asset* asset) {
         if (!asset || !asset->info) return;
-        if (renderer) {
-            asset->info->light_sources = info_->light_sources;
+        asset->info->set_lighting(info_->light_sources);
+        asset->info->moving_asset = info_->moving_asset;
+        if (renderer && assets_) {
+            assets_->ensure_light_textures_loaded(asset);
         }
         asset->clear_render_caches();
         if (assets_) {
@@ -1847,8 +1859,11 @@ void AssetInfoUI::mark_lighting_asset_for_rebuild() {
 
     apply_to_assets_with_info([&](Asset* asset) {
         if (!asset || !asset->info) return;
-        if (renderer) {
-            asset->info->light_sources = info_->light_sources;
+        asset->info->set_lighting(info_->light_sources);
+        asset->info->is_light_source = info_->is_light_source;
+        asset->info->moving_asset = info_->moving_asset;
+        if (renderer && assets_) {
+            assets_->ensure_light_textures_loaded(asset);
         }
         asset->clear_render_caches();
         if (assets_) {

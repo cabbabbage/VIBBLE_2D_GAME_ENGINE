@@ -295,46 +295,92 @@ AnimationChildData* Animation::find_child_timeline(std::string_view child_name) 
 }
 
 void Animation::rebuild_child_timelines_from_frames() {
-    child_data_.clear();
-    if (child_asset_names_.empty() || frames.empty()) {
+    if (child_asset_names_.empty()) {
+        child_data_.clear();
         rebuild_child_start_events_from_timelines();
         return;
     }
 
-    const std::size_t frame_count = frames.size();
-    child_data_.reserve(child_asset_names_.size());
-    for (std::size_t child_idx = 0; child_idx < child_asset_names_.size(); ++child_idx) {
-        AnimationChildData descriptor;
-        descriptor.asset_name = child_asset_names_[child_idx];
-        descriptor.mode = AnimationChildMode::Static;
-        descriptor.frames.resize(frame_count);
-
-        for (std::size_t frame_idx = 0; frame_idx < frame_count; ++frame_idx) {
-            AnimationChildFrameData frame_sample{};
-            frame_sample.child_index = static_cast<int>(child_idx);
-            frame_sample.render_in_front = true;
-            frame_sample.visible = false;
-            frame_sample.dx = 0;
-            frame_sample.dy = 0;
-            frame_sample.degree = 0.0f;
-
-            AnimationFrame* frame = (frame_idx < frames.size()) ? frames[frame_idx] : nullptr;
-            if (frame) {
-                const auto& legacy_children = frame->children;
-                auto legacy_it = std::find_if(legacy_children.begin(), legacy_children.end(), [&](const AnimationChildFrameData& entry) {
-                    return entry.child_index == static_cast<int>(child_idx);
-                });
-                if (legacy_it != legacy_children.end()) {
-                    frame_sample = *legacy_it;
-                }
-            }
-
-            descriptor.frames[frame_idx] = frame_sample;
+    std::unordered_map<std::string, const AnimationChildData*> previous_by_asset;
+    previous_by_asset.reserve(child_data_.size());
+    for (const auto& existing : child_data_) {
+        if (!existing.asset_name.empty()) {
+            previous_by_asset.emplace(existing.asset_name, &existing);
         }
-
-        child_data_.push_back(std::move(descriptor));
     }
 
+    const bool has_parent_frames = !frames.empty();
+    const std::size_t parent_frame_count = has_parent_frames ? frames.size() : 0;
+
+    std::vector<AnimationChildData> rebuilt;
+    rebuilt.reserve(child_asset_names_.size());
+
+    for (std::size_t child_idx = 0; child_idx < child_asset_names_.size(); ++child_idx) {
+        const std::string& asset_name = child_asset_names_[child_idx];
+        const auto prev_it = previous_by_asset.find(asset_name);
+        const AnimationChildData* previous = (prev_it != previous_by_asset.end()) ? prev_it->second : nullptr;
+
+        AnimationChildData descriptor;
+        descriptor.asset_name = asset_name;
+        descriptor.name = previous ? previous->name : std::string{};
+        descriptor.animation_override = previous ? previous->animation_override : std::string{};
+        descriptor.mode = previous ? previous->mode : descriptor.mode;
+        descriptor.auto_start = previous ? previous->auto_start : (descriptor.mode == AnimationChildMode::Static);
+
+        auto make_default_sample = [&](int index) {
+            AnimationChildFrameData sample{};
+            sample.child_index = index;
+            sample.render_in_front = true;
+            sample.visible = false;
+            sample.dx = 0;
+            sample.dy = 0;
+            sample.degree = 0.0f;
+            return sample;
+        };
+
+        if (descriptor.mode == AnimationChildMode::Static) {
+            const std::size_t sample_count = (parent_frame_count > 0)
+                                                 ? parent_frame_count
+                                                 : ((previous && previous->is_static() && !previous->frames.empty())
+                                                        ? previous->frames.size()
+                                                        : static_cast<std::size_t>(1));
+            descriptor.frames.assign(sample_count, make_default_sample(static_cast<int>(child_idx)));
+            for (std::size_t frame_idx = 0; frame_idx < sample_count; ++frame_idx) {
+                if (has_parent_frames && frame_idx < frames.size()) {
+                    AnimationFrame* frame = frames[frame_idx];
+                    if (frame) {
+                        const auto& legacy_children = frame->children;
+                        auto legacy_it = std::find_if(legacy_children.begin(), legacy_children.end(), [&](const AnimationChildFrameData& entry) {
+                            return entry.child_index == static_cast<int>(child_idx);
+                        });
+                        if (legacy_it != legacy_children.end()) {
+                            descriptor.frames[frame_idx] = *legacy_it;
+                            descriptor.frames[frame_idx].child_index = static_cast<int>(child_idx);
+                            continue;
+                        }
+                    }
+                }
+                if (previous && previous->is_static() && frame_idx < previous->frames.size()) {
+                    descriptor.frames[frame_idx] = previous->frames[frame_idx];
+                    descriptor.frames[frame_idx].child_index = static_cast<int>(child_idx);
+                }
+            }
+        } else {
+            if (previous && previous->is_async() && !previous->frames.empty()) {
+                descriptor.frames = previous->frames;
+                for (auto& sample : descriptor.frames) {
+                    sample.child_index = static_cast<int>(child_idx);
+                }
+            }
+            if (descriptor.frames.empty()) {
+                descriptor.frames.push_back(make_default_sample(static_cast<int>(child_idx)));
+            }
+        }
+
+        rebuilt.push_back(std::move(descriptor));
+    }
+
+    child_data_ = std::move(rebuilt);
     rebuild_child_start_events_from_timelines();
 }
 

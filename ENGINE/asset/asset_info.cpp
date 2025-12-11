@@ -940,6 +940,34 @@ bool AssetInfo::rebuild_light_texture(SDL_Renderer* renderer, std::size_t light_
     return true;
 }
 
+bool AssetInfo::ensure_light_textures(SDL_Renderer* renderer) {
+    if (!renderer) {
+        return false;
+    }
+
+    bool missing = false;
+    for (const auto& light : light_sources) {
+        if (!light.texture || light.cached_w <= 0 || light.cached_h <= 0) {
+            missing = true;
+            break;
+        }
+    }
+
+    if (!missing) {
+        return true;
+    }
+
+    generate_lights(renderer);
+
+    bool all_loaded = true;
+    for (std::size_t i = 0; i < light_sources.size(); ++i) {
+        if (!rebuild_light_texture(renderer, i)) {
+            all_loaded = false;
+        }
+    }
+    return all_loaded;
+}
+
 bool AssetInfo::commit_manifest() {
         nlohmann::json payload = info_json_;
         if (!payload.contains("asset_name") || !payload["asset_name"].is_string() || payload["asset_name"].get<std::string>().empty()) {

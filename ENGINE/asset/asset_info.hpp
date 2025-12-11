@@ -201,6 +201,7 @@ class AssetInfo {
 
     // Reload a single cached light texture from disk and replace the in-memory texture.
     bool rebuild_light_texture(SDL_Renderer* renderer, std::size_t light_index);
+    bool ensure_light_textures(SDL_Renderer* renderer);
 
         private:
     void load_base_properties(const nlohmann::json &data);

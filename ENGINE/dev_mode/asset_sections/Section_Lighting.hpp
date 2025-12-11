@@ -194,10 +194,12 @@ public:
                 if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
                     Row nr = create_row_from_light(r.light, true);
                     rows_.insert(rows_.begin() + static_cast<long long>(i) + 1, std::move(nr));
+                    shift_pending_rebuild_indices(static_cast<std::size_t>(i + 1));
                     changed = true;
                     reset_scaling_profile = true;
                     rebuild_required = true;
-                    schedule_full_asset_light_rebuild();
+                    const std::size_t new_index = static_cast<std::size_t>(i + 1);
+                    schedule_light_rebuild(new_index);
                     used = true;
                     refresh_row_headers();
                     refresh_highlight_state();
@@ -294,10 +296,13 @@ public:
                 new_light.in_front = true;
                 new_light.render_to_dark_mask = true;
                 rows_.push_back(create_row_from_light(new_light, true, false));
+                shift_pending_rebuild_indices(rows_.empty() ? 0 : rows_.size() - 1);
                 changed = true;
                 reset_scaling_profile = true;
                 rebuild_required = true;
-                schedule_full_asset_light_rebuild();
+                if (!rows_.empty()) {
+                    schedule_light_rebuild(rows_.size() - 1);
+                }
                 used = true;
                 refresh_row_headers();
                 refresh_highlight_state();
@@ -531,6 +536,7 @@ private:
             const bool purge_light_cache = rebuild_required;
             if (ui_ && reset_scaling_profile) {
                 ui_->notify_light_sources_modified(purge_light_cache);
+                ui_->mark_target_asset_composite_dirty();
             }
             (void)info_->commit_manifest();
             if (rebuild_required) {
@@ -560,6 +566,26 @@ private:
         }
         pending_full_asset_light_rebuild_ = true;
         pending_light_rebuild_indices_.clear();
+    }
+
+    void shift_pending_rebuild_indices(std::size_t inserted_at) {
+        if (pending_light_rebuild_indices_.empty()) {
+            return;
+        }
+        bool shifted = false;
+        for (auto& index : pending_light_rebuild_indices_) {
+            if (index >= inserted_at) {
+                ++index;
+                shifted = true;
+            }
+        }
+        if (!shifted) {
+            return;
+        }
+        std::sort(pending_light_rebuild_indices_.begin(), pending_light_rebuild_indices_.end());
+        pending_light_rebuild_indices_.erase(
+            std::unique(pending_light_rebuild_indices_.begin(), pending_light_rebuild_indices_.end()),
+            pending_light_rebuild_indices_.end());
     }
 
     void finalize_pending_light_rebuilds() {

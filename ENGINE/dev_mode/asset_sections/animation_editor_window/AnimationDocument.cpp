@@ -1473,6 +1473,53 @@ bool AnimationDocument::set_child_timeline_settings(const std::string& animation
     return true;
 }
 
+bool AnimationDocument::set_child_mode_for_all_animations(const std::string& child_name,
+                                                          AnimationChildMode mode,
+                                                          bool auto_start) {
+    auto children = animation_children();
+    auto child_it = std::find(children.begin(), children.end(), child_name);
+    if (child_it == children.end()) {
+        return false;
+    }
+
+    const int child_index = static_cast<int>(std::distance(children.begin(), child_it));
+    bool mutated = false;
+
+    for (auto& anim_entry : animations_) {
+        const std::string& animation_id = anim_entry.first;
+        nlohmann::json payload = parse_payload(anim_entry.second, animation_id);
+        const int frame_count = std::max<int>(1, payload.value("number_of_frames", 1));
+        nlohmann::json timelines = payload.contains("child_timelines") ? payload["child_timelines"] : nlohmann::json::array();
+        timelines = normalize_child_timelines(timelines, children, static_cast<std::size_t>(frame_count));
+
+        if (child_index < 0 || child_index >= static_cast<int>(timelines.size())) {
+            continue;
+        }
+
+        nlohmann::json seed = timelines[static_cast<std::size_t>(child_index)];
+        seed["mode"] = mode_to_string(mode);
+        seed["auto_start"] = auto_start;
+        seed["autostart"] = auto_start;
+        seed["frames"] = nlohmann::json::array();
+
+        nlohmann::json rebuilt = build_child_timeline_entry(child_index, child_name, seed, static_cast<std::size_t>(frame_count));
+        rebuilt["auto_start"] = auto_start;
+        rebuilt["autostart"] = auto_start;
+
+        if (timelines[static_cast<std::size_t>(child_index)] != rebuilt) {
+            timelines[static_cast<std::size_t>(child_index)] = rebuilt;
+            payload["child_timelines"] = normalize_child_timelines(timelines, children, static_cast<std::size_t>(frame_count));
+            anim_entry.second = serialize_payload(coerce_payload(animation_id, payload));
+            mutated = true;
+        }
+    }
+
+    if (mutated) {
+        mark_dirty();
+    }
+    return mutated;
+}
+
 bool AnimationDocument::reset_child_timeline(const std::string& animation_id, const std::string& child_name) {
     auto anim_it = animations_.find(animation_id);
     if (anim_it == animations_.end()) {

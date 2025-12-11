@@ -72,6 +72,7 @@ class AssetInfoUI {
     void request_apply_section(AssetInfoSectionId section_id);
     void set_header_visibility_callback(std::function<void(bool)> cb);
     void notify_light_sources_modified(bool purge_light_cache);
+    void mark_target_asset_composite_dirty();
     void notify_spawn_group_entry_changed(const nlohmann::json& entry);
     void notify_spawn_group_removed(const std::string& spawn_id);
     void regenerate_shadow_masks();

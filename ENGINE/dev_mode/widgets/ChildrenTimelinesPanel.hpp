@@ -4,7 +4,6 @@
 
 #include <functional>
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -12,9 +11,8 @@
 #include "dev_mode/DockableCollapsible.hpp"
 
 class ButtonWidget;
-class DropdownWidget;
 class DMButton;
-class DMDropdown;
+class DMCheckbox;
 class Input;
 class SearchAssets;
 
@@ -25,11 +23,6 @@ class ManifestStore;
 namespace animation_editor {
 
 class AnimationDocument;
-
-struct ChildConfig {
-    std::string asset_name;
-    AnimationChildMode mode = AnimationChildMode::Static;
-};
 
 class ChildrenTimelinesPanel : public DockableCollapsible {
   public:
@@ -58,20 +51,15 @@ class ChildrenTimelinesPanel : public DockableCollapsible {
   private:
     void rebuild_rows();
     void sync_from_document();
-    void sync_animation_dropdown();
-    void sync_child_dropdown();
-    void sync_selection_controls();
-    void select_animation(int index);
-    void select_child(int index);
-    void reset_selected_child_timeline();
+    void sync_child_rows();
     void open_asset_picker();
     void add_child(const std::string& asset_name);
-    void remove_child();
-    void apply_selected_child_settings();
+    void remove_child(const std::string& child_name);
+    void apply_child_mode(const std::string& child_name, AnimationChildMode mode);
     void ensure_asset_picker();
     std::string current_signature() const;
-    std::string selected_animation_id() const;
-    std::optional<std::string> selected_child_name() const;
+    AnimationChildMode child_mode(const std::string& animation_id, const std::string& child_name) const;
+    bool apply_mode_to_all_animations(const std::string& child_name, AnimationChildMode mode);
 
   private:
     std::shared_ptr<AnimationDocument> document_;
@@ -80,25 +68,18 @@ class ChildrenTimelinesPanel : public DockableCollapsible {
     std::function<void(const std::string&, int)> status_callback_;
     std::function<void(const std::vector<std::string>&)> on_children_changed_;
 
-    std::vector<std::string> animation_ids_;
-    int selected_animation_index_ = -1;
-    std::vector<std::string> child_names_;
-    int selected_child_index_ = -1;
+    struct ChildRow {
+        std::string name;
+        std::unique_ptr<Widget> label_widget;
+        std::unique_ptr<DMCheckbox> async_checkbox;
+        std::unique_ptr<Widget> async_widget;
+        std::unique_ptr<DMButton> delete_button;
+        std::unique_ptr<Widget> delete_widget;
+    };
 
-    AnimationChildMode current_mode_ = AnimationChildMode::Static;
-
-    std::unique_ptr<DMDropdown> animation_dropdown_;
-    std::unique_ptr<DropdownWidget> animation_widget_;
-    std::unique_ptr<DMDropdown> child_dropdown_;
-    std::unique_ptr<DropdownWidget> child_widget_;
+    std::vector<ChildRow> child_rows_;
     std::unique_ptr<DMButton> add_button_;
     std::unique_ptr<ButtonWidget> add_widget_;
-    std::unique_ptr<DMButton> remove_button_;
-    std::unique_ptr<ButtonWidget> remove_widget_;
-    std::unique_ptr<DMButton> reset_button_;
-    std::unique_ptr<ButtonWidget> reset_widget_;
-    std::unique_ptr<DMDropdown> mode_dropdown_;
-    std::unique_ptr<DropdownWidget> mode_widget_;
 
     std::string last_signature_;
 };

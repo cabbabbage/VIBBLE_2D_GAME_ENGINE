@@ -647,6 +647,8 @@ void AnimationRuntime::apply_child_frame_data(Animation& anim, const AnimationFr
         prev_world.push_back(slot.world_pos);
     }
 
+    std::vector<bool> parent_looped_flags(self_->animation_children_.size(), false);
+
     animation_update::child_attachments::ParentState parent_state;
     SDL_Point render_pos{ static_cast<int>(std::lround(self_->smoothed_translation_x())),
                           static_cast<int>(std::lround(self_->smoothed_translation_y())) };
@@ -668,6 +670,7 @@ void AnimationRuntime::apply_child_frame_data(Animation& anim, const AnimationFr
             slot.timeline_frame_progress = 0.0f;
             slot.was_visible = false;
         }
+        parent_looped_flags[i] = parent_looped;
         slot.last_parent_frame_index = parent_frame_index;
     }
 
@@ -677,7 +680,7 @@ void AnimationRuntime::apply_child_frame_data(Animation& anim, const AnimationFr
                 continue;
             }
             auto& slot = self_->animation_children_[child_idx];
-            if (!slot.timeline) {
+            if (!slot.timeline || slot.timeline_mode != AnimationChildMode::Async) {
                 continue;
             }
             restart_child_timeline(slot);
@@ -700,13 +703,15 @@ void AnimationRuntime::apply_child_frame_data(Animation& anim, const AnimationFr
         AnimationChildFrameData sample{};
         bool should_emit = false;
         if (slot.timeline_mode == AnimationChildMode::Static) {
-            if (!slot.timeline_active && parent_frame_index >= 0 &&
-                static_cast<std::size_t>(parent_frame_index) < frames.size() &&
-                frames[static_cast<std::size_t>(parent_frame_index)].visible) {
-                restart_child_timeline(slot);
-            }
-            if (!slot.timeline_active || parent_frame_index < 0) {
+            if (parent_frame_index < 0) {
+                slot.timeline_active = false;
                 continue;
+            }
+            const bool parent_looped = parent_looped_flags[i];
+            if (parent_frame_index == 0 && (!slot.timeline_active || parent_looped)) {
+                restart_child_timeline(slot);
+            } else if (!slot.timeline_active) {
+                slot.timeline_active = true;
             }
             const std::size_t sample_idx = std::min(frames.size() - 1,
                                                     static_cast<std::size_t>(std::max(0, parent_frame_index)));
