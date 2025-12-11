@@ -238,7 +238,7 @@ void AudioPanel::render(SDL_Renderer* renderer) const {
 
     label_y += label_height();
     if (derived_from_animation_) {
-        // Replace instructional labels with tooltip icon/info
+
         DMWidgetTooltipRender(renderer, bounds_, info_tooltip_);
     } else if (has_audio_) {
         std::string clip_text = "Clip: " + audio_name_;
@@ -257,7 +257,7 @@ void AudioPanel::render(SDL_Renderer* renderer) const {
 }
 
 bool AudioPanel::handle_event(const SDL_Event& e) {
-    // Always allow tooltip interactions
+
     if (DMWidgetTooltipHandleEvent(e, bounds_, info_tooltip_)) {
         return true;
     }
@@ -457,8 +457,7 @@ void AudioPanel::refresh_inherited_message() {
     inherited_message_rect_ = SDL_Rect{0, 0, 0, 0};
 
     if (derived_from_animation_) {
-        std::string target = inherited_source_id_.empty() ? std::string("the source animation")
-                                                         : "animation '" + inherited_source_id_ + "'";
+        std::string target = inherited_source_id_.empty() ? std::string("the source animation") : "animation '" + inherited_source_id_ + "'";
         inherited_message_lines_.push_back("Audio settings inherit from " + target + ".");
         inherited_message_lines_.push_back("Edit the source animation to change them.");
     }
@@ -467,7 +466,6 @@ void AudioPanel::refresh_inherited_message() {
         layout_dirty_ = true;
     }
 
-    // Update tooltip content to replace labels
     if (derived_from_animation_) {
         std::string tip;
         for (size_t i = 0; i < inherited_message_lines_.size(); ++i) {

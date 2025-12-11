@@ -379,7 +379,7 @@ void AssetFilterBar::rebuild_layout() {
         const SDL_Rect& toggle_rect = filter_toggle_button_->rect();
         if (toggle_rect.w > 0) {
             int right_limit = std::max(mode_bar_rect_.x, toggle_rect.x - DMSpacing::item_gap());
-            // Reserve accessory width to the left of the toggle button
+
             if (right_accessory_width_ > 0) {
                 right_limit -= (right_accessory_width_ + DMSpacing::item_gap());
                 right_limit = std::max(mode_bar_rect_.x, right_limit);
@@ -399,13 +399,13 @@ void AssetFilterBar::rebuild_layout() {
     int current_y = header_rect_.y + header_rect_.h;
     filters_rect_ = SDL_Rect{0, current_y, available_width, 0};
     layout_filter_checkboxes();
-    // Place extra panel under checkboxes (inside filters_rect_)
+
     extra_panel_rect_ = SDL_Rect{0,0,0,0};
     if (extra_panel_height_ > 0) {
         const int top_gap = DMSpacing::item_gap();
         const int extra_y = filters_rect_.y + filters_rect_.h + top_gap;
         extra_panel_rect_ = SDL_Rect{ filters_rect_.x, extra_y, filters_rect_.w, extra_panel_height_ };
-        // Extend filters area to include extra panel
+
         filters_rect_.h += top_gap + extra_panel_height_;
     }
     merge_bounds(filters_rect_);
@@ -461,7 +461,6 @@ void AssetFilterBar::render(SDL_Renderer* renderer) const {
         }
     }
 
-    // Render extra panel content if configured
     if (extra_panel_rect_.w > 0 && extra_panel_rect_.h > 0 && extra_renderer_) {
         extra_renderer_(renderer, extra_panel_rect_);
     }
@@ -515,9 +514,9 @@ bool AssetFilterBar::handle_event(const SDL_Event& event) {
         sync_state_from_ui();
         notify_state_changed();
     }
-    // Route events to extra panel if present
+
     if (extra_panel_rect_.w > 0 && extra_panel_rect_.h > 0 && extra_event_handler_) {
-        // Always give extra content a chance to consume pointer/key events
+
         if (extra_event_handler_(event, extra_panel_rect_)) {
             used = true;
         }
@@ -836,7 +835,7 @@ void AssetFilterBar::layout_filter_checkboxes() {
             section_rows.pop_back();
         }
         return section_rows;
-    };
+};
 
     const auto primary_rows = build_rows_for(primary_entries);
     const auto advanced_rows = build_rows_for(advanced_entries);
@@ -847,7 +846,7 @@ void AssetFilterBar::layout_filter_checkboxes() {
             }
         }
         return false;
-    };
+};
 
     const bool has_primary = rows_have_content(primary_rows);
     const bool has_advanced = rows_have_content(advanced_rows);
@@ -899,7 +898,7 @@ void AssetFilterBar::layout_filter_checkboxes() {
                 y += row_gap;
             }
         }
-    };
+};
 
     bool section_emitted = false;
     if (has_primary) {

@@ -18,5 +18,5 @@ struct AssetLight {
     bool     has_back_lights      = false;
 };
 
-}  // namespace runtime_lighting
+}
 

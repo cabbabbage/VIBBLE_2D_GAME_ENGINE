@@ -29,8 +29,7 @@ void FrogController::update(const Input&) {
     if (self_->anim_->debug_enabled()) {
         std::ostringstream oss;
         oss << "[FrogController] pursuing player asset="
-            << (player->info ? player->info->name : "<unknown>")
-            << " (needs_target=" << (self_->needs_target ? "true" : "false") << ")";
+            << (player->info ? player->info->name : "<unknown>") << " (needs_target=" << (self_->needs_target ? "true" : "false") << ")";
         vibble::log::info(oss.str());
         std::cout << oss.str() << std::endl;
     }

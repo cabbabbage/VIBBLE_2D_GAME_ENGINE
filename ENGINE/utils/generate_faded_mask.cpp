@@ -11,9 +11,9 @@
 std::pair<GenerateFadedMask::MaskVariants, bool> GenerateFadedMask::BuildMasks(
     const std::string& asset_name,
     const std::string& animation_id,
-    const std::vector<int>& /*scale_steps*/,
-    const MaskVariants& /*variant_frames*/,
-    const ShadowMaskSettings& /*settings*/)
+    const std::vector<int>& ,
+    const MaskVariants& ,
+    const ShadowMaskSettings& )
 {
     vibble::log::warn(std::string{"[GenerateFadedMask] C++ mask generation is disabled; "}
                       + "invoke the Python asset pipeline (asset_tool.py / shadow_mask.py) "
@@ -39,9 +39,8 @@ std::vector<std::vector<SDL_Texture*>> GenerateFadedMask::SurfacesToTextures(
     return textures;
 }
 
-SDL_Surface* GenerateFadedMask::GenerateSingleMask(SDL_Surface* /*source*/,
-                                                   const ShadowMaskSettings& /*settings*/) {
-    vibble::log::warn("[GenerateFadedMask] GenerateSingleMask is disabled; "
-                      "use the Python shadow mask utilities instead.");
+SDL_Surface* GenerateFadedMask::GenerateSingleMask(SDL_Surface* ,
+                                                   const ShadowMaskSettings& ) {
+    vibble::log::warn("[GenerateFadedMask] GenerateSingleMask is disabled; " "use the Python shadow mask utilities instead.");
     return nullptr;
 }

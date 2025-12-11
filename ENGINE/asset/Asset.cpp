@@ -34,7 +34,6 @@ static std::mutex& asset_rng_mutex()
         return mutex;
 }
 
-// Collect the unique set of animation child asset ids across the asset and its animations.
 static std::vector<std::string> collect_animation_child_names(const AssetInfo& info) {
         std::vector<std::string> names;
         std::unordered_set<std::string> seen;
@@ -45,7 +44,7 @@ static std::vector<std::string> collect_animation_child_names(const AssetInfo& i
                 if (seen.insert(name).second) {
                         names.push_back(name);
                 }
-        };
+};
 
         for (const auto& name : info.animation_children) {
                 add(name);
@@ -60,7 +59,6 @@ static std::vector<std::string> collect_animation_child_names(const AssetInfo& i
         return names;
 }
 
-// Static storage for per-spawn-group flip overrides
 std::unordered_map<std::string, std::pair<bool,bool>> Asset::s_flip_overrides_{};
 std::mutex Asset::s_flip_overrides_mutex_{};
 
@@ -88,13 +86,13 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
 {
 	set_flip();
 	set_z_index();
-        // Ensure the player is always pixel-precise (no grid snapping during movement/rendering)
+
         try {
                 if (info && asset_types::canonicalize(info->type) == asset_types::player) {
-                        grid_resolution = 0; // force 0-resolution grid for the player
+                        grid_resolution = 0;
                 }
         } catch (...) {
-                // If type introspection fails, leave grid_resolution as-is
+
         }
         if (info) {
                 try {
@@ -125,14 +123,13 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
                         current_frame = f;
                 }
         }
-        
-        // Player keeps pixel-precise targets but still uses render-time smoothing so motion appears fluid
+
         const bool is_player_asset = info && asset_types::canonicalize(info->type) == asset_types::player;
         TransformSmoothingParams translation_params = transform_smoothing::asset_translation_params();
         if (is_player_asset) {
                 translation_params.method = TransformSmoothingMethod::Lerp;
-                translation_params.lerp_rate = 100.0f; // fast response with minimal perceived jitter
-                translation_params.max_step = 0.0f;    // no clamp so the player keeps up with input
+                translation_params.lerp_rate = 100.0f;
+                translation_params.max_step = 0.0f;
                 translation_params.snap_threshold = 0.0f;
         }
         translation_smoothing_x_.set_params(translation_params);
@@ -142,9 +139,7 @@ Asset::Asset(std::shared_ptr<AssetInfo> info_,
 
         translation_smoothing_x_.reset(static_cast<float>(pos.x));
         translation_smoothing_y_.reset(static_cast<float>(pos.y));
-        const float initial_scale = (info && std::isfinite(info->scale_factor) && info->scale_factor > 0.0f)
-                                        ? info->scale_factor
-                                        : 1.0f;
+        const float initial_scale = (info && std::isfinite(info->scale_factor) && info->scale_factor > 0.0f) ? info->scale_factor : 1.0f;
         scale_smoothing_.reset(initial_scale);
         alpha_smoothing_.reset(hidden ? 0.0f : 1.0f);
 
@@ -171,7 +166,7 @@ Asset::~Asset() {
         for (Asset* asset_child : asset_children) {
                 if (asset_child && asset_child->parent == this) asset_child->parent = nullptr;
         }
-        // clear_downscale_cache();
+
         clear_render_caches();
         if (composite_texture_) {
                 SDL_DestroyTexture(composite_texture_);
@@ -233,7 +228,7 @@ Asset::Asset(const Asset& o)
 , animation_children_initialized_(o.animation_children_initialized_)
 , initializing_animation_children_(false)
 {
-        // clear_downscale_cache();
+
         clear_render_caches();
         last_scale_usage_ = o.last_scale_usage_;
         scale_variant_state_ = o.scale_variant_state_;
@@ -255,7 +250,7 @@ Asset::Asset(const Asset& o)
 
 Asset& Asset::operator=(const Asset& o) {
         if (this == &o) return *this;
-        // clear_downscale_cache();
+
         clear_render_caches();
         parent               = o.parent;
         info                 = o.info;
@@ -380,9 +375,7 @@ void Asset::finalize_setup() {
 
 void Asset::update_scale_values() {
     const float base_scale =
-        (info && std::isfinite(info->scale_factor) && info->scale_factor > 0.0f)
-            ? info->scale_factor
-            : 1.0f;
+        (info && std::isfinite(info->scale_factor) && info->scale_factor > 0.0f) ? info->scale_factor : 1.0f;
 
     float perspective_scale = 1.0f;
     if (window) {
@@ -405,9 +398,7 @@ void Asset::update_scale_values() {
         desired_variant_scale = current_scale;
     }
 
-    const auto& steps = (info && !info->scale_variants.empty())
-                        ? static_cast<const std::vector<float>&>(info->scale_variants)
-                        : render_pipeline::ScalingLogic::DefaultScaleSteps();
+    const auto& steps = (info && !info->scale_variants.empty()) ? static_cast<const std::vector<float>&>(info->scale_variants) : render_pipeline::ScalingLogic::DefaultScaleSteps();
 
     auto selection = render_pipeline::ScalingLogic::Choose(desired_variant_scale, steps);
     current_nearest_variant_scale = selection.stored_scale;
@@ -433,8 +424,6 @@ SDL_Texture* Asset::get_texture()
 	return nullptr;
 }
 
-
-
 SDL_Texture* Asset::get_current_frame() const
 {
 	if (current_frame) {
@@ -457,7 +446,6 @@ void Asset::set_current_animation(const std::string& name)
 		frame_progress = 0.0f;
 	}
 }
-
 
 void Asset::update() {
     if (!info) return;
@@ -563,7 +551,7 @@ bool Asset::is_current_animation_looping() const {
 void Asset::add_child(Asset* asset_child) {
         if (!asset_child || !asset_child->info) return;
         if (info) {
-                // Spawn group logic removed; retain simple z_offset/top placement behavior if needed via other means.
+
         }
         asset_child->parent = this;
         if (!asset_child->get_assets()) asset_child->set_assets(this->assets_);
@@ -649,7 +637,6 @@ void Asset::initialize_animation_children_recursive() {
                 return;
         }
 
-        // Preserve existing slots by name to avoid respawning children.
         std::unordered_map<std::string, std::size_t> existing;
         existing.reserve(animation_children_.size());
         for (std::size_t i = 0; i < animation_children_.size(); ++i) {
@@ -659,7 +646,6 @@ void Asset::initialize_animation_children_recursive() {
                 }
         }
 
-        // Ensure there is a slot per requested child id.
         for (const auto& name : child_names) {
                 if (existing.find(name) != existing.end()) {
                         continue;
@@ -674,7 +660,6 @@ void Asset::initialize_animation_children_recursive() {
                 existing[name] = animation_children_.size() - 1;
         }
 
-        // Reorder slots to match canonical child name order for deterministic indexing.
         for (std::size_t i = 0; i < child_names.size(); ++i) {
                 const std::string& desired = child_names[i];
                 auto it = existing.find(desired);
@@ -703,9 +688,8 @@ void Asset::initialize_animation_children_recursive() {
                         slot.frame_progress = 0.0f;
                         slot.last_parent_frame_index = -1;
                 }
-        };
+};
 
-        // Initialize slots, spawn children, and keep them hidden until animation data drives them.
         for (std::size_t i = 0; i < child_names.size(); ++i) {
                 auto& slot = animation_children_[i];
                 slot.child_index = static_cast<int>(i);
@@ -722,9 +706,7 @@ void Asset::initialize_animation_children_recursive() {
                 }
                 if (!slot.spawned_asset && slot.info) {
                         SDL_Point spawn_pos{
-                                static_cast<int>(std::lround(smoothed_translation_x())),
-                                static_cast<int>(std::lround(smoothed_translation_y()))
-                        };
+                                static_cast<int>(std::lround(smoothed_translation_x())), static_cast<int>(std::lround(smoothed_translation_y())) };
                         Asset* child = nullptr;
                         try {
                                 child = assets_->spawn_asset(slot.asset_name, spawn_pos);
@@ -748,7 +730,6 @@ void Asset::initialize_animation_children_recursive() {
                 }
         }
 
-        // Park any extra slots as inactive.
         for (std::size_t i = child_names.size(); i < animation_children_.size(); ++i) {
                 auto& slot = animation_children_[i];
                 slot.child_index = -1;
@@ -771,12 +752,11 @@ void Asset::initialize_animation_children_recursive() {
         animation_children_initialized_ = true;
         initializing_animation_children_ = false;
         } catch (...) {
-                // If anything goes wrong, mark as not initialized but avoid crashing.
+
                 animation_children_initialized_ = false;
                 initializing_animation_children_ = false;
         }
 }
-
 
 void Asset::ensure_animation_runtime(bool force_recreate) {
     if (!assets_) {
@@ -911,7 +891,7 @@ void Asset::set_z_offset(int z) {
 
 void Asset::set_flip() {
         if (!info || !info->flipable) return;
-        // Check for explicit flip override set per spawn group
+
         bool use_override = false;
         bool override_value = false;
         if (!spawn_id.empty()) {
@@ -935,7 +915,6 @@ void Asset::set_flip() {
         flipped = should_flip;
 }
 
-// Static API to control flip overrides by spawn_id
 void Asset::SetFlipOverrideForSpawnId(const std::string& id, bool enabled, bool flipped) {
         if (id.empty()) return;
         std::lock_guard<std::mutex> lock(s_flip_overrides_mutex_);
@@ -973,7 +952,7 @@ Area Asset::get_area(const std::string& name) const {
 }
 
 void Asset::deactivate() {
-        // clear_downscale_cache();
+
         clear_render_caches();
         visibility_stamp = 0;
 }
@@ -1024,11 +1003,9 @@ void Asset::invalidate_downscale_cache() {
         last_scaled_h_            = 0;
         last_scaled_camera_scale_ = -1.0f;
         last_scale_usage_         = {};
-        // reset_scale_variant_state();
+
         downscale_cache_ready_revision_ = 0;
 }
-
-
 
 void Asset::refresh_cached_dimensions() {
         int width = 0;
@@ -1054,9 +1031,9 @@ void Asset::refresh_cached_dimensions() {
 }
 
 void Asset::on_scale_factor_changed() {
-        // clear_downscale_cache();
+
         last_scale_usage_ = {};
-        // reset_scale_variant_state();
+
         refresh_cached_dimensions();
 
         shadow_mask_cache_.width  = 0;

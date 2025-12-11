@@ -82,7 +82,6 @@ class AudioPanel {
     std::vector<std::string> inherited_message_lines_;
     mutable SDL_Rect inherited_message_rect_{0, 0, 0, 0};
 
-    // Info tooltip replacing instructional labels
     DMWidgetTooltipState info_tooltip_{};
 };
 

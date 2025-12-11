@@ -52,7 +52,7 @@ struct Chunk {
     Chunk& operator=(Chunk&&) noexcept = default;
 };
 
-}  // namespace world
+}
 
 class LightMap {
 public:
@@ -62,40 +62,21 @@ public:
         float     blended           = 1.0f;
         SDL_Color color{255, 255, 255, 255};
         bool      has_color = false;
-    };
+};
 
     LightMap(Assets* assets, int screen_width, int screen_height);
     ~LightMap();
 
     void rebuild(SDL_Renderer* renderer);
     void update(SDL_Renderer* renderer, std::uint32_t delta_ms);
-    SampledBrightness sample_lighting(int world_x,
-                                      int world_y,
-                                      float static_weight  = 0.0f,
-                                      float dynamic_weight = 1.0f) const;
-    SampledBrightness sample_lighting_bilinear(float world_x,
-                                               float world_y,
-                                               float static_weight  = 0.0f,
-                                               float dynamic_weight = 1.0f) const;
-    float sample_brightness(int world_x,
-                            int world_y,
-                            float static_weight  = 0.0f,
-                            float dynamic_weight = 1.0f) const;
-    float sample_brightness_bilinear(float world_x,
-                                     float world_y,
-                                     float static_weight  = 0.0f,
-                                     float dynamic_weight = 1.0f) const;
+    SampledBrightness sample_lighting(int world_x, int world_y, float static_weight  = 0.0f, float dynamic_weight = 1.0f) const;
+    SampledBrightness sample_lighting_bilinear(float world_x, float world_y, float static_weight  = 0.0f, float dynamic_weight = 1.0f) const;
+    float sample_brightness(int world_x, int world_y, float static_weight  = 0.0f, float dynamic_weight = 1.0f) const;
+    float sample_brightness_bilinear(float world_x, float world_y, float static_weight  = 0.0f, float dynamic_weight = 1.0f) const;
 
     void render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& view_rect) const;
-    void render_visible_chunks(SDL_Renderer* renderer,
-                               const SDL_Rect& view_rect,
-                               float           alpha_multiplier,
-                               const SDL_Color& color_mod) const;
-    void subtract_runtime_shadow_from_texture(SDL_Renderer* renderer,
-                                              SDL_Texture*  target_texture,
-                                              const SDL_Rect& target_rect,
-                                              const SDL_Rect& screen_rect,
-                                              float           alpha_multiplier) const;
+    void render_visible_chunks(SDL_Renderer* renderer, const SDL_Rect& view_rect, float           alpha_multiplier, const SDL_Color& color_mod) const;
+    void subtract_runtime_shadow_from_texture(SDL_Renderer* renderer, SDL_Texture*  target_texture, const SDL_Rect& target_rect, const SDL_Rect& screen_rect, float           alpha_multiplier) const;
     void render_chunk_preview(SDL_Renderer* renderer, const SDL_Rect& view_rect) const;
     void present_static_previews(SDL_Renderer* renderer) const;
 

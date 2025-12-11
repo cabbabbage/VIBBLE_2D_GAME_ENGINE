@@ -214,7 +214,6 @@ bool SlidingWindowContainer::is_point_inside(int x, int y) const {
     if (!visible_) return false;
     SDL_Point p{x, y};
 
-    // When header is hidden, use effective panel rectangle that excludes header area
     if (!header_visible_) {
         const int padding = DMSpacing::panel_padding();
         const int content_top = panel_.y + padding;
@@ -241,7 +240,7 @@ void SlidingWindowContainer::update(const Input& input, int screen_w, int screen
     const bool pointer_in_scroll =
         (mx >= scroll_region_.x && mx < scroll_region_.x + scroll_region_.w && my >= scroll_region_.y && my < scroll_region_.y + scroll_region_.h);
     bool pointer_in_panel_area = false;
-    // When header is hidden, ignore the header region for hit testing so it doesn't consume input
+
     if (!header_visible_) {
         const int padding = DMSpacing::panel_padding();
         const int content_top = panel_.y + padding;
@@ -329,7 +328,7 @@ bool SlidingWindowContainer::handle_event(const SDL_Event& e) {
     bool pointer_inside = false;
     bool pointer_inside_panel = false;
     if (pointer_event) {
-        // When header is hidden, use effective panel rectangle that excludes header area
+
         if (!header_visible_) {
             const int padding = DMSpacing::panel_padding();
             const int content_top = panel_.y + padding;
@@ -448,7 +447,6 @@ bool SlidingWindowContainer::handle_event(const SDL_Event& e) {
         }
     }
 
-    // Consume input if dragging scrollbars or if pointer is inside the interactive area
     bool should_consume_input = false;
     if (scroll_dragging_ || scrollbar_dragging_) {
         should_consume_input = true;
@@ -620,7 +618,6 @@ void SlidingWindowContainer::layout(int screen_w, int screen_h) const {
 
     int scroll_start = content_top + (header_visible_ ? (label_height + label_gap) : 0);
 
-    // When header is hidden, adjust panel rectangle to exclude header area
     SDL_Rect effective_panel = panel_;
     if (!header_visible_) {
         effective_panel.y = scroll_start;

@@ -7,7 +7,7 @@
 namespace camera_effects {
 
 struct ImageEffectSettings {
-    // Identity values here mirror apply_color_effects.py expectations
+
     float contrast = 0.0f;
     float brightness = 0.0f;
     float blur = 0.0f;
@@ -31,6 +31,6 @@ struct GlobalState {
 
 void set_global_state(const GlobalState& state);
 
-}  // namespace image_effects
+}
 
-}  // namespace camera_effects
+}

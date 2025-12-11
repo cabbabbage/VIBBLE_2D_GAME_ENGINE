@@ -357,7 +357,7 @@ MapLayersPanel::MapLayersPanel(int x, int y)
 
     set_close_button_on_left(true);
     set_close_button_enabled(true);
-    // Ensure the panel's close button also closes any right-hand sliding containers.
+
     set_on_close([this]() {
         if (rooms_list_container_) {
             rooms_list_container_->close();

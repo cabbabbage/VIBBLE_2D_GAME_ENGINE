@@ -36,7 +36,6 @@ ManifestData make_manifest_data(nlohmann::json manifest_json) {
     return data;
 }
 
-// Last known-good manifest to allow graceful fallback on transient parse errors
 static nlohmann::json& cached_manifest_ref() {
     static nlohmann::json cached = make_default_manifest_json();
     return cached;
@@ -91,7 +90,7 @@ void write_manifest_file(const std::filesystem::path& path,
 
 }
 
-} // namespace
+}
 
 std::string manifest_path() {
     return (project_root() / "manifest.json").string();
@@ -118,7 +117,7 @@ ManifestData load_manifest() {
         } catch (const nlohmann::json::parse_error&) {
             return false;
         }
-    };
+};
 
     nlohmann::json manifest_json;
     if (!read_once(manifest_json)) {
@@ -155,7 +154,6 @@ ManifestData load_manifest() {
         write_manifest_file(path, manifest_json);
     }
 
-    // Update last known-good cache
     cached_manifest_ref() = manifest_json;
     return make_manifest_data(std::move(manifest_json));
 }
@@ -166,6 +164,5 @@ void save_manifest(const ManifestData& data) {
     write_manifest_file(path, data.raw);
 }
 
-} // namespace manifest
-
+}
 

@@ -98,23 +98,22 @@ std::string trim_copy_room_editor(const std::string& input) {
 }
 
 static bool is_visible_pixel_at(SDL_Renderer* renderer, SDL_Point screen_point) {
-    if (!renderer) return true; // fail-open to preserve old behavior if no renderer
-    // Read back a 1x1 pixel from the current render target at screen_point.
+    if (!renderer) return true;
+
     Uint32 pixel = 0;
     SDL_Rect r{ screen_point.x, screen_point.y, 1, 1 };
 
-    // Get renderer output format; fall back if unavailable.
     Uint32 fmt = SDL_PIXELFORMAT_RGBA8888;
 #if SDL_MAJOR_VERSION >= 2
     SDL_RendererInfo info{};
     if (SDL_GetRendererInfo(renderer, &info) == 0 && info.num_texture_formats > 0) {
-        // Prefer the first reported texture format when possible.
+
         fmt = info.texture_formats[0];
     }
 #endif
 
     if (SDL_RenderReadPixels(renderer, &r, fmt, &pixel, sizeof(pixel)) != 0) {
-        // If readback fails (e.g., unsupported on this platform/driver), fail-open.
+
         return true;
     }
 
@@ -471,7 +470,7 @@ void RoomEditor::select_spawn_group_assets(const std::string& spawn_id) {
             return true;
         }
         return !std::equal(selected_assets_.begin(), selected_assets_.end(), previous_selection.begin());
-    };
+};
     if (spawn_id.empty()) {
         sync_spawn_group_panel_with_selection();
         if (selection_changed()) {
@@ -480,7 +479,7 @@ void RoomEditor::select_spawn_group_assets(const std::string& spawn_id) {
         update_highlighted_assets();
         return;
     }
-    // Prevent selecting a locked spawn group
+
     if (spawn_group_locked(spawn_id)) {
         sync_spawn_group_panel_with_selection();
         if (selection_changed()) {
@@ -679,7 +678,7 @@ void RoomEditor::set_screen_dimensions(int width, int height) {
 
     if (spawn_group_panel_) {
         spawn_group_panel_->set_screen_dimensions(screen_w_, screen_h_);
-        // Constrain to area between header and footer
+
         spawn_group_panel_->set_work_area(FloatingPanelLayoutManager::instance().usableRect());
         update_spawn_group_config_anchor();
     }
@@ -709,14 +708,14 @@ void RoomEditor::set_shared_footer_bar(DevFooterBar* footer) {
 void RoomEditor::set_header_visibility_callback(std::function<void(bool)> cb) {
     header_visibility_callback_ = std::move(cb);
     if (header_visibility_callback_) {
-        // Initialize header visibility state (no panels visible at init)
+
         header_visibility_callback_(false);
     }
     if (room_cfg_ui_) {
         room_cfg_ui_->set_header_visibility_controller([this](bool visible) {
             room_config_panel_visible_ = visible;
             if (header_visibility_callback_) {
-                // Forward actual visibility so outer UI can suppress headers/footers
+
                 header_visibility_callback_(visible);
             }
         });
@@ -725,7 +724,7 @@ void RoomEditor::set_header_visibility_callback(std::function<void(bool)> cb) {
         info_ui_->set_header_visibility_callback([this](bool visible) {
             asset_info_panel_visible_ = visible;
             if (header_visibility_callback_) {
-                // Forward actual visibility so outer UI can suppress headers/footers
+
                 header_visibility_callback_(visible);
             }
         });
@@ -845,7 +844,6 @@ void RoomEditor::update(const Input& input) {
             return;
         }
 
-
         if (has_spawn_target) {
             clear_active_spawn_group_target();
         }
@@ -854,7 +852,7 @@ void RoomEditor::update(const Input& input) {
             clear_selection();
             clear_highlighted_assets();
         }
-    };
+};
 
     if (!enabled_) {
         if (mouse_controls_enabled_last_frame_) {
@@ -887,10 +885,8 @@ void RoomEditor::update(const Input& input) {
         pan_zoom_.cancel(assets_->getView());
     }
 
-    // APPLY the queued highlight/selection state every frame
     update_highlighted_assets();
 }
-
 
 void RoomEditor::update_ui(const Input& input) {
     const bool config_visible_now = room_cfg_ui_ && room_cfg_ui_->visible();
@@ -904,7 +900,6 @@ void RoomEditor::update_ui(const Input& input) {
         reset_drag_state();
     }
 
-    // Update room config bounds to account for header visibility changes
     update_room_config_bounds();
 
     if (library_ui_ && library_ui_->is_visible()) {
@@ -947,19 +942,19 @@ if (auto selected = library_ui_->consume_selection()) {
         open_asset_info_editor(selected);
     }
         }
-        // Handle room area selection from library
+
         if (auto area_sel = library_ui_->consume_area_selection()) {
             const bool had_pending_spawn = pending_spawn_world_pos_.has_value();
             if (pending_spawn_world_pos_ && current_room_ && assets_) {
                 SDL_Point world = *pending_spawn_world_pos_;
                 pending_spawn_world_pos_.reset();
-                // find source room
+
                 Room* src_room = nullptr;
                 for (Room* r : assets_->rooms()) {
                     if (r && r->room_name == area_sel->room_name) { src_room = r; break; }
                 }
                 if (src_room) {
-                    // locate area entry JSON in source room
+
                     nlohmann::json* src_entry = nullptr;
                     nlohmann::json& src_root = src_room->assets_data();
                     if (src_root.is_object() && src_root.contains("areas") && src_root["areas"].is_array()) {
@@ -970,9 +965,9 @@ if (auto selected = library_ui_->consume_selection()) {
                         }
                     }
                     if (src_entry) {
-                        // Prepare copy
+
                         nlohmann::json copy = *src_entry;
-                        // Generate unique name for target room
+
                         std::string base = copy.value("name", area_sel->area_name);
                         if (base.empty()) base = "area";
                         std::string candidate = base;
@@ -982,13 +977,12 @@ if (auto selected = library_ui_->consume_selection()) {
                                 if (na.name == name) return true;
                             }
                             return false;
-                        };
+};
                         while (name_conflict(candidate)) {
                             candidate = base + "_" + std::to_string(suffix++);
                         }
                         copy["name"] = candidate;
 
-                        // Ensure original bounds info present if source didn't have it
                         auto dims_of = [&](Room* room){
                             int w=0,h=0; if (room && room->room_area) {
                                 auto b = room->room_area->get_bounds();
@@ -996,18 +990,16 @@ if (auto selected = library_ui_->consume_selection()) {
                                 h = std::max(1, std::get<3>(b) - std::get<1>(b));
                             }
                             return std::pair<int,int>(w,h);
-                        };
+};
                         auto [src_w, src_h] = dims_of(src_room);
                         if (!copy.contains("origional_width") && src_w > 0) copy["origional_width"] = src_w;
                         if (!copy.contains("origional_height") && src_h > 0) copy["origional_height"] = src_h;
 
-                        // Set anchor relative to center for target room based on click point
                         SDL_Point center{0,0};
                         if (current_room_->room_area) { auto c = current_room_->room_area->get_center(); center.x=c.x; center.y=c.y; }
                         copy["anchor_relative_to_center"] = true;
                         copy["anchor"] = nlohmann::json::object({ {"x", world.x - center.x}, {"y", world.y - center.y} });
 
-                        // Insert into target room areas
                         nlohmann::json& dst_root = current_room_->assets_data();
                         if (!dst_root.contains("areas") || !dst_root["areas"].is_array()) {
                             dst_root["areas"] = nlohmann::json::array();
@@ -1015,12 +1007,11 @@ if (auto selected = library_ui_->consume_selection()) {
                         dst_root["areas"].push_back(copy);
                         current_room_->save_assets_json();
 
-                        // Ensure an anchor spawn entry exists for drag/anchor updates
                         ensure_area_anchor_spawn_entry(current_room_, candidate);
                     }
                 }
             } else if (!had_pending_spawn) {
-                // No placement point: open info for area library selection? Ignore for now.
+
                 pending_spawn_world_pos_.reset();
             }
         }
@@ -1698,17 +1689,17 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
         }
         render_room_labels(renderer);
     }
-    // Render snapped crosshair at the world point under cursor (warped to screen)
+
     if (renderer && enabled_) {
-        // Skip crosshair when input is blocked by UI
+
         int mx = input_ ? input_->getX() : 0;
         int my = input_ ? input_->getY() : 0;
         if (!is_ui_blocking_input(mx, my)) {
             SDL_FPoint screen_f = cam.map_to_screen(snapped_cursor_world_);
             SDL_Point screen{ static_cast<int>(std::lround(screen_f.x)), static_cast<int>(std::lround(screen_f.y)) };
-            // Adjust X for parallax relative to warped floor
+
             if (assets_) {
-                // screen.x = assets_->world_grid().parallax_adjusted_screen_x(snapped_cursor_world_, screen.x);
+
             }
             SDL_Color color = DMStyles::HighlightColor();
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -1718,23 +1709,22 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
             SDL_RenderDrawLine(renderer, screen.x, screen.y - cross, screen.x, screen.y + cross);
         }
 
-        // Draw hover/selection outlines for highlighted assets (only when shift is held)
         if (is_shift_key_down()) {
             auto fetch_bounds = [&](Asset* asset, SDL_Rect& out_rect) -> bool {
                 if (!asset) return false;
-                // Prefer cached bounds from the spatial index
+
                 auto it = asset_bounds_cache_.find(asset);
                 if (it != asset_bounds_cache_.end()) {
                     out_rect = it->second.bounds;
                     return true;
                 }
-                // Fallback to on-the-fly computation
+
                 const float scale = std::max(kCameraScaleEpsilon, cam.get_scale());
                 const float inv_scale = 1.0f / scale;
                 const float ref_h = compute_reference_screen_height(cam, inv_scale);
                 int screen_y = 0;
                 return compute_asset_screen_bounds(cam, ref_h, inv_scale, asset, out_rect, screen_y);
-            };
+};
 
             ensure_spatial_index(cam);
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -1746,8 +1736,7 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
                     continue;
                 }
                 const bool is_selected = std::find(selected_assets_.begin(), selected_assets_.end(), asset) != selected_assets_.end();
-                SDL_Color color = is_selected ? DMStyles::AccentButton().hover_bg
-                                              : DMStyles::HighlightColor();
+                SDL_Color color = is_selected ? DMStyles::AccentButton().hover_bg : DMStyles::HighlightColor();
                 SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, 210);
                 for (int i = 0; i < outline_thickness; ++i) {
                     SDL_Rect r{
@@ -1755,13 +1744,13 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
                         bounds.y - i,
                         bounds.w + i * 2,
                         bounds.h + i * 2
-                    };
+};
                     SDL_RenderDrawRect(renderer, &r);
                 }
             }
         }
     }
-    // Now render dev-mode UI panels
+
     if (library_ui_ && library_ui_->is_visible()) {
         library_ui_->render(renderer, screen_w_, screen_h_);
     }
@@ -1812,7 +1801,6 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
             SDL_RenderDrawLine(renderer, screen_center.x, screen_center.y - cross, screen_center.x, screen_center.y + cross);
         }
 
-        // Edge-path helper overlay (dashed) similar to perimeter overlay
         auto draw_dashed_polyline_world = [&](const std::vector<SDL_Point>& path, SDL_Color color) {
             if (path.size() < 2) return;
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
@@ -1835,7 +1823,7 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
                     int seg = draw ? dash : gap;
                     int end = std::min(total, cursor + seg);
                     if (draw) {
-                        // draw segment from cursor..end
+
                         SDL_FPoint s_world{ static_cast<float>(a.x + ux * cursor), static_cast<float>(a.y + uy * cursor) };
                         SDL_FPoint e_world{ static_cast<float>(a.x + ux * end),    static_cast<float>(a.y + uy * end) };
                         SDL_FPoint s_screen_f = cam.map_to_screen_f(s_world);
@@ -1848,7 +1836,7 @@ void RoomEditor::render_overlays(SDL_Renderer* renderer) {
                     draw = !draw;
                 }
             }
-        };
+};
 
         auto edge_path = compute_edge_path_for_drag();
         if (!edge_path) {
@@ -2046,8 +2034,7 @@ void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetIn
     entry["display_name"]    = info->name;
 
     const int default_resolution =
-        current_room_ ? current_room_->map_grid_settings().resolution
-                      : MapGridSettings::defaults().resolution;
+        current_room_ ? current_room_->map_grid_settings().resolution : MapGridSettings::defaults().resolution;
 
     devmode::spawn::ensure_spawn_group_entry_defaults(entry, info->name, default_resolution);
 
@@ -2056,24 +2043,20 @@ void RoomEditor::finalize_asset_drag(Asset* asset, const std::shared_ptr<AssetIn
     arr.push_back(entry);
     save_current_room_assets_json();
 
-    // Update asset spawn metadata
     asset->spawn_id     = spawn_id;
     asset->spawn_method = "Exact";
 
-    // === Critical: recompute bounds/index immediately for new asset ===
     if (asset) {
         refresh_asset_spatial_entry(assets_->getView(), asset);
         ensure_spatial_index(assets_->getView());
     }
-    // Ensure highlight/hover reevaluates using fresh geometry.
+
     mark_highlight_dirty();
-    // ============================================================
 
     active_spawn_group_id_ = spawn_id;
     refresh_spawn_group_config_ui();
     rebuild_room_spawn_id_cache();
 }
-
 
 void RoomEditor::toggle_room_config() {
     ensure_room_configurator();
@@ -2167,7 +2150,6 @@ void RoomEditor::regenerate_room_from_template(Room* source_room) {
 void RoomEditor::focus_camera_on_asset(Asset* asset, double zoom_factor, int duration_steps) {
     if (!asset || !assets_) return;
 
-    // NEW: do not zoom/pan to any asset while the AssetInfoUI is open
     if (info_ui_ && info_ui_->is_visible()) {
         return;
     }
@@ -2177,7 +2159,6 @@ void RoomEditor::focus_camera_on_asset(Asset* asset, double zoom_factor, int dur
     cam.pan_and_zoom_to_asset(asset, zoom_factor, duration_steps);
     mark_spatial_index_dirty();
 }
-
 
 void RoomEditor::focus_camera_on_room_center(bool reframe_zoom) {
     if (!enabled_ || !assets_) return;
@@ -2325,7 +2306,6 @@ bool RoomEditor::any_blocking_panel_visible() const {
                        [](bool state) { return state; });
 }
 
-// RoomEditor.cpp
 void RoomEditor::handle_mouse_input(const Input& input) {
     if (!input_) return;
 
@@ -2333,7 +2313,6 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     const float prev_scale = cam.get_scale();
     const SDL_Point prev_center = cam.get_screen_center();
 
-    // --- Frame snapshot ---
     const SDL_Point screen_pt{ input_->getX(), input_->getY() };
     const bool left_down                = input_->isDown(Input::LEFT);
     const bool left_pressed_this_frame  = input_->wasPressed(Input::LEFT);
@@ -2341,15 +2320,10 @@ void RoomEditor::handle_mouse_input(const Input& input) {
     const bool shift_down =
         input.isScancodeDown(SDL_SCANCODE_LSHIFT) || input.isScancodeDown(SDL_SCANCODE_RSHIFT);
 
-    // Block camera panning if the pointer is pressed over a spawn-group gizmo so dragging can edit it.
     Asset* hit_before_pan = hit_test_asset(screen_pt, nullptr);
     const bool pointer_blocks_pan = dragging_ ||
-                                    (shift_down && hit_before_pan && !hit_before_pan->spawn_id.empty() &&
-                                     (left_down || left_pressed_this_frame));
+                                    (shift_down && hit_before_pan && !hit_before_pan->spawn_id.empty() && (left_down || left_pressed_this_frame));
 
-    // --- Pan/zoom first ---
-    // Allow panning when the pointer is over the scene (not over blocking UI).
-    // At this point, caller has already ensured input is not over UI via is_ui_blocking_input.
     pan_zoom_.handle_input(cam, input, pointer_blocks_pan);
     if (std::fabs(cam.get_scale() - prev_scale) > 1e-6 ||
         cam.get_screen_center().x != prev_center.x ||
@@ -2359,21 +2333,17 @@ void RoomEditor::handle_mouse_input(const Input& input) {
 
     const SDL_FPoint world_f = cam.screen_to_map(screen_pt);
     SDL_Point world_pt{ (int)std::lround(world_f.x), (int)std::lround(world_f.y) };
-    // Compute snapped cursor using live footer resolution when available; always enabled
+
     cursor_snap_resolution_ = current_grid_resolution();
     vibble::grid::Grid& grid_service = vibble::grid::global_grid();
     snapped_cursor_world_ = grid_service.snap_to_vertex(world_pt, cursor_snap_resolution_);
 
-    // --- Hit-test for hover (screen-space rects) ---
     Asset* hit = hit_test_asset(screen_pt, nullptr);
 
-    // --- Highlight rebuild helper ---
     auto rebuild_highlight = [this]() {
         highlighted_assets_.clear();
         if (!selected_assets_.empty()) {
-            highlighted_assets_.insert(highlighted_assets_.end(),
-                                       selected_assets_.begin(),
-                                       selected_assets_.end());
+            highlighted_assets_.insert(highlighted_assets_.end(), selected_assets_.begin(), selected_assets_.end());
         }
         if (hovered_asset_) {
             if (std::find(highlighted_assets_.begin(),
@@ -2383,9 +2353,8 @@ void RoomEditor::handle_mouse_input(const Input& input) {
             }
         }
         mark_highlight_dirty();
-    };
+};
 
-    // --- Persistent press/drag state ---
     static bool       prev_left_down = false;
     static SDL_Point  press_screen   = {0,0};
     static Asset*     pressed_asset  = nullptr;
@@ -2397,7 +2366,6 @@ void RoomEditor::handle_mouse_input(const Input& input) {
         was_dragged = false;
     }
 
-    // Swallow-window for left clicks after we consume an up
     if (suppress_next_left_click_) {
         if (click_buffer_frames_ > 0) {
             --click_buffer_frames_;
@@ -2406,15 +2374,14 @@ void RoomEditor::handle_mouse_input(const Input& input) {
         }
     }
 
-    // ---- LEFT DOWN edge ----
     if (shift_down && left_down && !prev_left_down) {
-        // Selection only on press; NEVER open panels here.
+
         pressed_asset = hit;
         was_dragged   = false;
         press_screen  = screen_pt;
 
         if (pressed_asset) {
-            // Build selection according to spawn-group semantics
+
             selected_assets_.clear();
             bool select_group = !pressed_asset->spawn_id.empty();
             if (select_group && active_assets_) {
@@ -2431,10 +2398,10 @@ void RoomEditor::handle_mouse_input(const Input& input) {
             }
             sync_spawn_group_panel_with_selection();
 
-            hovered_asset_ = pressed_asset; // clear visual feedback while pressed
+            hovered_asset_ = pressed_asset;
             rebuild_highlight();
         } else {
-            // Pressed empty: clear selection and hover highlight
+
             if (!selected_assets_.empty() || !highlighted_assets_.empty() || hovered_asset_) {
                 selected_assets_.clear();
                 highlighted_assets_.clear();
@@ -2445,7 +2412,6 @@ void RoomEditor::handle_mouse_input(const Input& input) {
         }
     }
 
-    // ---- While held: detect & run drag ----
     if (left_down && pressed_asset) {
         const int dx = screen_pt.x - press_screen.x;
         const int dy = screen_pt.y - press_screen.y;
@@ -2461,7 +2427,7 @@ void RoomEditor::handle_mouse_input(const Input& input) {
 
         if (was_dragged && dragging_) {
             update_drag_session(snapped_cursor_world_);
-            // Pin hover to dragged asset to keep highlight stable
+
             if (hovered_asset_ != pressed_asset) {
                 hovered_asset_ = pressed_asset;
                 rebuild_highlight();
@@ -2469,16 +2435,15 @@ void RoomEditor::handle_mouse_input(const Input& input) {
         }
     }
 
-    // ---- LEFT UP edge ----
     if (!left_down && prev_left_down && pressed_asset) {
         if (pressed_asset) {
             if (was_dragged) {
-                // End drag: do NOT treat as click, do NOT open Room Config
+
                 if (dragging_) {
                     finalize_drag_session();
                     dragging_ = false;
                 }
-                // Swallow this release so nothing underneath gets a click
+
                 suppress_next_left_click_ = true;
                 click_buffer_frames_      = 3;
 
@@ -2487,26 +2452,24 @@ void RoomEditor::handle_mouse_input(const Input& input) {
                 hovered_asset_ = nullptr;
                 sync_spawn_group_panel_with_selection();
             } else {
-                // Clean click (no drag): only open if we released over the SAME asset
+
                 if (hovered_asset_ == pressed_asset) {
                     open_room_config_for(pressed_asset);
 
-                    // Swallow the release so no other handler fires next frame
                     suppress_next_left_click_ = true;
                     click_buffer_frames_      = 3;
 
                     hovered_asset_ = pressed_asset;
                     rebuild_highlight();
                 }
-                // else: pressed A, released over B without crossing drag threshold → do nothing
+
             }
         }
-        // Reset press state for next cycle
+
         pressed_asset = nullptr;
         was_dragged   = false;
     }
 
-    // ---- Normal hover update when not actively dragging ----
     if (!dragging_) {
         if (hovered_asset_ != hit) {
             hovered_asset_ = hit;
@@ -2514,30 +2477,24 @@ void RoomEditor::handle_mouse_input(const Input& input) {
         }
     }
 
-    // Route other mouse behaviors ONLY if:
-    //  - not dragging
-    //  - not suppressed
-    //  - and there was NO left-button activity this frame
     const bool any_left_activity = left_pressed_this_frame || left_released_this_frame || left_down;
     if (!dragging_ && !suppress_next_left_click_ && !any_left_activity) {
-        handle_click(input); // safe to process hover/right-click/UI-only logic here
+        handle_click(input);
     }
 
     prev_left_down = left_down;
 }
 
-
-Asset* RoomEditor::hit_test_asset(SDL_Point screen_point, SDL_Renderer* /*renderer*/) const {
+Asset* RoomEditor::hit_test_asset(SDL_Point screen_point, SDL_Renderer* ) const {
     if (!active_assets_ || !assets_) return nullptr;
 
     const WarpedScreenGrid& cam = assets_->getView();
 
     if (!ensure_spatial_index(cam)) {
-        // No spatial index: compute bounds and choose the asset highest on screen.
+
         return hit_test_asset_fallback(cam, screen_point);
     }
 
-    // Gather nearby candidates and choose the one whose screen bounds sit highest.
     const std::vector<Asset*> candidates = gather_candidate_assets_for_point(screen_point);
     if (!candidates.empty()) {
         Asset* best = nullptr;
@@ -2553,7 +2510,7 @@ Asset* RoomEditor::hit_test_asset(SDL_Point screen_point, SDL_Renderer* /*render
                                       int z_index) {
             if (!asset) return;
             if (!asset->spawn_id.empty() && spawn_group_locked(asset->spawn_id)) {
-                return; // Ignore locked spawn groups entirely for hover/selection.
+                return;
             }
             if (!SDL_PointInRect(&screen_point, &rect)) {
                 return;
@@ -2564,10 +2521,7 @@ Asset* RoomEditor::hit_test_asset(SDL_Point screen_point, SDL_Renderer* /*render
             const bool is_better =
                 !best ||
                 bottom < best_bottom ||
-                (bottom == best_bottom && top < best_top) ||
-                (bottom == best_bottom && top == best_top && screen_y < best_screen_y) ||
-                (bottom == best_bottom && top == best_top && screen_y == best_screen_y && z_index > best_z) ||
-                (bottom == best_bottom && top == best_top && screen_y == best_screen_y && z_index == best_z && area < best_area);
+                (bottom == best_bottom && top < best_top) || (bottom == best_bottom && top == best_top && screen_y < best_screen_y) || (bottom == best_bottom && top == best_top && screen_y == best_screen_y && z_index > best_z) || (bottom == best_bottom && top == best_top && screen_y == best_screen_y && z_index == best_z && area < best_area);
             if (is_better) {
                 best = asset;
                 best_bottom = bottom;
@@ -2576,7 +2530,7 @@ Asset* RoomEditor::hit_test_asset(SDL_Point screen_point, SDL_Renderer* /*render
                 best_z = z_index;
                 best_area = area;
             }
-        };
+};
 
         for (Asset* asset : candidates) {
             auto bc = asset_bounds_cache_.find(asset);
@@ -2592,10 +2546,8 @@ Asset* RoomEditor::hit_test_asset(SDL_Point screen_point, SDL_Renderer* /*render
         }
     }
 
-    // Nothing decisive from the spatial index; fall back to a full bounds check.
     return hit_test_asset_fallback(cam, screen_point);
 }
-
 
 void RoomEditor::mark_spatial_index_dirty() const {
     spatial_index_dirty_ = true;
@@ -2731,14 +2683,12 @@ bool RoomEditor::compute_asset_screen_bounds(const WarpedScreenGrid& cam,
     if (sw <= 0 || sh <= 0) return false;
 
     SDL_Point world_point{
-        static_cast<int>(std::lround(world_x)),
-        static_cast<int>(std::lround(world_y))
-    };
+        static_cast<int>(std::lround(world_x)), static_cast<int>(std::lround(world_y)) };
     float center_x = effects.screen_position.x;
     if (assets_) {
-        // Do not apply grid parallax to the player asset
+
         if (!(asset && assets_->player == asset)) {
-            // center_x = assets_->world_grid().parallax_adjusted_screen_x(world_point, effects.screen_position.x);
+
         }
     }
     const int   left     = static_cast<int>(std::lround(center_x - static_cast<float>(sw) * 0.5f));
@@ -2877,7 +2827,7 @@ void RoomEditor::sync_dragged_assets_immediately() {
         }
         asset->clear_grid_residency_cache();
         asset->sync_transform_to_position();
-        asset->mark_composite_dirty();  // ensure render_package rebuilds so sprites follow drag
+        asset->mark_composite_dirty();
         if (assets_) {
             (void)assets_->world_grid().move_asset(asset, state.last_synced_pos, current);
         }
@@ -2933,7 +2883,7 @@ Asset* RoomEditor::hit_test_asset_fallback(const WarpedScreenGrid& cam, SDL_Poin
     int best_top = std::numeric_limits<int>::max();
     int best_screen_y = std::numeric_limits<int>::max();
     int best_z = std::numeric_limits<int>::min();
-    int best_area = std::numeric_limits<int>::max(); // smaller is better on final tie-break
+    int best_area = std::numeric_limits<int>::max();
 
     auto consider_candidate = [&](Asset* asset,
                                   const SDL_Rect& rect,
@@ -2952,10 +2902,7 @@ Asset* RoomEditor::hit_test_asset_fallback(const WarpedScreenGrid& cam, SDL_Poin
         const bool is_better =
             !best ||
             bottom < best_bottom ||
-            (bottom == best_bottom && top < best_top) ||
-            (bottom == best_bottom && top == best_top && screen_y < best_screen_y) ||
-            (bottom == best_bottom && top == best_top && screen_y == best_screen_y && z_index > best_z) ||
-            (bottom == best_bottom && top == best_top && screen_y == best_screen_y && z_index == best_z && area < best_area);
+            (bottom == best_bottom && top < best_top) || (bottom == best_bottom && top == best_top && screen_y < best_screen_y) || (bottom == best_bottom && top == best_top && screen_y == best_screen_y && z_index > best_z) || (bottom == best_bottom && top == best_top && screen_y == best_screen_y && z_index == best_z && area < best_area);
         if (is_better) {
             best = asset;
             best_bottom = bottom;
@@ -2964,7 +2911,7 @@ Asset* RoomEditor::hit_test_asset_fallback(const WarpedScreenGrid& cam, SDL_Poin
             best_z = z_index;
             best_area = area;
         }
-    };
+};
 
     for (Asset* asset : *active_assets_) {
         if (!asset) continue;
@@ -2983,7 +2930,6 @@ Asset* RoomEditor::hit_test_asset_fallback(const WarpedScreenGrid& cam, SDL_Poin
 
     return best;
 }
-
 
 void RoomEditor::update_hover_state(Asset* hit) {
     Asset* previous = hovered_asset_;
@@ -3012,7 +2958,7 @@ std::optional<std::string> RoomEditor::find_room_area_at_point(SDL_Point world_p
         int z = 0;
         bool visible = true;
         std::size_t order = 0;
-    };
+};
 
     std::unordered_map<std::string, AreaMetadata> metadata;
     std::size_t order_counter = 0;
@@ -3084,7 +3030,7 @@ std::optional<std::string> RoomEditor::find_room_area_at_point(SDL_Point world_p
             best_order = info.order;
             have_best_order = true;
         }
-    };
+};
 
     for (const auto& named : current_room_->areas) {
         if (named.name.empty()) {
@@ -3099,7 +3045,6 @@ std::optional<std::string> RoomEditor::find_room_area_at_point(SDL_Point world_p
 void RoomEditor::handle_click(const Input& input) {
     if (!input_) return;
 
-    // Use snapped cursor world position for all click logic
     SDL_Point world_mouse = snapped_cursor_world_;
 
     bool selection_changed = false;
@@ -3120,7 +3065,6 @@ void RoomEditor::handle_click(const Input& input) {
         }
         rclick_buffer_frames_ = 2;
 
-        // Shift modifier required for opening asset info
         const bool shift_modifier =
             input.isScancodeDown(SDL_SCANCODE_LSHIFT) || input.isScancodeDown(SDL_SCANCODE_RSHIFT);
         auto open_library_at = [&](const SDL_Point& point) {
@@ -3129,7 +3073,7 @@ void RoomEditor::handle_click(const Input& input) {
             if (!is_asset_library_open()) {
                 pending_spawn_world_pos_.reset();
             }
-        };
+};
 
         if (hovered_asset_) {
             if (shift_modifier) {
@@ -3180,7 +3124,6 @@ void RoomEditor::handle_click(const Input& input) {
             return;
         }
 
-        // Clicking an already-selected asset: don't duplicate it
         bool already_selected = false;
         for (Asset* a : selected_assets_) {
             if (a == nearest) {
@@ -3243,7 +3186,6 @@ void RoomEditor::handle_click(const Input& input) {
         mark_highlight_dirty();
     }
 }
-
 
 nlohmann::json* RoomEditor::find_area_entry_json(Room* room, const std::string& area_name) const {
     if (!room) return nullptr;
@@ -3316,7 +3258,7 @@ void RoomEditor::begin_area_drag_session(const std::string& area_name, const SDL
     MapGridSettings map_settings = current_room_ ? current_room_->map_grid_settings() : MapGridSettings::defaults();
     map_settings.clamp();
     area_drag_resolution_ = vibble::grid::clamp_resolution(map_settings.resolution);
-    // Make sure a spawn entry exists for this area
+
     ensure_area_anchor_spawn_entry(current_room_, area_drag_name_);
 }
 
@@ -3331,10 +3273,10 @@ void RoomEditor::finalize_area_drag_session() {
         area_drag_moved_ = false;
         return;
     }
-    // Snap to grid
+
     vibble::grid::Grid& grid_service = vibble::grid::global_grid();
     SDL_Point snapped = grid_service.snap_to_vertex(area_drag_last_world_, area_drag_resolution_);
-    // Compute dx/dy relative to room center
+
     SDL_Point center{0, 0};
     if (current_room_->room_area) {
         auto c = current_room_->room_area->get_center();
@@ -3343,15 +3285,13 @@ void RoomEditor::finalize_area_drag_session() {
     const int dx = snapped.x - center.x;
     const int dy = snapped.y - center.y;
 
-    // Update area JSON anchor to be relative-to-center with dx/dy
     if (nlohmann::json* area_entry = find_area_entry_json(current_room_, area_drag_name_)) {
         (*area_entry)["anchor_relative_to_center"] = true;
         (*area_entry)["anchor"] = nlohmann::json::object({ {"x", dx}, {"y", dy} });
-        // Leave scale_to_room untouched; size adjustments happen via existing logic
+
         current_room_->save_assets_json();
     }
 
-    // Also reflect dx/dy into the linked area spawn entry
     nlohmann::json& root = current_room_->assets_data();
     if (auto* groups_ptr = devmode::spawn::find_spawn_groups_array(root)) {
         for (auto& entry : const_cast<nlohmann::json&>(*groups_ptr)) {
@@ -3360,7 +3300,7 @@ void RoomEditor::finalize_area_drag_session() {
                 entry["position"] = "Exact";
                 entry["dx"] = dx;
                 entry["dy"] = dy;
-                // Keep origional dims if present; otherwise set from current room now
+
                 if (current_room_->room_area) {
                     auto b = current_room_->room_area->get_bounds();
                     const int w = std::max(1, std::get<2>(b) - std::get<0>(b));
@@ -3405,7 +3345,7 @@ void RoomEditor::update_highlighted_assets() {
             if (!asset_belongs_to_room(asset)) continue;
             if (!hovered_asset_->spawn_id.empty() && asset->spawn_id == hovered_asset_->spawn_id) {
                 if (spawn_group_locked(asset->spawn_id)) {
-                    continue; // skip highlighting locked groups
+                    continue;
                 }
                 if (std::find(highlighted_assets_.begin(), highlighted_assets_.end(), asset) == highlighted_assets_.end()) {
                     highlighted_assets_.push_back(asset);
@@ -3418,7 +3358,6 @@ void RoomEditor::update_highlighted_assets() {
         }
     }
 
-    // Always highlight the hovered asset, even if not in allow_hover_group
     if (hovered_asset_ && asset_belongs_to_room(hovered_asset_) &&
         (hovered_asset_->spawn_id.empty() || !spawn_group_locked(hovered_asset_->spawn_id)) &&
         std::find(highlighted_assets_.begin(), highlighted_assets_.end(), hovered_asset_) == highlighted_assets_.end()) {
@@ -3481,16 +3420,12 @@ bool RoomEditor::should_enable_mouse_controls() const {
         return false;
     }
 
-    // Do not globally disable mouse controls just because Asset Info is open.
-    // Only block for other modal types (none exist yet). UI blocking is handled
-    // by the caller so active selections stay intact while hovering panels.
     if (active_modal_ != ActiveModal::None && active_modal_ != ActiveModal::AssetInfo) {
         return false;
     }
 
     return true;
 }
-
 
 void RoomEditor::handle_shortcuts(const Input& input) {
     const bool ctrl = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
@@ -3532,7 +3467,7 @@ void RoomEditor::ensure_room_configurator() {
             }
         });
         room_cfg_ui_->set_bounds(room_config_bounds_);
-        // Constrain to area between header and footer
+
         room_cfg_ui_->set_work_area(FloatingPanelLayoutManager::instance().usableRect());
         room_cfg_ui_->set_blocks_editor_interactions(false);
         room_cfg_ui_->set_on_close([this]() {
@@ -3548,12 +3483,12 @@ void RoomEditor::ensure_room_configurator() {
                     pulse_active_modal_header();
                     return;
                 }
-                // Show the docked configurator and focus the target spawn group entry
+
                 set_room_config_visible(true);
                 if (room_cfg_ui_) {
                     room_cfg_ui_->focus_spawn_group(spawn_id);
                 }
-                // Ensure any legacy floating panel stays closed
+
                 if (spawn_group_panel_) {
                     spawn_group_panel_->close();
                     spawn_group_panel_->set_visible(false);
@@ -3686,7 +3621,7 @@ void RoomEditor::update_room_config_bounds() {
     const int max_width = std::max(320, available_width);
     const int desired_width = std::max(360, screen_w_ / 3);
     const int width = std::min(max_width, desired_width);
-    // Fit between header and footer using the current usable rect
+
     SDL_Rect usable = FloatingPanelLayoutManager::instance().usableRect();
     const int height = std::max(1, usable.h > 0 ? usable.h : screen_h_);
     const int max_x = std::max(0, screen_w_ - width);
@@ -3770,7 +3705,7 @@ void RoomEditor::handle_delete_shortcut(const Input& input) {
 }
 
 void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modifier) {
-    // If primary selection belongs to a locked group, do not start drag
+
     if (!selected_assets_.empty()) {
         Asset* primary = selected_assets_.front();
         if (primary && !primary->spawn_id.empty() && spawn_group_locked(primary->spawn_id)) {
@@ -3778,9 +3713,8 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
         }
     }
 
-    // Close the room config panel while dragging to maximize workspace
     if (room_config_dock_open_) {
-        // Preserve current selection when closing config due to drag start
+
         suppress_room_config_selection_clear_ = true;
         set_room_config_visible(false);
         suppress_room_config_selection_clear_ = false;
@@ -3808,7 +3742,7 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
 
     MapGridSettings map_settings = current_room_ ? current_room_->map_grid_settings() : MapGridSettings::defaults();
     map_settings.clamp();
-    // Use the live cursor snap so drag snapping matches the crosshair during editing
+
     int desired_resolution = cursor_snap_resolution_ > 0 ? cursor_snap_resolution_ : map_settings.resolution;
     drag_resolution_ = vibble::grid::clamp_resolution(desired_resolution);
     SpawnEntryResolution resolved_entry = drag_spawn_id_.empty() ? SpawnEntryResolution{} : locate_spawn_entry(drag_spawn_id_);
@@ -3823,12 +3757,12 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
     } else if (method == "Percent") {
         drag_mode_ = DragMode::Percent;
     } else if (method == "Perimeter") {
-        // Ctrl toggles center-drag vs radius-resize while in Shift+drag edit mode.
+
         drag_mode_ = ctrl_modifier ? DragMode::PerimeterCenter : DragMode::Perimeter;
     } else if (method == "Edge") {
         drag_mode_ = DragMode::Edge;
     } else if (method == "Random") {
-        // Allow freeform translation for random spawns so users can position the group anchor.
+
         drag_mode_ = DragMode::Free;
     } else {
         drag_mode_ = DragMode::Free;
@@ -3836,18 +3770,15 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
 
     bool resolve_geometry = (method == "Exact" || method == "Exact Position" || method == "Perimeter");
 
-    // Handle snap-to-grid + footer overlay resolution interactions on drag start
     const bool editing_spawn_config = is_spawn_group_panel_visible() && active_spawn_group_id_.has_value();
-    // Always snap: choose a working resolution sourced from spawn entry/room or footer when editing spawn config
+
     if (shared_footer_bar_) {
         if (editing_spawn_config) {
-            // While editing spawn group config, respect the footer stepper value for snapping,
-            // but never change the overlay via dragging.
+
             drag_resolution_ = vibble::grid::clamp_resolution(shared_footer_bar_->grid_resolution());
             overlay_resolution_before_drag_.reset();
         } else {
-            // While dragging in the room editor, temporarily override the footer grid resolution
-            // to match the active drag resolution, and restore on finalize.
+
             overlay_resolution_before_drag_ = shared_footer_bar_->grid_resolution();
             shared_footer_bar_->set_grid_resolution(vibble::grid::clamp_resolution(drag_resolution_));
         }
@@ -3948,7 +3879,7 @@ void RoomEditor::begin_drag_session(const SDL_Point& world_mouse, bool ctrl_modi
                 state.direction.y = -1.0f;
                 len = 1.0;
             }
-           
+
             if (drag_edge_area_) {
                 state.edge_length = edge_length_along_direction(*drag_edge_area_, drag_edge_center_, state.direction);
             }
@@ -3967,7 +3898,6 @@ void RoomEditor::update_drag_session(const SDL_Point& world_mouse) {
         return;
     }
 
-    // Helper to invalidate caches for all dragged assets
     auto invalidate_after_move = [this]() {
         sync_dragged_assets_immediately();
         for (auto& st : drag_states_) {
@@ -3980,30 +3910,27 @@ void RoomEditor::update_drag_session(const SDL_Point& world_mouse) {
         }
         mark_spatial_index_dirty();
         mark_highlight_dirty();
-        refresh_spatial_entries_for_dragged_assets(); // keep existing behavior
-    };
+        refresh_spatial_entries_for_dragged_assets();
+};
 
-    // Perimeter drag path
     if (drag_mode_ == DragMode::Perimeter) {
         apply_perimeter_drag(world_mouse);
         drag_last_world_ = world_mouse;
         drag_moved_ = true;
         invalidate_after_move();
-        ensure_spatial_index(assets_->getView()); // force rebuild now (not later)
+        ensure_spatial_index(assets_->getView());
         return;
     }
 
-    // Edge drag path
     if (drag_mode_ == DragMode::Edge) {
         apply_edge_drag(world_mouse);
         drag_last_world_ = world_mouse;
         drag_moved_ = true;
         invalidate_after_move();
-        ensure_spatial_index(assets_->getView()); // force rebuild now (not later)
+        ensure_spatial_index(assets_->getView());
         return;
     }
 
-    // Standard translate drag
     SDL_Point delta{world_mouse.x - drag_last_world_.x, world_mouse.y - drag_last_world_.y};
     const bool anchor_should_follow_pointer =
         (drag_mode_ == DragMode::Exact || drag_mode_ == DragMode::Percent);
@@ -4013,9 +3940,7 @@ void RoomEditor::update_drag_session(const SDL_Point& world_mouse) {
             anchor_asset = drag_states_.front().asset;
         }
         if (anchor_asset) {
-            // For Exact/Percent spawn groups, the asset position is the bottom-center
-            // of the sprite in world space. Align that anchor directly to the snapped
-            // crosshair/world pointer so the bottom-center sits exactly on the grid vertex.
+
             vibble::grid::Grid& grid_service = vibble::grid::global_grid();
             SDL_Point snapped_pointer = grid_service.snap_to_vertex(world_mouse, drag_resolution_);
             delta.x = snapped_pointer.x - anchor_asset->pos.x;
@@ -4046,14 +3971,11 @@ void RoomEditor::update_drag_session(const SDL_Point& world_mouse) {
     drag_last_world_ = world_mouse;
     drag_moved_ = true;
 
-    // Critical: ensure hover uses updated positions right away
     invalidate_after_move();
-    ensure_spatial_index(assets_->getView()); // force rebuild now (not later)
+    ensure_spatial_index(assets_->getView());
 
-    // Update JSON and refresh UI panel during drag for real-time feedback
     update_spawn_json_during_drag();
 }
-
 
 void RoomEditor::apply_perimeter_drag(const SDL_Point& world_mouse) {
     if (drag_states_.empty()) return;
@@ -4132,7 +4054,6 @@ void RoomEditor::apply_perimeter_drag(const SDL_Point& world_mouse) {
         refresh_spatial_entries_for_dragged_assets();
     }
 
-    // Update JSON and refresh UI panel during drag for real-time feedback
     update_spawn_json_during_drag();
 }
 
@@ -4253,39 +4174,33 @@ void RoomEditor::apply_edge_drag(const SDL_Point& world_mouse) {
         refresh_spatial_entries_for_dragged_assets();
     }
 
-    // Update JSON and refresh UI panel during drag for real-time feedback
     update_spawn_json_during_drag();
 }
 
 void RoomEditor::update_spawn_json_during_drag() {
-    // Skip if not dragging a spawn group
+
     if (drag_spawn_id_.empty() || drag_states_.empty()) {
         return;
     }
 
-    // Skip if panel is not visible or doesn't exist
     if (!spawn_group_panel_ || !spawn_group_panel_->is_visible()) {
         return;
     }
 
-    // Find the spawn entry
     SpawnEntryResolution resolved = locate_spawn_entry(drag_spawn_id_);
     nlohmann::json* entry = resolved.entry;
     if (!entry) {
         return;
     }
 
-    // Get primary asset
     Asset* primary = selected_assets_.empty() ? nullptr : selected_assets_.front();
     if (!primary) {
         return;
     }
 
-    // Get room dimensions
     SDL_Point center = get_room_center();
     auto [width, height] = get_room_dimensions();
 
-    // Temporarily update JSON values based on drag mode (without saving to disk)
     switch (drag_mode_) {
         case DragMode::Exact:
             update_exact_json(*entry, *primary, center, width, height);
@@ -4319,8 +4234,6 @@ void RoomEditor::update_spawn_json_during_drag() {
             break;
     }
 
-    // Refresh the UI panel to show updated values (reads from the temporarily updated JSON)
-    // Note: We use rebuild_rows instead of full refresh to avoid losing expansion state
     if (spawn_group_panel_) {
         spawn_group_panel_->rebuild_rows();
     }
@@ -4368,7 +4281,7 @@ bool RoomEditor::snap_dragged_assets_to_grid() {
 }
 
 void RoomEditor::finalize_drag_session() {
-    // Restore overlay grid resolution if we changed it for the drag
+
     if (shared_footer_bar_ && overlay_resolution_before_drag_.has_value()) {
         shared_footer_bar_->set_grid_resolution(*overlay_resolution_before_drag_);
         overlay_resolution_before_drag_.reset();
@@ -4440,8 +4353,7 @@ void RoomEditor::finalize_drag_session() {
                         inset = std::clamp(inset, 0, 200);
                         save_edge_json(*entry, inset);
                         json_modified = true;
-                        // For edge placement, respawn to keep even spacing along the edge
-                        // based on the new inset (mirrors live slider behavior).
+
                         request_respawn = true;
                     }
                     break;
@@ -4449,7 +4361,6 @@ void RoomEditor::finalize_drag_session() {
                     break;
             }
 
-            // Sync the spawn group's snap resolution to the current grid after a drag
             if (drag_moved_) {
                 const int snap_after_drag = current_grid_resolution();
                 if (snap_after_drag > 0) {
@@ -4512,7 +4423,7 @@ void RoomEditor::reset_drag_state() {
     drag_edge_inset_percent_ = 100.0;
     drag_moved_ = false;
     drag_spawn_id_.clear();
-    // Snap state managed implicitly
+
     overlay_resolution_before_drag_.reset();
 }
 
@@ -4689,7 +4600,7 @@ void RoomEditor::refresh_spawn_group_config_ui() {
             const std::string label = current_room_->room_name.empty() ? std::string("Room") : current_room_->room_name;
             entry.set_ownership_label(label, SDL_Color{255, 224, 96, 255});
         }
-        // Linked-to-area providers removed; ownership is implicit via config context.
+
 };
 
     SpawnEntryResolution resolved;
@@ -4816,7 +4727,7 @@ void RoomEditor::sync_spawn_group_panel_with_selection() {
             return false;
         }
         return &(*groups_it) == resolved.owner_array;
-    };
+};
 
     const bool map_assets_entry = owner_matches_section("map_assets_data");
     const bool boundary_entry   = owner_matches_section("map_boundary_data");
@@ -4826,7 +4737,7 @@ void RoomEditor::sync_spawn_group_panel_with_selection() {
             spawn_group_panel_->close();
             spawn_group_panel_->set_visible(false);
         }
-    };
+};
 
     auto close_room_config_preserving_selection = [this]() {
         if (!room_config_dock_open_) {
@@ -4835,7 +4746,7 @@ void RoomEditor::sync_spawn_group_panel_with_selection() {
         suppress_room_config_selection_clear_ = true;
         set_room_config_visible(false);
         suppress_room_config_selection_clear_ = false;
-    };
+};
 
     if (boundary_entry || boundary_asset) {
         close_spawn_group_panel();
@@ -4857,23 +4768,18 @@ void RoomEditor::sync_spawn_group_panel_with_selection() {
         return;
     }
 
-    // --- Fixed behavior below: do not auto-open Room Config on selection change ---
     active_spawn_group_id_ = spawn_id;
 
-    // Do NOT call set_room_config_visible(true) here.
-    // Only focus if the Room Config dock is already open.
     bool focused = false;
     if (room_cfg_ui_ && room_config_dock_open_) {
         focused = room_cfg_ui_->focus_spawn_group(spawn_id);
     }
 
-    // If we focused inside the already-open dock, hide the external picker.
     if (focused && spawn_group_panel_) {
         spawn_group_panel_->close();
         spawn_group_panel_->set_visible(false);
     }
 }
-
 
 void RoomEditor::sanitize_perimeter_spawn_groups() {
     if (!current_room_) return;
@@ -5131,12 +5037,11 @@ void RoomEditor::open_spawn_group_editor_by_id(const std::string& spawn_id) {
         return;
     }
 
-    // Prefer embedded, docked behavior: show Room Config panel and focus the target spawn group
     set_room_config_visible(true);
     if (room_cfg_ui_) {
         room_cfg_ui_->focus_spawn_group(spawn_id);
     }
-    // Ensure any legacy floating panel is closed/hidden
+
     if (spawn_group_panel_) {
         spawn_group_panel_->close();
         spawn_group_panel_->set_visible(false);
@@ -5226,7 +5131,6 @@ void RoomEditor::regenerate_current_room() {
         return;
     }
 
-    // Collect a stable copy of all spawn-group entries for the active room.
     auto& root = current_room_->assets_data();
     auto& groups = ensure_spawn_groups_array(root);
     std::vector<nlohmann::json> entries;
@@ -5237,12 +5141,10 @@ void RoomEditor::regenerate_current_room() {
         }
     }
 
-    // Respawn each group; the helper removes and re-creates assets per spawn_id.
     for (const auto& entry : entries) {
         respawn_spawn_group(entry);
     }
 
-    // Refresh caches and persist room spawn metadata.
     rebuild_room_spawn_id_cache();
     save_current_room_assets_json();
 }
@@ -5252,7 +5154,6 @@ Asset* RoomEditor::find_asset_spawn_owner(const std::string& spawn_id) const {
         return nullptr;
     }
 
-    // Heuristic: an owner is any asset that has a child whose spawn_id matches.
     for (Asset* asset : assets_->all) {
         if (!asset || asset->dead) {
             continue;
@@ -5272,10 +5173,8 @@ Asset* RoomEditor::find_asset_spawn_owner(const std::string& spawn_id) const {
     return nullptr;
 }
 
-void RoomEditor::respawn_asset_child_spawn_group(Asset* /*owner*/, const nlohmann::json& /*entry*/) {
-    // Child spawn-group regeneration is currently handled as part of normal room regeneration.
-    // The caller falls back to room-level respawn when no owner is found, so this
-    // function intentionally performs no work.
+void RoomEditor::respawn_asset_child_spawn_group(Asset* , const nlohmann::json& ) {
+
 }
 
 void RoomEditor::respawn_spawn_group(const nlohmann::json& entry) {
@@ -5597,7 +5496,7 @@ double RoomEditor::edge_length_along_direction(const Area& area,
 }
 bool RoomEditor::spawn_group_locked(const std::string& spawn_id) const {
     if (spawn_id.empty()) return false;
-    // We need a non-const to call locate, but we won't mutate
+
     RoomEditor* self = const_cast<RoomEditor*>(this);
     SpawnEntryResolution resolved = self->locate_spawn_entry(spawn_id);
     if (!resolved.valid() || !resolved.entry) return false;

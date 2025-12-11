@@ -9,7 +9,7 @@ BombController::BombController(Assets* assets, Asset* self)
     : assets_(assets), self_(self) {
     if (self_ && self_->anim_) {
         self_->anim_->set_debug_enabled(false);
-        self_->needs_target = true; // kick off first pursuit
+        self_->needs_target = true;
         vibble::log::info("[BombController] initialized (needs_target=true)");
         std::cout << "[BombController] initialized (needs_target=true)" << std::endl;
     }
@@ -20,15 +20,14 @@ void BombController::update(const Input&) {
         return;
     }
     Asset* player = assets_->player;
-    // Player can be absent if spawn data fails to generate one; bail out instead of crashing.
+
     if (!player || player == self_ || player->dead || !player->active) {
         return;
     }
 
-    int distance_sq = (self_->pos.x - player->pos.x) * (self_->pos.x - player->pos.x) +
-                          (self_->pos.y - player->pos.y) * (self_->pos.y - player->pos.y);
+    int distance_sq = (self_->pos.x - player->pos.x) * (self_->pos.x - player->pos.x) + (self_->pos.y - player->pos.y) * (self_->pos.y - player->pos.y);
 
-    if (distance_sq <= 700) { 
+    if (distance_sq <= 700) {
         std::cout << "[BombController] target reached" << std::endl;
         if (self_->info && self_->info->animations.count("explosion")) {
             std::cout << "[BombController] triggering explode animation." << std::endl;

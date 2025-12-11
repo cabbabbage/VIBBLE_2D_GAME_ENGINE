@@ -62,7 +62,7 @@ void init_from_env_once() {
     if (const char* v = std::getenv("VIBBLE_LOG_LEVEL")) {
         global_level() = parse_level_env(v);
     }
-    // Optional file sink for logs
+
     const char* file = std::getenv("VIBBLE_LOG_FILE");
     if (file && *file) {
         const char* append = std::getenv("VIBBLE_LOG_APPEND");

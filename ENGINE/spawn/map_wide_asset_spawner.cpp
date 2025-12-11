@@ -166,7 +166,6 @@ void MapWideAssetSpawner::spawn(std::vector<std::unique_ptr<Room>>& rooms) {
         assets.clear();
     }
 
-    // Resolve grid resolution from the active spawn group slider value; fallback to minimum 5
     int resolution = 5;
     try {
         if (spawn_info) {

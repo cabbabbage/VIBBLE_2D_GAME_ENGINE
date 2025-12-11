@@ -27,7 +27,7 @@ class Room;
 class Input;
 class DevControls;
 class AssetInfo;
-// class Global_Light_Source;
+
 class QuickTaskPopup;
 namespace animation_editor {
 class AnimationDocument;
@@ -101,7 +101,7 @@ public:
     void open_animation_editor_for_asset(const std::shared_ptr<AssetInfo>& info);
     void close_asset_info_editor();
     bool is_asset_info_editor_open() const;
-    // Returns true if the Asset Info UI is open and its Lighting section is expanded
+
     bool is_asset_info_lighting_section_expanded() const;
     void clear_editor_selection();
     void handle_sdl_event(const SDL_Event& e);
@@ -113,12 +113,8 @@ public:
     bool depth_effects_enabled() const { return depth_effects_enabled_; }
 
     void focus_camera_on_asset(Asset* a, double zoom_factor = 0.8, int duration_steps = 25);
-    // In-world frame editor session for animation frames
-    void begin_frame_editor_session(Asset* asset,
-                                    std::shared_ptr<animation_editor::AnimationDocument> document,
-                                    std::shared_ptr<animation_editor::PreviewProvider> preview,
-                                    const std::string& animation_id,
-                                    animation_editor::AnimationEditorWindow* host_to_toggle);
+
+    void begin_frame_editor_session(Asset* asset, std::shared_ptr<animation_editor::AnimationDocument> document, std::shared_ptr<animation_editor::PreviewProvider> preview, const std::string& animation_id, animation_editor::AnimationEditorWindow* host_to_toggle);
 
     devmode::core::ManifestStore* manifest_store();
     const devmode::core::ManifestStore* manifest_store() const;
@@ -158,8 +154,6 @@ public:
     void initialize_active_assets(SDL_Point center);
     std::uint64_t dev_active_state_version() const { return dev_active_state_version_; }
 
-    // Global_Light_Source* map_light_source();
-    // const Global_Light_Source* map_light_source() const;
     const LightMap* light_map() const;
     LightMap*       light_map();
     void force_shaded_assets_rerender();
@@ -173,15 +167,10 @@ public:
     int  map_grid_chunk_resolution() const;
     const MapGridSettings& map_grid_settings() const { return map_grid_settings_; }
 
-    // Compute tiling info for an asset so its sprite
-    // is cropped into grid-aligned squares matching the
-    // non-tiled sprite's world footprint.
     std::optional<Asset::TilingInfo> compute_tiling_for_asset(const Asset* asset) const;
 
     bool is_dev_mode() const { return dev_mode; }
 
-    // True when SceneRenderer is in light-map-only mode,
-    // which internally performs SDL_RenderPresent.
     bool scene_light_map_only_mode() const;
 
     int shading_group_count() const { return num_groups_; }
@@ -193,11 +182,9 @@ public:
     Asset* player = nullptr;
 
     Asset* spawn_asset(const std::string& name, SDL_Point world_pos);
-    // Rebuilds asset catalogs from the grid, refreshing active lists and filters.
+
     void rebuild_from_grid_state();
 
-    // Ensure light textures are loaded for the given asset from cache.
-    // Called automatically during asset initialization and spawn.
     void ensure_light_textures_loaded(Asset* asset);
 
     const std::vector<world::Chunk*>& active_chunks() const { return world_grid_.active_chunks(); }
@@ -210,8 +197,7 @@ private:
     void load_camera_settings_from_json();
     void write_camera_settings_to_json();
     void schedule_removal(Asset* a);
-    // Legacy chunk tiling removed; tiles are built at load and rendered separately.
-    // Returns true if any assets were removed.
+
     bool process_removals();
     void addAsset(const std::string& name, SDL_Point g);
     void update_filtered_active_assets();
@@ -249,8 +235,7 @@ private:
     int num_groups_ = 40;
     bool dev_mode = false;
     bool suppress_render_ = false;
-    // Temporarily suppress exposing the SDL_Renderer while wiring dev controls
-    // to avoid triggering texture/animation loads during dev-mode entry.
+
     bool suppress_dev_renderer_ = false;
     bool force_high_quality_rendering_ = false;
     bool render_dark_mask_enabled_ = true;
@@ -282,8 +267,6 @@ private:
     std::vector<Asset*> visible_candidate_buffer_;
     std::uint64_t active_candidate_generation_ = 0;
 
-    // Defer the first active-assets rebuild until the grid has
-    // populated active chunks on the first update.
     bool pending_initial_rebuild_ = false;
     bool logged_initial_rebuild_warning_ = false;
 
@@ -291,7 +274,7 @@ private:
         Asset* asset = nullptr;
         SDL_Point previous{0, 0};
         SDL_Point current{0, 0};
-    };
+};
 
     void track_asset_for_grid(Asset* asset);
     void untrack_asset_for_grid(Asset* asset);
@@ -303,7 +286,6 @@ private:
     std::vector<Asset*> pending_static_grid_registration_;
     std::vector<GridMovementCommand> movement_commands_buffer_;
     std::vector<Asset*> grid_registration_buffer_;
-    // Legacy tiling caches removed.
 
     void touch_dev_active_state_version();
 
@@ -333,9 +315,7 @@ private:
     void invalidate_max_asset_dimensions();
     SDL_Rect screen_world_rect() const;
     int audio_effect_max_distance_world() const;
-    // Update per-asset camera-relative audio metrics and tick the audio engine.
-    // Reads current camera focus via camera_.get_screen_center() so audio
-    // stays consistent across dev/runtime mode toggles.
+
     void update_audio_camera_metrics();
     void mark_non_player_update_buffer_dirty() {
         non_player_update_buffer_dirty_.store(true, std::memory_order_release);
@@ -345,7 +325,6 @@ private:
     SDL_Point last_known_player_pos_{0, 0};
     bool      last_player_pos_valid_ = false;
 
-    // Debug overlay: rectangles culled this rebuild
     std::vector<SDL_Rect> culled_debug_rects_;
 };
 #include "utils/map_grid_settings.hpp"

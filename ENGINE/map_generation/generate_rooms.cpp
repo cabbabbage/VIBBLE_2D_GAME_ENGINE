@@ -78,7 +78,7 @@ public:
                                 }
                         }
                         return false;
-                };
+};
 
                 for (int radius = 0; radius <= max_radius_; ++radius) {
                         for (int by = base_by - radius; by <= base_by + radius; ++by) {
@@ -118,7 +118,7 @@ private:
         struct RoomEntry {
                 Room* room = nullptr;
                 SDL_Point center{0, 0};
-        };
+};
 
         int bucket_size_ = 2048;
         int max_radius_ = 8;
@@ -199,7 +199,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
                 std::cout << "[GenerateRooms] No layers to process, returning empty\n";
                 return all_rooms;
         }
-        // Ensure there is at least one root room spec; synthesize a spawn if missing.
+
         if (map_layers_[0].rooms.empty()) {
                 std::string fallback_name = "spawn";
                 if (rooms_data.is_object()) {
@@ -223,7 +223,7 @@ std::vector<std::unique_ptr<Room>> GenerateRooms::build(AssetLibrary* asset_lib,
         if (!rooms_data.is_object()) {
                 rooms_data = nlohmann::json::object();
         }
-        // Ensure a minimal entry for the root room exists so geometry can be generated
+
         if (!rooms_data.contains(root_spec.name) || !rooms_data[root_spec.name].is_object()) {
                 constexpr int kSpawnRadius = 1500;
                 const int diameter = kSpawnRadius * 2;

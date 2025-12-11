@@ -27,7 +27,7 @@ public:
         std::string label;
         std::string value;
         bool is_tag = false;
-    };
+};
 
     using ExtraResultsProvider = std::function<std::vector<Result>()>;
     using AssetFilter = std::function<bool(const nlohmann::json&)>;

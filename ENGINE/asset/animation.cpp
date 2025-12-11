@@ -30,7 +30,6 @@ namespace fs = std::filesystem;
 
 namespace {
 
-// Applies the appropriate SDL texture scale mode based on asset settings.
 inline void apply_scale_mode(SDL_Texture* tex, const AssetInfo& info) {
 #if SDL_VERSION_ATLEAST(2, 0, 12)
     if (tex) {
@@ -89,7 +88,7 @@ void destroy_texture(SDL_Texture*& tex) {
     }
 }
 
-} // namespace
+}
 
 Animation::Animation() = default;
 
@@ -139,7 +138,6 @@ bool Animation::rebuild_frame(int frame_index,
     Animation::FrameCache& cache_entry = frame_cache_[idx];
     cache_entry.resize(variant_steps.size());
 
-    // Build cache roots
     const std::string cache_root = (std::filesystem::path("cache") / info.name / "animations").lexically_normal().generic_string();
 
     bool success = true;
@@ -180,7 +178,6 @@ bool Animation::rebuild_frame(int frame_index,
             }
         }
 
-        // Destroy old textures before replacing
         destroy_texture(cache_entry.textures[variant_idx]);
         destroy_texture(cache_entry.foreground_textures[variant_idx]);
         destroy_texture(cache_entry.background_textures[variant_idx]);
@@ -196,7 +193,6 @@ bool Animation::rebuild_frame(int frame_index,
         cache_entry.mask_heights[variant_idx] = mask_h;
     }
 
-    // Refresh frame variants for every movement path frame with this index
     for (auto& path : movement_paths_) {
         if (idx >= path.size()) {
             continue;
@@ -215,7 +211,6 @@ bool Animation::rebuild_frame(int frame_index,
         }
     }
 
-    // Update preview texture when rebuilding first frame
     if (idx == 0 && !frame_cache_.empty() && !frame_cache_[0].textures.empty()) {
         preview_texture = frame_cache_[0].textures[0];
     }
@@ -336,14 +331,10 @@ void Animation::rebuild_child_timelines_from_frames() {
             sample.dy = 0;
             sample.degree = 0.0f;
             return sample;
-        };
+};
 
         if (descriptor.mode == AnimationChildMode::Static) {
-            const std::size_t sample_count = (parent_frame_count > 0)
-                                                 ? parent_frame_count
-                                                 : ((previous && previous->is_static() && !previous->frames.empty())
-                                                        ? previous->frames.size()
-                                                        : static_cast<std::size_t>(1));
+            const std::size_t sample_count = (parent_frame_count > 0) ? parent_frame_count : ((previous && previous->is_static() && !previous->frames.empty()) ? previous->frames.size() : static_cast<std::size_t>(1));
             descriptor.frames.assign(sample_count, make_default_sample(static_cast<int>(child_idx)));
             for (std::size_t frame_idx = 0; frame_idx < sample_count; ++frame_idx) {
                 if (has_parent_frames && frame_idx < frames.size()) {
@@ -450,7 +441,7 @@ void Animation::adopt_prebuilt_frames(std::vector<FrameCache> caches,
             frame.is_last    = (idx + 1 == path.size());
             frame.next       = (idx + 1 < path.size()) ? &path[idx + 1] : nullptr;
             frame.prev       = (idx > 0) ? &path[idx - 1] : nullptr;
-            
+
             if (idx < frame_cache_.size()) {
                 const auto& cache = frame_cache_[idx];
                 for (size_t v = 0; v < cache.textures.size(); ++v) {
@@ -464,7 +455,7 @@ void Animation::adopt_prebuilt_frames(std::vector<FrameCache> caches,
                         variant.background_texture = cache.background_textures[v];
                     }
                     if (v < cache.mask_textures.size()) variant.shadow_mask_texture = cache.mask_textures[v];
-                    
+
                     frame.variants.push_back(variant);
                 }
             }
@@ -479,7 +470,6 @@ bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool fl
         return false;
     }
 
-    // Helper to apply scale mode
     auto apply_scale_mode = [&info](SDL_Texture* tex) {
         if (!tex) return;
 #if SDL_VERSION_ATLEAST(2, 0, 12)
@@ -489,9 +479,8 @@ bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool fl
             SDL_SetTextureScaleMode(tex, SDL_ScaleModeNearest);
         }
 #endif
-    };
+};
 
-    // Helper to duplicate a texture (respecting flip) so derived animations own their assets
     auto clone_texture = [&](SDL_Texture* src, int width_hint, int height_hint, SDL_RendererFlip flip_flags, int* out_w = nullptr, int* out_h = nullptr) -> SDL_Texture* {
         if (!src) return nullptr;
 
@@ -531,12 +520,10 @@ bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool fl
         if (out_w) *out_w = tex_w;
         if (out_h) *out_h = tex_h;
         return dst;
-    };
+};
 
-    // Clear existing cache
     clear_texture_cache();
 
-    // Inherit core properties
     variant_steps_ = source.variant_steps_;
     locked = source.locked;
     inherit_source_movement = source.inherit_source_movement;
@@ -548,7 +535,6 @@ bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool fl
         return false;
     }
 
-    // Determine flip flags for SDL_RenderCopyEx
     SDL_RendererFlip flip_flags = SDL_FLIP_NONE;
     if (flip_horizontal) {
         flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_HORIZONTAL);
@@ -557,14 +543,12 @@ bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool fl
         flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_VERTICAL);
     }
 
-    // Copy all frames
     frame_cache_.reserve(frame_count);
     for (std::size_t frame_idx = 0; frame_idx < frame_count; ++frame_idx) {
         const FrameCache& src_cache = source.frame_cache_[frame_idx];
         FrameCache dst_cache;
         dst_cache.resize(variant_count);
 
-        // Copy each variant
         for (std::size_t variant_idx = 0; variant_idx < variant_count; ++variant_idx) {
             if (variant_idx >= src_cache.textures.size()) {
                 continue;
@@ -582,20 +566,18 @@ bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool fl
             dst_cache.widths[variant_idx] = tex_w;
             dst_cache.heights[variant_idx] = tex_h;
 
-            // Copy foreground texture if present
             SDL_Texture* src_fg = (variant_idx < src_cache.foreground_textures.size()) ? src_cache.foreground_textures[variant_idx] : nullptr;
             if (src_fg) {
                 SDL_Texture* dst_fg = clone_texture(src_fg, tex_w, tex_h, flip_flags);
                 dst_cache.foreground_textures[variant_idx] = dst_fg;
             }
-            // Copy background texture if present
+
             SDL_Texture* src_bg = (variant_idx < src_cache.background_textures.size()) ? src_cache.background_textures[variant_idx] : nullptr;
             if (src_bg) {
                 SDL_Texture* dst_bg = clone_texture(src_bg, tex_w, tex_h, flip_flags);
                 dst_cache.background_textures[variant_idx] = dst_bg;
             }
 
-            // Copy mask texture if present
             SDL_Texture* src_mask = (variant_idx < src_cache.mask_textures.size()) ? src_cache.mask_textures[variant_idx] : nullptr;
             if (src_mask) {
                 int mask_w = src_cache.mask_widths[variant_idx];
@@ -611,7 +593,6 @@ bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool fl
         frame_cache_.push_back(std::move(dst_cache));
     }
 
-    // Reverse frame order if requested
     if (reverse_frames && !frame_cache_.empty()) {
         std::reverse(frame_cache_.begin(), frame_cache_.end());
     }
@@ -623,7 +604,6 @@ bool Animation::copy_from(const Animation& source, bool flip_horizontal, bool fl
 const FrameVariant* Animation::get_frame(const AnimationFrame* frame, float requested_scale) const {
     if (!frame || frame->variants.empty()) return nullptr;
 
-    // Select the smallest available variant that is at least as large as the requested scale.
     const auto selection = render_pipeline::ScalingLogic::Choose(requested_scale, variant_steps_);
     int best_variant_idx = selection.index;
 

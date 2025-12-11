@@ -31,12 +31,9 @@ std::mutex& cache_mutex() {
 
 TransformSmoothingMethod clamp_method(int raw, TransformSmoothingMethod fallback) {
     switch (raw) {
-    case static_cast<int>(TransformSmoothingMethod::None):
-        return TransformSmoothingMethod::None;
-    case static_cast<int>(TransformSmoothingMethod::Lerp):
-        return TransformSmoothingMethod::Lerp;
-    case static_cast<int>(TransformSmoothingMethod::CriticallyDampedSpring):
-        return TransformSmoothingMethod::CriticallyDampedSpring;
+    case static_cast<int>(TransformSmoothingMethod::None): return TransformSmoothingMethod::None;
+    case static_cast<int>(TransformSmoothingMethod::Lerp): return TransformSmoothingMethod::Lerp;
+    case static_cast<int>(TransformSmoothingMethod::CriticallyDampedSpring): return TransformSmoothingMethod::CriticallyDampedSpring;
     default:
         return fallback;
     }
@@ -70,18 +67,13 @@ TransformSmoothingParams load_params(std::string_view prefix,
     const std::string max_step_key     = base + ".max_step";
     const std::string snap_key         = base + ".snap_threshold";
 
-    const int method_value = static_cast<int>(devmode::ui_settings::load_number(
-        method_key, static_cast<int>(defaults.method)));
+    const int method_value = static_cast<int>(devmode::ui_settings::load_number( method_key, static_cast<int>(defaults.method)));
     params.method          = clamp_method(method_value, defaults.method);
 
-    params.lerp_rate        = static_cast<float>(devmode::ui_settings::load_number(
-        lerp_key, defaults.lerp_rate));
-    params.spring_frequency = static_cast<float>(devmode::ui_settings::load_number(
-        spring_key, defaults.spring_frequency));
-    params.max_step         = static_cast<float>(devmode::ui_settings::load_number(
-        max_step_key, defaults.max_step));
-    params.snap_threshold   = static_cast<float>(devmode::ui_settings::load_number(
-        snap_key, defaults.snap_threshold));
+    params.lerp_rate        = static_cast<float>(devmode::ui_settings::load_number( lerp_key, defaults.lerp_rate));
+    params.spring_frequency = static_cast<float>(devmode::ui_settings::load_number( spring_key, defaults.spring_frequency));
+    params.max_step         = static_cast<float>(devmode::ui_settings::load_number( max_step_key, defaults.max_step));
+    params.snap_threshold   = static_cast<float>(devmode::ui_settings::load_number( snap_key, defaults.snap_threshold));
 
     params = sanitized(params);
 
@@ -163,7 +155,7 @@ void store_params(std::string_view prefix, const TransformSmoothingParams& param
     devmode::ui_settings::save_number(snap_key, params.snap_threshold);
 }
 
-} // namespace
+}
 
 const TransformSmoothingParams& asset_translation_params() {
     std::lock_guard<std::mutex> lock(cache_mutex());
@@ -236,5 +228,5 @@ void reload_from_settings() {
     ensure_loaded();
 }
 
-} // namespace transform_smoothing
+}
 

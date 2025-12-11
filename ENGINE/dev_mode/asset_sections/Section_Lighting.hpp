@@ -30,9 +30,7 @@ public:
         DockableCollapsible::Rows rows;
         if (!info_) {
             if (!empty_state_widget_) {
-                empty_state_widget_ = std::make_unique<ReadOnlyTextBoxWidget>(
-                    "",
-                    "No asset selected. Select an asset from the library or scene to view and edit its information.");
+                empty_state_widget_ = std::make_unique<ReadOnlyTextBoxWidget>( "", "No asset selected. Select an asset from the library or scene to view and edit its information.");
             }
             rows.push_back({ empty_state_widget_.get() });
             set_rows(rows);
@@ -77,28 +75,22 @@ public:
             auto& r = rows_[i];
             const int row_top = y;
 
-            // Lay out controls so they never overlap:
-            // - Right-aligned action buttons (Duplicate, Delete)
-            // - Label (expand/collapse) fills remaining space on the left
             const int btn_w = 120;
             const int gap = DMSpacing::item_gap();
-            int right_cursor = x + maxw; // place from right edge moving left
+            int right_cursor = x + maxw;
 
-            // Delete button at far right
             if (r.b_delete) {
                 right_cursor -= btn_w;
                 r.b_delete->set_rect(SDL_Rect{ right_cursor, y - scroll_, btn_w, DMButton::height() });
-                right_cursor -= gap; // gap between buttons/label
+                right_cursor -= gap;
             }
 
-            // Duplicate button left of delete if present
             if (r.b_duplicate) {
                 right_cursor -= btn_w;
                 r.b_duplicate->set_rect(SDL_Rect{ right_cursor, y - scroll_, btn_w, DMButton::height() });
                 right_cursor -= gap;
             }
 
-            // Label fills remaining space from left x to right_cursor
             if (r.lbl) {
                 const int label_x = x;
                 const int label_w = std::max(0, right_cursor - label_x);
@@ -214,7 +206,7 @@ public:
                 reset_scaling_profile = true;
                 rebuild_required = rebuild_required || requires_rebuild;
                 used = true;
-            };
+};
 
             if (r.c_front && r.c_front->handle_event(e)) {
                 r.light.in_front = r.c_front->value();
@@ -334,17 +326,7 @@ public:
                 highlight_rect.w = std::max(0, highlight_rect.w - inset * 2);
                 highlight_rect.h = std::max(0, highlight_rect.h - inset * 2);
                 const SDL_Color fill = dm_draw::LightenColor(DMStyles::PanelBG(), 0.08f);
-                dm_draw::DrawBeveledRect(
-                    r,
-                    highlight_rect,
-                    DMStyles::CornerRadius(),
-                    DMStyles::BevelDepth(),
-                    fill,
-                    DMStyles::HighlightColor(),
-                    DMStyles::ShadowColor(),
-                    false,
-                    DMStyles::HighlightIntensity(),
-                    DMStyles::ShadowIntensity());
+                dm_draw::DrawBeveledRect( r, highlight_rect, DMStyles::CornerRadius(), DMStyles::BevelDepth(), fill, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
             }
             if (rrow.lbl)      rrow.lbl->render(r);
             if (rrow.b_duplicate) rrow.b_duplicate->render(r);
@@ -410,9 +392,7 @@ private:
         r.c_front          = std::make_unique<DMCheckbox>("Render Texture In Front", ls.in_front);
         r.c_behind         = std::make_unique<DMCheckbox>("Render Texture Behind", ls.behind);
         r.c_dark_mask      = std::make_unique<DMCheckbox>("Render To Dark Mask", ls.render_to_dark_mask);
-        r.c_asset_alpha_mask = std::make_unique<DMCheckbox>(
-            "Render Front/Back To Asset Alpha Mask",
-            ls.render_front_and_back_to_asset_alpha_mask);
+        r.c_asset_alpha_mask = std::make_unique<DMCheckbox>( "Render Front/Back To Asset Alpha Mask", ls.render_front_and_back_to_asset_alpha_mask);
         r.color_widget = std::make_unique<DMColorRangeWidget>("Light Color");
         {
             DMColorRangeWidget::RangedColor rc;
@@ -463,15 +443,15 @@ private:
     void configure_row_sliders(Row& r) {
         auto configure_rebuild_slider = [](std::unique_ptr<DMSlider>& slider) {
             if (slider) slider->set_defer_commit_until_unfocus(true);
-        };
+};
         auto configure_normal_slider = [](std::unique_ptr<DMSlider>& slider) {
             if (slider) slider->set_defer_commit_until_unfocus(false);
-        };
-        // Sliders that trigger texture rebuild: defer commit until unfocus to avoid excessive rebuilds
+};
+
         configure_rebuild_slider(r.s_intensity);
         configure_rebuild_slider(r.s_radius);
         configure_rebuild_slider(r.s_falloff);
-        // Other sliders: immediate commit
+
         configure_normal_slider(r.s_flicker_speed);
         configure_normal_slider(r.s_flicker_smoothness);
         configure_normal_slider(r.s_offset_x);
@@ -516,10 +496,7 @@ private:
             return;
         }
         SDL_Color new_c{
-            static_cast<Uint8>(std::clamp(value.r.min, 0, 255)),
-            static_cast<Uint8>(std::clamp(value.g.min, 0, 255)),
-            static_cast<Uint8>(std::clamp(value.b.min, 0, 255)),
-            static_cast<Uint8>(std::clamp(value.a.min, 0, 255))};
+            static_cast<Uint8>(std::clamp(value.r.min, 0, 255)), static_cast<Uint8>(std::clamp(value.g.min, 0, 255)), static_cast<Uint8>(std::clamp(value.b.min, 0, 255)), static_cast<Uint8>(std::clamp(value.a.min, 0, 255))};
         if (new_c.r == row_it->light.color.r && new_c.g == row_it->light.color.g &&
             new_c.b == row_it->light.color.b && new_c.a == row_it->light.color.a) {
             return;
@@ -552,9 +529,7 @@ private:
         if (pending_full_asset_light_rebuild_ || index >= rows_.size()) {
             return;
         }
-        const auto existing = std::find(pending_light_rebuild_indices_.begin(),
-                                         pending_light_rebuild_indices_.end(),
-                                         index);
+        const auto existing = std::find(pending_light_rebuild_indices_.begin(), pending_light_rebuild_indices_.end(), index);
         if (existing == pending_light_rebuild_indices_.end()) {
             pending_light_rebuild_indices_.push_back(index);
         }
@@ -583,9 +558,7 @@ private:
             return;
         }
         std::sort(pending_light_rebuild_indices_.begin(), pending_light_rebuild_indices_.end());
-        pending_light_rebuild_indices_.erase(
-            std::unique(pending_light_rebuild_indices_.begin(), pending_light_rebuild_indices_.end()),
-            pending_light_rebuild_indices_.end());
+        pending_light_rebuild_indices_.erase( std::unique(pending_light_rebuild_indices_.begin(), pending_light_rebuild_indices_.end()), pending_light_rebuild_indices_.end());
     }
 
     void finalize_pending_light_rebuilds() {

@@ -505,7 +505,7 @@ PreviewProvider::ResolvedAnimation PreviewProvider::resolve_animation(const std:
         }
 
         return false;
-    };
+};
 
     std::filesystem::path requested = relative_path;
     if (should_treat_as_absolute(requested)) {

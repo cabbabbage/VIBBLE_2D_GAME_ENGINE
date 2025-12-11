@@ -31,19 +31,17 @@ class MovementCanvas {
 
     void update();
     void render(SDL_Renderer* renderer) const;
-    // Render only the background grid and optional context (no points/path)
+
     void render_background(SDL_Renderer* renderer) const;
     bool handle_event(const SDL_Event& e);
 
-    void set_animation_context(std::shared_ptr<PreviewProvider> provider,
-                               const std::string& animation_id,
-                               float scale_percentage);
+    void set_animation_context(std::shared_ptr<PreviewProvider> provider, const std::string& animation_id, float scale_percentage);
     void set_show_animation_overlay(bool show) { show_animation_overlay_ = show; }
-    // Configure snapping resolution (grid exponent r where step = 2^r). Set to <0 to disable.
+
     void set_snap_resolution(int r) { snap_resolution_ = r; }
-    // Toggle whether the preview sprite should follow the movement offsets or stay anchored at origin.
+
     void set_anchor_follows_movement(bool follow) { anchor_follows_movement_ = follow; }
-    // Toggle smoothing behavior when moving a point.
+
     void set_smoothing_enabled(bool enabled) { smoothing_enabled_ = enabled; }
     void set_smoothing_curve_enabled(bool enabled) { smoothing_curve_enabled_ = enabled; }
     const SDL_Rect& bounds() const { return bounds_; }
@@ -61,8 +59,7 @@ class MovementCanvas {
     void fit_view_to_content();
     void pan_view(float delta_x, float delta_y);
     void apply_zoom(float scale_delta);
-    void apply_frame_move_from_base(int index, const SDL_FPoint& new_position,
-                                    const std::vector<SDL_FPoint>& base_positions);
+    void apply_frame_move_from_base(int index, const SDL_FPoint& new_position, const std::vector<SDL_FPoint>& base_positions);
     void update_selection_from_mouse();
 
   private:
@@ -80,7 +77,7 @@ class MovementCanvas {
     SDL_Point drag_last_mouse_{0, 0};
     SDL_FPoint drag_target_world_{0.0f, 0.0f};
     std::vector<SDL_FPoint> drag_base_positions_;
-    // Overlay preview
+
     std::shared_ptr<PreviewProvider> preview_provider_;
     std::string animation_id_;
     bool show_animation_overlay_ = false;

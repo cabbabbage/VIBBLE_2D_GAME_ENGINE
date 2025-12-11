@@ -196,4 +196,3 @@ inline int default_visit_threshold(const Asset* asset) {
 
 }
 
-

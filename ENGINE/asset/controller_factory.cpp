@@ -5,7 +5,7 @@
 #include "animation_update/custom_controllers/Vibble_controller.hpp"
 #include "animation_update/custom_controllers/Frog_controller.hpp"
 #include "animation_update/custom_controllers/Bomb_controller.hpp"
-// Dynamic includes will be added here
+
 #include "animation_update/custom_controllers/default_controller.hpp"
 
 ControllerFactory::ControllerFactory(Assets* assets)

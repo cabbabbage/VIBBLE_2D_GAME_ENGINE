@@ -59,7 +59,7 @@ bool SimpleTasksFile::load(std::vector<SimpleTask>& out) const {
                 current = SimpleTask{};
             }
             current.description = trim(t.substr(2));
-            current.status = "pending"; // default
+            current.status = "pending";
             have_current = true;
             in_meta = false;
             continue;

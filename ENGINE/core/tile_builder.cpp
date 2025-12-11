@@ -49,8 +49,6 @@ static std::uint64_t chunk_key(int i, int j) {
     return (static_cast<std::uint64_t>(hi) << 32) | static_cast<std::uint64_t>(lo);
 }
 
-// Local copy of Assets::compute_tiling_for_asset logic to avoid coupling
-// loader code to the runtime Assets manager.
 static std::optional<Asset::TilingInfo> compute_tiling_for_asset(const Asset* asset,
                                                                  const MapGridSettings& grid_settings) {
     if (!asset || !asset->info || !asset->info->tillable) {
@@ -88,12 +86,12 @@ static std::optional<Asset::TilingInfo> compute_tiling_for_asset(const Asset* as
         if (step_ <= 0) return value;
         const double scaled = std::floor(static_cast<double>(value) / static_cast<double>(step_));
         return static_cast<int>(scaled * static_cast<double>(step_));
-    };
+};
     auto align_up = [](int value, int step_) {
         if (step_ <= 0) return value;
         const double scaled = std::ceil(static_cast<double>(value) / static_cast<double>(step_));
         return static_cast<int>(scaled * static_cast<double>(step_));
-    };
+};
 
     const int origin_x = align_down(left, step);
     const int origin_y = align_down(top, step);
@@ -185,7 +183,7 @@ static SDL_Rect compute_source_rect(const ChunkTileAsset& ctx, const SDL_Rect& s
     return src;
 }
 
-} // namespace
+}
 
 namespace loader_tiles {
 
@@ -254,7 +252,6 @@ void build_grid_tiles(SDL_Renderer* renderer,
     for (world::Chunk* chunk : chunks) {
         if (!chunk) continue;
 
-        // Clear any preexisting tiles on the chunk
         chunk->releaseTileTextures();
 
         const SDL_Rect bounds = chunk->world_bounds;
@@ -266,15 +263,14 @@ void build_grid_tiles(SDL_Renderer* renderer,
         }
         const auto& tilers = tiler_it->second;
 
-        // Determine grid-aligned tile extents across the chunk
         auto align_down = [](int value, int step_) {
             const double scaled = std::floor(static_cast<double>(value) / static_cast<double>(step_));
             return static_cast<int>(scaled * static_cast<double>(step_));
-        };
+};
         auto align_up = [](int value, int step_) {
             const double scaled = std::ceil(static_cast<double>(value) / static_cast<double>(step_));
             return static_cast<int>(scaled * static_cast<double>(step_));
-        };
+};
         const int x0 = align_down(bounds.x, step);
         const int y0 = align_down(bounds.y, step);
         const int x1 = align_up(bounds.x + bounds.w, step);
@@ -284,7 +280,6 @@ void build_grid_tiles(SDL_Renderer* renderer,
             for (int x = x0; x < x1; x += step) {
                 SDL_Rect tile_world{ x, y, step, step };
 
-                // Check if any tiler covers this tile
                 bool any = false;
                 for (const ChunkTileAsset* ctx : tilers) {
                     if (!ctx) continue;
@@ -297,7 +292,6 @@ void build_grid_tiles(SDL_Renderer* renderer,
                 }
                 if (!any) continue;
 
-                // Create tile texture target
                 SDL_Texture* tile_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, tile_world.w, tile_world.h);
                 if (!tile_tex) continue;
                 SDL_SetTextureBlendMode(tile_tex, SDL_BLENDMODE_BLEND);
@@ -313,7 +307,6 @@ void build_grid_tiles(SDL_Renderer* renderer,
                 SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
                 SDL_RenderClear(renderer);
 
-                // Composite all tilers in this tile
                 for (const ChunkTileAsset* ctx : tilers) {
                     if (!ctx) continue;
                     SDL_Rect sprite_inter{};
@@ -327,7 +320,7 @@ void build_grid_tiles(SDL_Renderer* renderer,
                         sprite_inter.y - tile_world.y,
                         sprite_inter.w,
                         sprite_inter.h
-                    };
+};
                     SDL_Rect src = compute_source_rect(*ctx, sprite_inter);
                     if (src.w <= 0 || src.h <= 0) {
                         continue;
@@ -347,4 +340,4 @@ void build_grid_tiles(SDL_Renderer* renderer,
     }
 }
 
-} // namespace loader_tiles
+}

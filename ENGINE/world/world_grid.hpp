@@ -11,15 +11,11 @@
 #include "world/chunk_manager.hpp"
 #include "world/grid_point.hpp"
 
-// Forward declarations
 class Asset;
 class WarpedScreenGrid;
 
 namespace world {
 
-/**
- * Grid of chunks for asset residency and x parallax.
- */
 class WorldGrid {
 public:
     WorldGrid() : WorldGrid(SDL_Point{0, 0}, 0) {}
@@ -32,11 +28,10 @@ public:
     SDL_Point origin() const { return origin_; }
     void set_origin(SDL_Point origin);
 
-    // Creation helpers that store ownership inside the grid points.
     Asset* create_asset_at_point(std::unique_ptr<Asset> a);
-    Asset* create_asset_at_point(Asset* a); // convenience overload; transfers ownership
+    Asset* create_asset_at_point(Asset* a);
     Asset* register_asset(std::unique_ptr<Asset> a);
-    Asset* register_asset(Asset* a); // legacy helper; transfers ownership
+    Asset* register_asset(Asset* a);
     Chunk* ensure_chunk_from_world(SDL_Point world_px);
     Chunk* chunk_from_world(SDL_Point world_px) const;
     Chunk* get_or_create_chunk_ij(int i, int j);
@@ -54,7 +49,7 @@ public:
 
     Asset* move_asset_to_point(Asset* a, SDL_Point old_pos, SDL_Point new_pos);
     Asset* move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos);
-    // Removes an asset from the grid; ownership is destroyed internally.
+
     Asset* remove_asset(Asset* a);
     void unregister_asset(Asset* a);
     void rebuild_chunks();
@@ -67,7 +62,6 @@ public:
     const ChunkManager& chunks() const;
     std::vector<Asset*> all_assets() const;
 
-    // Grid point helpers for linking to ScreenGrid / render
     SDL_Point grid_index_from_world(SDL_Point world) const;
     GridId point_id_from_world(SDL_Point world) const;
     const std::unordered_map<GridId, GridPoint>& points() const { return points_; }
@@ -83,11 +77,7 @@ private:
     GridId make_point_id(int i, int j) const;
     void remove_asset_from_point(Asset* a, GridPoint& point);
     GridPoint& ensure_point(SDL_Point grid_index);
-    void bind_asset_to_point(Asset* a,
-                             GridPoint& point,
-                             SDL_Point world_pos,
-                             Chunk* owning_chunk,
-                             SDL_Point chunk_index);
+    void bind_asset_to_point(Asset* a, GridPoint& point, SDL_Point world_pos, Chunk* owning_chunk, SDL_Point chunk_index);
     void prune_empty_points();
     std::unique_ptr<Asset> extract_from_point(Asset* a, GridPoint& point);
 
@@ -107,4 +97,4 @@ private:
     std::unordered_map<Asset*, GridId> asset_to_point_;
 };
 
-} // namespace world
+}

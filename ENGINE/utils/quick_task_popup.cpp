@@ -36,7 +36,7 @@ void QuickTaskPopup::handle_escape() {
 }
 
 void QuickTaskPopup::update() {
-    // No animations
+
 }
 
 void QuickTaskPopup::render(SDL_Renderer* renderer) {
@@ -59,17 +59,14 @@ void QuickTaskPopup::render(SDL_Renderer* renderer) {
     SDL_SetRenderDrawColor(renderer, 80, 80, 100, 255);
     SDL_RenderDrawRect(renderer, &popup_rect_);
 
-    // Render top bar widgets
     if (assignee_dd_) assignee_dd_->render(renderer);
     if (assigner_dd_) assigner_dd_->render(renderer);
     if (description_box_) description_box_->render(renderer);
     if (add_button_)   add_button_->render(renderer);
 
-    // Section headers
     if (dev_label_) dev_label_->render(renderer);
     if (cline_label_) cline_label_->render(renderer);
 
-    // Draw rows for dev tasks
     const DMLabelStyle& ls = DMStyles::Label();
     int row_y = dev_rect_.y + DMButton::height() + 6;
     const int row_h = DMTextBox::height();
@@ -84,7 +81,6 @@ void QuickTaskPopup::render(SDL_Renderer* renderer) {
         if (row_y > dev_rect_.y + dev_rect_.h - row_h) break;
     }
 
-    // Draw rows for cline tasks
     row_y = cline_rect_.y + DMButton::height() + 6;
     for (size_t i = 0; i < cline_tasks_.size(); ++i) {
         const int x0 = cline_rect_.x + pad;
@@ -96,7 +92,6 @@ void QuickTaskPopup::render(SDL_Renderer* renderer) {
         if (row_y > cline_rect_.y + cline_rect_.h - row_h) break;
     }
 
-    // Render any expanded dropdown options on top
     DMDropdown::render_active_options(renderer);
 }
 
@@ -110,7 +105,6 @@ bool QuickTaskPopup::handle_event(const SDL_Event& event) {
 
     bool consumed = false;
 
-    // Top bar
     if (assignee_dd_ && assignee_dd_->handle_event(event)) consumed = true;
     if (assigner_dd_ && assigner_dd_->handle_event(event)) consumed = true;
     if (description_box_ && description_box_->handle_event(event)) consumed = true;
@@ -119,7 +113,6 @@ bool QuickTaskPopup::handle_event(const SDL_Event& event) {
         add_new_task();
     }
 
-    // Per-row delete buttons
     for (size_t i = 0; i < dev_row_widgets_.size(); ++i) {
         auto& rw = dev_row_widgets_[i];
         if (i >= dev_tasks_.size()) break;
@@ -139,8 +132,6 @@ bool QuickTaskPopup::handle_event(const SDL_Event& event) {
         }
     }
 
-    // While the popup is open, block ALL mouse input from reaching the scene
-    // (including clicks, motion, and scroll) regardless of where it occurs.
     if (event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP || event.type == SDL_MOUSEWHEEL) {
         return true;
     }
@@ -148,7 +139,7 @@ bool QuickTaskPopup::handle_event(const SDL_Event& event) {
 }
 
 void QuickTaskPopup::rebuild_ui() {
-    // Top bar
+
     const std::vector<std::string> assignee_opts{ "Any", "Cal", "Kaden", "Haden", "Cline" };
     const std::vector<std::string> assigner_opts{ "Cal", "Kaden", "Haden" };
     int default_assignee = assignee_dd_ ? assignee_dd_->selected() : 0;
@@ -158,11 +149,9 @@ void QuickTaskPopup::rebuild_ui() {
     description_box_ = std::make_unique<DMTextBox>("Description", description_box_ ? description_box_->value() : std::string());
     add_button_   = std::make_unique<DMButton>("Add Task", &DMStyles::CreateButton(), 100, DMButton::height());
 
-    // Section labels
     dev_label_ = std::make_unique<DMButton>("Dev Tasks", &DMStyles::HeaderButton(), 0, DMButton::height());
     cline_label_ = std::make_unique<DMButton>("Cline Tasks", &DMStyles::HeaderButton(), 0, DMButton::height());
 
-    // Row buttons sized to tasks
     dev_row_widgets_.clear();
     dev_row_widgets_.resize(dev_tasks_.size());
     for (size_t i = 0; i < dev_tasks_.size(); ++i) {
@@ -181,15 +170,12 @@ void QuickTaskPopup::layout_ui(const SDL_Rect& screen_rect) const {
     const int popup_width = std::min(1200, screen_rect.w - 80);
     const int popup_height = std::min(700, screen_rect.h - 80);
     popup_rect_ = { screen_rect.x + (screen_rect.w - popup_width)/2,
-                    screen_rect.y + (screen_rect.h - popup_height)/2,
-                    popup_width, popup_height };
+                    screen_rect.y + (screen_rect.h - popup_height)/2, popup_width, popup_height };
 
-    // Top bar (dynamic height to avoid overlap)
     const int topbar_x = popup_rect_.x + 12;
     const int topbar_y = popup_rect_.y + 12;
     const int topbar_w = popup_rect_.w - 24;
 
-    // Planned widths and gaps
     const int gap = 10;
     const int assignee_w = 180;
     const int assigner_w = 160;
@@ -197,7 +183,6 @@ void QuickTaskPopup::layout_ui(const SDL_Rect& screen_rect) const {
     int desc_w = topbar_w - (assignee_w + gap + assigner_w + gap + add_w + gap);
     if (desc_w < 200) desc_w = 200;
 
-    // Compute preferred heights for each control
     int assignee_h = assignee_dd_ ? assignee_dd_->preferred_height(assignee_w) : DMButton::height();
     int assigner_h = assigner_dd_ ? assigner_dd_->preferred_height(assigner_w) : DMButton::height();
     int desc_h = description_box_ ? description_box_->height_for_width(desc_w) : DMTextBox::height();
@@ -206,7 +191,6 @@ void QuickTaskPopup::layout_ui(const SDL_Rect& screen_rect) const {
 
     topbar_rect_ = { topbar_x, topbar_y, topbar_w, topbar_h };
 
-    // Lay out controls using computed height
     int x = topbar_rect_.x;
     const int y = topbar_rect_.y;
 
@@ -226,7 +210,6 @@ void QuickTaskPopup::layout_ui(const SDL_Rect& screen_rect) const {
         add_button_->set_rect(SDL_Rect{ x, y + (topbar_h - add_h) / 2, add_w, add_h });
     }
 
-    // Lists area split into two
     lists_rect_ = { popup_rect_.x + 12, topbar_rect_.y + topbar_rect_.h + 12, popup_rect_.w - 24, popup_rect_.h - (topbar_rect_.h + 24) };
     const int col_gap = 8;
     int col_w = (lists_rect_.w - col_gap) / 2;
@@ -236,7 +219,6 @@ void QuickTaskPopup::layout_ui(const SDL_Rect& screen_rect) const {
     if (dev_label_) dev_label_->set_rect(SDL_Rect{ dev_rect_.x, dev_rect_.y, dev_rect_.w, DMButton::height() });
     if (cline_label_) cline_label_->set_rect(SDL_Rect{ cline_rect_.x, cline_rect_.y, cline_rect_.w, DMButton::height() });
 
-    // Place delete buttons per row
     auto place_rows = [&](const std::vector<SimpleTask>& tasks, std::vector<RowWidgets>& rows, const SDL_Rect& rect) {
         int y_cursor = rect.y + DMButton::height() + 6;
         for (size_t i = 0; i < tasks.size() && i < rows.size(); ++i) {
@@ -247,7 +229,7 @@ void QuickTaskPopup::layout_ui(const SDL_Rect& screen_rect) const {
             y_cursor += DMTextBox::height() + 6;
             if (y_cursor > rect.y + rect.h - DMTextBox::height()) break;
         }
-    };
+};
     place_rows(dev_tasks_, dev_row_widgets_, dev_rect_);
     place_rows(cline_tasks_, cline_row_widgets_, cline_rect_);
 }

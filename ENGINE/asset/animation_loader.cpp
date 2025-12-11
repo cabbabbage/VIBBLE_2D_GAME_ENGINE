@@ -171,18 +171,16 @@ std::optional<AnimationChildMode> parse_child_mode(const nlohmann::json& node) {
         return std::nullopt;
 }
 
-
-// Count PNG files (0.png, 1.png, 2.png, etc.) in a folder
 int count_png_files(const std::string& folder) {
         int count = 0;
         const fs::path folder_path(folder);
-        
+
         std::error_code ec;
         if (!fs::exists(folder_path, ec) || ec) {
                 std::cout << "[Animation] count_png_files: folder does not exist: " << folder << "\n";
                 return 0;
         }
-        
+
         while (true) {
                 fs::path frame_path = folder_path / (std::to_string(count) + ".png");
                 if (!fs::exists(frame_path, ec) || ec) {
@@ -190,7 +188,7 @@ int count_png_files(const std::string& folder) {
                 }
                 ++count;
         }
-        
+
         std::cout << "[Animation] count_png_files: folder=" << folder << ", count=" << count << "\n";
         return count;
 }
@@ -404,12 +402,10 @@ VariantLayerPaths build_variant_layer_paths(const std::string& cache_folder,
         paths.foreground_folder = (scale_root / "foreground").string();
         paths.background_folder = (scale_root / "background").string();
         paths.mask_folder       = (scale_root / "mask").string();
-        
-        // Log constructed paths for debugging
-        std::cout << "[Animation] build_variant_layer_paths idx=" << index 
-                  << " scale=" << (index < steps.size() ? steps[index] : 0.0f)
-                  << " normal_folder=" << paths.normal_folder << "\n";
-        
+
+        std::cout << "[Animation] build_variant_layer_paths idx=" << index
+                  << " scale=" << (index < steps.size() ? steps[index] : 0.0f) << " normal_folder=" << paths.normal_folder << "\n";
+
         return paths;
 }
 
@@ -477,7 +473,7 @@ void apply_scale_mode(SDL_Texture* tex, const AssetInfo& info) {
 void apply_scale_mode(SDL_Texture*, const AssetInfo&) {}
 #endif
 
-} // namespace
+}
 
 void AnimationLoader::load(Animation& animation,
                      const std::string& trigger,
@@ -503,11 +499,11 @@ void AnimationLoader::load(Animation& animation,
                 if (diagnostics) {
                         diagnostics->cache_invalid = diagnostics->cache_invalid || cache_invalid_detected;
                 }
-        };
+};
         const double safe_scale = sanitize_scale_factor(scale_factor);
         animation.clear_texture_cache();
         const bool prefer_cached = !scaling_refresh_pending;
-        // Image effects are now handled by Python, so depth cues are not supported at runtime
+
         const bool supports_depthcue_cache = false;
         bool effect_hash_mismatch = false;
         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
@@ -516,8 +512,7 @@ void AnimationLoader::load(Animation& animation,
         render_pipeline::ScalingLogic::NormalizeVariantSteps(animation.variant_steps_);
         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                   << " normalized profile steps: " << format_steps(animation.variant_steps_) << "\n";
-        
-        // Parse source information first to determine if we need to inherit scale from source animation
+
         if (anim_json.contains("source")) {
                 const auto& s = anim_json["source"];
                 try {
@@ -539,8 +534,7 @@ void AnimationLoader::load(Animation& animation,
 			animation.source.name.clear();
 		} catch (...) { animation.source.name.clear(); }
 	}
-        
-        // If sourcing from another animation, inherit its variant_steps to ensure same scale
+
         if (animation.source.kind == "animation" && !animation.source.name.empty()) {
                 auto it = info.animations.find(animation.source.name);
                 if (it != info.animations.end()) {
@@ -548,15 +542,14 @@ void AnimationLoader::load(Animation& animation,
                         if (!src_anim.variant_steps_.empty()) {
                                 animation.variant_steps_ = src_anim.variant_steps_;
                                 std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                          << " inherited variant_steps from source animation '" << animation.source.name 
+                                          << " inherited variant_steps from source animation '" << animation.source.name
                                           << "': " << format_steps(animation.variant_steps_) << "\n";
                         }
                 }
         }
-        
-        // Calculate variant count after potential inheritance
+
         const std::size_t initial_variant_count = animation.variant_steps_.size();
-        
+
         animation.flipped_source = anim_json.value("flipped_source", false);
         animation.flip_vertical_source = anim_json.value("flip_vertical_source", false);
         animation.flip_movement_horizontal = anim_json.value("flip_movement_horizontal", false);
@@ -602,7 +595,7 @@ void AnimationLoader::load(Animation& animation,
                         animation.child_asset_names_ = src_child_it->second.child_assets();
                 }
         }
-        // Deduplicate child asset list while preserving order
+
         if (!animation.child_asset_names_.empty()) {
                 std::unordered_set<std::string> seen;
                 std::vector<std::string> unique;
@@ -636,7 +629,6 @@ void AnimationLoader::load(Animation& animation,
                 for (const auto& mv : seq) {
                         AnimationFrame fm;
 
-                        // Object-form support: { dx, dy, resort_z, children: [...] }
                         if (mv.is_object()) {
                                 try { fm.dx = static_cast<int>(mv.value("dx", 0)); } catch (...) { fm.dx = 0; }
                                 try { fm.dy = static_cast<int>(mv.value("dy", 0)); } catch (...) { fm.dy = 0; }
@@ -685,14 +677,13 @@ void AnimationLoader::load(Animation& animation,
                                 continue;
                         }
 
-                        // Array-form support
                         if (!mv.is_array() || mv.size() < 2) continue;
                         try { fm.dx = mv[0].get<int>(); } catch (...) { fm.dx = 0; }
                         try { fm.dy = mv[1].get<int>(); } catch (...) { fm.dy = 0; }
                         if (mv.size() >= 3 && mv[2].is_boolean()) {
                                 fm.z_resort = mv[2].get<bool>();
                         }
-                        // Optional color at index 3: only when exactly 3 numeric entries
+
                         bool color_consumed = false;
                         if (mv.size() >= 4 && mv[3].is_array()) {
                                 const auto& c = mv[3];
@@ -713,7 +704,7 @@ void AnimationLoader::load(Animation& animation,
                         } else if (mv.size() >= 4 && mv[3].is_array() && !color_consumed) {
                                 children_json = &mv[3];
                         } else if (mv.size() >= 3 && mv[2].is_array() && !(mv.size() >= 3 && mv[2].is_boolean())) {
-                                // Legacy: children immediately after dx,dy when no resort_z/color present
+
                                 children_json = &mv[2];
                         }
                         if (children_json) {
@@ -825,10 +816,10 @@ void AnimationLoader::load(Animation& animation,
                                   << " missing source animation '" << animation.source.name << "'\n";
                 }
         } else if (animation.source.kind == "folder") {
-                // Simplified cache loading - assume PNGs exist and load them directly
+
                 const fs::path cache_folder_path = fs::path(root_cache) / trigger;
                 std::string cache_folder = cache_folder_path.string();
-                
+
                 std::size_t variant_count = animation.variant_steps_.size();
                 if (variant_count == 0) {
                         animation.variant_steps_.push_back(1.0f);
@@ -840,14 +831,12 @@ void AnimationLoader::load(Animation& animation,
                           << " loading from cache_folder=" << cache_folder
                           << " variant_count=" << variant_count << "\n";
 
-                // Build paths for each variant
                 std::vector<VariantLayerPaths> variant_paths;
                 variant_paths.reserve(variant_count);
                 for (std::size_t idx = 0; idx < variant_count; ++idx) {
                         variant_paths.push_back(build_variant_layer_paths(cache_folder, animation.variant_steps_, idx));
                 }
 
-                // Lambda for freeing surface lists
                 auto free_surface_lists = [](std::vector<std::vector<SDL_Surface*>>& lists) {
                         for (auto& list : lists) {
                                 for (SDL_Surface* surf : list) {
@@ -857,41 +846,38 @@ void AnimationLoader::load(Animation& animation,
                                 }
                                 list.clear();
                         }
-                };
+};
 
-                // Find the first variant that exists to determine frame count
                 int frame_count = 0;
                 std::size_t working_variant_idx = 0;
                 for (std::size_t idx = 0; idx < variant_paths.size(); ++idx) {
                         const fs::path normal_folder_path(variant_paths[idx].normal_folder);
                         const fs::path test_frame = normal_folder_path / "0.png";
-                        
+
                         std::error_code test_ec;
                         if (fs::exists(test_frame, test_ec) && !test_ec) {
                                 frame_count = count_png_files(variant_paths[idx].normal_folder);
                                 if (frame_count > 0) {
                                         working_variant_idx = idx;
                                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                                  << " using variant " << idx << " (scale=" 
-                                                  << (idx < animation.variant_steps_.size() ? animation.variant_steps_[idx] : 0.0f)
-                                                  << ") to determine frame_count=" << frame_count << "\n";
+                                                  << " using variant " << idx << " (scale="
+                                                  << (idx < animation.variant_steps_.size() ? animation.variant_steps_[idx] : 0.0f) << ") to determine frame_count=" << frame_count << "\n";
                                         break;
                                 }
                         }
                 }
-                
+
                 if (frame_count == 0) {
                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                   << " no cached frames found in any variant folder\n";
                         for (std::size_t idx = 0; idx < variant_paths.size(); ++idx) {
-                                std::cout << "[AnimationLoader]   variant " << idx << " normal_folder=" 
+                                std::cout << "[AnimationLoader]   variant " << idx << " normal_folder="
                                           << variant_paths[idx].normal_folder << "\n";
                         }
                         flush_diagnostics();
                         return;
                 }
 
-                // Try to load surfaces from the expected cache locations
                 std::vector<std::vector<SDL_Surface*>> variant_surfaces(variant_count);
                 std::vector<std::vector<SDL_Surface*>> foreground_surfaces(variant_count);
                 std::vector<std::vector<SDL_Surface*>> background_surfaces(variant_count);
@@ -909,24 +895,21 @@ void AnimationLoader::load(Animation& animation,
                                 all_surfaces_loaded = false;
                                 std::cout << "[AnimationLoader] " << info.name << "::" << trigger
                                           << " failed to load variant " << idx << " from " << paths.normal_folder << "\n";
-                                break; // If any variant fails, we need to regenerate
+                                break;
                         }
-                        
-                        // Load foreground textures if available
+
                         std::vector<SDL_Surface*> fg_loaded;
-                        if (CacheManager::load_surface_sequence(paths.foreground_folder, frame_count, fg_loaded) && 
+                        if (CacheManager::load_surface_sequence(paths.foreground_folder, frame_count, fg_loaded) &&
                             static_cast<int>(fg_loaded.size()) == frame_count) {
                                 foreground_surfaces[idx] = std::move(fg_loaded);
                         }
-                        
-                        // Load background textures if available
+
                         std::vector<SDL_Surface*> bg_loaded;
-                        if (CacheManager::load_surface_sequence(paths.background_folder, frame_count, bg_loaded) && 
+                        if (CacheManager::load_surface_sequence(paths.background_folder, frame_count, bg_loaded) &&
                             static_cast<int>(bg_loaded.size()) == frame_count) {
                                 background_surfaces[idx] = std::move(bg_loaded);
                         }
 
-                        // Load mask sequences if present
                         std::vector<SDL_Surface*> mask_loaded;
                         if (CacheManager::load_surface_sequence(paths.mask_folder, frame_count, mask_loaded) &&
                             static_cast<int>(mask_loaded.size()) == frame_count) {
@@ -960,7 +943,6 @@ void AnimationLoader::load(Animation& animation,
                 scaled_sprite_w        = scaled_dimension(variant_surfaces[0][0]->w, safe_scale);
                 scaled_sprite_h        = scaled_dimension(variant_surfaces[0][0]->h, safe_scale);
 
-                // Cache is valid - load textures
                 int orig_w = variant_surfaces[0][0]->w;
                 int orig_h = variant_surfaces[0][0]->h;
 
@@ -972,8 +954,6 @@ void AnimationLoader::load(Animation& animation,
                         scaled_sprite_w = fallback_w;
                         scaled_sprite_h = fallback_h;
                 }
-
-                // Mask load handled above for cache path
 
                 animation.frames.clear();
                 animation.frame_cache_.clear();
@@ -1002,7 +982,6 @@ void AnimationLoader::load(Animation& animation,
                                 cache_entry.widths[variant_idx]   = tex_w;
                                 cache_entry.heights[variant_idx]  = tex_h;
 
-                                // Load foreground overlay if available
                                 SDL_Texture* fg_tex = nullptr;
                                 if (frame_idx < foreground_surfaces[variant_idx].size() && foreground_surfaces[variant_idx][frame_idx]) {
                                         fg_tex = CacheManager::surface_to_texture(renderer, foreground_surfaces[variant_idx][frame_idx]);
@@ -1012,7 +991,6 @@ void AnimationLoader::load(Animation& animation,
                                 }
                                 cache_entry.foreground_textures[variant_idx] = fg_tex;
 
-                                // Load background overlay if available
                                 SDL_Texture* bg_tex = nullptr;
                                 if (frame_idx < background_surfaces[variant_idx].size() && background_surfaces[variant_idx][frame_idx]) {
                                         bg_tex = CacheManager::surface_to_texture(renderer, background_surfaces[variant_idx][frame_idx]);
@@ -1047,14 +1025,12 @@ void AnimationLoader::load(Animation& animation,
                 free_surface_lists(background_surfaces);
                 free_surface_lists(mask_surfaces);
 
-                // Flip processing disabled for cached loading
                 if (animation.reverse_source && !animation.frame_cache_.empty()) {
                         std::reverse(animation.frame_cache_.begin(), animation.frame_cache_.end());
                 }
                 loaded_from_cache = true;
         }
 
-        // If we still lack frames but the source animation finished loading elsewhere, clone it now.
         if (animation.frame_cache_.empty() &&
             animation.source.kind == "animation" &&
             !animation.source.name.empty()) {
@@ -1079,10 +1055,6 @@ void AnimationLoader::load(Animation& animation,
                 }
         }
 
-
-
-
-        // Apply movement-only transforms; texture flips are handled by the cloner.
         auto apply_movement_transforms = [&](std::vector<std::vector<AnimationFrame>>& paths) {
                 if (animation.reverse_source) {
                         for (auto& path : paths) {
@@ -1109,7 +1081,7 @@ void AnimationLoader::load(Animation& animation,
                                 }
                         }
                 }
-        };
+};
 
         const bool derive_from_animation = (animation.source.kind == "animation" && !animation.source.name.empty());
         const bool use_inherited_movement = derive_from_animation && animation.inherit_source_movement;
@@ -1120,7 +1092,7 @@ void AnimationLoader::load(Animation& animation,
                         animation.movement_paths_ = it->second.movement_paths_;
                         movement_from_source = true;
                 } else if (!movement_specified) {
-                        // Leave an empty path so we can safely bind frames without forcing movement flips.
+
                         animation.movement_paths_.assign(1, {});
                 } else {
                         std::cout << "[AnimationLoader] " << info.name << "::" << trigger
@@ -1190,7 +1162,7 @@ void AnimationLoader::load(Animation& animation,
                         f.is_first    = (i == 0);
                         f.is_last     = (i + 1 == path.size());
                         f.frame_index = static_cast<int>(i);
-                        
+
                         f.variants.clear();
                         if (i < animation.frame_cache_.size()) {
                             const auto& cache = animation.frame_cache_[i];
@@ -1206,7 +1178,7 @@ void AnimationLoader::load(Animation& animation,
                         if (f.dx != 0 || f.dy != 0) {
                                 any_motion = true;
                         }
-                        // Only add frames from the primary path (index 0) to the frames list
+
                 if (path_idx == 0) {
                         animation.frames.push_back(&f);
                 }
@@ -1244,8 +1216,7 @@ void AnimationLoader::load(Animation& animation,
                 base_sprite = animation.frames[0]->variants[0].base_texture;
                 info.preview_texture = animation.frames[0]->variants[0].base_texture;
         }
-        
-        // Set preview texture
+
         if (!animation.frames.empty() && !animation.frames[0]->variants.empty()) {
             animation.preview_texture = animation.frames[0]->variants[0].base_texture;
         } else {
@@ -1280,7 +1251,6 @@ void AnimationLoader::load(Animation& animation,
                 vibble::log::debug(oss.str());
         }
 
-        // Refresh inherited movement paths for any earlier animations whose sources were not yet loaded.
         resolve_inherited_movements(info);
         flush_diagnostics();
 }
@@ -1333,7 +1303,7 @@ bool AnimationLoader::load_child_timelines_from_json(const nlohmann::json& anim_
                                 return new_index;
                         }
                         return -1;
-                };
+};
 
                 std::unordered_map<int, AnimationChildData> parsed;
                 parsed.reserve(timelines_node->size());
@@ -1380,7 +1350,7 @@ bool AnimationLoader::load_child_timelines_from_json(const nlohmann::json& anim_
                 const std::size_t parent_frame_count = animation.frames.size();
                 auto make_default_sample = [&](int idx) {
                         return make_default_child_frame(idx);
-                };
+};
 
                 std::vector<AnimationChildData> descriptors;
                 descriptors.reserve(child_assets.size());
@@ -1406,15 +1376,10 @@ bool AnimationLoader::load_child_timelines_from_json(const nlohmann::json& anim_
                                                                     : (previous ? previous->animation_override : std::string{});
                         descriptor.mode = parsed_data ? parsed_data->mode : previous->mode;
                         descriptor.auto_start = parsed_data ? parsed_data->auto_start
-                                                            : (previous ? previous->auto_start
-                                                                         : (descriptor.mode == AnimationChildMode::Static));
+                                                            : (previous ? previous->auto_start : (descriptor.mode == AnimationChildMode::Static));
 
                         if (descriptor.mode == AnimationChildMode::Static) {
-                                const std::size_t sample_count = (parent_frame_count > 0)
-                                                                         ? parent_frame_count
-                                                                         : ((previous && previous->is_static() && !previous->frames.empty())
-                                                                                ? previous->frames.size()
-                                                                                : static_cast<std::size_t>(1));
+                                const std::size_t sample_count = (parent_frame_count > 0) ? parent_frame_count : ((previous && previous->is_static() && !previous->frames.empty()) ? previous->frames.size() : static_cast<std::size_t>(1));
                                 descriptor.frames.assign(sample_count, make_default_sample(child_index));
 
                                 if (parsed_data && !parsed_data->frames.empty()) {

@@ -26,7 +26,6 @@ std::string status_heading(DevTaskStatus s) {
     return kLane1;
 }
 
-// Very small helper to replace all
 void replace_all(std::string& s, const std::string& from, const std::string& to) {
     if (from.empty()) return;
     size_t start_pos = 0;
@@ -124,12 +123,12 @@ bool DevTasksMarkdown::load(std::vector<DevTask>& out_tasks) {
     bool in_meta = false;
     auto commit = [&]() {
         if (!current.id.empty()) {
-            // If title missing, fall back to cline_description
+
             if (current.title.empty()) current.title = current.cline_description;
             out_tasks.push_back(current);
             current = DevTask{};
         }
-    };
+};
 
     while (std::getline(in, line)) {
         const std::string t = trim(line);
@@ -139,12 +138,12 @@ bool DevTasksMarkdown::load(std::vector<DevTask>& out_tasks) {
         if (t == kLane3) { lane = Lane::L3; continue; }
 
         if (starts_with(t, "- [")) {
-            // Commit previous task if any
+
             commit();
-            // Parse checkbox and title
+
             bool checked = false;
             if (starts_with(t, "- [x]")) checked = true;
-            // Extract title after "] "
+
             const auto rb = t.find("] ");
             std::string title = (rb != std::string::npos) ? trim(t.substr(rb + 2)) : std::string{};
             current = DevTask{};
@@ -160,17 +159,17 @@ bool DevTasksMarkdown::load(std::vector<DevTask>& out_tasks) {
         }
         if (t == "-->") {
             in_meta = false;
-            // if status was read as string, it remains
+
             continue;
         }
 
         if (in_meta) {
-            // key: value
+
             const auto colon = t.find(":");
             if (colon == std::string::npos) continue;
             std::string key = trim(t.substr(0, colon));
             std::string value = trim(t.substr(colon + 1));
-            // remove optional quotes
+
             value = unquote(value);
 
             if (key == "id") current.id = value;
@@ -178,7 +177,7 @@ bool DevTasksMarkdown::load(std::vector<DevTask>& out_tasks) {
             else if (key == "assignee") current.assignee = value;
             else if (key == "created") current.created = value;
             else if (key == "files") {
-                // Expect JSON-ish array: ["a","b"] (lenient)
+
                 std::string s = value;
                 if (!s.empty() && s.front()=='[' && s.back()==']') {
                     s = s.substr(1, s.size()-2);
@@ -195,7 +194,7 @@ bool DevTasksMarkdown::load(std::vector<DevTask>& out_tasks) {
             else if (key == "notes") current.notes = value;
         }
     }
-    // Commit last pending task
+
     commit();
     return true;
 }
@@ -209,7 +208,7 @@ bool DevTasksMarkdown::save(const std::vector<DevTask>& tasks) {
     if (!out.is_open()) return false;
 
     out << kTitle << "\n\n";
-    // Write sections in fixed order
+
     auto write_section = [&](DevTaskStatus section) {
         out << status_heading(section) << "\n\n";
         for (const DevTask& t : tasks) {
@@ -221,7 +220,7 @@ bool DevTasksMarkdown::save(const std::vector<DevTask>& tasks) {
             out << "status: " << to_string(t.status) << "\n";
             out << "assignee: " << t.assignee << "\n";
             out << "created: " << t.created << "\n";
-            // files as JSON-ish array (quote each, comma separated)
+
             out << "files: [";
             for (size_t i = 0; i < t.files.size(); ++i) {
                 std::string f = t.files[i];
@@ -230,7 +229,7 @@ bool DevTasksMarkdown::save(const std::vector<DevTask>& tasks) {
                 if (i + 1 < t.files.size()) out << ", ";
             }
             out << "]\n";
-            // Escape newlines from descriptions into \n for single-line storage
+
             std::string desc = t.cline_description;
             replace_all(desc, "\n", "\\n");
             std::string notes = t.notes;
@@ -239,7 +238,7 @@ bool DevTasksMarkdown::save(const std::vector<DevTask>& tasks) {
             out << "notes: " << notes << "\n";
             out << "-->\n\n";
         }
-    };
+};
 
     write_section(DevTaskStatus::PendingClineDescription);
     write_section(DevTaskStatus::PendingFixVerification);
@@ -247,7 +246,6 @@ bool DevTasksMarkdown::save(const std::vector<DevTask>& tasks) {
 
     out.close();
 
-    // Atomic rename
     try {
         fs::rename(tmp, path);
         return true;
@@ -261,17 +259,17 @@ std::string DevTasksMarkdown::next_id_for_today(const std::vector<DevTask>& task
     const std::string today = today_yyyy_mm_dd();
     int max_n = 0;
     for (const auto& t : tasks) {
-        // Expect format T-YYYY-MM-DD-###
+
         if (t.id.size() >= 15 && t.id.rfind("T-", 0) == 0) {
             if (t.id.size() >= 13 && t.id.substr(2, 10) == today) {
-                // parse suffix after last dash
+
                 const auto last_dash = t.id.find_last_of('-');
                 if (last_dash != std::string::npos && last_dash + 1 < t.id.size()) {
                     try {
                         int n = std::stoi(t.id.substr(last_dash + 1));
                         if (n > max_n) max_n = n;
                     } catch (...) {
-                        // ignore
+
                     }
                 }
             }
@@ -281,4 +279,3 @@ std::string DevTasksMarkdown::next_id_for_today(const std::vector<DevTask>& task
     std::snprintf(buf, sizeof(buf), "T-%s-%03d", today.c_str(), max_n + 1);
     return std::string(buf);
 }
-

@@ -627,10 +627,10 @@ int TagEditorWidget::layout(int width, int origin_x, int origin_y, bool apply) {
         int button_y = controls_y + button_offset;
         add_tag_btn_->set_rect(SDL_Rect{ add_x, button_y, final_button_width, button_height });
     }
-    // Layout checkbox and browse button below the search controls
+
     int checkbox_y = controls_y + search_height + DMSpacing::small_gap();
     int checkbox_spacing = DMSpacing::small_gap();
-    
+
     if (add_as_anti_checkbox_) {
         int checkbox_width = add_as_anti_checkbox_->preferred_width();
         if (checkbox_width > 0) {
@@ -640,12 +640,12 @@ int TagEditorWidget::layout(int width, int origin_x, int origin_y, bool apply) {
             }
         }
     }
-    
+
     int browse_x = origin_x;
     if (add_as_anti_checkbox_ && add_as_anti_checkbox_->rect().w > 0) {
         browse_x = origin_x + add_as_anti_checkbox_->rect().w + checkbox_spacing;
     }
-    
+
     if (browse_tags_btn_) {
         int browse_width = std::min(browse_tags_btn_->preferred_width(), width - (browse_x - origin_x));
         browse_width = std::max(browse_width, 60);
@@ -918,7 +918,7 @@ void TagEditorWidget::add_search_text_as_tag() {
 
 void TagEditorWidget::update_browse_mode() {
     if (show_browse_tags_) {
-        // Show all library tags as browsable recommendations
+
         std::vector<std::string> all_tags = TagLibrary::instance().tags();
         recommended_tags_.clear();
         recommended_anti_.clear();
@@ -931,7 +931,7 @@ void TagEditorWidget::update_browse_mode() {
             recommended_anti_.push_back(tag);
         }
     } else {
-        // Restore normal recommendations
+
         refresh_recommendations();
     }
     rebuild_buttons();

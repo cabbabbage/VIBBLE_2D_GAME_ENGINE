@@ -22,20 +22,19 @@ namespace animation_editor {
 
 namespace {
 
-// Totals panel moved to ToolsPanel; hide internal strip
 constexpr int kTotalsHeight = 0;
 constexpr int kVariantHeaderPadding = kPanelPadding;
 constexpr int kVariantTabHeight = 28;
 constexpr int kVariantTabSpacing = 6;
 constexpr int kVariantTabWidth = 140;
 constexpr int kVariantCloseSize = 18;
-// Slightly increase base thumbnail size to make the frame navigation panel feel wider
+
 constexpr int kFrameListBaseSize = 64;
-constexpr int kFrameListMaxSize  = 144; // allow growth to better fill panel width
+constexpr int kFrameListMaxSize  = 144;
 constexpr int kFrameListMinSize = 36;
 constexpr int kFrameThumbnailPadding = 6;
 constexpr int kFrameListTitleHeight = 22;
-// Frame navigator horizontal scrollbar
+
 constexpr int kFrameListScrollbarHeight = 18;
 constexpr int kScrollbarMinKnobWidth   = 32;
 
@@ -145,14 +144,13 @@ void render_tab_text(SDL_Renderer* renderer, const std::string& text, const SDL_
     TTF_CloseFont(font);
 }
 
-// Render compact text for small badges (e.g., frame index overlay)
 void render_badge_text_small(SDL_Renderer* renderer, const std::string& text, const SDL_Rect& rect, SDL_Color color) {
     if (!renderer || text.empty()) {
         return;
     }
 
     DMLabelStyle style = DMStyles::Label();
-    style.font_size = std::max(10, style.font_size - 2); // 16 -> 14 by default
+    style.font_size = std::max(10, style.font_size - 2);
     TTF_Font* font = style.open_font();
     if (!font) {
         return;
@@ -303,14 +301,14 @@ void FrameMovementEditor::update() {
             sync_view_selection_from_actual();
             synchronize_selection();
         }
-        // Hovering over points in the canvas highlights the corresponding frame in the list
+
         int hover = canvas_->hovered_index();
         if (hover >= 0 && hover < static_cast<int>(frames_.size())) {
             hovered_frame_index_ = view_index_for_actual(hover);
         } else {
             hovered_frame_index_ = -1;
         }
-        // Keep overlay context synchronized
+
         if (preview_provider_) {
             float pct = 100.0f;
             if (document_) {
@@ -327,7 +325,6 @@ void FrameMovementEditor::update() {
             mark_dirty();
         }
     }
-    // Smooth and show toggles are managed by ToolsPanel
 
     if (dirty_) {
         apply_changes();
@@ -337,7 +334,7 @@ void FrameMovementEditor::update() {
 
 void FrameMovementEditor::render(SDL_Renderer* renderer) const {
     render_variant_header(renderer);
-    // No local controls rendered here (moved to ToolsPanel)
+
     if (canvas_) canvas_->render(renderer);
     if (totals_panel_) totals_panel_->render(renderer);
     if (properties_panel_) properties_panel_->render(renderer);
@@ -462,8 +459,6 @@ void FrameMovementEditor::load_frames_from_document() {
         primary.primary = true;
         primary.frames = parse_movement_frames(movement);
 
-        // Determine how many frame slots the navigator should expose so that every art frame
-        // remains selectable even when the movement payload is sparse.
         const auto extract_declared_frames = [](const nlohmann::json& object) -> int {
             if (!object.is_object()) {
                 return 0;
@@ -486,7 +481,7 @@ void FrameMovementEditor::load_frames_from_document() {
             } catch (...) {
             }
             return 0;
-        };
+};
 
         const int declared_frame_count = extract_declared_frames(payload);
 
@@ -505,9 +500,7 @@ void FrameMovementEditor::load_frames_from_document() {
         }
 
         const bool match_source_exactly = derived && !inherit_movement;
-        const int preview_frame_count = (preview_provider_ && !animation_id_.empty())
-                                            ? preview_provider_->get_frame_count(animation_id_)
-                                            : 0;
+        const int preview_frame_count = (preview_provider_ && !animation_id_.empty()) ? preview_provider_->get_frame_count(animation_id_) : 0;
         const auto source_payload_frame_count = [&](const std::string& source_id) -> int {
             if (source_id.empty() || !document_) {
                 return 0;
@@ -521,7 +514,7 @@ void FrameMovementEditor::load_frames_from_document() {
                 return 0;
             }
             return extract_declared_frames(src_payload);
-        };
+};
 
         int target_frame_slots = 0;
         if (match_source_exactly) {
@@ -563,7 +556,7 @@ void FrameMovementEditor::load_frames_from_document() {
                 frames.resize(target_frame_slots);
             }
             sanitize_frames(frames);
-        };
+};
 
         ensure_frame_slots(primary.frames);
         variants_.push_back(std::move(primary));
@@ -669,7 +662,7 @@ void FrameMovementEditor::apply_changes() {
     }
 
     document_->replace_animation_payload(animation_id_, payload.dump());
-    // Persist immediately so movement changes are not lost
+
     document_->save_to_file();
     if (totals_panel_) totals_panel_->set_frames(frames_);
 }
@@ -691,14 +684,14 @@ void FrameMovementEditor::ensure_selection_visible() {
         return;
     }
     SDL_Rect item = frame_item_rects_[display_selected_index_];
-    // If item is left of viewport, scroll left
+
     if (item.x < viewport_left) {
         int delta = viewport_left - item.x;
         hscroll_offset_px_ = std::max(0, hscroll_offset_px_ - delta);
         layout_frame_list();
         return;
     }
-    // If item is right of viewport, scroll right
+
     int viewport_right = viewport_left + viewport_width;
     int item_right = item.x + item.w;
     if (item_right > viewport_right) {
@@ -719,8 +712,7 @@ void FrameMovementEditor::ensure_children() {
     if (totals_panel_) {
         totals_panel_->set_selected_index(&selected_index_);
     }
-    // Controls moved to external tools panel
-    // Remove frame properties panel entirely (requested)
+
     if (properties_panel_) {
         properties_panel_.reset();
     }
@@ -743,17 +735,16 @@ void FrameMovementEditor::update_layout() {
         const int content_y = header_rect_.y + header_rect_.h + kPanelPadding;
         const int content_w = std::max(0, mode_controls_rect_.w - kPanelPadding * 2);
         const int content_h = std::max(0, mode_controls_rect_.y + mode_controls_rect_.h - content_y - kPanelPadding);
-        // Compact single-column: totals only
+
         const int totals_height = std::min(content_h, kTotalsHeight);
         totals_rect_ = SDL_Rect{content_x, content_y, content_w, totals_height};
         properties_rect_ = SDL_Rect{0, 0, 0, 0};
     }
 
     if (totals_panel_) totals_panel_->set_bounds(totals_rect_);
-    // properties panel removed
 
     layout_variant_header();
-    // Local control rects cleared; ToolsPanel owns controls
+
     smooth_button_rect_ = SDL_Rect{0,0,0,0};
     show_anim_button_rect_ = SDL_Rect{0,0,0,0};
     layout_frame_list();
@@ -783,7 +774,7 @@ void FrameMovementEditor::mark_dirty() {
     sync_view_selection_from_actual();
     layout_frame_list();
     ensure_selection_visible();
-    // Persist immediately on any value change to ensure movement points are saved
+
     apply_changes();
     dirty_ = false;
 }
@@ -861,10 +852,8 @@ void FrameMovementEditor::smooth_frames() {
         const double target_x = total_dx * t;
         const double target_y = total_dy * t;
 
-        int rounded_x = (i == steps) ? static_cast<int>(std::lround(total_dx))
-                                     : static_cast<int>(std::lround(target_x));
-        int rounded_y = (i == steps) ? static_cast<int>(std::lround(total_dy))
-                                     : static_cast<int>(std::lround(target_y));
+        int rounded_x = (i == steps) ? static_cast<int>(std::lround(total_dx)) : static_cast<int>(std::lround(target_x));
+        int rounded_y = (i == steps) ? static_cast<int>(std::lround(total_dy)) : static_cast<int>(std::lround(target_y));
 
         const int dx = rounded_x - accum_x;
         const int dy = rounded_y - accum_y;
@@ -946,16 +935,12 @@ void FrameMovementEditor::render_frame_list(SDL_Renderer* renderer) const {
     }
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    dm_draw::DrawBeveledRect(renderer, frame_list_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(),
-                             DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(),
-                             DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect(renderer, frame_list_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
-    // Title: show animation name
     if (!animation_id_.empty()) {
         SDL_Rect title_rect{ frame_list_rect_.x + kPanelPadding,
                              frame_list_rect_.y + kPanelPadding,
-                             std::max(0, frame_list_rect_.w - kPanelPadding * 2),
-                             kFrameListTitleHeight };
+                             std::max(0, frame_list_rect_.w - kPanelPadding * 2), kFrameListTitleHeight };
         render_tab_text(renderer, animation_id_, title_rect, DMStyles::Label().color);
     }
 
@@ -994,8 +979,7 @@ void FrameMovementEditor::render_frame_list(SDL_Renderer* renderer) const {
                 if (SDL_QueryTexture(texture, nullptr, nullptr, &tex_w, &tex_h) == 0 && tex_w > 0 && tex_h > 0) {
                     const int max_w = std::max(1, item.w - kFrameThumbnailPadding * 2);
                     const int max_h = std::max(1, item.h - kFrameThumbnailPadding * 2);
-                    float scale = std::min(static_cast<float>(max_w) / static_cast<float>(tex_w),
-                                            static_cast<float>(max_h) / static_cast<float>(tex_h));
+                    float scale = std::min(static_cast<float>(max_w) / static_cast<float>(tex_w), static_cast<float>(max_h) / static_cast<float>(tex_h));
                     if (scale <= 0.0f) scale = 1.0f;
                     if (scale > 1.0f)  scale = 1.0f;
                     int draw_w = std::max(1, static_cast<int>(std::round(tex_w * scale)));
@@ -1006,7 +990,6 @@ void FrameMovementEditor::render_frame_list(SDL_Renderer* renderer) const {
             }
         }
 
-        // Always draw a small corner badge with the frame index
         const int badge_padding = 4;
         const int badge_height = 18;
         const int badge_width = 28;
@@ -1017,11 +1000,10 @@ void FrameMovementEditor::render_frame_list(SDL_Renderer* renderer) const {
         const int badge_radius = std::min(DMStyles::CornerRadius(), std::min(badge.w, badge.h) / 2);
         dm_draw::DrawBeveledRect(renderer, badge, badge_radius, 1, badge_bg, badge_bg, badge_bg, false, 0.0f, 0.0f);
         dm_draw::DrawRoundedOutline(renderer, badge, badge_radius, 1, list_style.border);
-        // Use slightly smaller font so the index fits inside the beveled badge
+
         render_badge_text_small(renderer, std::to_string(i + 1), badge, index_text_color);
     }
 
-    // Draw horizontal scrollbar if needed
     if (hscroll_track_rect_.w > 0 && hscroll_track_rect_.h > 0) {
         SDL_Color track_bg = DMStyles::PanelBG();
         track_bg.a = 220;
@@ -1036,7 +1018,6 @@ void FrameMovementEditor::render_frame_list(SDL_Renderer* renderer) const {
         dm_draw::DrawRoundedOutline(renderer, hscroll_knob_rect_, knob_radius, 1, knob_border);
     }
 
-    // Inline carousel navigation buttons
     if (fl_prev_button_rect_.w > 0 && fl_prev_button_rect_.h > 0) {
         const DMButtonStyle& style = DMStyles::AccentButton();
         SDL_Color bg = style.bg;
@@ -1187,11 +1168,11 @@ bool FrameMovementEditor::handle_frame_list_event(const SDL_Event& e) {
             }
         }
         return -1;
-    };
+};
 
     switch (e.type) {
         case SDL_MOUSEMOTION: {
-            // Handle scrollbar dragging without affecting selection
+
             if (hscroll_dragging_ && hscroll_track_rect_.w > 0) {
                 const int track_x = hscroll_track_rect_.x;
                 const int track_w = hscroll_track_rect_.w;
@@ -1209,7 +1190,7 @@ bool FrameMovementEditor::handle_frame_list_event(const SDL_Event& e) {
                 return true;
             }
             SDL_Point p{e.motion.x, e.motion.y};
-            // Update hover states for carousel buttons
+
             fl_prev_hovered_ = SDL_PointInRect(&p, &fl_prev_button_rect_) != 0;
             fl_next_hovered_ = SDL_PointInRect(&p, &fl_next_button_rect_) != 0;
             hovered_frame_index_ = index_at_point(p);
@@ -1220,7 +1201,7 @@ bool FrameMovementEditor::handle_frame_list_event(const SDL_Event& e) {
                 break;
             }
             SDL_Point p{e.button.x, e.button.y};
-            // Carousel buttons
+
             if (SDL_PointInRect(&p, &fl_prev_button_rect_)) {
                 fl_prev_pressed_ = true;
                 return true;
@@ -1229,7 +1210,7 @@ bool FrameMovementEditor::handle_frame_list_event(const SDL_Event& e) {
                 fl_next_pressed_ = true;
                 return true;
             }
-            // Scrollbar interactions first
+
             if (hscroll_track_rect_.w > 0 && SDL_PointInRect(&p, &hscroll_knob_rect_)) {
                 hscroll_dragging_ = true;
                 hscroll_drag_dx_ = p.x - hscroll_knob_rect_.x;
@@ -1330,13 +1311,11 @@ void FrameMovementEditor::layout_frame_list() {
         return;
     }
 
-    // Single-row layout with horizontal scrolling when needed
     int item_height = std::max(kFrameListMinSize, std::min(std::min(kFrameListMaxSize, available_height), kFrameListBaseSize));
     int item_width  = std::max(kFrameListMinSize, std::min(item_height, kFrameListMaxSize));
     int content_width = (count > 0) ? (count * item_width + (count - 1) * spacing) : 0;
     hscroll_content_px_ = content_width;
 
-    // If content overflows horizontally, reserve space for a scrollbar
     const bool need_scroll = content_width > viewport_width;
     if (need_scroll) {
         available_height = std::max(0, available_height - (kFrameListScrollbarHeight + spacing));
@@ -1345,17 +1324,15 @@ void FrameMovementEditor::layout_frame_list() {
         content_width = (count > 0) ? (count * item_width + (count - 1) * spacing) : 0;
     }
 
-    // Clamp scroll offset
     const int max_offset = std::max(0, content_width - viewport_width);
     if (hscroll_offset_px_ < 0) hscroll_offset_px_ = 0;
     if (hscroll_offset_px_ > max_offset) hscroll_offset_px_ = max_offset;
 
-    // If not scrolling, center the content to better fill the width
     int centering_offset = 0;
     if (!need_scroll && viewport_width > content_width) {
         centering_offset = (viewport_width - content_width) / 2;
     }
-    // Layout items applying scroll offset and centering
+
     const int start_x = frame_list_rect_.x + padding + centering_offset - hscroll_offset_px_;
     const int start_y = frame_list_rect_.y + padding + kFrameListTitleHeight + std::max(0, (available_height - item_height) / 2);
 
@@ -1366,7 +1343,6 @@ void FrameMovementEditor::layout_frame_list() {
         frame_item_rects_.push_back(item);
     }
 
-    // Build scrollbar rects when needed
     if (need_scroll) {
         hscroll_track_rect_ = SDL_Rect{ frame_list_rect_.x + padding,
                                         frame_list_rect_.y + frame_list_rect_.h - padding - kFrameListScrollbarHeight,
@@ -1385,7 +1361,6 @@ void FrameMovementEditor::layout_frame_list() {
         hscroll_offset_px_  = 0;
     }
 
-    // Inline carousel navigation buttons (always available if there are frames)
     const int items_area_y = frame_list_rect_.y + padding + kFrameListTitleHeight;
     const int items_area_h = available_height;
     int btn_h = std::max(24, std::min(32, items_area_h));

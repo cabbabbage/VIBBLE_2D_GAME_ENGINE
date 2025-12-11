@@ -6,7 +6,7 @@
 #include "asset/asset_info.hpp"
 
 namespace {
-// Apply texture scale mode based on asset info
+
 void apply_scale_mode(SDL_Texture* tex, const AssetInfo& info) {
     if (!tex) return;
 #if SDL_VERSION_ATLEAST(2, 0, 12)
@@ -64,7 +64,7 @@ SDL_Texture* clone_texture(SDL_Texture* src,
     return dst;
 }
 
-} // namespace
+}
 
 void AnimationCloner::ApplyChildFrameFlip(std::vector<AnimationChildFrameData>& children,
                                           const Options& opts) {
@@ -75,8 +75,8 @@ void AnimationCloner::ApplyChildFrameFlip(std::vector<AnimationChildFrameData>& 
     }
 
     for (auto& child : children) {
-        if (flip_children_h) child.dx = -child.dx; // mirror across parent's bottom-center vertical axis
-        if (flip_children_v) child.dy = -child.dy; // mirror across parent's bottom-center horizontal axis
+        if (flip_children_h) child.dx = -child.dx;
+        if (flip_children_v) child.dy = -child.dy;
     }
 }
 
@@ -89,7 +89,7 @@ void copy_children(const std::vector<AnimationChildFrameData>& src_children,
     AnimationCloner::ApplyChildFrameFlip(dst_children, opts);
 }
 
-} // namespace
+}
 
 bool AnimationCloner::Clone(const Animation& source,
                             Animation&       dest,
@@ -102,7 +102,6 @@ bool AnimationCloner::Clone(const Animation& source,
 
     dest.clear_texture_cache();
 
-    // Copy scalar metadata
     dest.variant_steps_   = source.variant_steps_;
     dest.locked           = source.locked;
     dest.on_end_animation = source.on_end_animation;
@@ -124,13 +123,12 @@ bool AnimationCloner::Clone(const Animation& source,
 
     auto src_index_for = [&](std::size_t dst_idx) -> std::size_t {
         return opts.reverse_frames ? (frame_count - 1 - dst_idx) : dst_idx;
-    };
+};
 
     SDL_RendererFlip flip_flags = SDL_FLIP_NONE;
     if (opts.flip_horizontal) flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_HORIZONTAL);
     if (opts.flip_vertical)   flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_VERTICAL);
 
-    // Clone textures into frame cache
     dest.frame_cache_.reserve(frame_count);
     for (std::size_t dst_idx = 0; dst_idx < frame_count; ++dst_idx) {
         const std::size_t src_idx = src_index_for(dst_idx);
@@ -149,7 +147,6 @@ bool AnimationCloner::Clone(const Animation& source,
             dst_cache.widths[v]   = tex_w;
             dst_cache.heights[v]  = tex_h;
 
-            // Foreground / background / mask / depthcue
             SDL_Texture* src_fg = (v < src_cache.foreground_textures.size()) ? src_cache.foreground_textures[v] : nullptr;
             if (src_fg) {
                 dst_cache.foreground_textures[v] = clone_texture(src_fg, tex_w, tex_h, flip_flags, renderer, info);
@@ -170,7 +167,6 @@ bool AnimationCloner::Clone(const Animation& source,
         dest.frame_cache_.push_back(std::move(dst_cache));
     }
 
-    // Build movement paths & frames
     dest.movement_paths_.clear();
     dest.frames.clear();
     dest.movement_paths_.resize(source.movement_paths_.size());
@@ -230,7 +226,6 @@ bool AnimationCloner::Clone(const Animation& source,
         }
     }
 
-    // Total motion recompute based on primary path
     dest.total_dx = 0;
     dest.total_dy = 0;
     dest.movment = false;
@@ -246,9 +241,7 @@ bool AnimationCloner::Clone(const Animation& source,
     }
 
     dest.number_of_frames = static_cast<int>(frame_count);
-    dest.preview_texture = (!dest.frame_cache_.empty() && !dest.frame_cache_[0].textures.empty())
-        ? dest.frame_cache_[0].textures[0]
-        : nullptr;
+    dest.preview_texture = (!dest.frame_cache_.empty() && !dest.frame_cache_[0].textures.empty()) ? dest.frame_cache_[0].textures[0] : nullptr;
 
     return !dest.frame_cache_.empty();
 }

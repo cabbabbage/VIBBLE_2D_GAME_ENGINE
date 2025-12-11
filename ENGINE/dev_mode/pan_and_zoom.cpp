@@ -14,7 +14,7 @@ void PanAndZoom::handle_input(WarpedScreenGrid& cam, const Input& input, bool pa
     const SDL_Point mouse{ input.getX(), input.getY() };
     const int wheel_y = input.getScrollY();
     if (wheel_y != 0) {
-        // mouse wheel -> zoom
+
         const double step = (zoom_scale_factor_ > 0.0) ? zoom_scale_factor_ : 1.0;
         const int ticks = std::abs(wheel_y);
         const bool zoom_in = (wheel_y < 0);
@@ -24,21 +24,17 @@ void PanAndZoom::handle_input(WarpedScreenGrid& cam, const Input& input, bool pa
 
         const double base_scale = std::max(0.0001, static_cast<double>(cam.get_scale()));
         const double unclamped_target = base_scale * eff;
-        const double target_scale = std::clamp(
-            unclamped_target,
-            0.0001,
-            static_cast<double>(WarpedScreenGrid::kMaxZoomAnchors));
+        const double target_scale = std::clamp( unclamped_target, 0.0001, static_cast<double>(WarpedScreenGrid::kMaxZoomAnchors));
         const double adjusted_eff = target_scale / base_scale;
 
         if (std::abs(adjusted_eff - 1.0) > 1e-6) {
-            // If we are currently panning, lock focus to the pan center so
-            // wheel-zoom happens around that focus (stable pan with zoom).
+
             if (panning_) {
                 cam.set_manual_zoom_override(true);
                 cam.set_focus_override(cam.get_screen_center());
                 cam.animate_zoom_multiply(adjusted_eff, dur);
             } else {
-                // Not panning: zoom toward the cursor.
+
                 cam.animate_zoom_towards_point(adjusted_eff, mouse, dur);
             }
         }
@@ -85,17 +81,13 @@ void PanAndZoom::handle_input(WarpedScreenGrid& cam, const Input& input, bool pa
         return;
     }
 
-    // Drag to pan: move screen center and keep focus in sync.
     const double scale = std::max(0.0001, static_cast<double>(cam.get_scale()));
     const int dx = mouse.x - pan_start_mouse_screen_.x;
     const int dy = mouse.y - pan_start_mouse_screen_.y;
     SDL_Point new_center{
-        static_cast<int>(std::lround(static_cast<double>(pan_start_center_.x) - static_cast<double>(dx) * scale)),
-        // Invert vertical mouse movement so pushing the mouse down pans the view up, and vice versa.
-        static_cast<int>(std::lround(static_cast<double>(pan_start_center_.y) - static_cast<double>(dy) * scale))
-    };
-    cam.set_focus_override(new_center);   // keep camera focus set while panning
-    cam.set_screen_center(new_center);    // and actually move the view
+        static_cast<int>(std::lround(static_cast<double>(pan_start_center_.x) - static_cast<double>(dx) * scale)),  static_cast<int>(std::lround(static_cast<double>(pan_start_center_.y) - static_cast<double>(dy) * scale)) };
+    cam.set_focus_override(new_center);
+    cam.set_screen_center(new_center);
 }
 
 void PanAndZoom::cancel(WarpedScreenGrid& cam) {

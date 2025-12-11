@@ -29,7 +29,7 @@ public:
         Lock,
         Reverse,
         Animation,
-    };
+};
 
     struct FrameCache {
         std::vector<SDL_Texture*> textures;
@@ -51,7 +51,7 @@ public:
             mask_widths.assign(variant_count, 0);
             mask_heights.assign(variant_count, 0);
         }
-    };
+};
 
     struct AudioClip {
         std::string name;
@@ -59,7 +59,7 @@ public:
         int volume = 100;
         bool effects = false;
         std::shared_ptr<Mix_Chunk> chunk;
-    };
+};
 
     Animation();
     const FrameVariant* get_frame(const AnimationFrame* frame, float requested_scale) const;
@@ -74,15 +74,10 @@ public:
     const AudioClip* audio_data() const;
     void clear_texture_cache();
     void adopt_prebuilt_frames(std::vector<FrameCache> caches, std::vector<SDL_Texture*> base_frames, std::vector<SDL_Texture*> base_masks, std::vector<float> variant_steps);
-    // Rebuild textures for a specific frame from the cached PNGs on disk (all variants/layers).
-    bool rebuild_frame(int frame_index,
-                      SDL_Renderer* renderer,
-                      const AssetInfo& info,
-                      const std::string& animation_id);
-    // Rebuild textures for every frame in this animation from cache.
-    bool rebuild_animation(SDL_Renderer* renderer,
-                           const AssetInfo& info,
-                           const std::string& animation_id);
+
+    bool rebuild_frame(int frame_index, SDL_Renderer* renderer, const AssetInfo& info, const std::string& animation_id);
+
+    bool rebuild_animation(SDL_Renderer* renderer, const AssetInfo& info, const std::string& animation_id);
     bool copy_from(const Animation& source, bool flip_horizontal, bool flip_vertical, bool reverse_frames, SDL_Renderer* renderer, class AssetInfo& info);
     static OnEndDirective classify_on_end(std::string_view value);
     struct Source {

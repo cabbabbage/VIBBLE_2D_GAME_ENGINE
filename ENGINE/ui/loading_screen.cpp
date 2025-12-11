@@ -48,7 +48,7 @@ std::vector<fs::path> LoadingScreen::list_images_in(const fs::path& dir, bool re
         if (ext == ".png" || ext == ".jpg" || ext == ".jpeg") {
             out.push_back(file);
         }
-    };
+};
 
     if (recursive) {
         for (const auto& entry : fs::recursive_directory_iterator(dir)) {
@@ -175,7 +175,7 @@ void LoadingScreen::draw_frame() {
         SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
         SDL_RenderClear(renderer_);
 
-        const double rotation_speed = 20.0; // degrees per second
+        const double rotation_speed = 20.0;
         Uint32 now = SDL_GetTicks();
         Uint32 delta = last_frame_time_ ? (now - last_frame_time_) : 0;
         last_frame_time_ = now;

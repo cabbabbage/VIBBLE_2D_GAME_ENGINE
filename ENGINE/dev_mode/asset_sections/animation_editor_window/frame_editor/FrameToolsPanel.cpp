@@ -8,7 +8,7 @@
 
 namespace animation_editor {
 namespace {
-// Helper to check if in any children editing mode
+
 bool is_children_mode(FrameToolsPanel::Mode mode) {
     return mode == FrameToolsPanel::Mode::StaticChildren ||
            mode == FrameToolsPanel::Mode::AsyncChildren;
@@ -16,9 +16,9 @@ bool is_children_mode(FrameToolsPanel::Mode mode) {
 }
 
 FrameToolsPanel::FrameToolsPanel()
-    : DockableCollapsible("Tools", true /*floatable*/, 32, 32) {
+    : DockableCollapsible("Tools", true , 32, 32) {
     set_show_header(true);
-    // Build initial widgets for movement mode
+
     smooth_checkbox_ = std::make_unique<DMCheckbox>("Smooth", false);
     curve_checkbox_  = std::make_unique<DMCheckbox>("Curve", false);
     show_anim_checkbox_ = std::make_unique<DMCheckbox>("Show Animation", true);
@@ -182,19 +182,18 @@ bool FrameToolsPanel::handle_event(const SDL_Event& e) {
     bool consumed = DockableCollapsible::handle_event(e);
 
     if (mode_ == Mode::Movement) {
-        // Smooth checkbox toggle detection
+
         if (smooth_checkbox_) {
             bool current = smooth_checkbox_->value();
             if (current != last_smooth_value_) {
                 last_smooth_value_ = current;
                 if (on_toggle_smooth_) on_toggle_smooth_(current);
-                // Show/hide Curve row when Smooth toggles
+
                 rebuild_rows();
                 consumed = true;
             }
         }
 
-        // Curve checkbox toggle detection (only has effect if Smooth is true)
         if (curve_checkbox_) {
             bool current = curve_checkbox_->value();
             if (current != last_curve_value_) {
@@ -204,7 +203,6 @@ bool FrameToolsPanel::handle_event(const SDL_Event& e) {
             }
         }
 
-        // Show Animation checkbox toggling detection
         if (show_anim_checkbox_) {
             bool current = show_anim_checkbox_->value();
             if (current != last_checkbox_value_) {
@@ -214,7 +212,6 @@ bool FrameToolsPanel::handle_event(const SDL_Event& e) {
             }
         }
 
-        // Totals edit: parse and call on change for integers
         auto parse_int = [](const std::string& s, int& out) -> bool {
             try {
                 size_t idx = 0;
@@ -222,7 +219,7 @@ bool FrameToolsPanel::handle_event(const SDL_Event& e) {
                 if (idx == s.size()) { out = v; return true; }
             } catch (...) {}
             return false;
-        };
+};
         if (dx_box_ && dy_box_) {
             const std::string now_dx = dx_box_->value();
             const std::string now_dy = dy_box_->value();
@@ -317,7 +314,7 @@ void FrameToolsPanel::rebuild_rows() {
         }
         case Mode::AttackGeometry:
         case Mode::HitGeometry: {
-            rows.clear(); // empty for now
+            rows.clear();
             break;
         }
     }

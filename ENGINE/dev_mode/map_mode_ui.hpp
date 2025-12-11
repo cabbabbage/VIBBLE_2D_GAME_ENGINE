@@ -77,8 +77,7 @@ public:
     void set_headers_suppressed(bool suppressed);
     void set_sliding_headers_hidden(bool hidden);
     void set_dev_sliding_headers_hidden(bool hidden);
-    void set_mode_button_sets(std::vector<HeaderButtonConfig> map_buttons,
-                              std::vector<HeaderButtonConfig> room_buttons);
+    void set_mode_button_sets(std::vector<HeaderButtonConfig> map_buttons, std::vector<HeaderButtonConfig> room_buttons);
     void set_header_mode(HeaderMode mode);
     void set_button_state(const std::string& id, bool active);
     void set_button_state(HeaderMode mode, const std::string& id, bool active);

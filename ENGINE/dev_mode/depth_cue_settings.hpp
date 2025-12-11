@@ -42,4 +42,4 @@ inline void save_background_texture_max_opacity(int value) {
     devmode::ui_settings::save_number(kBackgroundTextureOpacitySettingKey, clamped);
 }
 
-}  // namespace devmode::camera_prefs
+}

@@ -149,11 +149,7 @@ void DMWidgetsSetSliderScrollCapture(const void* owner, bool capture) {
 
 SDL_Rect DMWidgetTooltipIconRect(const SDL_Rect& bounds) {
     SDL_Rect icon{
-        bounds.x + std::max(0, bounds.w - kTooltipIconSize - kTooltipIconPadding),
-        bounds.y + kTooltipIconPadding,
-        kTooltipIconSize,
-        kTooltipIconSize
-    };
+        bounds.x + std::max(0, bounds.w - kTooltipIconSize - kTooltipIconPadding), bounds.y + kTooltipIconPadding, kTooltipIconSize, kTooltipIconSize };
     const int min_x = bounds.x + kTooltipIconPadding;
     const int min_y = bounds.y + kTooltipIconPadding;
     if (icon.x < min_x) {
@@ -190,7 +186,7 @@ bool DMWidgetTooltipHandleEvent(const SDL_Event& e, const SDL_Rect& bounds, DMWi
     auto point_in_icon = [&](int x, int y) {
         SDL_Point p{x, y};
         return SDL_PointInRect(&p, &icon_rect);
-    };
+};
 
     switch (e.type) {
     case SDL_MOUSEMOTION: {
@@ -287,9 +283,7 @@ void DMWidgetTooltipRender(SDL_Renderer* renderer, const SDL_Rect& bounds, const
     }
 
     SDL_Rect tooltip_rect{box_x, box_y, box_w, box_h};
-    dm_draw::DrawBeveledRect(renderer, tooltip_rect, kTooltipCornerRadius, 1,
-                             tooltip_box_background(), DMStyles::HighlightColor(), DMStyles::ShadowColor(),
-                             false, DMStyles::HighlightIntensity() * 0.5f, DMStyles::ShadowIntensity() * 0.5f);
+    dm_draw::DrawBeveledRect(renderer, tooltip_rect, kTooltipCornerRadius, 1, tooltip_box_background(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity() * 0.5f, DMStyles::ShadowIntensity() * 0.5f);
     dm_draw::DrawRoundedOutline(renderer, tooltip_rect, kTooltipCornerRadius, 1, tooltip_box_border());
 
     const int text_draw_x = tooltip_rect.x + kTooltipBoxPadding;
@@ -1069,7 +1063,7 @@ void DMNumericStepper::render(SDL_Renderer* r) const {
             int text_y = rect.y + (rect.h - size.y) / 2;
             DMFontCache::instance().draw_text(r, slider_style.label, text, text_x, text_y);
         }
-    };
+};
 
     draw_button(dec_rect_, hovered_dec_, pressed_dec_, "-");
     draw_button(inc_rect_, hovered_inc_, pressed_inc_, "+");
@@ -2157,7 +2151,7 @@ void DMRangeSlider::render(SDL_Renderer* r) const {
         if (align_right) band.x = knob.x + knob.w - band_w - inset;
         SDL_SetRenderDrawColor(r, color.r, color.g, color.b, color.a);
         SDL_RenderFillRect(r, &band);
-    };
+};
     draw_knob_band(kmin, border_min, false);
     draw_knob_band(kmax, border_max, true);
     if (edit_min_) {

@@ -11,12 +11,7 @@ class FloatSliderWidget : public Widget {
 public:
     using ChangeCallback = std::function<void(float)>;
 
-    FloatSliderWidget(std::string label,
-                      float min_val,
-                      float max_val,
-                      float step,
-                      float value,
-                      int precision = 2);
+    FloatSliderWidget(std::string label, float min_val, float max_val, float step, float value, int precision = 2);
 
     FloatSliderWidget(const FloatSliderWidget&) = delete;
     FloatSliderWidget& operator=(const FloatSliderWidget&) = delete;

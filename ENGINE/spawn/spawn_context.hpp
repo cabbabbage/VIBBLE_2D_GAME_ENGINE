@@ -97,13 +97,5 @@ class SpawnContext {
     std::unordered_set<std::string> spacing_filter_storage_;
     const std::unordered_set<std::string>* spacing_filter_ = nullptr;
 
-    Asset* spawnAssetInternal(const std::string& name,
-                              const std::shared_ptr<AssetInfo>& info,
-                              const Area& area,
-                              SDL_Point pos,
-                              int depth,
-                              Asset* parent,
-                              const std::string& spawn_id,
-                              const std::string& spawn_method,
-                              const std::optional<Asset::TilingInfo>& tiling);
+    Asset* spawnAssetInternal(const std::string& name, const std::shared_ptr<AssetInfo>& info, const Area& area, SDL_Point pos, int depth, Asset* parent, const std::string& spawn_id, const std::string& spawn_method, const std::optional<Asset::TilingInfo>& tiling);
 };

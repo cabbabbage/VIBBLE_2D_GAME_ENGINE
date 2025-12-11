@@ -42,7 +42,7 @@ TotalsPanel::TotalsPanel() = default;
 
 void TotalsPanel::set_bounds(const SDL_Rect& bounds) {
     bounds_ = bounds;
-    // Layout text boxes side-by-side
+
     const int pad = 6;
     const int box_h = DMTextBox::height();
     const int content_x = bounds_.x + pad;
@@ -58,7 +58,7 @@ void TotalsPanel::set_bounds(const SDL_Rect& bounds) {
 void TotalsPanel::set_frames(const std::vector<MovementFrame>& frames) {
     frames_ = frames;
     recalculate_totals();
-    // Keep widgets in sync if not being edited
+
     const int dx = static_cast<int>(std::lround(total_dx_));
     const int dy = static_cast<int>(std::lround(total_dy_));
     if (dx_box_ && !dx_box_->is_editing()) dx_box_->set_value(std::to_string(dx));
@@ -68,16 +68,14 @@ void TotalsPanel::set_frames(const std::vector<MovementFrame>& frames) {
 void TotalsPanel::set_selected_index(const int* selected_index) { selected_index_ = selected_index; }
 
 void TotalsPanel::update() {
-    // No animations; sync handled in set_frames and handle_event
+
 }
 
 void TotalsPanel::render(SDL_Renderer* renderer) const {
     if (!renderer) return;
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    dm_draw::DrawBeveledRect(
-        renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(),
-        DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect( renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     if (dx_box_) dx_box_->render(renderer);
     if (dy_box_) dy_box_->render(renderer);
@@ -87,12 +85,12 @@ bool TotalsPanel::handle_event(const SDL_Event& e) {
     bool consumed = false;
     if (dx_box_ && dx_box_->handle_event(e)) {
         consumed = true;
-        // Parse and apply dx if valid integer
+
         try {
             int new_dx = std::stoi(dx_box_->value());
             if (on_totals_changed_) on_totals_changed_(new_dx, static_cast<int>(std::lround(total_dy_)));
         } catch (...) {
-            // ignore invalid input while typing
+
         }
     }
     if (dy_box_ && dy_box_->handle_event(e)) {

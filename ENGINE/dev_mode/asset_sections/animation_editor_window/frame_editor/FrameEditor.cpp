@@ -23,11 +23,10 @@ constexpr int kFrameListMinHeight = 96;
 constexpr int kNavigationButtonWidth = 64;
 constexpr int kNavigationButtonHeight = 64;
 constexpr int kToolsPanelWidth = 360;
-// Small visual tweaks
-constexpr int kModeControlsYOffset = -4;   // nudge up a bit
-constexpr int kFrameListYOffset    =  4;   // nudge down a bit (frame nav panel)
 
-// Helper to check if in any children editing mode
+constexpr int kModeControlsYOffset = -4;
+constexpr int kFrameListYOffset    =  4;
+
 bool is_children_mode(FrameEditor::Mode mode) {
     return mode == FrameEditor::Mode::StaticChildren ||
            mode == FrameEditor::Mode::AsyncChildren;
@@ -137,7 +136,7 @@ void FrameEditor::update() {
                         return child;
                     }
                     return child + suffix;
-                };
+};
                 std::string candidate = default_anim_id(child_id);
                 int child_frames = preview_provider_->get_frame_count(candidate);
                 if (child_frames <= 0) {
@@ -154,20 +153,20 @@ void FrameEditor::update() {
         }
         movement_editor_->set_frame_list_override(override_count, override_animation_id, true);
     }
-    // Sync tools panel from movement editor state
+
     if (tools_panel_ && movement_editor_) {
         auto totals = movement_editor_->total_displacement();
-        tools_panel_->set_totals(totals.first, totals.second, true /*avoid overwrite if editing*/);
+        tools_panel_->set_totals(totals.first, totals.second, true );
         tools_panel_->set_show_animation(movement_editor_->show_animation());
     }
     if (tools_panel_) {
-        // Keep the panel clamped inside the editor bounds so controls remain findable
+
         SDL_Rect panel_rect = tools_panel_->rect();
         SDL_Rect work = bounds_;
         const int min_w = 200;
         const int min_h = 160;
         if (panel_rect.w <= 0 || panel_rect.h <= 0) {
-            // Recover from an invalid rect by snapping to the reserved panel area
+
             if (tools_panel_rect_.w > 0 && tools_panel_rect_.h > 0) {
                 panel_rect = tools_panel_rect_;
             } else {
@@ -176,7 +175,7 @@ void FrameEditor::update() {
             }
             tools_panel_->set_rect(panel_rect);
         } else {
-            // Clamp to the work area with a small margin
+
             const int margin = DMSpacing::panel_padding();
             int max_x = work.x + work.w - panel_rect.w - margin;
             int max_y = work.y + work.h - panel_rect.h - margin;
@@ -193,14 +192,12 @@ void FrameEditor::render(SDL_Renderer* renderer) const {
         return;
     }
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    // Keep the floating tools panel clamped to the editor bounds
+
     if (tools_panel_) {
         tools_panel_->set_work_area_bounds(bounds_);
     }
     if (header_rect_.w > 0 && header_rect_.h > 0) {
-        dm_draw::DrawBeveledRect(renderer, header_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(),
-                                 DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(),
-                                 DMStyles::ShadowIntensity());
+        dm_draw::DrawBeveledRect(renderer, header_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
     }
 
     for (const auto& button : mode_buttons_) {
@@ -213,7 +210,7 @@ void FrameEditor::render(SDL_Renderer* renderer) const {
         if (active_mode_ == Mode::Movement) {
             movement_editor_->render(renderer);
         } else {
-            // In other modes, still show the preview grid/canvas for context
+
             movement_editor_->render_canvas_only(renderer);
             if (is_children_mode(active_mode_) && children_editor_) {
                 children_editor_->render(renderer);
@@ -246,14 +243,12 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
         }
         SDL_Rect tools_bounds = tools_panel_hit_rect();
         return SDL_PointInRect(&p, &tools_bounds) != 0;
-    };
+};
     bool pointer_in_tools = compute_pointer_in_tools(e);
     for (size_t i = 0; i < mode_buttons_.size(); ++i) {
         auto& button = mode_buttons_[i];
         if (button && button->handle_event(e)) {
-            // Map button index to Mode enum value
-            // Button 0 -> Movement, Button 1 -> StaticChildren (default children mode),
-            // Button 2 -> AttackGeometry, Button 3 -> HitGeometry
+
             Mode target_mode;
             switch (i) {
                 case 0: target_mode = Mode::Movement; break;
@@ -267,7 +262,6 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
         }
     }
 
-    // Route to floating tools panel first
     if (tools_panel_) {
         SDL_Rect before_rect = tools_panel_->rect();
         bool consumed = tools_panel_->handle_event(e);
@@ -284,7 +278,6 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
         pointer_in_tools = compute_pointer_in_tools(e);
     }
 
-    // Always feed events to the buttons for proper hover/press visuals
     if (prev_frame_button_) {
         prev_frame_button_->handle_event(e);
     }
@@ -292,7 +285,6 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
         next_frame_button_->handle_event(e);
     }
 
-    // Robust click handling for navigation regardless of DMButton internals
     if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
         SDL_Point p{e.button.x, e.button.y};
         if (SDL_PointInRect(&p, &prev_button_rect_) && movement_editor_ &&
@@ -308,7 +300,7 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
             return true;
         }
     }
-    // Consume pointer interactions over the nav buttons
+
     if (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN) {
         SDL_Point p;
         if (e.type == SDL_MOUSEMOTION) { p.x = e.motion.x; p.y = e.motion.y; }
@@ -324,7 +316,6 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
         }
     }
 
-    // Keyboard navigation or rotation adjustments
     if (e.type == SDL_KEYDOWN) {
         if (is_children_mode(active_mode_) && children_editor_) {
             if (children_editor_->handle_key_event(e)) {
@@ -364,7 +355,7 @@ bool FrameEditor::handle_event(const SDL_Event& e) {
             return true;
         }
     }
-    // If the event is inside any of our interactive bounds, consume it by default
+
     if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION) {
         SDL_Point p;
         if (e.type == SDL_MOUSEMOTION) { p.x = e.motion.x; p.y = e.motion.y; }
@@ -412,7 +403,7 @@ void FrameEditor::ensure_children() {
                 frame_changed_callback_(index);
             }
         });
-        // Default to showing animation overlay
+
         movement_editor_->set_show_animation(true);
     } else {
         movement_editor_->set_preview_provider(preview_provider_);
@@ -434,18 +425,18 @@ void FrameEditor::ensure_children() {
         children_editor_->set_preview_provider(preview_provider_);
         children_editor_->set_canvas(movement_editor_ ? movement_editor_->canvas() : nullptr);
     }
-    // Create Tools panel
+
     if (!tools_panel_) {
         tools_panel_ = std::make_unique<FrameToolsPanel>();
         tools_panel_->set_mode(static_cast<FrameToolsPanel::Mode>(static_cast<int>(active_mode_)));
         tools_panel_->set_callbacks(
-            // Toggle smooth
+
             [this](bool smooth) { if (movement_editor_) movement_editor_->set_smoothing_enabled(smooth); },
-            // Toggle curve (only used when smooth is true)
+
             [this](bool curve) { if (movement_editor_) movement_editor_->set_curve_enabled(curve); },
-            // Toggle show animation
+
             [this](bool show) { if (movement_editor_) movement_editor_->set_show_animation(show); },
-            // Totals changed
+
             [this](int dx, int dy) { if (movement_editor_) movement_editor_->set_total_displacement(dx, dy); }
         );
         tools_panel_->open();
@@ -457,8 +448,7 @@ void FrameEditor::ensure_children() {
         children_editor_->set_tools_panel(tools_panel_.get());
     }
     if (movement_editor_ && movement_editor_->canvas()) {
-        movement_editor_->canvas()->set_anchor_follows_movement(active_mode_ == Mode::Movement ||
-                                                                is_children_mode(active_mode_));
+        movement_editor_->canvas()->set_anchor_follows_movement(active_mode_ == Mode::Movement || is_children_mode(active_mode_));
     }
     update_button_styles();
     update_navigation_styles();
@@ -530,7 +520,6 @@ void FrameEditor::update_layout() {
         }
     }
 
-    // Nudge mode controls slightly upward
     mode_controls_rect_ = SDL_Rect{header_rect_.x,
                                    header_rect_.y + header_rect_.h + gap_header_mode + kModeControlsYOffset,
                                    header_rect_.w,
@@ -541,7 +530,6 @@ void FrameEditor::update_layout() {
     const int nav_gap = DMSpacing::small_gap();
     int nav_width = kNavigationButtonWidth;
 
-    // Reserve space for tools panel on the right
     int tools_panel_width = (available_width >= kToolsPanelWidth + nav_width * 2 + nav_gap * 2) ? kToolsPanelWidth : 0;
     int remaining_width = available_width - tools_panel_width;
 
@@ -555,19 +543,18 @@ void FrameEditor::update_layout() {
     int display_x = prev_x + nav_width + nav_gap;
     int next_x = display_x + display_width + nav_gap;
 
-    // Position tools panel
     if (is_children_mode(active_mode_)) {
-        // Dock the tools panel into the mode controls area so children controls are always visible
+
         tools_panel_rect_ = mode_controls_rect_;
         tools_panel_follow_layout_ = true;
     } else {
-        // Position on the right; if space is tight, keep a floating fallback rect
+
         if (tools_panel_width > 0) {
             int tools_x = bounds_.x + padding + remaining_width;
             int tools_height = display_height + gap_display_list + frame_list_height;
             tools_panel_rect_ = SDL_Rect{tools_x, center_top, tools_panel_width, tools_height};
         } else {
-            // Preserve an existing rect if it is valid; otherwise, fall back to a clamped floating rect
+
             SDL_Rect existing = tools_panel_ ? tools_panel_->rect() : SDL_Rect{0, 0, 0, 0};
             if (existing.w > 0 && existing.h > 0) {
                 tools_panel_rect_ = existing;
@@ -589,7 +576,7 @@ void FrameEditor::update_layout() {
         } else if (tools_panel_rect_.w > 0 && tools_panel_rect_.h > 0 && tools_panel_->rect().w <= 0) {
             tools_panel_->set_rect(tools_panel_rect_);
         }
-        // Keep docked when children mode so it doesn't float away
+
         if (is_children_mode(active_mode_) && tools_panel_rect_.w > 0 && tools_panel_rect_.h > 0) {
             tools_panel_->set_rect(tools_panel_rect_);
         }
@@ -602,11 +589,9 @@ void FrameEditor::update_layout() {
     prev_button_rect_ = SDL_Rect{prev_x, nav_y, nav_width, nav_height};
     next_button_rect_ = SDL_Rect{next_x, nav_y, nav_width, nav_height};
 
-    // Nudge frame navigation panel slightly downward and keep it clear of the tools panel on the right
     frame_list_rect_ = SDL_Rect{header_rect_.x,
                                 frame_display_rect_.y + frame_display_rect_.h + gap_display_list + kFrameListYOffset,
-                                std::max(0, remaining_width),
-                                std::max(0, frame_list_height)};
+                                std::max(0, remaining_width), std::max(0, frame_list_height)};
 
     if (prev_frame_button_) prev_frame_button_->set_rect(prev_button_rect_);
     if (next_frame_button_) next_frame_button_->set_rect(next_button_rect_);
@@ -631,8 +616,7 @@ void FrameEditor::set_mode(Mode mode) {
         children_editor_->refresh_payload_cache_from_document();
     }
     if (movement_editor_ && movement_editor_->canvas()) {
-        movement_editor_->canvas()->set_anchor_follows_movement(active_mode_ == Mode::Movement ||
-                                                                is_children_mode(active_mode_));
+        movement_editor_->canvas()->set_anchor_follows_movement(active_mode_ == Mode::Movement || is_children_mode(active_mode_));
     }
 }
 
@@ -647,7 +631,7 @@ void FrameEditor::update_button_styles() const {
     const DMButtonStyle& active_style = DMStyles::AccentButton();
     const DMButtonStyle& inactive_style = DMStyles::HeaderButton();
     for (size_t i = 0; i < mode_buttons_.size(); ++i) {
-        // Map button index to Mode check
+
         bool is_active = false;
         switch (i) {
             case 0: is_active = (active_mode_ == Mode::Movement); break;

@@ -17,6 +17,7 @@
 class Input;
 class SpawnGroupLabelWidget;
 namespace devmode::core { class ManifestStore; }
+namespace devmode::core { class ManifestStore; }
 
 class SpawnGroupConfig : public DockableCollapsible {
     struct Entry;

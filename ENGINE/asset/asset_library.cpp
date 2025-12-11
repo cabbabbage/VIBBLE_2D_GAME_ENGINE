@@ -45,7 +45,7 @@ bool is_reserved_animation_name(const std::string& raw_name) {
             "cache",
             "caches",
             "areas",
-        };
+};
         return reserved.find(name) != reserved.end();
 }
 
@@ -139,7 +139,7 @@ bool ensure_start_animation(nlohmann::json& metadata) {
                 }
                 auto it = animations.find(candidate);
                 return it != animations.end() && it->is_object();
-        };
+};
 
         if (metadata.contains("start") && metadata["start"].is_string()) {
                 const std::string existing = metadata["start"].get<std::string>();
@@ -161,7 +161,7 @@ bool ensure_start_animation(nlohmann::json& metadata) {
                         }
                 }
                 return {};
-        };
+};
 
         std::string replacement = select();
         if (replacement.empty()) {
@@ -264,8 +264,7 @@ std::vector<std::string> discover_asset_directories(const std::filesystem::path&
                         }
                 }
         } catch (const std::exception& ex) {
-                vibble::log::warn(std::string("[AssetLibrary] Failed to enumerate assets root '") +
-                                  assets_root.generic_string() + "': " + ex.what());
+                vibble::log::warn(std::string("[AssetLibrary] Failed to enumerate assets root '") + assets_root.generic_string() + "': " + ex.what());
                 names.clear();
         }
         std::sort(names.begin(), names.end());
@@ -273,7 +272,7 @@ std::vector<std::string> discover_asset_directories(const std::filesystem::path&
         return names;
 }
 
-} // namespace
+}
 
 AssetLibrary::AssetLibrary(bool auto_load) {
         if (auto_load) {
@@ -311,8 +310,7 @@ void AssetLibrary::load_all_from_SRC() {
                 std::error_code ec;
                 const bool assets_root_exists = std::filesystem::exists(assets_root, ec);
                 if (!assets_root_exists || ec) {
-                        vibble::log::warn(std::string("[AssetLibrary] Assets root '") +
-                                          assets_root.generic_string() + "' is missing or inaccessible.");
+                        vibble::log::warn(std::string("[AssetLibrary] Assets root '") + assets_root.generic_string() + "' is missing or inaccessible.");
                 }
         } else {
                 for (const auto& asset_name : discovered_assets) {
@@ -338,7 +336,7 @@ void AssetLibrary::load_all_from_SRC() {
         struct AssetBuildJob {
                 std::string name;
                 nlohmann::json metadata;
-        };
+};
         std::vector<AssetBuildJob> work_items;
         work_items.reserve(manifest.assets.size());
 
@@ -364,7 +362,7 @@ void AssetLibrary::load_all_from_SRC() {
                         int loaded = 0;
                         int failed = 0;
                         std::vector<std::pair<std::string, std::shared_ptr<AssetInfo>>> assets;
-                };
+};
 
                 std::vector<std::future<WorkerResult>> futures;
                 futures.reserve(worker_count);
@@ -418,7 +416,7 @@ void AssetLibrary::load_all_from_SRC() {
 
 void AssetLibrary::add_asset(const std::string& name, const nlohmann::json& metadata) {
     if (info_by_name_.count(name)) {
-        // Asset already exists, skip adding
+
         return;
     }
 

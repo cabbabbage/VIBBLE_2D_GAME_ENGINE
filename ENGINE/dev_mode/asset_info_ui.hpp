@@ -56,7 +56,7 @@ class AssetInfoUI {
     void render(SDL_Renderer* r, int screen_w, int screen_h) const;
     void render_world_overlay(SDL_Renderer* r, const class WarpedScreenGrid& cam) const;
     void pulse_header();
-    // Ensure the animation editor panel is visible for the current asset
+
     void open_animation_editor_panel();
     void set_assets(Assets* a);
     Assets* assets() const { return assets_; }
@@ -86,10 +86,8 @@ class AssetInfoUI {
     SDL_Texture* mask_preview_texture() const { return mask_preview_texture_; }
     int mask_preview_width() const { return mask_preview_w_; }
     int mask_preview_height() const { return mask_preview_h_; }
-    // Begin an interactive color sampling flow from the world view
-    void begin_color_sampling(const utils::color::RangedColor& current,
-                              std::function<void(SDL_Color)> on_sample,
-                              std::function<void()> on_cancel);
+
+    void begin_color_sampling(const utils::color::RangedColor& current, std::function<void(SDL_Color)> on_sample, std::function<void()> on_cancel);
     void cancel_color_sampling(bool silent);
 
   private:
@@ -153,17 +151,14 @@ class AssetInfoUI {
     devmode::core::ManifestStore* manifest_store_ = nullptr;
     Section_SpawnGroups* spawn_groups_section_ = nullptr;
 
-    // Additional controls under Configure Animations
     std::unique_ptr<class DMButton> duplicate_btn_;
     std::unique_ptr<class ButtonWidget> duplicate_btn_widget_;
     std::unique_ptr<class DMButton> delete_btn_;
     std::unique_ptr<class ButtonWidget> delete_btn_widget_;
 
-    // Duplicate asset popup state
     bool showing_duplicate_popup_ = false;
     std::string duplicate_asset_name_;
 
-    // Delete asset confirmation modal state (mirrors AssetLibraryUI behavior)
     bool showing_delete_popup_ = false;
     struct PendingDeleteInfo { std::string name; std::string asset_dir; };
     std::optional<PendingDeleteInfo> pending_delete_;
@@ -175,7 +170,6 @@ class AssetInfoUI {
     bool delete_yes_pressed_ = false;
     bool delete_no_pressed_ = false;
 
-    // Helpers for duplicate/delete flows
     bool duplicate_current_asset(const std::string& new_name);
     void request_delete_current_asset();
     void cancel_delete_request();
@@ -184,17 +178,14 @@ class AssetInfoUI {
     bool handle_delete_modal_event(const SDL_Event& e);
     void update_delete_modal_geometry(int screen_w, int screen_h);
 
-    // Light crosshair dragging state
     bool light_drag_active_ = false;
     int  light_drag_index_ = -1;
     int  hovered_light_index_ = -1;
 
-    // Mask preview cache
     SDL_Texture* mask_preview_texture_ = nullptr;
     int mask_preview_w_ = 0;
     int mask_preview_h_ = 0;
 
-    // Color sampling state (used by lighting color picker)
     bool color_sampling_active_ = false;
     bool color_sampling_preview_valid_ = false;
     SDL_Color color_sampling_preview_{255,255,255,255};

@@ -21,6 +21,6 @@ int Player::dealDamage(Damage *damage) {
             health -= damage->damage_amt_per_frame;
         }
     }
-    
+
     return health;
 }

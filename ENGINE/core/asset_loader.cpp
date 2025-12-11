@@ -213,7 +213,6 @@ std::vector<Asset*> AssetLoader::collectDistantAssets(int lock_threshold, int re
                         const bool should_lock = minDist > lock_distance;
                         const bool should_remove = minDist >= remove_distance;
 
-                        // Never mark the player as static; always allow its frames to advance.
                         if (asset && asset->info && asset->info->type == asset_types::player) {
                                 asset->static_frame = false;
                         } else {
@@ -257,7 +256,7 @@ void AssetLoader::loadRooms() {
                         const int map_radius_int = map_radius_ > 0.0 ? static_cast<int>(std::lround(map_radius_)) : diameter;
                         const int mr = std::max(diameter, map_radius_int * 2);
                         SDL_Point center{mr / 2, mr / 2};
-                        // Write back minimal rooms_data entry
+
                         if (rooms_data_) {
                                 nlohmann::json& spawn = (*rooms_data_)["spawn"];
                                 if (!spawn.is_object()) spawn = nlohmann::json::object();
@@ -419,7 +418,7 @@ void AssetLoader::createAssets(world::WorldGrid& grid) {
         vibble::log::debug(std::string("[AssetLoader] Registered assets: total=") + std::to_string(registered_assets.size()));
 
         const auto t1 = std::chrono::steady_clock::now();
-        // Build per-grid tiles once assets are registered to chunks.
+
         {
             loader_tiles::build_grid_tiles(renderer_, grid, map_grid_settings_, registered_assets);
         }
@@ -455,14 +454,11 @@ void AssetLoader::load_from_manifest(const nlohmann::json& map_manifest) {
         trails_data_       = &map_manifest_json_["trails_data"];
         if (!trails_data_->is_object()) *trails_data_ = nlohmann::json::object();
 
-        // If no map_layers are present, infer a minimal layer spec with a single spawn room.
-        // This allows loading a completely blank map that only declares a spawn room in rooms_data,
-        // or even creates a default spawn if rooms_data is empty.
         try {
                 auto ml_it = map_manifest_json_.find("map_layers");
                 const bool missing_or_empty = (ml_it == map_manifest_json_.end()) || !ml_it->is_array() || ml_it->empty();
                 if (missing_or_empty) {
-                        // Determine a spawn room name to reference
+
                         std::string spawn_name;
                         if (rooms_data_ && rooms_data_->is_object()) {
                                 for (auto it = rooms_data_->begin(); it != rooms_data_->end(); ++it) {
@@ -477,11 +473,11 @@ void AssetLoader::load_from_manifest(const nlohmann::json& map_manifest) {
                         }
                         if (spawn_name.empty()) {
                                 spawn_name = "spawn";
-                                // Create a default spawn room entry if none exists
+
                                 nlohmann::json& rd = *rooms_data_;
                                 nlohmann::json& spawn_entry = rd[spawn_name];
                                 if (!spawn_entry.is_object() || spawn_entry.empty()) {
-                                        // Provide conservative defaults for a circular spawn room
+
                                         constexpr int kSpawnRadius = 1500;
                                         const int diameter = kSpawnRadius * 2;
                                         spawn_entry = nlohmann::json::object();
@@ -518,7 +514,7 @@ void AssetLoader::load_from_manifest(const nlohmann::json& map_manifest) {
                         vibble::log::info(std::string("[AssetLoader] Inferred default map_layers for blank map '") + map_id_ + "'.");
                 }
         } catch (...) {
-                // Non-fatal: if inference fails, continue with whatever structure exists
+
         }
 
         auto layers_it = map_manifest_json_.find("map_layers");

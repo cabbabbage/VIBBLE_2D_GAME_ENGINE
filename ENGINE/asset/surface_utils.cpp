@@ -61,6 +61,6 @@ std::uint64_t compute_surface_signature(const std::vector<std::vector<SDL_Surfac
     return signature;
 }
 
-}  // namespace surface_utils
-}  // namespace asset
+}
+}
 

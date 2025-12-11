@@ -98,7 +98,7 @@ Asset* SpawnContext::spawnAssetInternal(const std::string& name,
                 std::mt19937 g(rd());
                 std::shuffle(shuffled_asset_children.begin(), shuffled_asset_children.end(), g);
                 for (auto* asset_child_info : shuffled_asset_children) {
-                        // Skip if the linked area is marked as impassable attachment
+
                         bool skip_for_impassable = false;
                         if (raw->info) {
                                 for (const auto& na : raw->info->areas) {
@@ -121,7 +121,7 @@ Asset* SpawnContext::spawnAssetInternal(const std::string& name,
                                                    "': resolved area has no points");
                                 continue;
                         }
-                        // Spawn group system removed; no auto-spawning of children here.
+
                         resolved_child_areas.insert_or_assign(asset_child_info->area_name, childArea);
                         std::vector<Asset*> kids;
                         vibble::log::debug(std::string{"[Spawn] Parent '"} + parent_name +
@@ -216,14 +216,14 @@ Asset* SpawnContext::spawnTiledAsset(const std::string& name,
                 }
                 const double scaled = std::floor(static_cast<double>(value) / static_cast<double>(step));
                 return static_cast<int>(scaled * static_cast<double>(step));
-        };
+};
         auto align_up = [](int value, int step) {
                 if (step <= 0) {
                         return value;
                 }
                 const double scaled = std::ceil(static_cast<double>(value) / static_cast<double>(step));
                 return static_cast<int>(scaled * static_cast<double>(step));
-        };
+};
 
         const int origin_x = align_down(min_x, tile_w);
         const int origin_y = align_down(min_y, tile_h);

@@ -16,11 +16,11 @@ float LightFlickerCalculator::compute_multiplier(const LightSource& light, float
     auto mix = [](std::uint32_t seed, std::uint32_t value) {
         seed ^= value + 0x9e3779b9u + (seed << 6) + (seed >> 2);
         return seed;
-    };
+};
 
     auto to_rand = [](std::uint32_t h) {
         return static_cast<float>(h & 0xFFFFu) / 32767.5f - 1.0f;
-    };
+};
 
     auto value_noise_1d = [&](float t, std::uint32_t seed) {
         if (!std::isfinite(t)) {
@@ -34,7 +34,7 @@ float LightFlickerCalculator::compute_multiplier(const LightSource& light, float
         const float a   = to_rand(mix(seed, static_cast<std::uint32_t>(i)));
         const float b   = to_rand(mix(seed, static_cast<std::uint32_t>(i + 1)));
         return a + (b - a) * u;
-    };
+};
 
     std::uint32_t base = 0x811C9DC5u;
     base = mix(base, static_cast<std::uint32_t>(light.offset_x));

@@ -16,7 +16,7 @@ std::string to_lower_copy(std::string value) {
     });
     return value;
 }
-} // namespace
+}
 
 bool remove_manifest_asset_entry(const std::string& asset_name, std::ostream* log) {
     if (asset_name.empty()) {
@@ -131,4 +131,4 @@ RemoveAssetResult remove_asset_entry(core::ManifestStore* store,
     return result;
 }
 
-} // namespace devmode::manifest_utils
+}

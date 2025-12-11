@@ -11,6 +11,7 @@
 #include <nlohmann/json.hpp>
 
 namespace devmode::core { class ManifestStore; }
+namespace devmode::core { class ManifestStore; }
 
 #include "SlidingWindowContainer.hpp"
 #include "widgets.hpp"
@@ -57,7 +58,6 @@ public:
               SpawnGroupConfig::ConfigureEntryCallback configure_entry = {});
     void open(Room* room);
 
-    // Supply a manifest store so SpawnGroupConfig can resolve asset metadata
     void set_manifest_store(class devmode::core::ManifestStore* store);
 
     bool refresh_spawn_groups(const nlohmann::json& room_data);

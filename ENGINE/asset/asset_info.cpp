@@ -53,13 +53,13 @@ std::vector<std::string> parse_string_array(const nlohmann::json& json_value) {
 
 AnimationChildFrameData parse_async_child_frame(const nlohmann::json& entry) {
     AnimationChildFrameData data{};
-    data.child_index = -1; // async children are asset-level, not indexed per frame
+    data.child_index = -1;
 
     auto read_bool = [](const nlohmann::json& v, bool fallback) {
         if (v.is_boolean()) return v.get<bool>();
         if (v.is_number_integer()) return v.get<int>() != 0;
         return fallback;
-    };
+};
 
     if (entry.is_object()) {
         try { data.dx = static_cast<int>(entry.value("dx", 0)); } catch (...) { data.dx = 0; }
@@ -727,7 +727,7 @@ AssetInfo::AreaCodec::decode_entry(const AssetInfo& info, const nlohmann::json& 
     if (named.kind.empty()) {
         named.kind = named.type;
     }
-    // Optional attachment metadata passthrough
+
     try {
         if (entry.contains("attachment_subtype") && entry["attachment_subtype"].is_string()) {
             named.attachment_subtype = entry["attachment_subtype"].get<std::string>();
@@ -735,14 +735,14 @@ AssetInfo::AreaCodec::decode_entry(const AssetInfo& info, const nlohmann::json& 
         if (entry.contains("is_on_top") && entry["is_on_top"].is_boolean()) {
             named.attachment_is_on_top = entry["is_on_top"].get<bool>();
         } else if (entry.contains("placed_on_top_parent") && entry["placed_on_top_parent"].is_boolean()) {
-            // legacy compatibility if present
+
             named.attachment_is_on_top = entry["placed_on_top_parent"].get<bool>();
         }
         if (entry.contains("child_candidates") && entry["child_candidates"].is_array()) {
             named.attachment_child_candidates = entry["child_candidates"];
         }
     } catch (...) {
-        // ignore malformed attachment metadata
+
     }
     const int resolution = vibble::grid::clamp_resolution(entry.value("resolution", 2));
     named.area = std::make_unique<Area>(name, points, resolution);
@@ -813,8 +813,6 @@ void AssetInfo::clear_light_textures() {
 	destroy_light_textures(light_sources);
 }
 
-
-
 void AssetInfo::load_base_properties(const nlohmann::json &data) {
         type = asset_types::canonicalize(data.value("asset_type", std::string{asset_types::object}));
         if (type == asset_types::player) {
@@ -826,7 +824,7 @@ void AssetInfo::load_base_properties(const nlohmann::json &data) {
         try {
                 if (data.contains("tillable")) {
                         tillable = data.at("tillable").get<bool>();
-                } else if (data.contains("tileable")) { // backward/alternate key support
+                } else if (data.contains("tileable")) {
                         tillable = data.at("tileable").get<bool>();
                 } else if (info_json_.contains("tillable")) {
                         tillable = info_json_.value("tillable", false);
@@ -836,7 +834,7 @@ void AssetInfo::load_base_properties(const nlohmann::json &data) {
                         tillable = false;
                 }
         } catch (...) {
-                // Fallback on either key if parsing fails
+
                 if (info_json_.contains("tillable")) {
                         tillable = info_json_.value("tillable", false);
                 } else {
@@ -853,7 +851,7 @@ void AssetInfo::load_base_properties(const nlohmann::json &data) {
         NeighborSearchRadius = std::clamp( data.value("neighbor_search_distance", NeighborSearchRadius), 20, 1000);
         info_json_["neighbor_search_distance"] = NeighborSearchRadius;
         if (info_json_.is_object()) {
-                info_json_.erase("apply_parallax"); // strip deprecated knob
+                info_json_.erase("apply_parallax");
         }
 }
 
@@ -884,7 +882,7 @@ void AssetInfo::generate_lights(SDL_Renderer* renderer) {
 
 	auto load_from_cache = [&]() -> bool {
 		return try_load_cached_lights(cache_dir, renderer, light_sources, signatures);
-	};
+};
 
     bool loaded = load_from_cache();
     if (!loaded && regenerate_lights_via_python(name)) {
@@ -910,7 +908,6 @@ bool AssetInfo::rebuild_light_texture(SDL_Renderer* renderer, std::size_t light_
 
     LightSource& light = light_sources[light_index];
 
-    // Destroy existing texture before reloading
     if (light.texture) {
         SDL_DestroyTexture(light.texture);
         light.texture = nullptr;
@@ -1140,8 +1137,6 @@ void AssetInfo::set_animation_children(const std::vector<std::string>& children)
         }
         info_json_["animation_children"] = std::move(arr);
 
-    // Keep per-animation child lists aligned with the canonical set so runtime
-    // attachment slots exist even before timelines reference them.
     for (auto& [anim_id, anim] : animations) {
         std::vector<std::string> merged;
         merged.reserve(animation_children.size() + anim.child_assets().size());
@@ -1263,7 +1258,7 @@ void AssetInfo::set_passable(bool v) {
 
 void AssetInfo::set_tillable(bool v) {
         tillable = v;
-        // Write both keys for compatibility; UI shows "Tileable"
+
         info_json_["tillable"] = v;
         info_json_["tileable"] = v;
 }
@@ -1391,11 +1386,10 @@ void AssetInfo::upsert_area_from_editor(const Area& area,
     nlohmann::json entry =
         AreaCodec::encode_entry(*this, area, final_type, final_kind, frame);
 
-    // Preserve attachment-related fields when present
     if (existing_entry && existing_entry->is_object()) {
         static const char* kAttachmentKeys[] = {
             "attachment_subtype", "is_on_top", "child_candidates", "placed_on_top_parent", "z_offset"
-        };
+};
         for (const char* key : kAttachmentKeys) {
             auto it = existing_entry->find(key);
             if (it != existing_entry->end()) {
@@ -1621,7 +1615,6 @@ void AssetInfo::initialize_from_json(const nlohmann::json& source) {
                 }
         }
 
-        // Allow raw canvas dimensions in manifest for assets without animations (e.g., zone assets)
         try {
                 if (data.contains("canvas_width") && data["canvas_width"].is_number_integer()) {
                         original_canvas_width = std::max(0, data["canvas_width"].get<int>());
@@ -1630,7 +1623,7 @@ void AssetInfo::initialize_from_json(const nlohmann::json& source) {
                         original_canvas_height = std::max(0, data["canvas_height"].get<int>());
                 }
         } catch (...) {
-                // ignore malformed canvas fields
+
         }
 
         load_children(data);
@@ -1720,7 +1713,7 @@ void AssetInfo::set_lighting(const std::vector<LightSource>& lights) {
         j["falloff"] = l.fall_off;
         j["flicker_speed"] = l.flicker_speed;
         j["flicker_smoothness"] = l.flicker_smoothness;
-        // Legacy key preserved so older tooling can still observe "some" flicker value
+
         j["flicker"] = l.flicker_speed;
         j["flare"] = l.flare;
         j["offset_x"] = l.offset_x;
@@ -1949,15 +1942,14 @@ bool AssetInfo::update_animation_properties(const std::string& animation_name, c
     }
 
     try {
-        // Update the anims_json_ structure
+
         if (!anims_json_.is_object()) {
             anims_json_ = nlohmann::json::object();
         }
 
-        // Merge the new properties with existing animation data
         nlohmann::json updated_animation = properties;
         if (anims_json_.contains(animation_name) && anims_json_[animation_name].is_object()) {
-            // Preserve existing properties not being updated
+
             for (auto& [key, value] : anims_json_[animation_name].items()) {
                 if (!updated_animation.contains(key)) {
                     updated_animation[key] = value;
@@ -1967,7 +1959,6 @@ bool AssetInfo::update_animation_properties(const std::string& animation_name, c
 
         anims_json_[animation_name] = updated_animation;
 
-        // Update the info_json_ animations section
         if (!info_json_.is_object()) {
             info_json_ = nlohmann::json::object();
         }
@@ -1976,7 +1967,6 @@ bool AssetInfo::update_animation_properties(const std::string& animation_name, c
         }
         info_json_["animations"][animation_name] = updated_animation;
 
-        // Update the start_animation if this animation is being set as start
         if (properties.contains("start") && properties["start"].is_boolean() && properties["start"].get<bool>()) {
             start_animation = animation_name;
             info_json_["start"] = start_animation;
@@ -1996,7 +1986,6 @@ void AssetInfo::loadAnimations(SDL_Renderer* renderer) {
     int dummy_w = 0;
     int dummy_h = 0;
 
-    // Helper to pull the name of a source animation (if any)
     auto parse_source_animation = [](const nlohmann::json& payload) -> std::optional<std::string> {
         if (!payload.contains("source") || !payload["source"].is_object()) {
             return std::nullopt;
@@ -2015,7 +2004,7 @@ void AssetInfo::loadAnimations(SDL_Renderer* renderer) {
         } catch (...) {
             return std::nullopt;
         }
-    };
+};
 
     auto animation_ready = [this](const std::string& name) {
         auto it = animations.find(name);
@@ -2024,9 +2013,8 @@ void AssetInfo::loadAnimations(SDL_Renderer* renderer) {
         }
         const Animation& anim = it->second;
         return anim.number_of_frames > 0 && !anim.frames.empty();
-    };
+};
 
-    // Pre-create animation entries so dependencies can find their sources by name.
     for (auto it = anims_json_.begin(); it != anims_json_.end(); ++it) {
         animations[it.key()];
     }
@@ -2034,25 +2022,11 @@ void AssetInfo::loadAnimations(SDL_Renderer* renderer) {
     std::filesystem::path cache_root = std::filesystem::path("cache") / this->name / "animations";
     auto load_single = [&](const std::string& name, const nlohmann::json& json) {
         Animation& anim = animations[name];
-        AnimationLoader::load(anim,
-                              name,
-                              json,
-                              *this,
-                              dir_path_,
-                              cache_root.string(),
-                              scale_factor,
-                              renderer,
-                              dummy_base_sprite,
-                              dummy_w,
-                              dummy_h,
-                              original_canvas_width,
-                              original_canvas_height,
-                              false);
-    };
+        AnimationLoader::load(anim, name, json, *this, dir_path_, cache_root.string(), scale_factor, renderer, dummy_base_sprite, dummy_w, dummy_h, original_canvas_width, original_canvas_height, false);
+};
 
     std::vector<std::pair<std::string, nlohmann::json>> deferred;
 
-    // First pass: load animations that either don't depend on another animation or whose source is already ready.
     for (auto it = anims_json_.begin(); it != anims_json_.end(); ++it) {
         const std::string name = it.key();
         const auto& json       = it.value();
@@ -2067,7 +2041,6 @@ void AssetInfo::loadAnimations(SDL_Renderer* renderer) {
         load_single(name, json);
     }
 
-    // Second pass: iteratively try to load deferred animations once their sources have been populated.
     std::size_t safety_counter = deferred.size() + 1;
     while (!deferred.empty() && safety_counter-- > 0) {
         bool progress = false;
@@ -2089,7 +2062,6 @@ void AssetInfo::loadAnimations(SDL_Renderer* renderer) {
         }
     }
 
-    // Final fallback: load any remaining animations even if their source could not be resolved, but emit a hint.
     for (const auto& pending : deferred) {
         auto source_name = parse_source_animation(pending.second);
         if (source_name) {

@@ -81,7 +81,7 @@ void OnEndSelector::update() {
     if (!document_ || animation_id_.empty()) {
         return;
     }
-    // Refresh options when the set of animations changes
+
     {
         auto ids = document_->animation_ids();
         std::sort(ids.begin(), ids.end());
@@ -174,10 +174,7 @@ void OnEndSelector::sync_from_document() {
     if (strings::is_reserved_animation_name(on_end)) {
         on_end = strings::to_lower_copy(on_end);
     }
-    // If the document contains an on_end value that isn't currently in the
-    // options list (for example a reference to an animation id that existed
-    // previously or differs in normalization), preserve it by adding it to
-    // the options so the user's selection is not lost and can be shown.
+
     if (std::find(options_.begin(), options_.end(), on_end) == options_.end()) {
         if (!on_end.empty()) {
             options_.push_back(on_end);

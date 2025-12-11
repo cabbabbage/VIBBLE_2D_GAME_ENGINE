@@ -19,13 +19,12 @@ bool MovementPlanExecutor::tick(AnimationRuntime& up, Plan& plan,
         if (self && up.planner_iface_) {
             const int visited_thresh = up.planner_iface_->visit_threshold_px();
             const int visited_thresh_squared = visited_thresh * visited_thresh;
-            const int dist_sq = (self->pos.x - plan.final_dest.x) * (self->pos.x - plan.final_dest.x) +
-                                (self->pos.y - plan.final_dest.y) * (self->pos.y - plan.final_dest.y);
+            const int dist_sq = (self->pos.x - plan.final_dest.x) * (self->pos.x - plan.final_dest.x) + (self->pos.y - plan.final_dest.y) * (self->pos.y - plan.final_dest.y);
             if (dist_sq <= visited_thresh_squared) {
                 self->target_reached = true;
             }
         }
-    };
+};
 
     if (plan.strides.empty() || stride_index >= plan.strides.size()) {
         check_target_reached();

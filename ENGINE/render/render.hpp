@@ -14,32 +14,23 @@
 class Assets;
 class WarpedScreenGrid;
 namespace world { class WorldGrid; }
+namespace world { class WorldGrid; }
 
-// Renders prebuilt per-grid tiles with parallax applied. Intended to be
-// invoked at the start of SceneRenderer::render().
 class GridTileRenderer {
 public:
     explicit GridTileRenderer(Assets* assets) : assets_(assets) {}
 
-    // Render using Assets-owned camera and grid.
     void render(SDL_Renderer* renderer);
 
-    // Render using explicit camera and grid references.
     void render(SDL_Renderer* renderer, const WarpedScreenGrid& cam, const world::WorldGrid& grid);
 
 private:
     Assets* assets_ = nullptr;
 };
-////////////////////////////////////////////////////////////////////////////////
 
 class SceneRenderer {
 public:
-    SceneRenderer(SDL_Renderer* renderer,
-                  Assets* assets,
-                  int screen_width,
-                  int screen_height,
-                  const nlohmann::json& map_manifest,
-                  const std::string& map_id);
+    SceneRenderer(SDL_Renderer* renderer, Assets* assets, int screen_width, int screen_height, const nlohmann::json& map_manifest, const std::string& map_id);
     ~SceneRenderer();
 
     static constexpr float kDefaultMapLightOpacity = 0.75f;
@@ -72,22 +63,15 @@ private:
         SDL_Rect        screen_rect{};
         SDL_Color       color_mod{255, 255, 255, 255};
         SDL_RendererFlip flip       = SDL_FLIP_NONE;
-    };
+};
     struct PrevalidatedTag {};
 
-    SceneRenderer(PrevalidatedTag,
-                  SDL_Renderer* renderer,
-                  Assets* assets,
-                  int screen_width,
-                  int screen_height,
-                  const nlohmann::json& map_manifest,
-                  const std::string& map_id);
+    SceneRenderer(PrevalidatedTag, SDL_Renderer* renderer, Assets* assets, int screen_width, int screen_height, const nlohmann::json& map_manifest, const std::string& map_id);
     static PrevalidatedTag require_prerequisites(SDL_Renderer* renderer, Assets* assets);
 
     bool ensure_darkness_overlay();
     void destroy_darkness_overlay();
-    void render_dynamic_darkness_overlay(float map_light_opacity,
-                                         const std::vector<DarkMaskSprite>& sprites);
+    void render_dynamic_darkness_overlay(float map_light_opacity, const std::vector<DarkMaskSprite>& sprites);
 
     bool ensure_sky_texture();
     void destroy_sky_texture();
@@ -100,36 +84,29 @@ private:
     Assets*        assets_;
     int            screen_width_;
     int            screen_height_;
-    
+
     std::unique_ptr<GridTileRenderer> tile_renderer_;
-    
+
     bool           debugging = false;
     bool           low_quality_rendering_ = false;
     bool           dark_mask_enabled_ = true;
 
     std::uint64_t frame_counter_ = 0;
 
-
-
-
     SDL_Texture* darkness_overlay_texture_ = nullptr;
     int          darkness_overlay_width_   = 0;
     int          darkness_overlay_height_  = 0;
     float        map_light_opacity_        = kDefaultMapLightOpacity;
-    SDL_Color    map_clear_color_{0, 128, 0, 255};  // Green for debugging
+    SDL_Color    map_clear_color_{0, 128, 0, 255};
     bool         debug_auto_paths_ = true;
 
     CompositeAssetRenderer composite_renderer_;
 
-    // Depth-cue warmup: skip expensive per-asset effects for first N frames
-    // after initialization to avoid stalls when transitioning from the loading screen.
-    // Configurable via constructor constants in .cpp; defaults to a small number of frames.
-    std::uint32_t depthcue_warmup_frames_ = 8; // frames to skip depth-cue effects after init
+    std::uint32_t depthcue_warmup_frames_ = 8;
 
-    // Full-scene post-processing targets
-    SDL_Texture* scene_composite_tex_ = nullptr;   // Draws full scene here first
-    SDL_Texture* postprocess_tex_     = nullptr;   // Reused staging for color pass
-    SDL_Texture* blur_tex_            = nullptr;   // Reused staging for blur pass
+    SDL_Texture* scene_composite_tex_ = nullptr;
+    SDL_Texture* postprocess_tex_     = nullptr;
+    SDL_Texture* blur_tex_            = nullptr;
 
     std::uint64_t darkness_overlay_skipped_frames_  = 0;
     std::uint64_t darkness_overlay_rendered_frames_ = 0;
@@ -145,4 +122,4 @@ private:
     int                   fog_texture_height_ = 0;
     bool                  fog_texture_failed_ = false;
 };
-////////////////////////////////////////////////////////////////////////////////`
+

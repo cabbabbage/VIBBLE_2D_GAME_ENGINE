@@ -14,8 +14,8 @@ void InitializeAssets::initialize(Assets& assets,
                                   std::vector<Room*> rooms,
                                   int,
                                   int,
-                                  int /*screen_center_x*/,
-                                  int /*screen_center_y*/,
+                                  int ,
+                                  int ,
                                   int)
 {
         vibble::log::debug("[InitializeAssets] Initializing Assets manager...");
@@ -41,21 +41,20 @@ void InitializeAssets::initialize(Assets& assets,
                 set_camera_recursive(raw, &assets.getView());
                 set_assets_owner_recursive(raw, &assets);
                 assets.all.push_back(raw);
-                // Assets should already be finalized by AssetLoader::finalizeAssets().
-                // Guard to avoid double-initialization; finalize only if somehow not finalized.
+
                 if (!raw->is_finalized()) {
                     vibble::log::debug("[InitializeAssets] Asset '" + (raw->info ? raw->info->name : std::string{"<null>"}) + "' not finalized by loader; finalizing now.");
                     raw->finalize_setup();
                 }
-                // Ensure animation children are initialized (and do so recursively)
+
                 if (raw->info && !raw->info->animation_children.empty()) {
                     try {
                         raw->initialize_animation_children_recursive();
                     } catch (...) {
-                        // Fail-safe: continue initialization even if children init fails
+
                     }
                 }
-                // Initialize tiling for tileable assets on load
+
                 try {
                     if (raw->info && raw->info->tillable) {
                         auto t = assets.compute_tiling_for_asset(raw);
@@ -68,24 +67,20 @@ void InitializeAssets::initialize(Assets& assets,
                         raw->set_tiling_info(std::nullopt);
                     }
                 } catch (...) {
-                    // Leave tiling unset on any failure
+
                     raw->set_tiling_info(std::nullopt);
                 }
 
-                // Load light textures from cache for this asset
                 try {
                     assets.ensure_light_textures_loaded(raw);
                 } catch (...) {
-                    // Leave lights unloaded on any failure; continue initialization
+
                 }
         }
 	find_player(assets);
-        // Do not trigger active asset rebuild during construction.
-        // Just mark lists dirty; the first rebuild will occur lazily on
-        // the first update after the world grid populates active chunks.
+
         assets.mark_active_assets_dirty();
         vibble::log::debug("[InitializeAssets] Initialization base complete. Total assets: " + std::to_string(assets.all.size()));
-    // Leave rebuild to the runtime update once chunks are available.
 
 }
 

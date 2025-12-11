@@ -28,9 +28,7 @@ class FrameMovementEditor {
 
     void set_document(std::shared_ptr<AnimationDocument> document);
     void set_animation_id(const std::string& animation_id);
-    void set_layout_sections(const SDL_Rect& mode_controls_bounds,
-                             const SDL_Rect& frame_display_bounds,
-                             const SDL_Rect& frame_list_bounds);
+    void set_layout_sections(const SDL_Rect& mode_controls_bounds, const SDL_Rect& frame_display_bounds, const SDL_Rect& frame_list_bounds);
     void set_close_callback(CloseCallback callback);
     void set_preview_provider(std::shared_ptr<PreviewProvider> provider);
     void set_frame_list_override(int count, const std::string& animation_id, bool preserve_selection);
@@ -53,7 +51,6 @@ class FrameMovementEditor {
     MovementCanvas* canvas() { return canvas_.get(); }
     const MovementCanvas* canvas() const { return canvas_.get(); }
 
-    // Tools integration
     void set_show_animation(bool show);
     bool show_animation() const { return show_animation_; }
     void set_smoothing_enabled(bool enabled);
@@ -109,7 +106,7 @@ class FrameMovementEditor {
     std::unique_ptr<MovementCanvas> canvas_;
     std::unique_ptr<TotalsPanel> totals_panel_;
     std::unique_ptr<FramePropertiesPanel> properties_panel_;
-    // Controls moved to external tools panel
+
     std::unique_ptr<DMButton> smooth_button_;
     std::unique_ptr<DMButton> show_anim_button_;
     std::shared_ptr<PreviewProvider> preview_provider_;
@@ -131,14 +128,14 @@ class FrameMovementEditor {
     int frame_list_override_count_ = -1;
     std::string frame_list_override_animation_id_;
     int display_selected_index_ = 0;
-    // Horizontal scrolling state for frame navigator
-    int hscroll_offset_px_ = 0;               // current horizontal scroll offset in pixels
-    int hscroll_content_px_ = 0;              // total content width in pixels
-    SDL_Rect hscroll_track_rect_{0,0,0,0};    // scrollbar track rect (visible when content overflows)
-    SDL_Rect hscroll_knob_rect_{0,0,0,0};     // scrollbar knob rect
-    bool hscroll_dragging_ = false;           // dragging the knob
-    int  hscroll_drag_dx_ = 0;                // drag offset within knob
-    // Inline carousel navigation buttons inside frame list
+
+    int hscroll_offset_px_ = 0;
+    int hscroll_content_px_ = 0;
+    SDL_Rect hscroll_track_rect_{0,0,0,0};
+    SDL_Rect hscroll_knob_rect_{0,0,0,0};
+    bool hscroll_dragging_ = false;
+    int  hscroll_drag_dx_ = 0;
+
     SDL_Rect fl_prev_button_rect_{0,0,0,0};
     SDL_Rect fl_next_button_rect_{0,0,0,0};
     bool fl_prev_hovered_ = false;

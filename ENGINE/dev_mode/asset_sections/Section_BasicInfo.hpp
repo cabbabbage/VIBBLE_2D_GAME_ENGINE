@@ -71,9 +71,7 @@ inline void Section_BasicInfo::build() {
     widgets_.clear();
     DockableCollapsible::Rows rows;
     if (!info_) {
-        auto placeholder = std::make_unique<ReadOnlyTextBoxWidget>(
-            "",
-            "No asset selected. Select an asset from the library or scene to view and edit its information.");
+        auto placeholder = std::make_unique<ReadOnlyTextBoxWidget>( "", "No asset selected. Select an asset from the library or scene to view and edit its information.");
         rows.push_back({ placeholder.get() });
         widgets_.push_back(std::move(placeholder));
         set_rows(rows);
@@ -81,14 +79,14 @@ inline void Section_BasicInfo::build() {
     }
 
     type_options_ = asset_types::all_as_strings();
-    // Prevent selecting area type unless it's already an area; and prevent changing area to anything else
+
     const bool is_area_asset = (asset_types::canonicalize(info_->type) == std::string(asset_types::area));
     const bool is_tiled_asset = info_->tillable;
     if (is_area_asset) {
         type_options_.clear();
         type_options_.emplace_back(std::string(asset_types::area));
     } else {
-        // Remove 'area' from options for non-area assets
+
         type_options_.erase(std::remove(type_options_.begin(), type_options_.end(), std::string(asset_types::area)), type_options_.end());
     }
     dd_type_ = std::make_unique<DMDropdown>("Type", type_options_, find_index(type_options_, info_->type));
@@ -279,9 +277,9 @@ inline void Section_BasicInfo::render_world_overlay(SDL_Renderer* r,
         SDL_Point world_point{ target->pos.x, target->pos.y };
         float center_x = effects.screen_position.x;
         if (assets) {
-            // Do not apply grid parallax to the player asset
+
             if (!(assets->player == target)) {
-                // parallax_adjusted_screen_x is now handled internally by compute_render_effects
+
             }
         }
         const int   left     = static_cast<int>(std::lround(center_x - static_cast<float>(sw) * 0.5f));

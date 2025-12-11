@@ -18,10 +18,8 @@ public:
     bool is_last = false;
     bool is_first = false;
 
-    // All variants for this frame
     std::vector<FrameVariant> variants;
 
-    // Texture getters, delegated to variants
     SDL_Texture* get_base_texture(int index) const {
         return variants[index].get_base_texture();
     }
@@ -38,9 +36,8 @@ public:
         return variants[index].get_shadow_mask_texture();
     }
 
-
-    std::vector<AnimationChildFrameData> children; //children are the same for every variant
-    std::vector<int> child_start_events;           // child indices that auto-start on this parent frame
+    std::vector<AnimationChildFrameData> children;
+    std::vector<int> child_start_events;
     animation_update::FrameHitGeometry hit_geometry;
     animation_update::FrameAttackGeometry attack_geometry;
 

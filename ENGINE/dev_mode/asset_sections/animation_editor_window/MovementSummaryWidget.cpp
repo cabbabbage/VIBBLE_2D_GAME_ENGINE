@@ -104,11 +104,11 @@ ResolvedMovement resolve_movement(const AnimationDocument* document, const std::
     std::string kind = source ? source->value("kind", std::string{"folder"}) : std::string{"folder"};
 
     if (kind == "animation") {
-        // New: honor inherit_source_movement flag (default true for derived)
+
         bool inherit_movement = payload.value("inherit_source_movement", true);
         if (!inherit_movement) {
-            // Treat as custom movement: do not derive from source
-            kind = "folder"; // fallthrough to local movement parsing below
+
+            kind = "folder";
         }
     }
 
@@ -225,8 +225,7 @@ int MovementSummaryWidget::preferred_height(int) const {
     const int padding = kPanelPadding;
     const int label_height = DMStyles::Label().font_size + DMSpacing::small_gap();
     int height = padding;
-    int text_lines = derived_from_animation_ ? static_cast<int>(inherited_message_lines_.empty() ? 1 : inherited_message_lines_.size())
-                                             : 2;
+    int text_lines = derived_from_animation_ ? static_cast<int>(inherited_message_lines_.empty() ? 1 : inherited_message_lines_.size()) : 2;
     height += label_height * std::max(1, text_lines);
     if (show_button_) {
         height += DMSpacing::small_gap();
@@ -365,8 +364,7 @@ void MovementSummaryWidget::apply_resolved_totals(const ResolvedMovement& resolv
     button_is_go_to_ = false;
 
     if (derived_from_animation_) {
-        std::string target = inherited_source_id_.empty() ? std::string("the source animation")
-                                                         : "animation '" + inherited_source_id_ + "'";
+        std::string target = inherited_source_id_.empty() ? std::string("the source animation") : "animation '" + inherited_source_id_ + "'";
         inherited_message_lines_.push_back("Movement inherits from " + target + ".");
         if (!resolved.modifiers.empty()) {
             std::string joined;
@@ -379,8 +377,7 @@ void MovementSummaryWidget::apply_resolved_totals(const ResolvedMovement& resolv
             inherited_message_lines_.push_back("Modifiers: (none).");
         }
         inherited_message_lines_.push_back("Edit the source animation to change it.");
-        inherited_message_lines_.push_back("Totals ΔX: " + std::to_string(static_cast<int>(std::lround(total_dx_))) +
-                                           ", ΔY: " + std::to_string(static_cast<int>(std::lround(total_dy_))) + ".");
+        inherited_message_lines_.push_back("Totals ΔX: " + std::to_string(static_cast<int>(std::lround(total_dx_))) + ", ΔY: " + std::to_string(static_cast<int>(std::lround(total_dy_))) + ".");
         show_button_ = go_to_source_callback_ && !inherited_source_id_.empty();
         button_is_go_to_ = show_button_;
     } else {

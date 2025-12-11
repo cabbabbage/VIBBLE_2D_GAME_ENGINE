@@ -31,8 +31,6 @@ class AssetInfoUI;
 class RenderAsset;
 class AssetList;
 
-
-
 struct RenderObject {
     SDL_Texture* texture = nullptr;
     SDL_Rect screen_rect{};
@@ -62,8 +60,7 @@ class Asset {
         SDL_Texture* texture = nullptr;
         int          width   = 0;
         int          height  = 0;
-    };
-
+};
 
     struct MaskRenderMetadata {
         struct TextureDefaults {
@@ -75,7 +72,7 @@ class Asset {
             SDL_BlendMode blend = SDL_BLENDMODE_BLEND;
             bool         initialized = false;
             void reset();
-        };
+};
 
         SDL_Texture* last_mask_texture = nullptr;
         int          mask_w            = 0;
@@ -85,7 +82,7 @@ class Asset {
         TextureDefaults base_defaults;
 
         void reset();
-    };
+};
 
     struct TilingInfo {
         bool      enabled      = false;
@@ -97,7 +94,7 @@ class Asset {
         bool is_valid() const {
             return enabled && tile_size.x > 0 && tile_size.y > 0 && coverage.w > 0 && coverage.h > 0;
         }
-    };
+};
 
     struct AnimationChildAttachment {
         int child_index = -1;
@@ -120,7 +117,7 @@ class Asset {
         bool timeline_active = false;
         int timeline_frame_cursor = 0;
         float timeline_frame_progress = 0.0f;
-    };
+};
 
     struct BoundsSquare {
         float center_x = 0.0f;
@@ -128,7 +125,7 @@ class Asset {
         float half_size = 0.0f;
 
         bool valid() const { return std::isfinite(half_size) && half_size > 0.0f; }
-    };
+};
 
     Area get_area(const std::string& name) const;
     Asset(std::shared_ptr<AssetInfo> info,
@@ -146,7 +143,7 @@ class Asset {
     ~Asset();
     void finalize_setup();
     void rebuild_animation_runtime();
-    // Initialize animation child attachments immediately and recursively
+
     void initialize_animation_children_recursive();
     bool is_finalized() const { return finalized_; }
     void on_scale_factor_changed();
@@ -176,7 +173,7 @@ class Asset {
         int   last_variant_index = 0;
         float hysteresis_min     = 0.0f;
         float hysteresis_max     = std::numeric_limits<float>::max();
-    };
+};
 
     const ScaleVariantState& scale_variant_state() const { return scale_variant_state_; }
 
@@ -221,7 +218,6 @@ class Asset {
     std::uint64_t grid_id() const { return grid_id_; }
     void clear_grid_id();
 
-    // Composite Rendering Support
     SDL_Texture* composite_texture() const { return composite_texture_; }
     void set_composite_texture(SDL_Texture* tex);
     bool is_composite_dirty() const { return composite_dirty_; }
@@ -280,7 +276,7 @@ class Asset {
     void update_scale_values();
     SDL_Texture* get_current_variant_texture() const;
     void set_current_animation(const std::string& name);
-    // Per-spawn-group flip override (set by planner/UI); thread-safe accessors
+
 public:
     static void SetFlipOverrideForSpawnId(const std::string& spawn_id, bool enabled, bool flipped);
     static void ClearFlipOverrideForSpawnId(const std::string& spawn_id);
@@ -338,8 +334,6 @@ private:
     ScaleUsageStats last_scale_usage_{};
     ScaleVariantState scale_variant_state_{};
 
-
-
     void clear_render_caches();
     void reset_mask_render_metadata();
     static void destroy_render_cache(RenderTextureCache& cache);
@@ -348,8 +342,6 @@ private:
     mutable RenderTextureCache cast_shadow_cache_{};
     mutable MaskRenderMetadata mask_render_metadata_{};
 
-    // void reset_scale_variant_state();
-
     TransformSmoothingState translation_smoothing_x_{};
     TransformSmoothingState translation_smoothing_y_{};
     TransformSmoothingState scale_smoothing_{};
@@ -357,7 +349,6 @@ private:
 
     const AnimationFrame* last_rendered_frame_ = nullptr;
 
-    // Tracks whether finalize_setup() has already run for this asset
     bool finalized_ = false;
     std::uint64_t grid_id_ = 0;
     bool has_cached_grid_residency_ = false;

@@ -97,7 +97,7 @@ bool FrameEditorSession::timeline_entry_is_static(const nlohmann::json& entry) {
             lowered.push_back(static_cast<char>(std::tolower(ch)));
         }
         return lowered;
-    };
+};
     if (entry.contains("mode") && entry["mode"].is_string()) {
         const std::string lowered = to_lower(entry["mode"].get<std::string>());
         if (lowered == "async" || lowered == "asynchronous") {
@@ -127,7 +127,7 @@ FrameEditorSession::ChildFrame FrameEditorSession::child_frame_from_timeline_sam
             }
         }
         return fallback;
-    };
+};
     auto read_float = [](const nlohmann::json& value, float fallback) -> float {
         if (value.is_number()) {
             try {
@@ -141,7 +141,7 @@ FrameEditorSession::ChildFrame FrameEditorSession::child_frame_from_timeline_sam
             }
         }
         return fallback;
-    };
+};
     auto read_bool = [](const nlohmann::json& value, bool fallback) -> bool {
         if (value.is_boolean()) {
             return value.get<bool>();
@@ -161,7 +161,7 @@ FrameEditorSession::ChildFrame FrameEditorSession::child_frame_from_timeline_sam
             if (text == "false" || text == "0" || text == "no" || text == "off") return false;
         }
         return fallback;
-    };
+};
 
     ChildFrame child;
     child.child_index = child_index;
@@ -255,9 +255,7 @@ void FrameEditorSession::apply_child_timelines_from_payload(const nlohmann::json
             if (child_index >= static_cast<int>(frames_[frame_idx].children.size())) {
                 continue;
             }
-            ChildFrame sample = (frame_idx < samples.size())
-                ? child_frame_from_timeline_sample(samples[frame_idx], child_index)
-                : child_frame_from_timeline_sample(nlohmann::json::object(), child_index);
+            ChildFrame sample = (frame_idx < samples.size()) ? child_frame_from_timeline_sample(samples[frame_idx], child_index) : child_frame_from_timeline_sample(nlohmann::json::object(), child_index);
             frames_[frame_idx].children[child_index] = sample;
         }
     }

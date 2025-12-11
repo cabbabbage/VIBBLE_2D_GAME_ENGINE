@@ -23,7 +23,7 @@ class AnimationDocument {
         bool auto_start = false;
         std::string animation_override;
         bool found = false;
-    };
+};
 
     void load_from_file(const std::filesystem::path& info_path);
     void load_from_manifest(const nlohmann::json& asset_json, const std::filesystem::path& asset_root, std::function<void(const nlohmann::json&)> persist_callback);
@@ -45,14 +45,8 @@ class AnimationDocument {
     void replace_animation_children(const std::vector<std::string>& children);
     std::string animation_children_signature() const;
     ChildTimelineSettings child_timeline_settings(const std::string& animation_id, const std::string& child_name) const;
-    bool set_child_timeline_settings(const std::string& animation_id,
-                     const std::string& child_name,
-                     AnimationChildMode mode,
-                     bool auto_start,
-                     const std::string& animation_override);
-    bool set_child_mode_for_all_animations(const std::string& child_name,
-                         AnimationChildMode mode,
-                         bool auto_start);
+    bool set_child_timeline_settings(const std::string& animation_id, const std::string& child_name, AnimationChildMode mode, bool auto_start, const std::string& animation_override);
+    bool set_child_mode_for_all_animations(const std::string& child_name, AnimationChildMode mode, bool auto_start);
     bool reset_child_timeline(const std::string& animation_id, const std::string& child_name);
 
     const std::filesystem::path& info_path() const { return info_path_; }
@@ -60,7 +54,6 @@ class AnimationDocument {
 
     void set_on_saved_callback(std::function<void()> callback);
 
-    // Returns the base scale percentage for the asset (default 100.0)
     double scale_percentage() const;
 
   private:
@@ -68,9 +61,7 @@ class AnimationDocument {
     void ensure_document_initialized();
     void rebuild_animation_cache();
     void mark_dirty() const;
-    bool rewrite_child_payloads(const std::vector<int>& index_remap,
-                  const std::vector<std::string>& next_children,
-                  const std::vector<std::string>& previous_children);
+    bool rewrite_child_payloads(const std::vector<int>& index_remap, const std::vector<std::string>& next_children, const std::vector<std::string>& previous_children);
 
   private:
     std::filesystem::path info_path_;

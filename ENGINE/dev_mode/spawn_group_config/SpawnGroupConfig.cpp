@@ -581,7 +581,6 @@ std::string trim(const std::string& value) {
 struct SpawnGroupConfig::Entry {
     friend class SpawnGroupConfig;
 
-
     struct CandidateWidgets {
         std::unique_ptr<DMTextBox> name_box;
         std::unique_ptr<SpawnGroupCallbackTextBoxWidget> name_widget;
@@ -687,7 +686,6 @@ struct SpawnGroupConfig::Entry {
             [this](bool value) { on_resolve_quantity_changed(value); },
             editable_);
 
-        // Section toggles: Candidates and Advanced Options (both collapsed by default).
         candidates_toggle_btn_ = std::make_unique<DMButton>("Candidates", &DMStyles::ListButton(), 140, DMButton::height());
         candidates_toggle_widget_ = std::make_unique<ButtonWidget>(candidates_toggle_btn_.get(), [this]() {
             candidates_expanded_ = !candidates_expanded_;
@@ -737,7 +735,6 @@ struct SpawnGroupConfig::Entry {
 
         empty_candidates_label_ = std::make_unique<SpawnGroupLabelWidget>("No candidates", DMStyles::Label().color, true);
 
-        // Explicit flip controls (hidden by default; visibility decided in sync_from_json)
         auto explicit_flip_checkbox = std::make_unique<DMCheckbox>("Explicit Flip", false);
         explicit_flip_widget_ = std::make_unique<CallbackCheckboxWidget>(
             std::move(explicit_flip_checkbox),
@@ -845,7 +842,6 @@ struct SpawnGroupConfig::Entry {
         std::string display = safe_string(entry, "display_name", {});
         name_widget_->set_value(display);
 
-        // Sync lock state and recompute editable gating
         bool base_editable = (owner_ && (owner_->bound_array_ != nullptr || owner_->bound_entry_ != nullptr));
         locked_ = safe_bool(entry, "locked", false);
         if (lock_widget_) {
@@ -886,7 +882,6 @@ struct SpawnGroupConfig::Entry {
             owner_->mark_layout_dirty();
         }
 
-        // Determine if this entry contains a Zone Asset candidate to adjust label accordingly
         auto is_zone_asset_name = [store = owner_ ? owner_->manifest_store_ : nullptr](const std::string& name) -> bool {
             if (!store || name.empty()) return false;
             try {
@@ -896,7 +891,7 @@ struct SpawnGroupConfig::Entry {
                 std::transform(t.begin(), t.end(), t.begin(), [](unsigned char ch){ return static_cast<char>(std::tolower(ch)); });
                 return t == std::string{"zone_asset"};
             } catch (...) { return false; }
-        };
+};
         bool has_zone_asset = false;
         try {
             if (entry.contains("candidates") && entry["candidates"].is_array()) {
@@ -913,7 +908,7 @@ struct SpawnGroupConfig::Entry {
         static const char* kAdjustLabel = "Adjust to Room";
         static const char* kResolveLabel = "Resolve geometry to room size";
         if (resolve_geometry_widget_) {
-            // Recreate the checkbox if label needs to change (per-entry)
+
             bool want_adjust = has_zone_asset;
             if (use_adjust_label_ != want_adjust) {
                 auto geometry_checkbox = std::make_unique<DMCheckbox>(want_adjust ? kAdjustLabel : kResolveLabel, false);
@@ -926,7 +921,6 @@ struct SpawnGroupConfig::Entry {
             }
         }
 
-        // Determine explicit flip visibility and state
         auto has_flippable_candidate = [this](const nlohmann::json& e) -> bool {
             if (!owner_ || !owner_->manifest_store_) return false;
             if (!e.is_object()) return false;
@@ -937,14 +931,14 @@ struct SpawnGroupConfig::Entry {
                     if (!c.is_object()) continue;
                     std::string nm = c.value("name", std::string{});
                     if (nm.empty() || nm == "null") continue;
-                    if (!nm.empty() && nm.front() == '#') continue; // tags not resolved here
+                    if (!nm.empty() && nm.front() == '#') continue;
                     auto view = owner_->manifest_store_->get_asset(nm);
                     if (!view || !view.data || !view.data->is_object()) continue;
                     if (view.data->value("can_invert", false)) return true;
                 }
             } catch (...) {}
             return false;
-        };
+};
         const bool prev_show_explicit = show_explicit_flip_widget_;
         const bool prev_show_force    = show_force_flipped_widget_;
         show_explicit_flip_widget_ = has_flippable_candidate(entry);
@@ -1065,15 +1059,15 @@ struct SpawnGroupConfig::Entry {
         if (resolve_quantity_widget_) {
             resolve_quantity_widget_->set_editable(editable_ && show_resolve_quantity_widget_);
         }
-        // Ensure lock checkbox remains editable when entry is locked so it can be toggled
+
         if (lock_widget_) {
             bool base_editable = (owner_ && (owner_->bound_array_ != nullptr || owner_->bound_entry_ != nullptr));
             lock_widget_->set_editable(base_editable);
         }
-        // Linked area UI removed; no dropdown to edit.
+
         update_priority_button_states();
         if (delete_button_) {
-            // Dim delete button when not editable
+
             delete_button_->set_style(editable_ ? &DMStyles::DeleteButton() : &disabled_priority_button_style());
         }
     }
@@ -1105,7 +1099,6 @@ struct SpawnGroupConfig::Entry {
                 rows.push_back({lock_widget_.get()});
             }
 
-            // Header row for section toggles: Candidates (left) and Advanced Options (right)
             if (candidates_toggle_widget_ || advanced_toggle_widget_) {
                 DockableCollapsible::Row toggles_row;
                 if (candidates_toggle_widget_) toggles_row.push_back(candidates_toggle_widget_.get());
@@ -1128,8 +1121,6 @@ struct SpawnGroupConfig::Entry {
                 rows.push_back(qty_row);
             }
 
-            // Sliders and non-checkbox fields remain outside Advanced Options
-            
             if (show_perimeter_radius_widget_ && perimeter_radius_widget_) {
                 rows.push_back({perimeter_radius_widget_.get()});
             }
@@ -1142,7 +1133,6 @@ struct SpawnGroupConfig::Entry {
                 rows.push_back({resolution_widget_.get()});
             }
 
-            // Candidates section content (collapsible)
             if (candidates_expanded_) {
                 if (candidate_entries_.empty()) {
                     rows.push_back({empty_candidates_label_.get()});
@@ -1152,7 +1142,6 @@ struct SpawnGroupConfig::Entry {
                 }
             }
 
-            // Advanced Options section content (collapsible)
             if (advanced_expanded_) {
                 if (show_resolve_geometry_widget_ && resolve_geometry_widget_) {
                     rows.push_back({resolve_geometry_widget_.get()});
@@ -1287,7 +1276,7 @@ private:
         if (auto* graph = candidate_editor_widget()) {
             graph->set_search_extra_results_provider([this]() {
                 std::vector<SearchAssets::Result> results;
-                // Always include an explicit null candidate option
+
                 {
                     SearchAssets::Result null_res;
                     null_res.label = "null";
@@ -1295,7 +1284,7 @@ private:
                     null_res.is_tag = false;
                     results.push_back(std::move(null_res));
                 }
-                // Also include room area names as selectable candidates
+
                 try {
                     const auto& provider = area_names_provider();
                     auto names = provider ? provider() : std::vector<std::string>{};
@@ -1639,8 +1628,7 @@ private:
                 return;
             }
             (*entry)["edge_inset_percent"] = clamped;
-            // Treat as a geometry-affecting change so the editor respawns
-            // the group immediately (mirrors Perimeter radius live updates).
+
             notify_change(true, false, false);
             sync_from_json();
         }
@@ -1665,13 +1653,13 @@ private:
     }
 
     void on_locked_changed(bool value) {
-        // Allow toggling lock only if the underlying entry is editable in general
+
         bool base_editable = (owner_ && (owner_->bound_array_ != nullptr || owner_->bound_entry_ != nullptr));
         if (!base_editable) return;
         if (auto* entry = mutable_entry()) {
             (*entry)["locked"] = value;
             locked_ = value;
-            // Recompute per-widget editability
+
             editable_ = base_editable && !locked_;
             notify_change(false, false, false);
             refresh_configuration();
@@ -1687,7 +1675,7 @@ private:
     std::optional<std::string> method_lock_{};
     bool quantity_hidden_ = false;
     std::unique_ptr<CandidateEditorPieGraphWidget> candidate_graph_{};
-    // Section toggles
+
     std::unique_ptr<DMButton> candidates_toggle_btn_{};
     std::unique_ptr<ButtonWidget> candidates_toggle_widget_{};
     bool candidates_expanded_ = false;
@@ -1732,7 +1720,6 @@ private:
     bool show_resolve_quantity_widget_ = false;
     int current_resolution_ = 0;
 
-    // Explicit flip UI state
     std::unique_ptr<CallbackCheckboxWidget> explicit_flip_widget_{};
     std::unique_ptr<CallbackCheckboxWidget> force_flipped_widget_{};
     bool show_explicit_flip_widget_ = false;

@@ -89,7 +89,6 @@ constexpr const char* kModeIdRoom = "room";
 constexpr const char* kModeIdMap = "map";
 constexpr int kPopupOutlineThickness = 1;
 
-// Grid header settings keys
 constexpr const char* kGridOverlayEnabledKey = "dev.grid.overlay.enabled";
 constexpr const char* kGridSnapEnabledKey    = "dev.grid.snap.enabled";
 constexpr const char* kGridCellSizePxKey     = "dev.grid.cell_size_px";
@@ -221,7 +220,6 @@ std::string make_unique_asset_area_name(const AssetInfo& info, const std::string
 }
 
 }
-
 
 class RegenerateRoomPopup {
 public:
@@ -374,7 +372,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     const char* ctor_start = "[DevControls] ctor start";
     dev_mode_trace(ctor_start);
     std::cout << ctor_start << "\n";
-    // Load grid header settings
+
     grid_overlay_enabled_ = devmode::ui_settings::load_bool(kGridOverlayEnabledKey, false);
     snap_to_grid_enabled_ = devmode::ui_settings::load_bool(kGridSnapEnabledKey, false);
     const int saved_overlay_r = static_cast<int>(devmode::ui_settings::load_number(kGridOverlayResolutionKey, -1));
@@ -388,7 +386,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     room_editor_ = std::make_unique<RoomEditor>(assets_, screen_w_, screen_h_);
     if (room_editor_) {
         room_editor_->set_manifest_store(&manifest_store_);
-        // Hide top header/footer while sliding containers are visible
+
         room_editor_->set_header_visibility_callback([this](bool visible) {
             sliding_headers_hidden_ = visible;
             apply_header_suppression();
@@ -397,11 +395,11 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
         room_editor_->set_boundary_assets_panel_callback([this]() { this->open_boundary_assets_modal(); });
     }
     map_editor_ = std::make_unique<MapEditor>(assets_);
-    // Constrain map-mode label spawn area between header bottom and footer top
+
     map_editor_->set_label_safe_area_provider([this]() -> SDL_Rect {
-        // Default full-screen area
+
         SDL_Rect area{0, 0, screen_w_, screen_h_};
-        // Header: AssetFilterBar header (if not suppressed)
+
         if (!asset_filter_.header_suppressed()) {
             const SDL_Rect header = asset_filter_.header_rect();
             if (header.h > 0) {
@@ -412,7 +410,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
                 }
             }
         }
-        // Footer: Dev footer bar (if visible)
+
         if (map_mode_ui_) {
             if (DevFooterBar* fb = map_mode_ui_->get_footer_bar()) {
                 if (fb->visible()) {
@@ -432,20 +430,19 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     }
     map_grid_regen_cb_ = [this]() { this->regenerate_map_grid_assets(); };
     apply_header_suppression();
-    // Grid overlay snap resolution uses the same exponent range (0..kMaxResolution)
+
     grid_resolution_stepper_ = std::make_unique<DMNumericStepper>("Grid Resolution (r)", 0, vibble::grid::kMaxResolution, grid_overlay_resolution_r_);
     grid_resolution_stepper_->set_on_change([this](int new_r){
         const int clamped_r = vibble::grid::clamp_resolution(new_r);
         if (clamped_r == grid_overlay_resolution_r_) {
             return;
         }
-        apply_overlay_grid_resolution(clamped_r, /*user_override=*/true, /*update_stepper=*/false, /*update_footer=*/true);
+        apply_overlay_grid_resolution(clamped_r, true, false, true);
     });
     if (grid_resolution_stepper_) {
         grid_resolution_stepper_->set_value(grid_overlay_resolution_r_);
     }
 
-    // Grid overlay checkbox
     grid_overlay_checkbox_ = std::make_unique<DMCheckbox>("Show Grid", grid_overlay_enabled_);
     camera_panel_ = std::make_unique<CameraUIPanel>(assets_, 72, 72);
     if (camera_panel_) {
@@ -507,12 +504,11 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     if (room_editor_ && map_mode_ui_) {
         room_editor_->set_shared_footer_bar(map_mode_ui_->get_footer_bar());
     }
-    // Set up grid controls in footer bar
+
     if (map_mode_ui_) {
         if (auto* footer = map_mode_ui_->get_footer_bar()) {
             const bool depth_effects_enabled = assets_
-                ? assets_->depth_effects_enabled()
-                : devmode::camera_prefs::load_depthcue_enabled();
+                ? assets_->depth_effects_enabled() : devmode::camera_prefs::load_depthcue_enabled();
             footer->set_depth_effects_enabled(depth_effects_enabled);
             footer->set_depth_effects_callbacks([this](bool enabled) {
                 auto* cam = camera_override_for_testing_
@@ -542,7 +538,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
                     devmode::camera_prefs::save_depthcue_enabled(enabled);
                 }
             });
-            // Set depth effects enabled to true on load
+
             if (assets_) {
                 assets_->set_depth_effects_enabled(true);
                 footer->set_depth_effects_enabled(true);
@@ -562,7 +558,7 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
                     if (clamped == grid_overlay_resolution_r_) {
                         return;
                     }
-                    apply_overlay_grid_resolution(clamped, /*user_override=*/from_user, /*update_stepper=*/true, /*update_footer=*/false);
+                    apply_overlay_grid_resolution(clamped, from_user, true, false);
                 }
             );
         }
@@ -574,12 +570,12 @@ DevControls::DevControls(Assets* owner, int screen_w, int screen_h)
     }
     asset_filter_.initialize();
     asset_filter_.set_state_changed_callback([this]() { refresh_active_asset_filters(); });
-    // Keep header always visible in dev mode
+
     asset_filter_.set_enabled(enabled_);
     asset_filter_.set_screen_dimensions(screen_w_, screen_h_);
     asset_filter_.set_map_info(map_info_json_);
     asset_filter_.set_current_room(current_room_);
-    // No extra panel for grid controls anymore
+
     asset_filter_.set_extra_panel_height(0);
     asset_filter_.set_extra_panel_renderer({});
     asset_filter_.set_extra_panel_event_handler({});
@@ -645,19 +641,19 @@ void DevControls::set_map_info(nlohmann::json* map_info, MapLightPanel::SaveCall
         map_mode_ui_->set_map_context(map_info_json_, map_path_);
     }
     asset_filter_.set_map_info(map_info_json_);
-    // Sync overlay snap resolution; default to map grid settings unless the user overrides.
+
     if (map_info_json_) {
         ensure_map_grid_settings(*map_info_json_);
         const nlohmann::json& section = (*map_info_json_)["map_grid_settings"];
         MapGridSettings settings = MapGridSettings::from_json(&section);
         settings.clamp();
         if (!grid_overlay_resolution_user_override_) {
-            apply_overlay_grid_resolution(settings.resolution, /*user_override=*/false, /*update_stepper=*/true, /*update_footer=*/true);
+            apply_overlay_grid_resolution(settings.resolution, false, true, true);
         } else {
-            apply_overlay_grid_resolution(grid_overlay_resolution_r_, /*user_override=*/false, /*update_stepper=*/true, /*update_footer=*/true);
+            apply_overlay_grid_resolution(grid_overlay_resolution_r_, false, true, true);
         }
     } else {
-        apply_overlay_grid_resolution(grid_overlay_resolution_r_, /*user_override=*/false, /*update_stepper=*/true, /*update_footer=*/true);
+        apply_overlay_grid_resolution(grid_overlay_resolution_r_, false, true, true);
     }
     configure_header_button_sets();
 }
@@ -716,7 +712,6 @@ void DevControls::set_screen_dimensions(int width, int height) {
     if (map_assets_modal_) map_assets_modal_->set_screen_dimensions(width, height);
     if (boundary_assets_modal_) boundary_assets_modal_->set_screen_dimensions(width, height);
 
-    // No right-accessory reservation; grid controls now live in expanded panel
     asset_filter_.set_right_accessory_width(0);
     asset_filter_.ensure_layout();
     SDL_Rect usable = FloatingPanelLayoutManager::instance().computeUsableRect(
@@ -867,7 +862,7 @@ void DevControls::set_enabled(bool enabled) {
         return;
     }
     enabled_ = enabled;
-    // Keep header always visible in dev mode
+
     asset_filter_.set_enabled(enabled_);
 
     if (enabled_) {
@@ -966,7 +961,6 @@ void DevControls::update(const Input& input) {
         }
     }
 
-    // No keyboard shortcuts for grid header fields in this scope
     pointer_over_camera_panel_ =
         camera_panel_ && camera_panel_->is_visible() && camera_panel_->is_point_inside(input.getX(), input.getY());
     pointer_over_image_effect_panel_ =
@@ -980,12 +974,10 @@ void DevControls::update(const Input& input) {
             handle_map_selection();
         }
     } else if (mode_ == Mode::RoomEditor && room_editor_ && room_editor_->is_enabled()) {
-        // While in-world Frame Editor session is active, disable dev mouse controls that
-        // highlight/select assets by skipping RoomEditor update and clearing highlights.
+
         const bool frame_editing = frame_editor_session_ && frame_editor_session_->is_active();
         if (!frame_editing) {
-            const bool camera_panel_blocking = camera_panel_ && camera_panel_->is_visible() &&
-                                              (pointer_over_camera_panel_ || pointer_over_image_effect_panel_);
+            const bool camera_panel_blocking = camera_panel_ && camera_panel_->is_visible() && (pointer_over_camera_panel_ || pointer_over_image_effect_panel_);
             if (!camera_panel_blocking) {
                 room_editor_->update(input);
             }
@@ -1005,8 +997,8 @@ void DevControls::update(const Input& input) {
     }
     bool modal_hide = is_modal_blocking_panels();
     modal_headers_hidden_ = modal_hide;
-    bool hide_headers = modal_hide; // keep header visible unless a modal blocks panels
-    // Keep header always visible in dev mode
+    bool hide_headers = modal_hide;
+
     asset_filter_.set_enabled(enabled_);
     apply_header_suppression();
     if (map_mode_ui_) {
@@ -1018,7 +1010,7 @@ void DevControls::update(const Input& input) {
     if (boundary_assets_modal_ && boundary_assets_modal_->visible()) {
         boundary_assets_modal_->update(input);
     }
-    // Legacy CreateRoomAreaPanel removed
+
     if (trail_suite_) {
         trail_suite_->update(input);
         if (pending_trail_template_ && !trail_suite_->is_open()) {
@@ -1028,7 +1020,6 @@ void DevControls::update(const Input& input) {
 
     asset_filter_.ensure_layout();
 
-    // Gather current sliding container rects before deciding header visibility
     SDL_Rect layout_rect = asset_filter_.layout_bounds();
     SDL_Rect footer_rect{0, 0, 0, 0};
     std::vector<SDL_Rect> sliding_rects;
@@ -1045,7 +1036,7 @@ void DevControls::update(const Input& input) {
         }
     }
     modal_hide = is_modal_blocking_panels();
-    // Keep header visible unless a modal blocks panels or layers panel is open
+
     const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
     hide_headers = modal_hide || sliding_headers_hidden_ || layers_panel_open;
     SDL_Rect header_rect = hide_headers ? SDL_Rect{0, 0, 0, 0} : asset_filter_.header_rect();
@@ -1073,7 +1064,6 @@ void DevControls::update(const Input& input) {
         }
     }
 
-    // Update depth cue hover states
     if (camera_panel_ && camera_panel_->is_blur_section_visible() && assets_ && enabled_) {
         const WarpedScreenGrid& cam = assets_->getView();
         const WarpedScreenGrid::RealismSettings& settings = cam.realism_settings();
@@ -1082,7 +1072,7 @@ void DevControls::update(const Input& input) {
                 return static_cast<float>(screen_h_) * 0.5f;
             }
             return std::clamp(value, 0.0f, static_cast<float>(screen_h_));
-        };
+};
         float fg_y = clamp_line(settings.foreground_plane_screen_y);
         float bg_y = clamp_line(settings.background_plane_screen_y);
         int mouse_y = input.getY();
@@ -1099,13 +1089,11 @@ void DevControls::update(const Input& input) {
     }
 
     sync_header_button_states();
-    // Update in-world frame editor session
+
     if (frame_editor_session_ && frame_editor_session_->is_active()) {
         frame_editor_session_->update(input);
     }
 
-    // If we are suppressing render during a Map→Room transition, resume
-    // once the camera finishes its pan/zoom animation.
     if (render_suppression_in_progress_) {
         WarpedScreenGrid* cam = assets_ ? &assets_->getView() : nullptr;
         const bool camera_idle = !cam || !cam->is_zooming();
@@ -1190,7 +1178,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
             }
         }
         return handled;
-    };
+};
 
     auto handle_floating_panels = [&]() -> bool {
         auto floating = FloatingDockableManager::instance().open_panels();
@@ -1224,7 +1212,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
             }
         }
         return false;
-    };
+};
 
     if (handle_floating_panels()) {
         return;
@@ -1387,8 +1375,6 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
         }
     }
 
-    // Legacy CreateRoomAreaPanel removed
-
     if (mode_ == Mode::MapEditor) {
         return;
     }
@@ -1401,7 +1387,7 @@ void DevControls::handle_sdl_event(const SDL_Event& event) {
                     return static_cast<float>(screen_h_) * 0.5f;
                 }
                 return std::clamp(value, 0.0f, static_cast<float>(screen_h_));
-            };
+};
             if (hover_depthcue_foreground_) {
                 depthcue_drag_state_ = DepthCueDragState::Foreground;
                 const WarpedScreenGrid::RealismSettings& settings = assets_->getView().realism_settings();
@@ -1467,7 +1453,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     if (!enabled_) return;
 
     const bool layers_panel_open = map_mode_ui_ && map_mode_ui_->is_layers_panel_visible();
-    // Hide the top dev header whenever modal/sliding UI or the Layers panel would obscure it.
+
     const bool hide_headers = modal_headers_hidden_ || sliding_headers_hidden_ || layers_panel_open;
     asset_filter_.set_header_suppressed(hide_headers);
 
@@ -1479,13 +1465,12 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         SDL_FPoint linear = c.map_to_screen(w);
         float warped_y = c.warp_floor_screen_y(static_cast<float>(w.y), linear.y);
         return SDL_FPoint{linear.x, warped_y};
-    };
+};
 
     const bool show_depth_guides = camera_panel_ && camera_panel_->is_depth_section_visible();
     std::optional<float> horizon_screen_y;
     std::optional<std::string> parallax_probe_label;
 
-    // Render grid overlay if enabled (moved to beginning to render behind UI)
         const bool need_grid_helpers = assets_ && (grid_overlay_enabled_ || show_depth_guides);
         if (renderer && need_grid_helpers) {
             const WarpedScreenGrid& cam = assets_->getView();
@@ -1501,16 +1486,14 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
             SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
         }
-        // Grid colors (reduced alpha)
+
         SDL_Color minor{0, 255, 255, 48};
         SDL_Color major{0, 255, 255, 80};
 
-        // Calculate visible world bounds with padding to cover the full screen.
         SDL_FPoint top_left_world = cam.screen_to_map(SDL_Point{0, 0});
         SDL_FPoint bottom_right_world = cam.screen_to_map(SDL_Point{screen_w_, screen_h_});
         const float cam_scale = std::max(0.0001f, cam.get_scale());
 
-        // Calculate grid lines using the current overlay snap resolution
         int cell = std::max(1, grid_cell_size_px_);
         if (cell > 0) {
             const float world_padding = static_cast<float>(cell) * 4.0f;
@@ -1524,13 +1507,10 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                 horizon_screen_y = static_cast<float>(depth_params.horizon_screen_y);
             }
 
-            const int major_interval = 8; // major line every N cells
+            const int major_interval = 8;
             const int samples_per_line = 32;
             const float mid_world_x = (min_world_x + max_world_x) * 0.5f;
 
-            // Vertical lines (sample along Y then warp through the camera + parallax)
-            // Also compute the screen X where a vertical grid line crosses the horizon
-            // so we can draw a distinct orange vertical marker there.
             float start_x = std::floor(min_world_x / cell) * cell;
             bool have_horizon_x = false;
             float best_horizon_x = 0.0f;
@@ -1542,9 +1522,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                     const float t = static_cast<float>(s) / static_cast<float>(samples_per_line);
                     const float wy = min_world_y + (max_world_y - min_world_y) * t;
                     SDL_Point world_point{
-                        static_cast<int>(std::lround(x)),
-                        static_cast<int>(std::lround(wy))
-                    };
+                        static_cast<int>(std::lround(x)), static_cast<int>(std::lround(wy)) };
                     SDL_FPoint screen = floor_warped_screen_position(cam, world_point);
                     polyline.push_back(SDL_Point{
                         static_cast<int>(std::lround(screen.x)),
@@ -1558,11 +1536,9 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                     SDL_RenderDrawLines(renderer, polyline.data(), static_cast<int>(polyline.size()));
                 }
 
-                // If we have a horizon Y, check if this polyline crosses it and record
-                // the intersection X that is closest to the screen center.
                 if (depth_params.enabled && horizon_screen_y) {
                     const float hy = *horizon_screen_y;
-                    // scan segments for crossing
+
                     for (size_t i = 1; i < polyline.size(); ++i) {
                         const float y0 = static_cast<float>(polyline[i-1].y);
                         const float y1 = static_cast<float>(polyline[i].y);
@@ -1583,7 +1559,6 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                 }
             }
 
-            // Draw the orange vertical horizon marker (closest intersection to center)
             if (have_horizon_x) {
                 const int xi = static_cast<int>(std::lround(best_horizon_x));
                 SDL_BlendMode prev_mode2 = SDL_BLENDMODE_NONE;
@@ -1594,14 +1569,11 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                 SDL_SetRenderDrawBlendMode(renderer, prev_mode2);
             }
 
-            // Horizontal lines (sample along X; stop when screen spacing collapses near the horizon).
             float start_y = std::floor(max_world_y / cell) * cell;
             float highest_horizontal_screen_y = std::numeric_limits<float>::infinity();
             for (float y = start_y; y >= min_world_y - cell; y -= cell) {
                 SDL_Point sample_world{
-                    static_cast<int>(std::lround(mid_world_x)),
-                    static_cast<int>(std::lround(y))
-                };
+                    static_cast<int>(std::lround(mid_world_x)), static_cast<int>(std::lround(y)) };
                 SDL_FPoint sample_screen = floor_warped_screen_position(cam, sample_world);
                 const float screen_y = sample_screen.y;
                 if (std::isfinite(screen_y)) {
@@ -1614,9 +1586,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                     const float t = static_cast<float>(s) / static_cast<float>(samples_per_line);
                     const float wx = min_world_x + (max_world_x - min_world_x) * t;
                     SDL_Point world_point{
-                        static_cast<int>(std::lround(wx)),
-                        static_cast<int>(std::lround(y))
-                    };
+                        static_cast<int>(std::lround(wx)), static_cast<int>(std::lround(y)) };
                     SDL_FPoint screen = floor_warped_screen_position(cam, world_point);
                     polyline.push_back(SDL_Point{
                         static_cast<int>(std::lround(screen.x)),
@@ -1634,8 +1604,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             if (grid_overlay_enabled_ && horizon_screen_y) {
                 const float hy = *horizon_screen_y;
                 const bool already_at_horizon =
-                    std::isfinite(highest_horizontal_screen_y) &&
-                    std::fabs(highest_horizontal_screen_y - hy) < 0.5f;
+                    std::isfinite(highest_horizontal_screen_y) && std::fabs(highest_horizontal_screen_y - hy) < 0.5f;
                 if (!already_at_horizon) {
                     SDL_Color c = major;
                     SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
@@ -1645,7 +1614,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             }
 
             if (depth_params.enabled) {
-                // Always reflect the camera-computed horizon so the guide matches pitch direction.
+
                 horizon_screen_y = static_cast<float>(depth_params.horizon_screen_y);
             }
 
@@ -1654,34 +1623,24 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                 const int sample_dy = std::max(cell * 3, 96);
                 const SDL_FPoint view_center = cam.get_view_center_f();
                 const double anchor_y = cam.current_anchor_world_y();
-                const int sample_x = static_cast<int>(std::lround(
-                    std::clamp(view_center.x + static_cast<float>(sample_dx), min_world_x, max_world_x)));
+                const int sample_x = static_cast<int>(std::lround( std::clamp(view_center.x + static_cast<float>(sample_dx), min_world_x, max_world_x)));
                 const double clamped_anchor_y = std::clamp(anchor_y, static_cast<double>(min_world_y), static_cast<double>(max_world_y));
                 const SDL_Point anchor_sample{
                     sample_x,
-                    static_cast<int>(std::lround(clamped_anchor_y))
-                };
+                    static_cast<int>(std::lround(clamped_anchor_y)) };
                 const SDL_Point above_sample{
                     sample_x,
-                    static_cast<int>(std::lround(std::clamp(clamped_anchor_y - static_cast<double>(sample_dy),
-                                                           static_cast<double>(min_world_y),
-                                                           static_cast<double>(max_world_y))))
-                };
+                    static_cast<int>(std::lround(std::clamp(clamped_anchor_y - static_cast<double>(sample_dy), static_cast<double>(min_world_y), static_cast<double>(max_world_y)))) };
                 const SDL_Point below_sample{
                     sample_x,
-                    static_cast<int>(std::lround(std::clamp(clamped_anchor_y + static_cast<double>(sample_dy),
-                                                           static_cast<double>(min_world_y),
-                                                           static_cast<double>(max_world_y))))
-                };
+                    static_cast<int>(std::lround(std::clamp(clamped_anchor_y + static_cast<double>(sample_dy), static_cast<double>(min_world_y), static_cast<double>(max_world_y)))) };
 
                 const float parallax_anchor = parallax_offset(anchor_sample);
                 const float parallax_above  = parallax_offset(above_sample);
                 const float parallax_below  = parallax_offset(below_sample);
                 if (std::isfinite(parallax_anchor) && std::isfinite(parallax_above) && std::isfinite(parallax_below)) {
                     char buffer[192];
-                    std::snprintf(buffer, sizeof(buffer),
-                                  "Parallax probe dx=+%d | above %.1f px  anchor %.1f px  below %.1f px",
-                                  sample_dx, parallax_above, parallax_anchor, parallax_below);
+                    std::snprintf(buffer, sizeof(buffer), "Parallax probe dx=+%d | above %.1f px  anchor %.1f px  below %.1f px", sample_dx, parallax_above, parallax_anchor, parallax_below);
                     parallax_probe_label = std::string(buffer);
                 }
             }
@@ -1712,9 +1671,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             const world::WorldGrid& grid = assets_->world_grid();
             SDL_FPoint center_world_f = cam.get_view_center_f();
             SDL_Point depth_world{
-                static_cast<int>(std::lround(center_world_f.x)),
-                static_cast<int>(std::lround(depth_params.base_world_y))
-            };
+                static_cast<int>(std::lround(center_world_f.x)), static_cast<int>(std::lround(depth_params.base_world_y)) };
             SDL_FPoint depth_screen = floor_warped_screen_position(cam, depth_world);
             const int y_line = static_cast<int>(std::lround(depth_screen.y));
 
@@ -1748,7 +1705,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             style.color = color;
             const int label_y = std::max(0, yi - style.font_size - 2);
             DrawLabelText(renderer, label, 8, label_y, style);
-        };
+};
 
         if (horizon_screen_y) {
             draw_labeled_line(*horizon_screen_y, SDL_Color{255, 140, 0, 220}, "Horizon");
@@ -1762,7 +1719,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         if (map_editor_) map_editor_->render(renderer);
     } else if (renderer && mode_ == Mode::RoomEditor && room_editor_) {
         room_editor_->render_overlays(renderer);
-        // Frame editor session (in-world)
+
         if (frame_editor_session_ && frame_editor_session_->is_active()) {
             frame_editor_session_->render(renderer);
         }
@@ -1792,15 +1749,13 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         const WarpedScreenGrid::RealismSettings& settings = cam.realism_settings();
         SDL_FPoint center_world_f = cam.get_view_center_f();
         SDL_FPoint center_screen_f = cam.map_to_screen_f(center_world_f);
-        float center_y = std::isfinite(center_screen_f.y)
-            ? std::clamp(center_screen_f.y, 0.0f, static_cast<float>(screen_h_))
-            : static_cast<float>(screen_h_) * 0.5f;
+        float center_y = std::isfinite(center_screen_f.y) ? std::clamp(center_screen_f.y, 0.0f, static_cast<float>(screen_h_)) : static_cast<float>(screen_h_) * 0.5f;
         auto clamp_line = [&](float value) {
             if (!std::isfinite(value)) {
                 return center_y;
             }
             return std::clamp(value, 0.0f, static_cast<float>(screen_h_));
-        };
+};
         const float bg_line = clamp_line(settings.background_plane_screen_y);
         const float fg_line = clamp_line(settings.foreground_plane_screen_y);
 
@@ -1826,7 +1781,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
             SDL_Color actual_color = is_hover_or_drag ? SDL_Color{255, 255, 255, 220} : color;
             SDL_SetRenderDrawColor(renderer, actual_color.r, actual_color.g, actual_color.b, actual_color.a);
             SDL_RenderDrawLine(renderer, 0, yi, screen_w_, yi);
-        };
+};
         auto draw_label = [&](float line_y, const SDL_Color& color, const std::string& text) {
             DMLabelStyle style = base_label;
             style.color = color;
@@ -1836,14 +1791,12 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
                 text_y = yi + DMSpacing::small_gap();
             }
             DrawLabelText(renderer, text, DMSpacing::panel_padding(), text_y, style);
-        };
+};
         auto make_depthcue_label = [](const char* prefix, int opacity_max) {
             char buffer[160];
-            std::snprintf(buffer, sizeof(buffer), "%s Max Opacity: %d / 255",
-                          prefix,
-                          opacity_max);
+            std::snprintf(buffer, sizeof(buffer), "%s Max Opacity: %d / 255", prefix, opacity_max);
             return std::string(buffer);
-        };
+};
 
         draw_line(bg_line, bg_color, hover_depthcue_background_ || (depthcue_drag_state_ == DepthCueDragState::Background));
         {
@@ -1864,7 +1817,6 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         SDL_SetRenderDrawBlendMode(renderer, prev_mode);
     }
 
-    // When the Camera Settings panel is open, draw a crosshair at the rendered focus point (actual view center).
     if (renderer && camera_panel_ && camera_panel_->is_visible() && assets_) {
         const WarpedScreenGrid& cam = assets_->getView();
         SDL_FPoint center_world_f = cam.get_view_center_f();
@@ -1878,24 +1830,21 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         SDL_GetRenderDrawColor(renderer, &pr, &pg, &pb, &pa);
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-        // Use an accent-like color with good visibility.
         const SDL_Color c = DMStyles::AccentButton().hover_bg;
         SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, 230);
 
-        // Draw a simple thick plus-style crosshair centered at (cx, cy).
         constexpr int arm = 8;
-        constexpr int thickness = 3; // odd thickness keeps center pixel aligned
+        constexpr int thickness = 3;
         const int offset_start = -thickness / 2;
         const int offset_end   =  thickness / 2;
         for (int o = offset_start; o <= offset_end; ++o) {
-            SDL_RenderDrawLine(renderer, cx - arm, cy + o, cx + arm, cy + o); // horizontal
-            SDL_RenderDrawLine(renderer, cx + o, cy - arm, cx + o, cy + arm); // vertical
+            SDL_RenderDrawLine(renderer, cx - arm, cy + o, cx + arm, cy + o);
+            SDL_RenderDrawLine(renderer, cx + o, cy - arm, cx + o, cy + arm);
         }
 
         SDL_SetRenderDrawColor(renderer, pr, pg, pb, pa);
         SDL_SetRenderDrawBlendMode(renderer, prev_mode);
     }
-
 
     if (renderer && map_mode_ui_) map_mode_ui_->render(renderer);
     if (renderer && map_assets_modal_ && map_assets_modal_->visible()) {
@@ -1906,7 +1855,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
     }
     if (renderer && trail_suite_) trail_suite_->render(renderer);
     if (frame_editor_session_ && frame_editor_session_->is_active()) {
-        // Panels are rendered as part of render(); nothing to do here.
+
     }
     if (renderer && camera_panel_ && camera_panel_->is_visible()) {
         camera_panel_->render(renderer);
@@ -1918,7 +1867,7 @@ void DevControls::render_overlays(SDL_Renderer* renderer) {
         regenerate_popup_->render(renderer);
     }
     if (renderer && !hide_headers && !is_modal_blocking_panels()) {
-        // Render header and expanded filters (extra Grid panel is rendered inside AssetFilterBar)
+
         asset_filter_.set_right_accessory_width(0);
         asset_filter_.render(renderer);
     }
@@ -1932,10 +1881,10 @@ void DevControls::begin_frame_editor_session(Asset* asset,
     if (!asset || !assets_ || animation_id.empty()) return;
     if (!frame_editor_session_) frame_editor_session_ = std::make_unique<FrameEditorSession>();
     frame_editor_session_->set_snap_resolution(grid_overlay_resolution_r_);
-    // Snapshot grid overlay and force ON (non-persistent)
+
     frame_editor_prev_grid_overlay_ = grid_overlay_enabled_;
     grid_overlay_enabled_ = true;
-    // Close AssetInfo panel while Frame Editor is active; remember to reopen on exit.
+
     frame_editor_prev_asset_info_open_ = false;
     frame_editor_asset_for_reopen_ = nullptr;
     const bool launched_from_animation_editor = (host_to_toggle != nullptr);
@@ -1951,9 +1900,9 @@ void DevControls::begin_frame_editor_session(Asset* asset,
         frame_editor_asset_for_reopen_ = asset;
     }
     frame_editor_session_->begin(assets_, asset, std::move(document), std::move(preview), animation_id, host_to_toggle, [this]() {
-        // Restore grid overlay when session ends
+
         this->grid_overlay_enabled_ = this->frame_editor_prev_grid_overlay_;
-        // Reopen AssetInfo panel if it was previously open
+
         if (this->frame_editor_prev_asset_info_open_ && this->room_editor_ && this->frame_editor_asset_for_reopen_) {
             this->room_editor_->open_asset_info_editor_for_asset(this->frame_editor_asset_for_reopen_);
         }
@@ -2017,7 +1966,7 @@ void DevControls::open_animation_editor_for_asset(const std::shared_ptr<AssetInf
 
 void DevControls::close_asset_info_editor() {
     if (room_editor_) room_editor_->close_asset_info_editor();
-    // Also close any active in-world Frame Editor session
+
     end_frame_editor_session();
 }
 
@@ -2077,7 +2026,7 @@ void DevControls::notify_spawn_group_config_changed(const nlohmann::json& entry)
 
 void DevControls::notify_spawn_group_removed(const std::string& spawn_id) {
     remove_spawn_group_assets(spawn_id);
-    // Clear any flip override associated with this spawn group
+
     Asset::ClearFlipOverrideForSpawnId(spawn_id);
 }
 
@@ -2208,8 +2157,6 @@ void DevControls::configure_header_button_sets() {
     map_buttons.push_back(make_lighting_button());
     map_buttons.push_back(make_layers_button());
 
-
-
     {
         MapModeUI::HeaderButtonConfig map_assets_btn;
         map_assets_btn.id = "map_assets";
@@ -2339,12 +2286,11 @@ void DevControls::sync_header_button_states() {
 
     if (room_editor_) {
         room_editor_->set_blocking_panel_visible(RoomEditor::BlockingPanel::AssetLibrary, library_open);
-        // Camera panel blocking removed to allow pan/zoom when panel open but mouse not over it
+
         room_editor_->set_blocking_panel_visible(RoomEditor::BlockingPanel::Lighting, lights_open);
         room_editor_->set_blocking_panel_visible(RoomEditor::BlockingPanel::MapLayers, layers_open);
     }
 
-    // Legacy Area Mode filters removed; no area filter buttons to sync.
 }
 
 void DevControls::close_all_floating_panels() {
@@ -2394,7 +2340,7 @@ void DevControls::pulse_modal_header() {
 
 void DevControls::apply_header_suppression() {
     if (map_mode_ui_) {
-        // Suppress headers when modals or sliding containers request it
+
         const bool modal_hide = is_modal_blocking_panels();
         map_mode_ui_->set_headers_suppressed(modal_hide);
         map_mode_ui_->set_dev_sliding_headers_hidden(sliding_headers_hidden_);
@@ -2532,14 +2478,14 @@ void DevControls::regenerate_map_spawn_group(const nlohmann::json& entry) {
         AssetSpawnPlanner planner(sources, *room->room_area, assets_->library());
 
         MapGridSettings grid_settings = room->map_grid_settings();
-        // Use the spawn-group-specific grid resolution from the modal slider when available
+
         int resolution = std::max(0, grid_settings.resolution);
         try {
             if (entry.contains("grid_resolution")) {
                 resolution = std::max(5, entry.value("grid_resolution", resolution));
             }
         } catch (...) {
-            // keep fallback resolution
+
         }
         resolution = vibble::grid::clamp_resolution(resolution);
         vibble::grid::Grid& grid_service = vibble::grid::global_grid();
@@ -3069,12 +3015,12 @@ void DevControls::toggle_image_effect_panel() {
             sync_header_button_states();
             return;
         }
-        // Close camera panel before opening effect panel
+
         if (camera_panel_ && camera_panel_->is_visible()) {
             camera_panel_->close();
         }
         image_effect_panel_->set_assets(assets_);
-        // Set close callback to reopen camera panel
+
         image_effect_panel_->set_close_callback([this]() {
             if (camera_panel_) {
                 camera_panel_->open();
@@ -3141,8 +3087,6 @@ void DevControls::handle_map_selection() {
     Room* selected = map_editor_->consume_selected_room();
     if (!selected) return;
 
-    // Before entering Room mode, glide the camera to the selected room
-    // and temporarily suppress heavy scene rendering until settled.
     if (assets_) {
         assets_->set_render_suppressed(true);
         render_suppression_in_progress_ = true;
@@ -3154,7 +3098,7 @@ void DevControls::handle_map_selection() {
             const double current_scale = std::max(0.0001, static_cast<double>(cam->get_scale()));
             const double target_scale  = cam->default_zoom_for_room(selected);
             const double factor = (target_scale > 0.0) ? (target_scale / current_scale) : 1.0;
-            const int duration_steps = 30; // smooth but quick
+            const int duration_steps = 30;
             cam->pan_and_zoom_to_point(center, factor, duration_steps);
         }
     }

@@ -6,7 +6,7 @@
 namespace devmode {
 namespace core {
 class ManifestStore;
-} // namespace core
+}
 
 namespace manifest_utils {
 
@@ -15,11 +15,9 @@ struct RemoveAssetResult {
 	bool used_store = false;
 };
 
-RemoveAssetResult remove_asset_entry(core::ManifestStore* store,
-									 const std::string& asset_name,
-									 std::ostream* log = nullptr);
+RemoveAssetResult remove_asset_entry(core::ManifestStore* store, const std::string& asset_name, std::ostream* log = nullptr);
 
 bool remove_manifest_asset_entry(const std::string& asset_name, std::ostream* log = nullptr);
 
 }
-} // namespace devmode::manifest_utils
+}

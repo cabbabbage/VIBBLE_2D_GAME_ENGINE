@@ -19,21 +19,19 @@ public:
     int get_dx() const;
     int get_dy() const;
 
-
 private:
     void movement(const Input& input);
     float frame_dt() const;
     std::string animation_for_direction(int raw_x, int raw_y) const;
     void Dash();
 
-    static constexpr float kWalkSpeed        = 300.0f; // pixels per second (baseline walk speed)
+    static constexpr float kWalkSpeed        = 300.0f;
     static constexpr float kSprintMultiplier = 2.0f;
 
     Asset* player_ = nullptr;
     int    dx_ = 0;
     int    dy_ = 0;
 
-    // Dashing variables
     bool canDash    = true;
     bool isDashing  = false;
     float dashingPower = 10.0f;
@@ -42,7 +40,6 @@ private:
     std::chrono::steady_clock::time_point dashEndTime;
     std::chrono::steady_clock::time_point cooldownEndTime;
 
-    // Subpixel accumulators so fractional movement does not get lost when rounding to ints
     float subpixel_x_ = 0.0f;
     float subpixel_y_ = 0.0f;
 };

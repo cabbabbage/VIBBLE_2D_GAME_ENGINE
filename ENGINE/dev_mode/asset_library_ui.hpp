@@ -49,19 +49,19 @@ public:
     struct AreaRef {
         std::string room_name;
         std::string area_name;
-    };
+};
     std::optional<AreaRef> consume_area_selection();
 
 private:
     struct PendingDeleteInfo {
         std::string name;
         std::string asset_dir;
-    };
+};
     enum class CreateAssetResult {
         Success,
         AlreadyExists,
         Failed
-    };
+};
 
     void ensure_items(AssetLibrary& lib);
     void rebuild_rows();

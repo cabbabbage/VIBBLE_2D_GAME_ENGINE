@@ -42,7 +42,7 @@ class PlaybackSettingsPanel {
         bool flip_vertical = false;
         bool flip_movement_horizontal = false;
         bool flip_movement_vertical = false;
-        bool inherit_source_movement = true; // new: controls whether movement is inherited from source animation
+        bool inherit_source_movement = true;
         bool locked = false;
         bool random_start = false;
 
@@ -88,7 +88,7 @@ class PlaybackSettingsPanel {
     std::unique_ptr<DMCheckbox> reverse_checkbox_;
     std::unique_ptr<DMCheckbox> locked_checkbox_;
     std::unique_ptr<DMCheckbox> random_start_checkbox_;
-    std::unique_ptr<DMSlider> speed_slider_; // legacy UI, no longer used
+    std::unique_ptr<DMSlider> speed_slider_;
 
     PlaybackState state_{};
     PlaybackState document_state_{};
@@ -101,7 +101,6 @@ class PlaybackSettingsPanel {
     std::vector<std::string> inherited_modifiers_;
     mutable SDL_Rect inherited_message_rect_{0, 0, 0, 0};
 
-    // Info tooltip replacing instructional labels
     DMWidgetTooltipState info_tooltip_{};
 };
 

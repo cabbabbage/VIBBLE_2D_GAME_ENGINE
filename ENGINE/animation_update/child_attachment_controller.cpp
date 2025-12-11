@@ -42,7 +42,7 @@ const AnimationFrame* pick_start_frame(const Animation& animation) {
     }
     return frame ? frame : start;
 }
-} // namespace
+}
 
 namespace animation_update::child_attachments {
 
@@ -108,8 +108,7 @@ void advance_frames(std::vector<Asset::AnimationChildAttachment>& slots,
             if constexpr (kChildAttachmentDebug) {
                 std::cout << "[ChildAttachments] Slot " << slot.child_index
                           << " advanced to frame "
-                          << (slot.current_frame ? slot.current_frame->frame_index : -1)
-                          << " (asset='" << slot.asset_name << "')\n";
+                          << (slot.current_frame ? slot.current_frame->frame_index : -1) << " (asset='" << slot.asset_name << "')\n";
             }
         }
     }
@@ -122,9 +121,7 @@ void apply_frame_data(std::vector<Asset::AnimationChildAttachment>& slots,
     if (slots.empty()) {
         return;
     }
-    const float parent_scale = std::isfinite(parent_state.scale) && parent_state.scale > 0.0f
-                                   ? parent_state.scale
-                                   : 1.0f;
+    const float parent_scale = std::isfinite(parent_state.scale) && parent_state.scale > 0.0f ? parent_state.scale : 1.0f;
     const int parent_frame_index = frame ? frame->frame_index : -1;
     if constexpr (kChildAttachmentDebug) {
         std::cout << "[ChildAttachments] Applying frame data (parent_frame_index=" << parent_frame_index << ")\n";
@@ -193,11 +190,9 @@ void apply_frame_data(std::vector<Asset::AnimationChildAttachment>& slots,
         }
         const float scaled_dx = static_cast<float>(child_data.dx) * parent_scale;
         const float scaled_dy = static_cast<float>(child_data.dy) * parent_scale;
-        // Position child relative to parent's base (bottom-middle) in pixels,
-        // not relative to the parent's top-left position or grid.
+
         const int dx = parent_state.flipped
-                           ? -static_cast<int>(std::lround(scaled_dx))
-                           : static_cast<int>(std::lround(scaled_dx));
+                           ? -static_cast<int>(std::lround(scaled_dx)) : static_cast<int>(std::lround(scaled_dx));
         const int dy = static_cast<int>(std::lround(scaled_dy));
         slot.world_pos.x = parent_state.base_position.x + dx;
         slot.world_pos.y = parent_state.base_position.y + dy;
@@ -209,4 +204,4 @@ void apply_frame_data(std::vector<Asset::AnimationChildAttachment>& slots,
     }
 }
 
-} // namespace animation_update::child_attachments
+}

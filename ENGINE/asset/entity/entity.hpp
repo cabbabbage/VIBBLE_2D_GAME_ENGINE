@@ -5,18 +5,18 @@
 #include "damage.hpp"
 
 class Entity {
-    public: 
+    public:
         enum Type{
             PLAYER,
             ENEMY,
             RANGEDENEMY
-        };
+};
 
     virtual int getHealth();
     virtual Type getType();
     virtual bool isDamageable();
     virtual int dealDamage(Damage *damage);
-    
+
     Damage damage;
 
     protected:

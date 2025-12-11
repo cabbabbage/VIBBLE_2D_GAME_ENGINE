@@ -28,8 +28,7 @@ using map_layers::clamp_candidate_min;
 
 namespace map_layers {
 inline double min_edge_distance_from_map_info(const json& map_info) {
-    // Fallback extractor: read integer setting "min_edge_distance" from map_layers_settings
-    // and return it as double; fall back to the library default when missing/invalid.
+
     if (!map_info.is_object()) {
         return static_cast<double>(kDefaultMinEdgeDistance);
     }

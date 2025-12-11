@@ -81,7 +81,7 @@ class ChildLabelWidget : public Widget {
 }
 
 ChildrenTimelinesPanel::ChildrenTimelinesPanel()
-    : DockableCollapsible("Children & Timelines", true /*floatable*/, kDefaultPanelWidth, kDefaultPanelHeight) {
+    : DockableCollapsible("Children & Timelines", true , kDefaultPanelWidth, kDefaultPanelHeight) {
     set_show_header(true);
 
     add_button_ = std::make_unique<DMButton>("Find Assets", &disabled_button_style(), 140, DMButton::height());
@@ -404,4 +404,4 @@ bool ChildrenTimelinesPanel::apply_mode_to_all_animations(const std::string& chi
     return document_->set_child_mode_for_all_animations(child_name, mode, auto_start);
 }
 
-} // namespace animation_editor
+}

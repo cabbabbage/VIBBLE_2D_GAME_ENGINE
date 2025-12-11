@@ -58,12 +58,12 @@ struct ScalingLogic {
         int   last_index = 0;
         float min_scale  = 0.0f;
         float max_scale  = ::std::numeric_limits<float>::max();
-    };
+};
 
     struct HysteresisOptions {
         float margin         = 0.05f;
         float preload_margin = 0.02f;
-    };
+};
 
     static constexpr float kDefaultHysteresisMargin = 0.05f;
     static constexpr float kDefaultPreloadMargin    = 0.02f;
@@ -89,7 +89,7 @@ struct ScalingLogic {
         float         min_scale = 1.0f;
         float         max_scale = 1.0f;
         bool has_custom_steps() const { return !steps.empty(); }
-    };
+};
 
     static constexpr ::std::size_t kMaxVariantCount     = 5;
     static constexpr ::std::size_t kDefaultVariantCount = kMaxVariantCount;
@@ -145,9 +145,7 @@ struct ScalingLogic {
             options.preload_margin = kDefaultPreloadMargin;
         }
 
-        const float safe_smoothed = (::std::isfinite(smoothed_scale) && smoothed_scale > 0.0f)
-                                        ? smoothed_scale
-                                        : base.requested_scale;
+        const float safe_smoothed = (::std::isfinite(smoothed_scale) && smoothed_scale > 0.0f) ? smoothed_scale : base.requested_scale;
 
         HysteresisState current = state;
         const int max_index = static_cast<int>(steps.size() - 1);
@@ -196,9 +194,7 @@ struct ScalingLogic {
         if (result.stored_scale <= 0.0f) {
             result.stored_scale = 1.0f;
         }
-        result.remainder_scale = (result.stored_scale > 0.0f)
-                                     ? (result.requested_scale / result.stored_scale)
-                                     : 1.0f;
+        result.remainder_scale = (result.stored_scale > 0.0f) ? (result.requested_scale / result.stored_scale) : 1.0f;
         bounds = variant_bounds(steps, candidate, options.margin);
         result.hysteresis_min = bounds.first;
         result.hysteresis_max = bounds.second;
@@ -411,19 +407,19 @@ private:
         ::std::uint64_t revision = 0;
         float         min_scale = 1.0f;
         float         max_scale = 1.0f;
-    };
+};
 
     struct ProfileObservation {
         bool          had_entry = false;
         ::std::uint64_t revision  = 0;
-    };
+};
 
     struct ProfilesState {
         bool                   loaded = false;
         ::std::mutex             mutex;
         ::std::unordered_map<::std::string, ProfileEntry> entries;
         ::std::unordered_map<::std::string, ProfileObservation> history;
-    };
+};
 
     static inline ProfilesState& profiles_state() {
         static ProfilesState state;
@@ -556,16 +552,14 @@ struct ScalingProfileBuildOptions {
 
 bool BuildScalingProfiles(const ScalingProfileBuildOptions& options);
 
-} // namespace render_pipeline
+}
 
 namespace render_pipeline::shading {
 
 void ClearShadowStateFor(const Asset* asset);
 
-// Inline stub implementation - shadow state clearing is a no-op in the current
-// rendering pipeline since shadow caching was moved to per-asset texture caches.
-inline void ClearShadowStateFor(const Asset* /*asset*/) {
-    // No global shadow state to clear; per-asset caches are handled by Asset itself.
+inline void ClearShadowStateFor(const Asset* ) {
+
 }
 
-} // namespace render_pipeline::shading
+}

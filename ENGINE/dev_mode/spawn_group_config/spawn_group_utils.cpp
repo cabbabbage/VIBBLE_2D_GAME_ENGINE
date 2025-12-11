@@ -74,9 +74,7 @@ std::string generate_spawn_id() {
 }
 
 nlohmann::json& ensure_spawn_groups_array(nlohmann::json& root) {
-    // Be liberal: coerce non-object values into an object so we never throw
-    // when the caller hands us unexpected manifest fragments (e.g., legacy
-    // spawn data removed from AssetInfo).
+
     if (root.is_array()) {
         return root;
     }
@@ -322,7 +320,6 @@ bool ensure_spawn_group_entry_defaults(nlohmann::json& entry,
         changed = true;
     }
 
-    // Ensure per-group lock flag exists (default false)
     if (!entry.contains("locked") || !entry["locked"].is_boolean()) {
         entry["locked"] = false;
         changed = true;
@@ -342,7 +339,6 @@ bool ensure_spawn_group_entry_defaults(nlohmann::json& entry,
         changed = true;
     }
 
-    // Explicit flip defaults (optional; default to disabled)
     if (!entry.contains("explicit_flip") || !entry["explicit_flip"].is_boolean()) {
         entry["explicit_flip"] = false;
         changed = true;

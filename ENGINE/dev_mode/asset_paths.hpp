@@ -27,5 +27,5 @@ inline bool is_protected_asset_root(const std::filesystem::path& path) {
     return normalized == src_root || normalized == assets_root;
 }
 
-}  // namespace devmode::asset_paths
+}
 

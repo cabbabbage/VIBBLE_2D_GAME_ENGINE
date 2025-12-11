@@ -25,7 +25,7 @@ fs::path script_path(const fs::path& repo_root, const std::string& script_name) 
     return repo_root / "tools" / script_name;
 }
 
-} // namespace
+}
 
 RebuildQueueCoordinator::RebuildQueueCoordinator() {
     repo_root_ = default_repo_root();
@@ -271,4 +271,4 @@ bool RebuildQueueCoordinator::validate_manifest_cache(const std::string& command
     return run_python_script(script, {"--manifest", manifest_path_.string()}, command_prefix);
 }
 
-} // namespace vibble
+}

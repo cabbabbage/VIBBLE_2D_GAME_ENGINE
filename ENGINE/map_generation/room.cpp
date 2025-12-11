@@ -475,7 +475,7 @@ void Room::load_named_areas_from_json() {
 
                         auto scale_component = [](int value, double factor) {
                                 return static_cast<int>(std::llround(static_cast<double>(value) * factor));
-                        };
+};
 
                         if (can_scale) {
                                 const double sx = static_cast<double>(current_width) / static_cast<double>(stored_width);
@@ -543,7 +543,7 @@ void Room::load_named_areas_from_json() {
                                         meta.anchor_relative_to_center = orj.value("anchor_relative_to_center", false);
                                         na.origin_room = meta;
                                 } else {
-                                        // One-time upgrader: inject origin_room if missing
+
                                         nlohmann::json meta = nlohmann::json::object();
                                         meta["name"] = room_name;
                                         meta["width"] = room_dims.first;
@@ -560,7 +560,7 @@ void Room::load_named_areas_from_json() {
                                         na.origin_room = store;
                                 }
                         } catch (...) {
-                                // Ignore malformed origin_room metadata
+
                         }
                         areas.push_back(std::move(na));
                 }
@@ -722,7 +722,6 @@ void Room::upsert_named_area(const Area& area,
                 if (stored_height > 0) entry["origional_height"] = stored_height;
         }
 
-        // Persist origin_room metadata next to existing bookkeeping
         try {
                 auto dims = current_room_dimensions();
                 nlohmann::json origin_meta = nlohmann::json::object();
@@ -733,7 +732,7 @@ void Room::upsert_named_area(const Area& area,
                 origin_meta["anchor_relative_to_center"] = anchor.relative_to_center;
                 entry["origin_room"] = std::move(origin_meta);
         } catch (...) {
-                // Non-fatal: ignore failures to persist extended metadata
+
         }
 
         if (existing_entry) {

@@ -28,13 +28,6 @@
 #include "world/chunk.hpp"
 #include "world/world_grid.hpp"
 
-
-
-
-////////////////////////////////////////////////////////////////////////////////
-// GridTileRenderer implementation
-////////////////////////////////////////////////////////////////////////////////
-
 void GridTileRenderer::render(SDL_Renderer* renderer) {
     if (!renderer || !assets_) return;
     render(renderer, assets_->getView(), assets_->world_grid());
@@ -45,8 +38,6 @@ void GridTileRenderer::render(SDL_Renderer* renderer, const WarpedScreenGrid& ca
 
     const auto& chunks = grid.active_chunks();
     if (chunks.empty()) return;
-
-    // Depth-cue effects are intentionally not applied to tiles.
 
     const SDL_Color white{255, 255, 255, 255};
     int indices[6] = {0, 1, 2, 0, 2, 3};
@@ -64,17 +55,15 @@ void GridTileRenderer::render(SDL_Renderer* renderer, const WarpedScreenGrid& ca
             auto floor_warped_screen_position = [&](SDL_Point world_pos) -> SDL_FPoint {
                 auto effects = cam.compute_render_effects(world_pos, 0, 0, {});
                 return {std::floor(effects.screen_position.x), std::floor(effects.screen_position.y)};
-            };
+};
 
             SDL_FPoint screen_tl = floor_warped_screen_position(world_tl);
             SDL_FPoint screen_tr = floor_warped_screen_position(world_tr);
             SDL_FPoint screen_br = floor_warped_screen_position(world_br);
             SDL_FPoint screen_bl = floor_warped_screen_position(world_bl);
 
-            // Drop degenerate quads from extreme warping/parallax.
             const float area_doubled =
-                (screen_tr.x - screen_tl.x) * (screen_bl.y - screen_tl.y) -
-                (screen_bl.x - screen_tl.x) * (screen_tr.y - screen_tl.y);
+                (screen_tr.x - screen_tl.x) * (screen_bl.y - screen_tl.y) - (screen_bl.x - screen_tl.x) * (screen_tr.y - screen_tl.y);
             if (std::fabs(area_doubled) < 1e-5f) {
                 continue;
             }
@@ -112,17 +101,13 @@ void GridTileRenderer::render(SDL_Renderer* renderer, const WarpedScreenGrid& ca
     }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// SceneRenderer core render loop
-////////////////////////////////////////////////////////////////////////////////
-
 namespace {
 
 inline float ticks_to_seconds(Uint64 ticks) {
     return static_cast<float>(ticks) * 0.001f;
 }
 
-} // namespace
+}
 
 SceneRenderer::SceneRenderer(SDL_Renderer* renderer,
                              Assets* assets,
@@ -165,7 +150,7 @@ SceneRenderer::SceneRenderer(PrevalidatedTag,
   sky_texture_path_(std::filesystem::path("SRC") / "misc_content" / "sky.png"),
   composite_renderer_(renderer, assets)
 {
-    // Extract map clear color from manifest
+
     bool color_set = false;
     if (map_manifest.contains("maps") && map_manifest["maps"].contains(map_id)) {
         const auto& map_data = map_manifest["maps"][map_id];
@@ -199,7 +184,7 @@ SceneRenderer::SceneRenderer(PrevalidatedTag,
         }
     }
     if (!color_set) {
-        // Default background color
+
         map_clear_color_ = SDL_Color{69, 101, 74, 255};
     }
 
@@ -267,7 +252,7 @@ void SceneRenderer::render() {
         SDL_Rect  rect{};
         SDL_Point center{};
         bool      use_center = false;
-    };
+};
 
     auto build_screen_render_data = [&](const RenderObject& obj,
                                         const SDL_FPoint& base,
@@ -297,11 +282,7 @@ void SceneRenderer::render() {
         const int screen_h = std::max(1, static_cast<int>(std::lround(scaled_height)));
 
         SDL_Rect screen_rect{
-            static_cast<int>(std::lround(base.x + static_cast<double>(offset_x) * static_cast<double>(inv_scale) - scaled_width * 0.5)),
-            static_cast<int>(std::lround(base.y + static_cast<double>(offset_y) * static_cast<double>(inv_scale) - scaled_height)),
-            screen_w,
-            screen_h
-        };
+            static_cast<int>(std::lround(base.x + static_cast<double>(offset_x) * static_cast<double>(inv_scale) - scaled_width * 0.5)), static_cast<int>(std::lround(base.y + static_cast<double>(offset_y) * static_cast<double>(inv_scale) - scaled_height)), screen_w, screen_h };
 
         SDL_Point center = obj.center;
         if (obj.use_custom_center) {
@@ -314,7 +295,7 @@ void SceneRenderer::render() {
         data.center     = center;
         data.use_center = obj.use_custom_center;
         return data;
-    };
+};
 
     const auto& active_assets = assets_->getActive();
     std::vector<DarkMaskSprite> dark_mask_sprites;
@@ -325,11 +306,10 @@ void SceneRenderer::render() {
         }
 
         if (const auto& tiling = asset->tiling_info(); tiling && tiling->is_valid()) {
-            // Tile assets are drawn by GridTileRenderer already, so skip the base sprite render.
+
             continue;
         }
 
-        // Skip stored grid projections; render assets directly using the current camera without parallax/warp.
         composite_renderer_.update(asset, nullptr, flicker_time_seconds);
 
         SDL_Point world_pos{ asset->pos.x, asset->pos.y };
@@ -366,9 +346,9 @@ void SceneRenderer::render() {
             }
 
             SDL_SetTextureBlendMode(obj.texture, obj.blend_mode);
-            // Apply horizon fade to alpha
+
             Uint8 final_alpha = obj.color_mod.a;
-            
+
             SDL_SetTextureColorMod(obj.texture, obj.color_mod.r, obj.color_mod.g, obj.color_mod.b);
             SDL_SetTextureAlphaMod(obj.texture, final_alpha);
 
@@ -405,7 +385,6 @@ void SceneRenderer::render() {
                 continue;
             }
 
-            // First, draw every movement stride for all animations (purple) from asset center
             SDL_SetRenderDrawColor(renderer_, 160, 32, 240, 160);
             if (asset->info) {
                 for (const auto& [anim_id, anim] : asset->info->animations) {
@@ -417,17 +396,9 @@ void SceneRenderer::render() {
                             SDL_Point next{ cursor.x + frame.dx, cursor.y + frame.dy };
                             SDL_FPoint screen_cur  = cam.map_to_screen(cursor);
                             SDL_FPoint screen_next = cam.map_to_screen(next);
-                            SDL_RenderDrawLine(renderer_,
-                                               static_cast<int>(std::lround(screen_cur.x)),
-                                               static_cast<int>(std::lround(screen_cur.y)),
-                                               static_cast<int>(std::lround(screen_next.x)),
-                                               static_cast<int>(std::lround(screen_next.y)));
+                            SDL_RenderDrawLine(renderer_, static_cast<int>(std::lround(screen_cur.x)), static_cast<int>(std::lround(screen_cur.y)), static_cast<int>(std::lround(screen_next.x)), static_cast<int>(std::lround(screen_next.y)));
                             SDL_Rect dot{
-                                static_cast<int>(std::lround(screen_next.x)) - 2,
-                                static_cast<int>(std::lround(screen_next.y)) - 2,
-                                4,
-                                4
-                            };
+                                static_cast<int>(std::lround(screen_next.x)) - 2, static_cast<int>(std::lround(screen_next.y)) - 2, 4, 4 };
                             SDL_RenderFillRect(renderer_, &dot);
                             cursor = next;
                         }
@@ -435,9 +406,8 @@ void SceneRenderer::render() {
                 }
             }
 
-            // Draw the current plan's per-frame path in blue
             if (!plan->strides.empty()) {
-                SDL_SetRenderDrawColor(renderer_, 0, 0, 255, 160);  // Blue for plan
+                SDL_SetRenderDrawColor(renderer_, 0, 0, 255, 160);
                 SDL_Point cursor = plan->world_start;
                 for (const auto& stride : plan->strides) {
                     auto it = asset->info->animations.find(stride.animation_id);
@@ -450,18 +420,13 @@ void SceneRenderer::render() {
                             SDL_Point next{ cursor.x + frame.dx, cursor.y + frame.dy };
                             SDL_FPoint screen_cur = cam.map_to_screen(cursor);
                             SDL_FPoint screen_next = cam.map_to_screen(next);
-                            SDL_RenderDrawLine(renderer_, 
-                                               static_cast<int>(std::lround(screen_cur.x)), 
-                                               static_cast<int>(std::lround(screen_cur.y)),
-                                               static_cast<int>(std::lround(screen_next.x)), 
-                                               static_cast<int>(std::lround(screen_next.y)));
+                            SDL_RenderDrawLine(renderer_, static_cast<int>(std::lround(screen_cur.x)), static_cast<int>(std::lround(screen_cur.y)), static_cast<int>(std::lround(screen_next.x)), static_cast<int>(std::lround(screen_next.y)));
                             cursor = next;
                         }
                     }
                 }
             }
 
-            // Draw threshold circles around each waypoint
             if (!plan->sanitized_checkpoints.empty()) {
                 const int visit_threshold = asset->anim_->visit_threshold_px();
                 int threshold = visit_threshold;
@@ -469,24 +434,18 @@ void SceneRenderer::render() {
                 const int segments = 24;
                 std::vector<SDL_FPoint> ring;
                 ring.reserve(static_cast<std::size_t>(segments) + 1);
-                SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 180);  // White circles
+                SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 180);
                 for (std::size_t idx = 0; idx < plan->sanitized_checkpoints.size(); ++idx) {
                     const SDL_Point wp = plan->sanitized_checkpoints[idx];
                     ring.clear();
                     for (int i = 0; i <= segments; ++i) {
                         const double angle = (6.28318530717958647692 * static_cast<double>(i)) / static_cast<double>(segments);
                         SDL_Point pt{
-                            wp.x + static_cast<int>(std::lround(static_cast<double>(threshold) * std::cos(angle))),
-                            wp.y + static_cast<int>(std::lround(static_cast<double>(threshold) * std::sin(angle)))
-                        };
+                            wp.x + static_cast<int>(std::lround(static_cast<double>(threshold) * std::cos(angle))), wp.y + static_cast<int>(std::lround(static_cast<double>(threshold) * std::sin(angle))) };
                         ring.push_back(cam.map_to_screen(pt));
                     }
                     for (std::size_t i = 1; i < ring.size(); ++i) {
-                        SDL_RenderDrawLine(renderer_,
-                                           static_cast<int>(std::lround(ring[i - 1].x)),
-                                           static_cast<int>(std::lround(ring[i - 1].y)),
-                                           static_cast<int>(std::lround(ring[i].x)),
-                                           static_cast<int>(std::lround(ring[i].y)));
+                        SDL_RenderDrawLine(renderer_, static_cast<int>(std::lround(ring[i - 1].x)), static_cast<int>(std::lround(ring[i - 1].y)), static_cast<int>(std::lround(ring[i].x)), static_cast<int>(std::lround(ring[i].y)));
                     }
         }
     }
@@ -612,10 +571,7 @@ void SceneRenderer::render_sky_layer(const WarpedScreenGrid& cam, bool depth_eff
 
     SDL_FRect dst{
         0.0f,
-        static_cast<float>(horizon_y) - target_h,
-        target_w,
-        target_h
-    };
+        static_cast<float>(horizon_y) - target_h, target_w, target_h };
 
     SDL_SetTextureColorMod(sky_texture_, 255, 255, 255);
     SDL_SetTextureAlphaMod(sky_texture_, 255);
@@ -652,11 +608,7 @@ void SceneRenderer::render_dynamic_darkness_overlay(float map_light_opacity,
     SDL_RenderClear(renderer_);
 
     if (!sprites.empty()) {
-        SDL_BlendMode carve_mode = SDL_ComposeCustomBlendMode(
-            SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_ONE,
-            SDL_BLENDOPERATION_ADD,
-            SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-            SDL_BLENDOPERATION_ADD);
+        SDL_BlendMode carve_mode = SDL_ComposeCustomBlendMode( SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_ONE, SDL_BLENDOPERATION_ADD, SDL_BLENDFACTOR_ZERO, SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, SDL_BLENDOPERATION_ADD);
 
         for (const DarkMaskSprite& sprite : sprites) {
             if (!sprite.texture) {

@@ -35,4 +35,4 @@ std::string trim_whitespace_copy(const std::string& value) {
     return std::string(begin, end);
 }
 
-} // namespace devmode::utils
+}

@@ -71,7 +71,7 @@ bool is_playable_room_cached(const Room& room, PlayableRoomsCacheEntry& entry) {
     return it->second;
 }
 
-} // namespace
+}
 
 namespace animation_update::detail {
 
@@ -155,7 +155,7 @@ SDL_Point frame_world_delta(const AnimationFrame& frame,
                             const vibble::grid::Grid& grid) {
     (void)asset;
     (void)grid;
-    // Treat animation frame deltas as pixel-precise world offsets to avoid grid snapping.
+
     return SDL_Point{ frame.dx, frame.dy };
 }
 
@@ -183,7 +183,7 @@ bool bottom_point_inside_playable_area(const Assets* assets, SDL_Point bottom_po
             return false;
         }
         return room->room_area->contains_point(bottom_point);
-    };
+};
 
     if (cache_entry.last_containing_room && contains_playable(cache_entry.last_containing_room)) {
         return true;
@@ -231,7 +231,7 @@ bool segment_leaves_playable_area(const Assets* assets, SDL_Point from, SDL_Poin
     return false;
 }
 
-} // namespace animation_update::detail
+}
 
 AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets)
     : self_(self), assets_owner_(assets), grid_service_(&vibble::grid::global_grid()) {
@@ -288,9 +288,7 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
     if (debug_logging) {
         std::ostringstream oss;
         oss << "[AnimationUpdate] auto_move asset=" << asset_name
-            << " rel_checkpoints=" << rel_checkpoints.size()
-            << " visited_thresh=" << visited_thresh_
-            << " override_non_locked=" << std::boolalpha << override_non_locked;
+            << " rel_checkpoints=" << rel_checkpoints.size() << " visited_thresh=" << visited_thresh_ << " override_non_locked=" << std::boolalpha << override_non_locked;
         vibble::log::info(oss.str());
     }
 
@@ -314,13 +312,10 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
         std::ostringstream oss;
         oss << "[AnimationUpdate] auto_move plan asset=" << asset_name
             << " final_dest=(" << final_dest.x << "," << final_dest.y << ")"
-            << " sanitized_points=" << plan_.sanitized_checkpoints.size()
-            << " strides=" << plan_.strides.size();
+            << " sanitized_points=" << plan_.sanitized_checkpoints.size() << " strides=" << plan_.strides.size();
         vibble::log::info(oss.str());
     }
 
-    // If no viable strides were produced, immediately request another plan so controllers
-    // can try alternative inputs instead of getting stuck with a cleared request flag.
     if (plan_.strides.empty()) {
         if (debug_logging) {
             vibble::log::info("[AnimationUpdate] auto_move plan produced no strides for asset=" + asset_name);
@@ -335,7 +330,6 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
         runtime_->reset_plan_progress();
     }
 
-    // Signal executor to re-evaluate plan
     input_event_ = true;
     if (self_) {
         self_->needs_target = false;
@@ -349,7 +343,7 @@ void AnimationUpdate::move(SDL_Point delta,
     if (!self_ || !self_->info) {
         return;
     }
-    // Do not mutate Asset here; store request for executor
+
     pending_move_.delta        = delta;
     pending_move_.animation_id = animation;
     pending_move_.resort_z     = resort_z;
@@ -446,7 +440,7 @@ vibble::grid::Grid& AnimationUpdate::grid() const {
 
 int AnimationUpdate::effective_grid_resolution(std::optional<int> override_resolution) const {
     (void)override_resolution;
-    // Force pixel-level precision for all animation updates.
+
     return 0;
 }
 

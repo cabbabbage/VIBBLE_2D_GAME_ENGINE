@@ -11,7 +11,7 @@ public:
         health = 150;
         speed = 1;
     }
-    
+
     Type getType() override;
     int getHealth() override;
     bool isDamageable() override;

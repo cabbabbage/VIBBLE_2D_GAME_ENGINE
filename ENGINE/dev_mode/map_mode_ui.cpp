@@ -474,9 +474,7 @@ bool MapModeUI::handle_floating_panel_event(const SDL_Event& e, bool& used) {
             break;
         }
 
-        const bool inside = (lights && lights->is_visible() && lights->is_point_inside(p.x, p.y)) ||
-                            (layers_preview && layers_preview->is_visible() && layers_preview->is_point_inside(p.x, p.y)) ||
-                            (!lights && !layers_preview && panel->is_visible() && panel->is_point_inside(p.x, p.y));
+        const bool inside = (lights && lights->is_visible() && lights->is_point_inside(p.x, p.y)) || (layers_preview && layers_preview->is_visible() && layers_preview->is_point_inside(p.x, p.y)) || (!lights && !layers_preview && panel->is_visible() && panel->is_point_inside(p.x, p.y));
 
         if ((pointer_event || wheel_event) && inside) {
             if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
@@ -561,7 +559,7 @@ void MapModeUI::ensure_panels() {
             this->show_sliding_panel(desired_panel);
         });
         layers_panel_->set_on_close([this]() {
-            // Close any right-hand sliding containers when the layers panel closes
+
             if (rooms_list_container_) {
                 rooms_list_container_->close();
             }
@@ -592,7 +590,7 @@ void MapModeUI::ensure_panels() {
         rooms_list_container_ = std::make_unique<SlidingWindowContainer>();
         rooms_list_container_->set_header_visible(true);
         rooms_list_container_->set_scrollbar_visible(true);
-        // Suppress headers/footers while sliding containers are visible
+
         rooms_list_container_->set_header_visibility_controller([this](bool visible) {
             this->set_dev_sliding_headers_hidden(visible);
         });
@@ -622,7 +620,7 @@ void MapModeUI::ensure_panels() {
         layer_controls_container_ = std::make_unique<SlidingWindowContainer>();
         layer_controls_container_->set_header_visible(true);
         layer_controls_container_->set_scrollbar_visible(true);
-        // Suppress headers/footers while sliding containers are visible
+
         layer_controls_container_->set_header_visibility_controller([this](bool visible) {
             this->set_dev_sliding_headers_hidden(visible);
         });
@@ -752,7 +750,7 @@ void MapModeUI::configure_footer_buttons() {
                 } else {
                     this->set_active_panel(PanelType::None);
                 }
-            };
+};
             buttons.push_back(std::move(layers_btn));
         }
 
@@ -808,8 +806,7 @@ void MapModeUI::sync_footer_button_states() {
 void MapModeUI::update_footer_visibility() {
     if (!footer_bar_) return;
     footer_bar_->set_bounds(screen_w_, screen_h_);
-    // Hide the footer whenever headers are suppressed (including sliding-only).
-    // Otherwise, show when map mode is active or footer is configured as always visible.
+
     const bool should_show = (!headers_suppressed_) && (footer_always_visible_ || map_mode_active_);
     footer_bar_->set_visible(should_show);
 }
@@ -1257,7 +1254,7 @@ void MapModeUI::ensure_room_configurator() {
         room_configurator_ = std::make_unique<RoomConfigurator>();
     }
     if (room_configurator_) {
-        // Suppress headers/footers while the room configurator is visible
+
         room_configurator_->set_header_visibility_controller([this](bool visible) {
             this->set_dev_sliding_headers_hidden(visible);
         });
@@ -1286,7 +1283,7 @@ void MapModeUI::ensure_room_configurator() {
         if (room_config_container_) {
             room_config_container_->set_header_visible(true);
             room_config_container_->set_scrollbar_visible(true);
-            // Suppress headers/footers while the room config container is visible
+
             room_config_container_->set_header_visibility_controller([this](bool visible) {
                 this->set_dev_sliding_headers_hidden(visible);
             });
@@ -1381,8 +1378,6 @@ void MapModeUI::set_light_save_callback(LightSaveCallback cb) {
         layers_preview_panel_->set_map_info(map_info_, callback);
     }
 }
-
-
 
 bool MapModeUI::is_point_inside(int x, int y) const {
     if (pointer_inside_floating_panel(x, y)) {

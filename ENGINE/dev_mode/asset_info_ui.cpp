@@ -73,8 +73,6 @@ void configure_panel_for_container(DockableCollapsible* panel) {
         return;
     }
 
-    // Embedded panels should behave like regular sections inside the
-    // SlidingWindowContainer instead of independent floating windows.
     panel->set_floatable(false);
     panel->set_close_button_enabled(false);
     panel->set_show_header(true);
@@ -161,7 +159,7 @@ bool copy_section_from_source(AssetInfoSectionId section_id, const nlohmann::jso
             }
             changed |= copy_key("z_threshold");
             changed |= copy_key("can_invert");
-            // Support both keys; canonical UI uses "tileable"
+
             changed |= copy_key("tileable");
             changed |= copy_key("tillable");
             break;
@@ -180,6 +178,13 @@ bool copy_section_from_source(AssetInfoSectionId section_id, const nlohmann::jso
     }
     return changed;
 }
+
+struct LightTransform {
+    float cx = 0.0f;
+    float cy = 0.0f;
+    float sx = 1.0f;
+    float sy = 1.0f;
+};
 
 }
 
@@ -211,7 +216,6 @@ AssetInfoUI::AssetInfoUI() {
         }
     }
 
-    // Duplicate and Delete buttons
     if (!duplicate_btn_) {
         duplicate_btn_ = std::make_unique<DMButton>("Duplicate Asset", &DMStyles::FooterToggleButton(), 220, DMButton::height());
     }
@@ -282,7 +286,7 @@ AssetInfoUI::AssetInfoUI() {
     container_.set_on_close([this]() { this->close(); });
 
     container_.set_update_function([this](const Input& input, int screen_w, int screen_h) {
-        // Constrain panel between header and footer
+
         SDL_Rect usable = FloatingPanelLayoutManager::instance().usableRect();
         if (usable.w > 0 && usable.h > 0) {
             int panel_x = screen_w - std::max(screen_w / 3, 320);
@@ -349,14 +353,10 @@ AssetInfoUI::~AssetInfoUI() {
     apply_camera_override(false);
     sync_map_light_panel_visibility(false);
     if (assets_) {
-        /*
-        if (auto* gl = assets_->map_light_source()) {
-            gl->set_alpha_override(std::nullopt);
-        }
-        */
+
     }
     if (assets_ && forcing_high_quality_rendering_) {
-        // assets_->set_force_high_quality_rendering(false);
+
     }
     forcing_high_quality_rendering_ = false;
     cancel_color_sampling(true);
@@ -370,16 +370,12 @@ AssetInfoUI::~AssetInfoUI() {
 void AssetInfoUI::set_assets(Assets* a) {
     if (assets_ == a) return;
     if (assets_ && forcing_high_quality_rendering_) {
-        // assets_->set_force_high_quality_rendering(false);
+
         forcing_high_quality_rendering_ = false;
     }
-    // Clear any map light override on the previous assets context
+
     if (assets_) {
-        /*
-        if (auto* gl = assets_->map_light_source()) {
-            gl->set_alpha_override(std::nullopt);
-        }
-        */
+
     }
     if (map_light_panel_auto_opened_ && assets_) {
         assets_->set_map_light_panel_visible(false);
@@ -430,7 +426,7 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
             animation_editor_window_->set_manifest_store(manifest_store_);
             animation_editor_window_->set_on_animation_properties_changed([this](const std::string& animation_id, const nlohmann::json& properties) {
                 if (info_ && info_->update_animation_properties(animation_id, properties)) {
-                    // Immediately refresh loaded asset instances
+
                     refresh_loaded_asset_instances();
                 }
             });
@@ -461,7 +457,7 @@ void AssetInfoUI::set_info(const std::shared_ptr<AssetInfo>& info) {
     for (auto& s : sections_) {
         try {
             s->set_info(info_);
-            // Hide some sections if the asset is an area
+
             bool is_area_asset = false;
             if (info_) {
                 std::string t = info_->type;
@@ -492,14 +488,10 @@ void AssetInfoUI::clear_info() {
     sync_map_light_panel_visibility(false);
     destroy_mask_preview_texture();
     if (assets_) {
-        /*
-        if (auto* gl = assets_->map_light_source()) {
-            gl->set_alpha_override(std::nullopt);
-        }
-        */
+
     }
     if (assets_ && forcing_high_quality_rendering_) {
-        // assets_->set_force_high_quality_rendering(false);
+
         forcing_high_quality_rendering_ = false;
     }
     info_.reset();
@@ -554,17 +546,13 @@ void AssetInfoUI::close() {
     clear_section_focus();
     sync_map_light_panel_visibility(false);
     if (assets_) {
-        /*
-        if (auto* gl = assets_->map_light_source()) {
-            gl->set_alpha_override(std::nullopt);
-        }
-        */
+
     }
     if (animation_editor_window_) animation_editor_window_->set_visible(false);
     if (asset_selector_) asset_selector_->close();
     if (children_panel_) children_panel_->close_overlay();
     if (assets_ && forcing_high_quality_rendering_) {
-        // assets_->set_force_high_quality_rendering(false);
+
         forcing_high_quality_rendering_ = false;
     }
     light_drag_active_ = false;
@@ -620,7 +608,7 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
     int editor_y = panel.y;
     int editor_height = panel.h > 0 ? panel.h : std::max(0, screen_h - editor_y);
     if (editor_width <= 0) {
-        // Fallback to the remaining space once the Asset Info panel width is known.
+
         editor_width = std::max( screen_w - std::max(panel.w, std::max(screen_w / 3, 320)), screen_w / 3);
     }
     if (editor_height <= 0) {
@@ -635,7 +623,7 @@ void AssetInfoUI::layout_widgets(int screen_w, int screen_h) const {
 }
 
 bool AssetInfoUI::handle_event(const SDL_Event& e) {
-    // If we're actively sampling a color, intercept inputs until completion/cancel
+
     if (color_sampling_active_) {
         const bool pointer_event =
             (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
@@ -657,7 +645,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                     }
                 }
             }
-            // If we failed to read pixels, cancel silently
+
             cancel_color_sampling(true);
             return true;
         }
@@ -665,7 +653,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
             cancel_color_sampling(false);
             return true;
         }
-        // Swallow other inputs while sampling
+
         switch (e.type) {
             case SDL_MOUSEBUTTONDOWN:
             case SDL_MOUSEBUTTONUP:
@@ -678,7 +666,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                 break;
         }
     }
-    // Give active dropdown overlays global priority so option clicks are reliable
+
     if (auto* active_dd = DMDropdown::active_dropdown()) {
         if (active_dd->handle_event(e)) {
             return true;
@@ -751,7 +739,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
             case SDL_MOUSEWHEEL:
             case SDL_KEYDOWN:
             case SDL_TEXTINPUT:
-                return true; // consume inputs while modal is visible
+                return true;
             default:
                 break;
         }
@@ -785,7 +773,6 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
         }
     }
 
-    // World overlay: click-and-drag light crosshairs when Lighting section is open
     auto clear_light_hover = [&]() {
         if (hovered_light_index_ == -1) {
             return;
@@ -794,17 +781,16 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
         if (lighting_section_) {
             lighting_section_->set_highlighted_light(std::nullopt);
         }
-    };
+};
     if (lighting_section_ && lighting_section_->is_expanded() && info_ && assets_) {
         const bool pointer_event =
             (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP || e.type == SDL_MOUSEMOTION);
         if (pointer_event && target_asset_ && target_asset_->info.get() == info_.get()) {
             const WarpedScreenGrid& cam = assets_->getView();
 
-            // Build a transform consistent with SceneRenderer::render_lights_for_source
             auto compute_light_transform = [&]() {
-                struct Xform { float cx; float cy; float sx; float sy; } out{0,0,1,1};
-                // Resolve base frame size
+                LightTransform out{0.0f, 0.0f, 1.0f, 1.0f};
+
                 int fw = target_asset_->cached_w;
                 int fh = target_asset_->cached_h;
                 if ((fw <= 0 || fh <= 0)) {
@@ -821,9 +807,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                 if (fw <= 0) fw = 1;
                 if (fh <= 0) fh = 1;
 
-                const float base_scale = (target_asset_->info && std::isfinite(target_asset_->info->scale_factor) && target_asset_->info->scale_factor > 0.0f)
-                    ? target_asset_->info->scale_factor
-                    : 1.0f;
+                const float base_scale = (target_asset_->info && std::isfinite(target_asset_->info->scale_factor) && target_asset_->info->scale_factor > 0.0f) ? target_asset_->info->scale_factor : 1.0f;
                 const float scale = cam.get_scale();
                 const float inv_scale = (scale > 0.0f) ? (1.0f / scale) : 1.0f;
 
@@ -841,9 +825,9 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                 SDL_Point world_point{ target_asset_->pos.x, target_asset_->pos.y };
                 float adjusted_cx = ef.screen_position.x;
                 if (assets_ && target_asset_) {
-                    // Do not apply grid parallax to the player asset
+
                     if (!(assets_->player == target_asset_)) {
-                        // parallax_adjusted_screen_x is now handled internally by compute_render_effects
+
                     }
                 }
                 const float distance_scale  = ef.distance_scale;
@@ -854,11 +838,11 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
 
                 out.cx = adjusted_cx;
                 out.cy = ef.screen_position.y;
-                // Per-axis screen-pixels per local-offset unit
+
                 out.sx = (fw > 0) ? (width_px  / static_cast<float>(fw)) : base_scale * inv_scale * distance_scale;
                 out.sy = (fh > 0) ? (height_px / static_cast<float>(fh)) : base_scale * inv_scale * distance_scale * vertical_scale;
                 return out;
-            };
+};
 
             auto xform = compute_light_transform();
 
@@ -868,7 +852,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                 const float cx = xform.cx + static_cast<float>(offx) * xform.sx;
                 const float cy = xform.cy + static_cast<float>(light.offset_y) * xform.sy;
                 return SDL_Point{ static_cast<int>(std::lround(cx)), static_cast<int>(std::lround(cy)) };
-            };
+};
 
             const int mx = (e.type == SDL_MOUSEMOTION) ? e.motion.x : e.button.x;
             const int my = (e.type == SDL_MOUSEMOTION) ? e.motion.y : e.button.y;
@@ -884,7 +868,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                     }
                 }
                 return -1;
-            };
+};
 
             auto set_light_hover = [&](int idx) {
                 if (idx == hovered_light_index_) {
@@ -897,7 +881,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                 } else {
                     lighting_section_->set_highlighted_light(std::nullopt);
                 }
-            };
+};
 
             const int hovered_idx = hit_test_index(mx, my);
 
@@ -914,7 +898,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
             } else if (e.type == SDL_MOUSEMOTION && light_drag_active_ && light_drag_index_ >= 0 &&
                        light_drag_index_ < static_cast<int>(info_->light_sources.size())) {
                 auto& L = info_->light_sources[light_drag_index_];
-                // Invert the screen mapping so the crosshair sits under the mouse
+
                 const float dx_screen = static_cast<float>(mx) - xform.cx;
                 const float dy_screen = static_cast<float>(my) - xform.cy;
                 const float unflipped_x = (xform.sx != 0.0f) ? (dx_screen / xform.sx) : 0.0f;
@@ -928,7 +912,7 @@ bool AssetInfoUI::handle_event(const SDL_Event& e) {
                 }
                 L.offset_x = final_off_x;
                 L.offset_y = final_off_y;
-                // Update serialized lighting payload without disturbing other properties.
+
                 info_->set_lighting(info_->light_sources);
                 if (lighting_section_) {
                     lighting_section_->update_light_offsets(static_cast<std::size_t>(light_drag_index_), final_off_x, final_off_y);
@@ -997,20 +981,12 @@ void AssetInfoUI::update(const Input& input, int screen_w, int screen_h) {
     const bool need_high_quality = shading_requires_high_quality;
     if (assets_) {
         if (need_high_quality != forcing_high_quality_rendering_) {
-            // assets_->set_force_high_quality_rendering(need_high_quality);
+
             forcing_high_quality_rendering_ = need_high_quality;
         }
     } else {
         forcing_high_quality_rendering_ = false;
     }
-
-    // While the Lighting section is expanded, force the map light to darkest opacity
-    // TODO: Enable when map_light_source method is available
-    /*
-    if (assets_) {
-        // Placeholder for future implementation
-    }
-    */
 
     if (!visible_) return;
 
@@ -1065,7 +1041,6 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
 
     DMDropdown::render_active_options(r);
 
-    // Color sampling preview overlay
     if (color_sampling_active_ && r) {
         SDL_Rect sample_rect{ color_sampling_cursor_.x, color_sampling_cursor_.y, 1, 1 };
         Uint32 pixel = 0;
@@ -1107,7 +1082,6 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         }
     }
 
-    // Duplicate asset popup: reuse AssetLibraryUI input style
     if (showing_duplicate_popup_) {
         SDL_Rect box{ screen_w/2 - 150, screen_h/2 - 40, 300, 80 };
         SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
@@ -1175,7 +1149,6 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
         }
     }
 
-    // Delete confirmation popup
     if (showing_delete_popup_) {
         const SDL_Color panel_bg = DMStyles::PanelBG();
         const SDL_Color& highlight = DMStyles::HighlightColor();
@@ -1213,7 +1186,7 @@ void AssetInfoUI::render(SDL_Renderer* r, int screen_w, int screen_h) const {
                     }
                 }
             }
-        };
+};
 
         render_button(delete_yes_rect_, delete_yes_hovered_, delete_yes_pressed_, "Yes, delete", DMStyles::DeleteButton());
         render_button(delete_no_rect_, delete_no_hovered_, delete_no_pressed_, "Cancel", DMStyles::HeaderButton());
@@ -1289,16 +1262,14 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const WarpedScreenGrid& 
         basic_info_section_->render_world_overlay(r, cam, target_asset_, reference_screen_height);
     }
 
-    // When the Lighting section is expanded, draw a crosshair at each light's anchor
     if (lighting_section_ && lighting_section_->is_expanded() && target_asset_ && target_asset_->info.get() == info_.get()) {
         SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
         const SDL_Color lh = DMStyles::AccentButton().hover_bg;
         SDL_SetRenderDrawColor(r, lh.r, lh.g, lh.b, 220);
 
-        // Compute transform consistent with runtime light rendering
         const WarpedScreenGrid& cam = assets_->getView();
         auto compute_light_transform = [&]() {
-            struct Xform { float cx; float cy; float sx; float sy; } out{0,0,1,1};
+            LightTransform out{0.0f, 0.0f, 1.0f, 1.0f};
             int fw = target_asset_->cached_w;
             int fh = target_asset_->cached_h;
             if ((fw <= 0 || fh <= 0)) {
@@ -1315,9 +1286,7 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const WarpedScreenGrid& 
             if (fw <= 0) fw = 1;
             if (fh <= 0) fh = 1;
 
-            const float base_scale = (target_asset_->info && std::isfinite(target_asset_->info->scale_factor) && target_asset_->info->scale_factor > 0.0f)
-                ? target_asset_->info->scale_factor
-                : 1.0f;
+            const float base_scale = (target_asset_->info && std::isfinite(target_asset_->info->scale_factor) && target_asset_->info->scale_factor > 0.0f) ? target_asset_->info->scale_factor : 1.0f;
             const float scale = cam.get_scale();
             const float inv_scale = (scale > 0.0f) ? (1.0f / scale) : 1.0f;
 
@@ -1335,9 +1304,9 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const WarpedScreenGrid& 
             SDL_Point world_point{ target_asset_->pos.x, target_asset_->pos.y };
             float adjusted_cx = ef.screen_position.x;
             if (assets_ && target_asset_) {
-                // Do not apply grid parallax to the player asset
+
                 if (!(assets_->player == target_asset_)) {
-                    // parallax_adjusted_screen_x is now handled internally by compute_render_effects
+
                 }
             }
             const float distance_scale  = ef.distance_scale;
@@ -1354,7 +1323,7 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const WarpedScreenGrid& 
         }();
 
         const int crosshair_arm_px = 6;
-        const int crosshair_thickness_px = 3; // odd value to stay centered
+        const int crosshair_thickness_px = 3;
         const int offset_start = -crosshair_thickness_px / 2;
         const int offset_end = crosshair_thickness_px / 2;
         auto draw_thick_line = [&](int x1, int y1, int x2, int y2) {
@@ -1367,7 +1336,7 @@ void AssetInfoUI::render_world_overlay(SDL_Renderer* r, const WarpedScreenGrid& 
             for (int offset = offset_start; offset <= offset_end; ++offset) {
                 SDL_RenderDrawLine(r, x1 + offset, y1, x2 + offset, y2);
             }
-        };
+};
 
         for (const auto& light : info_->light_sources) {
             int offx = light.offset_x;
@@ -1403,7 +1372,7 @@ void AssetInfoUI::refresh_target_asset_scale() {
         asset->info->set_scale_factor(info_->scale_factor);
         asset->on_scale_factor_changed();
         return true;
-    };
+};
 
     bool refreshed_any = false;
     if (assets_) {
@@ -1427,7 +1396,7 @@ void AssetInfoUI::refresh_target_asset_scale() {
     }
 
     if (assets_ && refreshed_any) {
-        // Keep active state fresh so the new scale is reflected without forcing a full animation rebuild.
+
         assets_->mark_active_assets_dirty();
     }
 }
@@ -1587,7 +1556,7 @@ void AssetInfoUI::sync_target_tiling_state() {
         if (!asset || !asset->info) return std::nullopt;
         if (!asset->info->tillable) return std::nullopt;
         return assets_->compute_tiling_for_asset(asset);
-    };
+};
 
     auto apply_for_asset = [&](Asset* asset) {
         if (!asset_matches_current_info(asset)) return false;
@@ -1600,14 +1569,14 @@ void AssetInfoUI::sync_target_tiling_state() {
                 asset->set_tiling_info(*t);
                 return true;
             }
-            // Fallback to disabling if invalid
+
             asset->set_tiling_info(std::nullopt);
             return true;
         } else {
             asset->set_tiling_info(std::nullopt);
             return true;
         }
-    };
+};
 
     bool updated_any = false;
     for (Asset* asset : assets_->all) {
@@ -1782,7 +1751,7 @@ void AssetInfoUI::notify_light_sources_modified(bool purge_light_cache) {
         asset->clear_render_caches();
         if (assets_) {
             assets_->ensure_light_textures_loaded(asset);
-            // Ensure any light-map and runtime lighting consumers react immediately
+
             assets_->notify_light_map_asset_moved(asset);
         }
     });
@@ -1822,7 +1791,6 @@ void AssetInfoUI::mark_light_for_rebuild(std::size_t light_index) {
         info_->rebuild_light_texture(renderer, light_index);
     }
 
-    // Propagate updated light textures to live assets
     apply_to_assets_with_info([&](Asset* asset) {
         if (!asset || !asset->info) return;
         asset->info->set_lighting(info_->light_sources);
@@ -1945,7 +1913,6 @@ void AssetInfoUI::sync_animation_children() {
         return;
     }
 
-    // Persist the change first so JSON/manifest reflect the selection before any rebuilds.
     info_->set_animation_children(info_->animation_children);
     (void)info_->commit_manifest();
 
@@ -2087,7 +2054,7 @@ std::filesystem::path AssetInfoUI::resolve_mask_preview_frame_path() const {
             }
         }
         return {};
-    };
+};
 
     std::string preferred = info_->start_animation.empty() ? std::string{"default"} : info_->start_animation;
     std::filesystem::path path = try_animation(preferred);
@@ -2148,15 +2115,7 @@ bool AssetInfoUI::generate_mask_preview() {
         }
 
         std::ostringstream cmd;
-        cmd << "python \"" << script.string() << "\" "
-            << "\"" << input_png.string() << "\" "
-            << "\"" << output_png.string() << "\" "
-            << settings.expansion_ratio << " "
-            << settings.blur_scale << " "
-            << settings.falloff_start << " "
-            << settings.falloff_exponent << " "
-            << settings.alpha_multiplier << " "
-            << "\"" << meta_path.string() << "\"";
+        cmd << "python \"" << script.string() << "\" " << "\"" << input_png.string() << "\" " << "\"" << output_png.string() << "\" " << settings.expansion_ratio << " " << settings.blur_scale << " " << settings.falloff_start << " " << settings.falloff_exponent << " " << settings.alpha_multiplier << " " << "\"" << meta_path.string() << "\"";
 
         const std::string command = cmd.str();
         std::cout << "[AssetInfoUI] Generating mask preview with: " << command << "\n";
@@ -2192,8 +2151,6 @@ bool AssetInfoUI::is_point_inside(int x, int y) const {
     if (!visible_) return false;
     SDL_Point p{ x, y };
 
-    // Treat the embedded animation editor area as part of this UI so it
-    // receives pointer routing/blocking like the rest of the panel.
     if (animation_editor_window_ && animation_editor_window_->is_visible()) {
         if (animation_editor_rect_.w > 0 && animation_editor_rect_.h > 0 &&
             SDL_PointInRect(&p, &animation_editor_rect_)) {
@@ -2246,7 +2203,7 @@ void AssetInfoUI::rebuild_default_sections() {
 
     auto adopt_section = [](auto* section) {
         configure_panel_for_container(section);
-    };
+};
 
     auto finalize_section = [this](DockableCollapsible* section) {
         if (!section) {
@@ -2262,7 +2219,7 @@ void AssetInfoUI::rebuild_default_sections() {
         } catch (...) {
             SDL_Log("AssetInfoUI: failed to build section during initialization due to unknown error.");
         }
-    };
+};
 
     auto basic = std::make_unique<Section_BasicInfo>();
     basic_info_section_ = basic.get();
@@ -2368,19 +2325,12 @@ void AssetInfoUI::refresh_loaded_asset_instances() {
         return;
     }
 
-    // Clear the entire asset cache when animation sources change
     if (!info_->name.empty()) {
-        /*
-        if (!AnimationLoader::clear_asset_cache(info_->name)) {
-            std::cerr << "[AssetInfoUI] Failed to clear cache for " << info_->name
-                      << " after source changes\n";
-        }
-        */
+
     }
 
-    // Force scaling profile refresh for this asset
     if (!info_->name.empty()) {
-        // This will trigger a new profile entry to be created/updated
+
         render_pipeline::ScalingLogic::LoadPrecomputedProfiles(true);
         auto profile = render_pipeline::ScalingLogic::ProfileForAsset(info_->name);
         (void)profile;
@@ -2416,7 +2366,6 @@ void AssetInfoUI::on_animation_document_saved() {
         return;
     }
 
-    // Prioritize assets_->renderer() over potentially stale last_renderer_
     SDL_Renderer* renderer = nullptr;
     if (assets_) {
         renderer = assets_->renderer();
@@ -2446,7 +2395,6 @@ bool AssetInfoUI::duplicate_current_asset(const std::string& raw_name) {
         return false;
     }
 
-    // Begin new asset edit; ensure it does not already exist
     auto session = manifest_store_->begin_asset_edit(name, true);
     if (!session) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Failed to begin manifest session for '%s'", name.c_str());
@@ -2481,7 +2429,6 @@ bool AssetInfoUI::duplicate_current_asset(const std::string& raw_name) {
         }
         fs::create_directories(dst_dir);
 
-        // Copy folder content if source exists
         std::error_code ec;
         if (!src_dir.empty() && fs::exists(src_dir, ec)) {
             fs::copy(src_dir, dst_dir, fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
@@ -2490,7 +2437,6 @@ bool AssetInfoUI::duplicate_current_asset(const std::string& raw_name) {
             }
         }
 
-        // Build new manifest entry: start from source manifest if available
         nlohmann::json manifest_entry;
         if (manifest_store_) {
             auto view = manifest_store_->get_asset(info_->name);
@@ -2503,7 +2449,7 @@ bool AssetInfoUI::duplicate_current_asset(const std::string& raw_name) {
         const std::string dst_dir_str = dst_dir.lexically_normal().generic_string();
         manifest_entry["asset_name"] = name;
         manifest_entry["asset_directory"] = dst_dir_str;
-        // Maintain animations/tags etc.; update start path if present
+
         manifest_entry["start"] = dst_dir_str;
 
         session.data() = manifest_entry;
@@ -2515,7 +2461,6 @@ bool AssetInfoUI::duplicate_current_asset(const std::string& raw_name) {
         }
         manifest_store_->flush();
 
-        // Reload asset library and animations
         if (assets_) {
             assets_->library().load_all_from_SRC();
             if (SDL_Renderer* renderer = assets_->renderer()) {
@@ -2565,7 +2510,6 @@ void AssetInfoUI::confirm_delete_request() {
 
     showing_delete_popup_ = false;
 
-    // Remove live instances
     if (assets_) {
         assets_->clear_editor_selection();
         std::vector<Asset*> doomed;
@@ -2588,20 +2532,14 @@ void AssetInfoUI::confirm_delete_request() {
             const auto remove_result = devmode::manifest_utils::remove_asset_entry(manifest_store_, asset_name, &std::cerr);
             manifest_entry_removed = remove_result.removed;
             if (!manifest_entry_removed) {
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                            "[AssetInfoUI] Failed to remove '%s' from manifest",
-                            asset_name.c_str());
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Failed to remove '%s' from manifest", asset_name.c_str());
             }
             manifest_flush_required = remove_result.used_store || manifest_flush_required;
         } else {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                        "[AssetInfoUI] Manifest store unavailable; manifest not updated for '%s'",
-                        asset_name.c_str());
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Manifest store unavailable; manifest not updated for '%s'", asset_name.c_str());
             manifest_entry_removed = devmode::manifest_utils::remove_manifest_asset_entry(asset_name, &std::cerr);
             if (!manifest_entry_removed) {
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                            "[AssetInfoUI] Failed to remove '%s' from manifest assets list",
-                            asset_name.c_str());
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Failed to remove '%s' from manifest assets list", asset_name.c_str());
             }
         }
     }
@@ -2612,14 +2550,12 @@ void AssetInfoUI::confirm_delete_request() {
         if (!std::filesystem::exists(path, ec)) return true;
         std::filesystem::remove_all(path, ec);
         return !ec;
-    };
+};
 
     if (!asset_dir.empty()) {
         const auto normalized_dir = asset_dir.lexically_normal();
         if (asset_paths::is_protected_asset_root(normalized_dir)) {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                        "[AssetInfoUI] Refusing to remove protected asset root '%s'",
-                        normalized_dir.generic_string().c_str());
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AssetInfoUI] Refusing to remove protected asset root '%s'", normalized_dir.generic_string().c_str());
         } else {
             remove_directory_if_exists(normalized_dir);
         }
@@ -2671,7 +2607,6 @@ void AssetInfoUI::confirm_delete_request() {
         assets_->library().remove(asset_name);
     }
 
-    // Close the editor if we just deleted the current asset
     if (info_ && info_->name == asset_name) {
         clear_info();
         close();

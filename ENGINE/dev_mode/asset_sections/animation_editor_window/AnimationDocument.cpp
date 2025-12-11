@@ -221,7 +221,7 @@ const nlohmann::json* find_child_array_const(const nlohmann::json& entry) {
             return &value;
         }
         return nullptr;
-    };
+};
     if (entry.is_array()) {
         if (entry.size() > 4 && entry[4].is_array()) {
             return &entry[4];
@@ -320,7 +320,7 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
     std::string path = source.value("path", kind == "folder" ? animation_id : std::string{});
     nlohmann::json name_value;
     if (kind == "folder") {
-        // Use empty string so downstream UI code that calls get<std::string>() doesn't throw on null
+
         name_value = std::string{};
     } else {
         if (source.contains("name") && source["name"].is_string()) {
@@ -370,11 +370,8 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
         }
     }
 
-    // Respect inherit_source_movement for derived animations. When a derived animation opts
-    // OUT of inheriting movement, we keep local movement data in the payload so editors can
-    // load/save it. Otherwise, we strip movement-related fields for clean derived records.
     bool inherit_source_movement = payload.value("inherit_source_movement", derived_from_animation);
-    // Ensure the key is explicitly present for downstream tools/UI
+
     payload["inherit_source_movement"] = inherit_source_movement;
 
     if (derived_from_animation) {
@@ -383,13 +380,13 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
                                                        {"flipY", derived_flip_y},
                                                        {"flipMovementX", derived_flip_movement_x},
                                                        {"flipMovementY", derived_flip_movement_y}};
-        // Keep movement only if not inheriting; otherwise strip to avoid conflicting data
+
         if (inherit_source_movement) {
             payload.erase("movement");
             payload.erase("movement_total");
             payload.erase("movement_variants");
         }
-        // Keep other derived-compatible fields minimal
+
         payload.erase("audio");
         payload.erase("locked");
         payload.erase("movement_preview_bounds");
@@ -435,7 +432,7 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
                 return parse_int(bounds.at(key), 0);
             }
             return 0;
-        };
+};
         int top = std::max(0, read_bound("top"));
         int left = std::max(0, read_bound("left"));
         int right = std::max(0, read_bound("right"));
@@ -495,7 +492,7 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
                 }
             }
             return 0;
-        };
+};
 
         int total_dx = 0;
         int total_dy = 0;
@@ -520,7 +517,6 @@ nlohmann::json coerce_payload(const std::string& animation_id, const nlohmann::j
     }
     payload["on_end"] = on_end;
 
-    // Normalize children list: keep unique, non-empty strings in declared order
     if (payload.contains("children") && payload["children"].is_array()) {
         nlohmann::json dedup = nlohmann::json::array();
         std::unordered_set<std::string> seen;
@@ -710,7 +706,7 @@ void AnimationDocument::save_to_file(bool fire_callback) const {
             root = nlohmann::json::object();
         }
         if (base_data_.is_object()) {
-            // Keep any top-level metadata (animation_children, size_settings, etc.) in sync before overwriting "animations".
+
             for (auto it = base_data_.begin(); it != base_data_.end(); ++it) {
                 if (it.key() == "animations" || it.key() == "start") {
                     continue;
@@ -875,31 +871,25 @@ void AnimationDocument::rename_animation(const std::string& old_id, const std::s
     if (start_animation_ && *start_animation_ == old_id) {
         start_animation_ = candidate;
     }
-    // After the key change, walk all payloads and rewrite references that
-    // point to the old id. This includes:
-    //  - source.kind == "animation": update both name and fallback path
-    //  - on_end fields equal to old id
-    //  - any id-bearing entries in movement_variants if present
+
     for (auto& entry : animations_) {
         const std::string& id = entry.first;
         nlohmann::json payload = parse_payload(entry.second, id);
 
         bool changed = false;
 
-        // Helper to trim a string for lenient comparisons
         auto trim_copy = [](std::string s) {
             auto not_space = [](unsigned char ch) { return !std::isspace(ch); };
             s.erase(s.begin(), std::find_if(s.begin(), s.end(), not_space));
             s.erase(std::find_if(s.rbegin(), s.rend(), not_space).base(), s.end());
             return s;
-        };
+};
 
-        // Update source references that may point to the renamed id
         if (payload.contains("source") && payload["source"].is_object()) {
             nlohmann::json& src = payload["source"];
             std::string kind = src.value("kind", std::string{"folder"});
             if (kind == std::string{"animation"}) {
-                // Preferred explicit name
+
                 if (src.contains("name")) {
                     if (src["name"].is_string()) {
                         std::string name = trim_copy(src["name"].get<std::string>());
@@ -908,10 +898,10 @@ void AnimationDocument::rename_animation(const std::string& old_id, const std::s
                             changed = true;
                         }
                     } else if (src["name"].is_null()) {
-                        // keep fallback below
+
                     }
                 }
-                // Fallback path (used when name is null/empty)
+
                 if (src.contains("path") && src["path"].is_string()) {
                     std::string path = trim_copy(src["path"].get<std::string>());
                     if (path == old_id) {
@@ -922,7 +912,6 @@ void AnimationDocument::rename_animation(const std::string& old_id, const std::s
             }
         }
 
-        // Update on_end transition if it references the old id
         if (payload.contains("on_end") && payload["on_end"].is_string()) {
             std::string oe = trim_copy(payload["on_end"].get<std::string>());
             if (oe == old_id) {
@@ -931,10 +920,9 @@ void AnimationDocument::rename_animation(const std::string& old_id, const std::s
             }
         }
 
-        // Update any id-bearing fields in movement_variants if present
         if (payload.contains("movement_variants")) {
             nlohmann::json& mv = payload["movement_variants"];
-            // Best-effort: replace any string value equal to old_id anywhere within
+
             std::function<void(nlohmann::json&)> rewrite_strings = [&](nlohmann::json& node) {
                 if (node.is_string()) {
                     try {
@@ -957,7 +945,7 @@ void AnimationDocument::rename_animation(const std::string& old_id, const std::s
                     }
                     return;
                 }
-            };
+};
             rewrite_strings(mv);
         }
 
@@ -966,7 +954,6 @@ void AnimationDocument::rename_animation(const std::string& old_id, const std::s
         }
     }
 
-    // Keep UI/model caches coherent after cascading edits
     mark_dirty();
     rebuild_animation_cache();
 }
@@ -1103,7 +1090,7 @@ nlohmann::json* locate_child_array(nlohmann::json& entry) {
             return &value;
         }
         return nullptr;
-    };
+};
     if (entry.size() > 4 && entry[4].is_array()) {
         return &entry[4];
     }
@@ -1182,7 +1169,7 @@ bool ensure_child_entries(nlohmann::json& movement_entry, std::size_t child_coun
                     entry.push_back(std::move(value));
                     changed = true;
                 }
-            };
+};
             ensure_index(0, idx);
             ensure_index(1, 0);
             ensure_index(2, 0);
@@ -1236,7 +1223,7 @@ bool ensure_child_entries(nlohmann::json& movement_entry, std::size_t child_coun
     return changed;
 }
 
-}  // namespace
+}
 
 std::vector<std::string> AnimationDocument::animation_children() const {
     auto* self = const_cast<AnimationDocument*>(this);
@@ -1565,7 +1552,7 @@ void AnimationDocument::ensure_document_initialized() {
     }
 
     if (ids.empty()) {
-        // New document: seed a default animation so the editor/UI start in a valid state.
+
         nlohmann::json payload = coerce_payload("default", nlohmann::json::object({
                                                            {"source", nlohmann::json{{"kind", "folder"},
                                                                                        {"path", "default"},

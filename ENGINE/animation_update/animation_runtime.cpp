@@ -22,7 +22,7 @@
 #include "utils/grid.hpp"
 #include "render/warped_screen_grid.hpp"
 #include <iostream>
-#include "animation_update.hpp" // planner interface
+#include "animation_update.hpp"
 #include "animation_update/child_attachment_controller.hpp"
 #include "utils/transform_smoothing.hpp"
 
@@ -88,7 +88,6 @@ void AnimationRuntime::update() {
         return;
     }
 
-    // Consume any queued async child triggers from the planner.
     const std::vector<std::string> async_requests = planner_iface_->consume_async_requests();
     if (!async_requests.empty()) {
         handle_async_requests(async_requests);
@@ -111,21 +110,18 @@ void AnimationRuntime::update() {
         }
     } decay{ this };
 
-    // Consume any input signal (planner sets this when controllers interacted)
     const bool got_input = planner_iface_->consume_input_event();
 
     const bool has_plan = !planner_iface_->plan_.strides.empty();
     const bool plan_deferred = has_plan &&
                                should_defer_for_non_locked(planner_iface_->plan_.override_non_locked);
 
-    // Follow path plan if present
     if (has_plan && !plan_deferred &&
         executor_.tick(*this, planner_iface_->plan_, stride_index_, stride_frame_counter_)) {
         just_applied_controller_move_ = false;
         return;
     }
 
-    // If controller issued a direct move request, apply it now
     if (planner_iface_->has_pending_move()) {
         const auto& req = planner_iface_->pending_move_;
         if (!should_defer_for_non_locked(req.override_non_locked)) {
@@ -135,7 +131,6 @@ void AnimationRuntime::update() {
         }
     }
 
-    // If no new input after a controller move, redirect immediately to on-end/default
     if (!got_input && just_applied_controller_move_) {
         auto it = self_->info->animations.find(self_->current_animation);
         if (it != self_->info->animations.end()) {
@@ -150,7 +145,6 @@ void AnimationRuntime::update() {
         just_applied_controller_move_ = false;
     }
 
-    // Keep animations alive when idle
     if (self_->get_current_animation() != animation_update::detail::kDefaultAnimation) {
         if (!advance(self_->current_frame)) {
             switch_to(animation_update::detail::kDefaultAnimation);
@@ -207,7 +201,6 @@ void AnimationRuntime::apply_pending_move() {
         }
     }
 
-    // Reflect new position as the destination for planners
     planner_iface_->final_dest = self_->pos;
 
     const std::string resolved = resolve_animation(*self_, req.animation_id);
@@ -242,9 +235,6 @@ bool AnimationRuntime::advance(AnimationFrame*& frame) {
         }
     }
 
-    // If the animation is locked, frozen, or the asset is flagged static, do not advance frames.
-    // Exception: the player asset should always advance.
-    // Exception: non-player assets with an active plan may override locked animations for auto-movement.
     const bool is_player = self_->info && self_->info->type == asset_types::player;
     bool should_skip = !is_player && (self_->static_frame || anim.locked || anim.is_frozen());
     bool has_overriding_plan = planner_iface_ && !planner_iface_->plan_.strides.empty() && planner_iface_->plan_.override_non_locked;
@@ -254,11 +244,10 @@ bool AnimationRuntime::advance(AnimationFrame*& frame) {
         return true;
     }
     if (is_player) {
-        // Ensure player is never considered static
+
         self_->static_frame = false;
     }
 
-    // Time-based frame advance using the fixed engine playback FPS.
     constexpr int target_fps = kBaseAnimationFps;
     const float frame_interval = 1.0f / static_cast<float>(target_fps);
     float dt = 0.0f;
@@ -266,7 +255,7 @@ bool AnimationRuntime::advance(AnimationFrame*& frame) {
         dt = assets_owner_->frame_delta_seconds();
     }
     if (!(dt > 0.0f)) {
-        dt = 1.0f / 60.0f; // fallback to 60Hz
+        dt = 1.0f / 60.0f;
     }
 
     self_->frame_progress += dt;
@@ -282,7 +271,7 @@ bool AnimationRuntime::advance(AnimationFrame*& frame) {
                 frame = anim.get_first_frame(path_index);
                 advanced_any = true;
             } else {
-                // Reached end of non-looping animation
+
                 update_child_attachments(anim, dt);
                 return false;
             }
@@ -426,7 +415,6 @@ void AnimationRuntime::ensure_child_slots(Animation& anim) {
         }
     }
 
-    // Ensure there is a slot for every requested child id.
     for (const auto& name : requested) {
         if (index_by_name.find(name) != index_by_name.end()) {
             continue;
@@ -441,7 +429,6 @@ void AnimationRuntime::ensure_child_slots(Animation& anim) {
         index_by_name[name] = slots.size() - 1;
     }
 
-    // Reorder slots so indices line up with the animation's child order.
     for (std::size_t i = 0; i < requested.size(); ++i) {
         const std::string& desired = requested[i];
         std::size_t current_idx = index_by_name[desired];
@@ -454,9 +441,7 @@ void AnimationRuntime::ensure_child_slots(Animation& anim) {
         }
         auto& slot = slots[i];
         const AnimationChildData* bound_timeline = (i < timelines.size()) ? &timelines[i] : nullptr;
-        const bool binding_changed = slot.child_index != static_cast<int>(i) ||
-                                     slot.asset_name != desired ||
-                                     slot.timeline != bound_timeline;
+        const bool binding_changed = slot.child_index != static_cast<int>(i) || slot.asset_name != desired || slot.timeline != bound_timeline;
         slot.child_index = static_cast<int>(i);
         slot.asset_name = desired;
         slot.timeline = bound_timeline;
@@ -506,7 +491,6 @@ void AnimationRuntime::ensure_child_slots(Animation& anim) {
         }
     }
 
-    // Park unused slots until a future animation needs them again.
     for (std::size_t i = requested.size(); i < slots.size(); ++i) {
         auto& slot = slots[i];
         slot.child_index = -1;
@@ -544,7 +528,7 @@ void AnimationRuntime::advance_child_frames(float dt) {
             scale = 1.0f;
         }
         return scale;
-    };
+};
     std::vector<const AnimationFrame*> previous_frames;
     previous_frames.reserve(self_->animation_children_.size());
     for (const auto& slot : self_->animation_children_) {
@@ -631,7 +615,7 @@ void AnimationRuntime::apply_child_frame_data(Animation& anim, const AnimationFr
             scale = 1.0f;
         }
         return scale;
-    };
+};
     std::vector<bool> prev_visible;
     std::vector<bool> prev_front;
     std::vector<float> prev_rotation;
@@ -713,16 +697,14 @@ void AnimationRuntime::apply_child_frame_data(Animation& anim, const AnimationFr
             } else if (!slot.timeline_active) {
                 slot.timeline_active = true;
             }
-            const std::size_t sample_idx = std::min(frames.size() - 1,
-                                                    static_cast<std::size_t>(std::max(0, parent_frame_index)));
+            const std::size_t sample_idx = std::min(frames.size() - 1, static_cast<std::size_t>(std::max(0, parent_frame_index)));
             sample = frames[sample_idx];
             should_emit = true;
         } else {
             if (!slot.timeline_active) {
                 continue;
             }
-            const std::size_t sample_idx = std::min(frames.size() - 1,
-                                                    static_cast<std::size_t>(std::max(0, slot.timeline_frame_cursor)));
+            const std::size_t sample_idx = std::min(frames.size() - 1, static_cast<std::size_t>(std::max(0, slot.timeline_frame_cursor)));
             sample = frames[sample_idx];
             should_emit = true;
         }
@@ -739,11 +721,7 @@ void AnimationRuntime::apply_child_frame_data(Animation& anim, const AnimationFr
     bool any_changed = false;
     for (std::size_t i = 0; i < self_->animation_children_.size(); ++i) {
         const auto& slot = self_->animation_children_[i];
-        const bool changed = (prev_visible[i] != slot.visible) ||
-                             (prev_front[i] != slot.render_in_front) ||
-                             (std::abs(prev_rotation[i] - slot.rotation_degrees) > 0.001f) ||
-                             (prev_world[i].x != slot.world_pos.x) ||
-                             (prev_world[i].y != slot.world_pos.y);
+        const bool changed = (prev_visible[i] != slot.visible) || (prev_front[i] != slot.render_in_front) || (std::abs(prev_rotation[i] - slot.rotation_degrees) > 0.001f) || (prev_world[i].x != slot.world_pos.x) || (prev_world[i].y != slot.world_pos.y);
         if (changed) {
             any_changed = true;
             break;
@@ -754,7 +732,6 @@ void AnimationRuntime::apply_child_frame_data(Animation& anim, const AnimationFr
     }
     sync_child_assets();
 }
-
 
 Asset* AnimationRuntime::spawn_child_asset(Asset::AnimationChildAttachment& slot) {
     if (!assets_owner_ || !self_ || !slot.info) {
@@ -768,15 +745,12 @@ Asset* AnimationRuntime::spawn_child_asset(Asset::AnimationChildAttachment& slot
     }
 
     SDL_Point spawn_pos{
-        static_cast<int>(std::lround(self_->smoothed_translation_x())),
-        static_cast<int>(std::lround(self_->smoothed_translation_y()))
-    };
+        static_cast<int>(std::lround(self_->smoothed_translation_x())), static_cast<int>(std::lround(self_->smoothed_translation_y())) };
     Asset* child = assets_owner_->spawn_asset(slot.asset_name, spawn_pos);
     if (!child) {
         return nullptr;
     }
 
-    // Attach to parent and inherit core spatial/Z context.
     child->parent = self_;
     child->depth = self_->depth;
     child->grid_resolution = self_->grid_resolution;
@@ -795,7 +769,7 @@ void AnimationRuntime::destroy_child_assets() {
     if (!self_) {
         return;
     }
-    // Do not delete child assets; park them and clear slot state until they are needed again.
+
     auto park_slot = [](Asset::AnimationChildAttachment& slot) {
         slot.child_index = -1;
         slot.visible = false;
@@ -814,7 +788,7 @@ void AnimationRuntime::destroy_child_assets() {
         if (slot.spawned_asset) {
             slot.spawned_asset->set_hidden(true);
         }
-    };
+};
 
     for (auto& slot : self_->animation_children_) {
         park_slot(slot);
@@ -898,7 +872,7 @@ void AnimationRuntime::sync_child_assets() {
         SDL_Point child_top_left{
             slot.world_pos.x - child_w / 2,
             slot.world_pos.y - child_h
-        };
+};
         child->pos = child_top_left;
         child->grid_resolution = self_->grid_resolution;
         child->depth = self_->depth;
@@ -917,7 +891,7 @@ void AnimationRuntime::sync_child_assets() {
         child->alpha_smoothing_.reset(0.0f);
         child->render_package.clear();
         child->scene_mask_lights.clear();
-    };
+};
 
     for (auto& slot : self_->animation_children_) {
         sync_slot(slot);
@@ -1186,9 +1160,7 @@ bool AnimationRuntime::adjust_next_checkpoint(const std::vector<const Asset*>& b
         return false;
     }
     mark_progress_toward_checkpoints();
-    SDL_Point target = (next_checkpoint_index_ < planner_iface_->plan_.sanitized_checkpoints.size())
-                         ? planner_iface_->plan_.sanitized_checkpoints[next_checkpoint_index_]
-                         : planner_iface_->final_dest;
+    SDL_Point target = (next_checkpoint_index_ < planner_iface_->plan_.sanitized_checkpoints.size()) ? planner_iface_->plan_.sanitized_checkpoints[next_checkpoint_index_] : planner_iface_->final_dest;
     SDL_Point bottom_target = animation_update::detail::bottom_middle_for(*self_, target);
     SDL_Point push{0, 0};
     std::vector<const Asset*> influencing_neighbors;
@@ -1354,7 +1326,7 @@ vibble::grid::Grid& AnimationRuntime::grid() const {
 
 int AnimationRuntime::effective_grid_resolution(std::optional<int> override_resolution) const {
     (void)override_resolution;
-    // Animation runtime always operates at pixel precision.
+
     return 0;
 }
 

@@ -53,9 +53,9 @@ int PreviewTimeline::current_frame() const {
 bool PreviewTimeline::update() {
     int previous_frame = current_frame();
     if (scrubbing_) {
-        scrubbing_ = false; // Release scrub
+        scrubbing_ = false;
     }
     return current_frame() != previous_frame;
 }
 
-} // namespace animation_editor
+}

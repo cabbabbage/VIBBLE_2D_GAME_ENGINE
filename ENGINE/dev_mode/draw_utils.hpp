@@ -29,16 +29,9 @@ inline void stamp_circle(SDL_Surface* surf, int cx, int cy, int r, Uint32 color)
 SDL_Color LightenColor(const SDL_Color& color, float amount);
 SDL_Color DarkenColor(const SDL_Color& color, float amount);
 
-void DrawRoundedSolidRect(SDL_Renderer* renderer,
-                          const SDL_Rect& rect,
-                          int corner_radius,
-                          const SDL_Color& color);
+void DrawRoundedSolidRect(SDL_Renderer* renderer, const SDL_Rect& rect, int corner_radius, const SDL_Color& color);
 
-void DrawRoundedGradientRect(SDL_Renderer* renderer,
-                             const SDL_Rect& rect,
-                             int corner_radius,
-                             const SDL_Color& top_color,
-                             const SDL_Color& bottom_color);
+void DrawRoundedGradientRect(SDL_Renderer* renderer, const SDL_Rect& rect, int corner_radius, const SDL_Color& top_color, const SDL_Color& bottom_color);
 
 void DrawBeveledRect( SDL_Renderer* renderer, const SDL_Rect& rect, int corner_radius, int bevel_depth, const SDL_Color& fill, const SDL_Color& highlight, const SDL_Color& shadow, bool draw_outline = true, float highlight_intensity = 0.35f, float shadow_intensity = 0.35f);
 

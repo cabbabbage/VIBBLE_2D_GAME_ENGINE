@@ -85,7 +85,7 @@ std::string lowercase_copy(std::string value) {
     return value;
 }
 
-}  // namespace
+}
 
 FrameChildrenEditor::FrameChildrenEditor() = default;
 
@@ -219,8 +219,7 @@ void FrameChildrenEditor::render(SDL_Renderer* renderer) const {
     }
     const float offset_scale = parent_scale;
     const float sprite_scale_base = parent_scale * doc_scale;
-    SDL_FPoint anchor_screen = canvas_ ? canvas_->frame_anchor_screen(selected_frame_index_)
-                                       : world_to_screen(frame_anchor(selected_frame_index_));
+    SDL_FPoint anchor_screen = canvas_ ? canvas_->frame_anchor_screen(selected_frame_index_) : world_to_screen(frame_anchor(selected_frame_index_));
 
     for (std::size_t i = 0; i < child_ids_.size() && i < frame->children.size(); ++i) {
         const auto& child = frame->children[i];
@@ -243,9 +242,7 @@ void FrameChildrenEditor::render(SDL_Renderer* renderer) const {
             continue;
         }
         SDL_Rect dst{static_cast<int>(std::round(screen.x - dst_w * 0.5f)),
-                     static_cast<int>(std::round(screen.y - dst_h)),
-                     static_cast<int>(std::round(dst_w)),
-                     static_cast<int>(std::round(dst_h))};
+                     static_cast<int>(std::round(screen.y - dst_h)), static_cast<int>(std::round(dst_w)), static_cast<int>(std::round(dst_h))};
         if (dst.w <= 0 || dst.h <= 0) {
             continue;
         }
@@ -305,8 +302,7 @@ bool FrameChildrenEditor::handle_event(const SDL_Event& e) {
                 parent_scale = 1.0f;
             }
             const float offset_scale = parent_scale;
-            SDL_FPoint anchor_screen = canvas_ ? canvas_->frame_anchor_screen(selected_frame_index_)
-                                               : world_to_screen(frame_anchor(selected_frame_index_));
+            SDL_FPoint anchor_screen = canvas_ ? canvas_->frame_anchor_screen(selected_frame_index_) : world_to_screen(frame_anchor(selected_frame_index_));
             if (auto* child = current_child()) {
                 float denom = (std::isfinite(offset_scale) && offset_scale > 0.0f) ? offset_scale : 1.0f;
                 child->dx = static_cast<float>(std::round((static_cast<float>(screen.x) - anchor_screen.x) / denom));
@@ -423,7 +419,7 @@ void FrameChildrenEditor::reload_from_document() {
                         }
                     }
                     return nullptr;
-                };
+};
                 if (const nlohmann::json* children = find_children_array(entry)) {
                     for (const auto& child_entry : *children) {
                         if (!child_entry.is_array() || child_entry.empty()) continue;
@@ -620,7 +616,7 @@ bool FrameChildrenEditor::timeline_entry_is_static(const nlohmann::json& entry) 
             lowered.push_back(static_cast<char>(std::tolower(ch)));
         }
         return lowered;
-    };
+};
     if (entry.contains("mode") && entry["mode"].is_string()) {
         const std::string lowered = to_lower(entry["mode"].get<std::string>());
         if (lowered == "async" || lowered == "asynchronous") {
@@ -647,7 +643,7 @@ FrameChildrenEditor::ChildFrame FrameChildrenEditor::child_frame_from_sample(con
             } catch (...) {}
         }
         return fallback;
-    };
+};
     auto read_float = [](const nlohmann::json& value, float fallback) -> float {
         if (value.is_number()) {
             try {
@@ -659,7 +655,7 @@ FrameChildrenEditor::ChildFrame FrameChildrenEditor::child_frame_from_sample(con
             } catch (...) {}
         }
         return fallback;
-    };
+};
     auto read_bool = [](const nlohmann::json& value, bool fallback) -> bool {
         if (value.is_boolean()) return value.get<bool>();
         if (value.is_number_integer()) return value.get<int>() != 0;
@@ -673,7 +669,7 @@ FrameChildrenEditor::ChildFrame FrameChildrenEditor::child_frame_from_sample(con
             if (text == "false" || text == "0" || text == "no" || text == "off") return false;
         }
         return fallback;
-    };
+};
 
     ChildFrame child;
     child.child_index = child_index;
@@ -763,9 +759,7 @@ void FrameChildrenEditor::apply_child_timelines_from_payload(const nlohmann::jso
             if (child_index >= static_cast<int>(frames_[frame_idx].children.size())) {
                 continue;
             }
-            ChildFrame sample = (frame_idx < samples.size())
-                ? child_frame_from_sample(samples[frame_idx], child_index)
-                : child_frame_from_sample(nlohmann::json::object(), child_index);
+            ChildFrame sample = (frame_idx < samples.size()) ? child_frame_from_sample(samples[frame_idx], child_index) : child_frame_from_sample(nlohmann::json::object(), child_index);
             frames_[frame_idx].children[child_index] = sample;
         }
     }
@@ -926,7 +920,7 @@ void FrameChildrenEditor::add_or_rename_child(const std::string& raw_name) {
         s.erase(s.begin(), std::find_if(s.begin(), s.end(), not_space));
         s.erase(std::find_if(s.rbegin(), s.rend(), not_space).base(), s.end());
         return s;
-    };
+};
     std::string name = trim(raw_name);
     if (name.empty()) {
         return;
@@ -1202,8 +1196,7 @@ int FrameChildrenEditor::hit_test_child(int x, int y) const {
         parent_scale = 1.0f;
     }
     const float offset_scale = parent_scale;
-    SDL_FPoint anchor_screen = canvas_ ? canvas_->frame_anchor_screen(selected_frame_index_)
-                                       : world_to_screen(frame_anchor(selected_frame_index_));
+    SDL_FPoint anchor_screen = canvas_ ? canvas_->frame_anchor_screen(selected_frame_index_) : world_to_screen(frame_anchor(selected_frame_index_));
     SDL_Point pt{x, y};
     for (std::size_t i = 0; i < child_ids_.size() && i < frame->children.size(); ++i) {
         SDL_FPoint screen = child_screen_position(frame->children[i], anchor_screen, offset_scale);
@@ -1275,7 +1268,7 @@ float FrameChildrenEditor::child_scale_percentage(const std::string& child_id) c
             return true;
         }
         return false;
-    };
+};
 
     if (try_cache(child_id)) {
         return child_scale_cache_[child_id];
@@ -1408,7 +1401,7 @@ std::filesystem::path FrameChildrenEditor::resolve_manifest_path() const {
             return true;
         }
         return false;
-    };
+};
 
     fs::path start;
     if (document_) {
@@ -1477,7 +1470,7 @@ std::filesystem::path FrameChildrenEditor::resolve_child_asset_directory(const s
             }
         }
         return {};
-    };
+};
     fs::path resolved = try_match(resolve_assets_root());
     if (resolved.empty() && document_) {
         resolved = try_match(document_->asset_root().parent_path());
@@ -1659,4 +1652,4 @@ SDL_Texture* FrameChildrenEditor::acquire_child_texture(SDL_Renderer* renderer,
     return child_previews_[child_id].texture.get();
 }
 
-}  // namespace animation_editor
+}

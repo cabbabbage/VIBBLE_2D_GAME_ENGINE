@@ -97,16 +97,7 @@ bool ScrollController::apply_wheel_delta(int delta_lines) {
 }
 
 void draw_panel_background(SDL_Renderer* renderer, const SDL_Rect& bounds) {
-    dm_draw::DrawBeveledRect(renderer,
-                             bounds,
-                             DMStyles::CornerRadius(),
-                             DMStyles::BevelDepth(),
-                             DMStyles::PanelBG(),
-                             DMStyles::HighlightColor(),
-                             DMStyles::ShadowColor(),
-                             false,
-                             DMStyles::HighlightIntensity(),
-                             DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect(renderer, bounds, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 }
 
-}  // namespace animation_editor::ui
+}

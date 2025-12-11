@@ -23,8 +23,7 @@ public:
     void set_rooms(std::vector<Room*>* rooms);
     void set_screen_dimensions(int width, int height);
     void set_ui_blocker(std::function<bool(int, int)> blocker);
-    // Provide the screen-space safe area within which labels may spawn.
-    // When not provided, labels may spawn across the full screen.
+
     void set_label_safe_area_provider(std::function<SDL_Rect()> provider);
     void set_camera_override_for_testing(WarpedScreenGrid* camera_override);
 
@@ -74,7 +73,7 @@ private:
         int min_y = 0;
         int max_x = 0;
         int max_y = 0;
-    };
+};
 
     bool has_bounds_ = false;
     Bounds bounds_{};

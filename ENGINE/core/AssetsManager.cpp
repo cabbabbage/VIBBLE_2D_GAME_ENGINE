@@ -23,7 +23,6 @@
 #include "utils/quick_task_popup.hpp"
 #include "utils/log.hpp"
 
-
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -148,7 +147,7 @@ bool compute_asset_world_bounds(const Asset* asset,
     return true;
 }
 
-} // namespace
+}
 
 Assets::Assets(AssetLibrary& library,
                Asset*,
@@ -207,7 +206,7 @@ Assets::Assets(AssetLibrary& library,
             return finder_->getCurrentRoom();
         }
         return nullptr;
-    };
+};
     Room* intro_room = current_room();
 
     SDL_Point intro_center{screen_center_x, screen_center_y};
@@ -248,8 +247,6 @@ Assets::Assets(AssetLibrary& library,
     apply_map_light_config();
     apply_map_grid_settings(map_grid_settings_, false);
 
-    // Mark that we should defer the first active-assets rebuild
-    // until the grid has computed active chunks on the first update.
     pending_initial_rebuild_ = true;
     logged_initial_rebuild_warning_ = false;
     moving_assets_for_grid_.clear();
@@ -267,7 +264,6 @@ Assets::Assets(AssetLibrary& library,
 
     update_filtered_active_assets();
 
-    // Initialize quick task popup
     quick_task_popup_ = std::make_unique<QuickTaskPopup>();
     if (manifest_store_fallback_) {
         quick_task_popup_->set_manifest_store(manifest_store_fallback_.get());
@@ -448,9 +444,9 @@ void Assets::apply_camera_runtime_settings() {
     render_pipeline::ScalingLogic::SetQualityCap(quality_cap);
     if (scene) {
         const bool low_quality = (effective_percent < 100) && !force_high_quality_rendering_;
-        // scene->set_low_quality_rendering(low_quality);
+
     }
-    // Image effects are now handled by Python, so no longer setting global state here
+
 }
 
 void Assets::set_depth_effects_enabled(bool enabled) {
@@ -470,7 +466,7 @@ void Assets::apply_map_light_config() {
     }
     auto it = map_info_json_.find("map_light_data");
     if (it != map_info_json_.end() && it->is_object()) {
-        // scene->apply_map_light_config(*it);
+
     }
 }
 
@@ -482,7 +478,7 @@ bool Assets::on_map_light_changed() {
 
 void Assets::set_update_map_light_enabled(bool enabled) {
     if (scene) {
-        // scene->set_update_map_light_enabled(enabled);
+
     }
 }
 
@@ -494,8 +490,6 @@ Assets::~Assets() {
     movement_commands_buffer_.clear();
     grid_registration_buffer_.clear();
 
-    // Legacy tiling caches removed.
-
     if (input) {
         input->clear_screen_to_world_mapper();
     }
@@ -503,7 +497,7 @@ Assets::~Assets() {
     scene = nullptr;
     delete finder_;
     delete dev_controls_;
-    // quick_task_popup_ is unique_ptr, auto-deleted
+
 }
 
 AssetLibrary& Assets::library() {
@@ -539,13 +533,13 @@ void Assets::notify_rooms_changed() {
 
 void Assets::refresh_active_asset_lists() {
     rebuild_active_assets_if_needed();
-    // Keep dev tools behavior by delegating to the helper
+
     update_audio_camera_metrics();
     update_filtered_active_assets();
 }
 
 void Assets::update_audio_camera_metrics() {
-    // Read current camera focus so audio stays consistent when dev mode toggles
+
     SDL_Point camera_focus = camera_.get_screen_center();
     auto update_audio_metrics = [&](Asset* asset) {
         if (!asset) return;
@@ -553,7 +547,7 @@ void Assets::update_audio_camera_metrics() {
         const float dy = static_cast<float>(asset->pos.y - camera_focus.y);
         asset->distance_from_camera = std::sqrt(dx * dx + dy * dy);
         asset->angle_from_camera = std::atan2(dy, dx);
-    };
+};
 
     if (player) {
         update_audio_metrics(player);
@@ -562,7 +556,6 @@ void Assets::update_audio_camera_metrics() {
         update_audio_metrics(asset);
     }
 
-    // Tick audio engine so positional audio tracks the player in runtime mode
     AudioEngine::instance().update();
 }
 
@@ -606,10 +599,6 @@ void Assets::ensure_dev_controls() {
         return;
     }
 
-    // Suppress returning a renderer during creation/wiring so dev-mode UI
-    // components cannot accidentally call into animation/texture loading while
-    // we are still wiring up DevControls. This prevents unexpected rebuilds
-    // when toggling dev mode on.
     suppress_dev_renderer_ = true;
 
     const char* msg_create = "[Assets] Creating Dev Controls";
@@ -633,7 +622,7 @@ void Assets::ensure_dev_controls() {
         const char* msg_fail = "[Assets] Failed to allocate Dev Controls";
         std::cout << msg_fail << "\n";
         dev_mode_trace(msg_fail);
-        // Clear suppression before returning
+
         suppress_dev_renderer_ = false;
         return;
     }
@@ -662,15 +651,13 @@ void Assets::ensure_dev_controls() {
         dev_controls_->set_map_info(&map_info_json_, [this]() { return on_map_light_changed(); });
         dev_mode_trace("[Assets] Dev Controls -> set_map_context");
         dev_controls_->set_map_context(&map_info_json_, map_path_);
-        // Wiring complete enough; stop suppressing the renderer so any further
-        // deliberate requests for the renderer (e.g., when user interacts)
-        // will work normally. Avoid leaving this suppressed across frames.
+
         suppress_dev_renderer_ = false;
         dev_mode_trace("[Assets] Dev Controls wiring complete");
     } catch (const std::exception& ex) {
         std::cout << "[Assets] Failed to wire Dev Controls: " << ex.what() << "\n";
         dev_mode_trace(std::string{"[Assets] Failed to wire Dev Controls: "} + ex.what());
-        // Roll back on failure
+
         delete dev_controls_;
         dev_controls_ = nullptr;
     } catch (...) {
@@ -723,9 +710,7 @@ void Assets::update(const Input& input)
 
     const bool ctrl_down = input.isScancodeDown(SDL_SCANCODE_LCTRL) || input.isScancodeDown(SDL_SCANCODE_RCTRL);
     if (scene && ctrl_down && input.wasScancodePressed(SDL_SCANCODE_Q)) {
-        // scene->toggle_chunk_preview();
-        // std::cout << "[Assets] Chunk preview "
-        //           << (scene->chunk_preview_enabled() ? "enabled" : "disabled") << " (Ctrl+Q).\n";
+
     }
 
     if (ctrl_down && input.wasScancodePressed(SDL_SCANCODE_B)) {
@@ -734,7 +719,6 @@ void Assets::update(const Input& input)
                   << (asset_boundary_box_display_enabled_ ? "enabled" : "disabled") << " (Ctrl+B).\n";
     }
 
-    // Quick Task popup Ctrl+T hotkey
     if (ctrl_down && input.wasScancodePressed(SDL_SCANCODE_T) && quick_task_popup_) {
         if (quick_task_popup_->is_open()) {
             quick_task_popup_->close();
@@ -745,13 +729,10 @@ void Assets::update(const Input& input)
                   << (quick_task_popup_->is_open() ? "opened" : "closed") << " (Ctrl+T).\n";
     }
 
-    // Update popup
     if (quick_task_popup_) {
         quick_task_popup_->update();
     }
 
-    // Flush any queued removals early in the frame so grid residency,
-    // lighting caches, and selections stay in sync before other work.
     if (process_removals()) {
         mark_active_assets_dirty();
         rebuild_active_assets_if_needed();
@@ -774,10 +755,9 @@ void Assets::update(const Input& input)
     int start_px = player ? player->pos.x : 0;
     int start_py = player ? player->pos.y : 0;
 
-    // Update player first and capture any movement
     if (player) {
         if (dev_mode) {
-            // In dev mode, only update animations and scale (skip movement/controller logic)
+
             if (player->info) {
                 player->update_scale_values();
             }
@@ -785,7 +765,7 @@ void Assets::update(const Input& input)
                 player->anim_runtime_->update();
             }
         } else {
-            // Full update including movement
+
             player->update();
         }
     }
@@ -806,7 +786,7 @@ void Assets::update(const Input& input)
 
         player_moved = moved_during_update || moved_since_last_frame;
         if (!dev_mode && moved_during_update) {
-            // Queue player movement for batched grid update
+
             movement_commands_buffer_.push_back(GridMovementCommand{
                 player,
                 SDL_Point{start_px, start_py},
@@ -817,16 +797,14 @@ void Assets::update(const Input& input)
         last_player_pos_valid_ = false;
     }
 
-    // Update non-player assets and accumulate movement commands
-    // Ensure we have a current buffer of non-player assets to update
     rebuild_non_player_update_buffer_if_needed();
 
     for (Asset* asset : non_player_update_buffer_) {
         if (!asset) continue;
         SDL_Point previous_pos{asset->pos.x, asset->pos.y};
-        
+
         if (dev_mode) {
-            // In dev mode, only update animations and scale (skip movement/controller logic)
+
             if (asset->info) {
                 asset->update_scale_values();
             }
@@ -834,7 +812,7 @@ void Assets::update(const Input& input)
                 asset->anim_runtime_->update();
             }
         } else {
-            // Full update including movement
+
             asset->update();
             if (previous_pos.x != asset->pos.x || previous_pos.y != asset->pos.y) {
                 movement_commands_buffer_.push_back(GridMovementCommand{
@@ -846,7 +824,6 @@ void Assets::update(const Input& input)
         }
     }
 
-    // Apply any batched grid movement commands so chunk membership is accurate
     if (!movement_commands_buffer_.empty()) {
         for (const GridMovementCommand& cmd : movement_commands_buffer_) {
             if (!cmd.asset) continue;
@@ -854,7 +831,7 @@ void Assets::update(const Input& input)
             cmd.asset->cache_grid_residency(SDL_Point{cmd.asset->pos.x, cmd.asset->pos.y});
         }
         movement_commands_buffer_.clear();
-        // Clear any auxiliary buffers related to grid updates/registration
+
         moving_assets_for_grid_.clear();
         grid_registration_buffer_.clear();
         touch_dev_active_state_version();
@@ -866,14 +843,12 @@ void Assets::update(const Input& input)
 
     update_max_asset_dimensions();
 
-    // Clear last-cycle culled overlay info
     culled_debug_rects_.clear();
 
-    // Build the warped screen grid then derive visible assets directly from it.
     std::vector<Asset*> prev_static_lights = active_static_light_assets_;
     std::vector<Asset*> prev_moving_lights = active_moving_light_assets_;
     camera_.rebuild_grid(world_grid_, last_frame_dt_seconds_);
-    // Refresh the active chunk cache so grid tiles stay visible during rendering.
+
     world_grid_.update_active_chunks(screen_world_rect(), 0);
     rebuild_active_from_screen_grid();
 
@@ -906,24 +881,16 @@ void Assets::update(const Input& input)
     mark_non_player_update_buffer_dirty();
     rebuild_non_player_update_buffer_if_needed();
 
-    // Update per-asset camera-relative audio metrics and audio engine each frame
     update_audio_camera_metrics();
 
-    // Keep dev-mode filtered lists in sync with the freshly rebuilt visibility
-    // state so overlays/highlights render correctly.
     update_filtered_active_assets();
     if (dev_controls_ && dev_controls_->is_enabled()) {
         dev_controls_->set_active_assets(filtered_active_assets, dev_active_state_version_);
         sync_dev_controls_current_room(current_room_);
         dev_controls_->update(input);
-        // Update dev-mode UI panels (e.g., asset library, camera panel) after world state
-        // has been processed so their layouts and button states stay in sync.
+
         dev_controls_->update_ui(input);
 
-        // When using the Room Editor in dev mode, tools like the spawn-group
-        // drag editor can move assets after the main grid/visibility pass.
-        // Rebuild the warped grid and active lists a second time so the main
-        // scene render reflects those edits immediately (not one frame later).
         if (dev_mode && dev_controls_->mode() == DevControls::Mode::RoomEditor) {
             camera_.rebuild_grid(world_grid_, last_frame_dt_seconds_);
             rebuild_active_from_screen_grid();
@@ -932,7 +899,6 @@ void Assets::update(const Input& input)
         }
     }
 
-    // Apply pending static registrations/removals before querying the grid.
     register_pending_static_assets();
     if (process_removals()) {
         mark_active_assets_dirty();
@@ -942,8 +908,6 @@ void Assets::update(const Input& input)
             dev_controls_->set_active_assets(filtered_active_assets, dev_active_state_version_);
         }
     }
-
-    // World grid was refreshed earlier, prior to building visibility.
 
     if (!suppress_render_ && scene) {
         scene->render();
@@ -1046,9 +1010,7 @@ SDL_Rect Assets::screen_world_rect() const {
     SDL_Rect rect{
         minx,
         miny,
-        std::max(0, maxx - minx),
-        std::max(0, maxy - miny)
-    };
+        std::max(0, maxx - minx), std::max(0, maxy - miny) };
     return rect;
 }
 
@@ -1060,9 +1022,6 @@ int Assets::audio_effect_max_distance_world() const {
     return std::max(1, static_cast<int>(std::ceil(radius)));
 }
 
-// Enable/disable developer mode. In dev mode we may lower
-// effective render quality (unless forced high quality is set)
-// and ensure DevControls are available.
 void Assets::set_dev_mode(bool mode) {
     if (dev_mode == mode) {
         return;
@@ -1088,7 +1047,7 @@ void Assets::set_dev_mode(bool mode) {
             dev_mode = true;
             show_dev_notice("Dev Mode enabled (Ctrl+D to toggle)", 2000);
         } else {
-            // Ensure we remain in a consistent runtime state on failure
+
             dev_mode = false;
             if (dev_controls_) {
                 try { dev_controls_->set_enabled(false); } catch (...) {}
@@ -1096,7 +1055,7 @@ void Assets::set_dev_mode(bool mode) {
             show_dev_notice("Dev Mode failed to enable", 2000);
         }
     } else {
-        // Disabling is simple and should not throw; guard just in case.
+
         try {
             if (dev_controls_) {
                 dev_controls_->set_enabled(false);
@@ -1107,11 +1066,9 @@ void Assets::set_dev_mode(bool mode) {
         show_dev_notice("Dev Mode disabled", 1500);
     }
 
-    // Update renderer quality caps based on (possibly changed) mode
     apply_camera_runtime_settings();
 }
 
-// Force high quality rendering (disables quality halving in dev mode).
 void Assets::set_force_high_quality_rendering(bool enable) {
     if (force_high_quality_rendering_ == enable) {
         return;
@@ -1120,7 +1077,6 @@ void Assets::set_force_high_quality_rendering(bool enable) {
     apply_camera_runtime_settings();
 }
 
-// Toggle the dark mask (dynamic darkness overlay)
 void Assets::set_render_dark_mask_enabled(bool enabled) {
     if (render_dark_mask_enabled_ == enabled) {
         return;
@@ -1131,7 +1087,6 @@ void Assets::set_render_dark_mask_enabled(bool enabled) {
     }
 }
 
-// Temporarily suppress heavy rendering work (e.g., during menus or smooth camera transitions).
 void Assets::set_render_suppressed(bool suppressed) {
     if (suppress_render_ == suppressed) {
         return;
@@ -1140,18 +1095,14 @@ void Assets::set_render_suppressed(bool suppressed) {
 
     if (scene) {
         if (suppressed) {
-            // Reduce load while suppressed
-            // scene->set_low_quality_rendering(true);
-            // scene->set_update_map_light_enabled(false);
+
         } else {
-            // Restore lighting updates and quality policy
-            // scene->set_update_map_light_enabled(true);
+
             apply_camera_runtime_settings();
         }
     }
 }
 
-// Accessors used by UI/engine code
 const std::vector<Asset*>& Assets::getActive() const {
     return active_assets;
 }
@@ -1160,9 +1111,8 @@ const std::vector<Asset*>& Assets::getFilteredActiveAssets() const {
     return filtered_active_assets;
 }
 
-void Assets::initialize_active_assets(SDL_Point /*center*/) {
-    // Seed the active lists conservatively with all assets; subsequent
-    // updates will refine visibility, ordering, and lighting state.
+void Assets::initialize_active_assets(SDL_Point ) {
+
     active_assets.clear();
     active_assets.reserve(all.size());
     for (Asset* a : all) {
@@ -1171,7 +1121,6 @@ void Assets::initialize_active_assets(SDL_Point /*center*/) {
         }
     }
 
-    // Build light asset subsets
     std::vector<Asset*> new_light_assets;
     std::vector<Asset*> new_static_lights;
     std::vector<Asset*> new_moving_lights;
@@ -1212,22 +1161,19 @@ void Assets::mark_active_assets_dirty() {
 }
 
 Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
-    // Lookup metadata
+
     std::shared_ptr<AssetInfo> info = library_.get(name);
     if (!info) {
         return nullptr;
     }
 
-    // Determine owning room label (if available)
     std::string owning_room = map_id_;
     if (current_room_) {
         owning_room = current_room_->room_name;
     }
 
-    // Build a minimal area carrying the owning room name; geometry not required here
-    Area spawn_area(owning_room, /*resolution*/ 0);
+    Area spawn_area(owning_room,  0);
 
-    // Choose a basic depth; prefer info->z_threshold if it exists
     int depth = 0;
     try {
         depth = info->z_threshold;
@@ -1235,7 +1181,6 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
         depth = 0;
     }
 
-    // Create and wire the asset
     auto uptr = std::make_unique<Asset>(info, spawn_area, world_pos, depth, nullptr, std::string{}, std::string{}, map_grid_settings_.spacing());
     Asset* raw = uptr.get();
     if (!raw) {
@@ -1245,19 +1190,15 @@ Asset* Assets::spawn_asset(const std::string& name, SDL_Point world_pos) {
     raw->set_camera(&camera_);
     raw->finalize_setup();
 
-    // Register with grid (transfers ownership to grid points) and containers
     raw = world_grid_.create_asset_at_point(std::move(uptr));
     all.push_back(raw);
 
-    // Load light textures from cache
     ensure_light_textures_loaded(raw);
 
-    // Invalidate caches and mark dirty so next cycle rebuilds active lists
     invalidate_max_asset_dimensions();
     mark_active_assets_dirty();
     mark_non_player_update_buffer_dirty();
 
-    // Return the raw pointer for immediate usage by caller
     return raw;
 }
 
@@ -1283,9 +1224,7 @@ void Assets::ensure_light_textures_loaded(Asset* asset) {
     }
 
     if (needs_regeneration && !info->ensure_light_textures(renderer())) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                    "[Assets] Failed to regenerate light textures for '%s'",
-                    info->name.c_str());
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[Assets] Failed to regenerate light textures for '%s'", info->name.c_str());
     }
 
     asset->mark_composite_dirty();
@@ -1314,19 +1253,17 @@ Asset* Assets::get_hovered_asset() const {
     return nullptr;
 }
 
-void Assets::notify_light_map_asset_moved(const Asset* /*asset*/) {
-    // Minimal implementation: leave as no-op. The light map will be
-    // refreshed on next frame via SceneRenderer.
+void Assets::notify_light_map_asset_moved(const Asset* ) {
+
 }
 
 void Assets::notify_light_map_static_assets_changed() {
-    // Minimal implementation: leave as no-op.
+
 }
 
 void Assets::track_asset_for_grid(Asset* asset) {
     (void)asset;
-    // Assets register themselves with the grid when created; no-op here to avoid
-    // duplicating ownership.
+
 }
 
 void Assets::untrack_asset_for_grid(Asset* asset) {
@@ -1414,9 +1351,7 @@ bool Assets::asset_bounds_in_screen_space(const Asset* asset, SDL_FRect& out_rec
     if (auto* gp = camera_.grid_point_for_asset(asset)) {
         const float zoom = std::max(0.000001f, camera_.get_scale());
         const float inv_scale = 1.0f / zoom;
-        // gp->perspective_scale already encodes distance/zoom; assets
-        // and renderers should use it directly when distance scaling
-        // is enabled.
+
         const float distance_scale = (asset->info->apply_distance_scaling) ? gp->perspective_scale : 1.0f;
         const float vertical_scale = (asset->info->apply_vertical_scaling) ? gp->vertical_scale : 1.0f;
 
@@ -1434,16 +1369,14 @@ bool Assets::asset_bounds_in_screen_space(const Asset* asset, SDL_FRect& out_rec
                 center_y - height * 0.5f,
                 width,
                 height
-            };
+};
             have_sprite_rect = true;
         }
     }
 
     if (!have_sprite_rect) {
         const SDL_Point world_center_point{
-            static_cast<int>(std::lround(world_center_x)),
-            static_cast<int>(std::lround(world_center_y))
-        };
+            static_cast<int>(std::lround(world_center_x)), static_cast<int>(std::lround(world_center_y)) };
 
         const float left_world   = world_center_x - scaled_half;
         const float right_world  = world_center_x + scaled_half;
@@ -1453,7 +1386,6 @@ bool Assets::asset_bounds_in_screen_space(const Asset* asset, SDL_FRect& out_rec
         SDL_FPoint top_left_screen = camera_.map_to_screen_f(SDL_FPoint{left_world, top_world});
         SDL_FPoint bottom_right_screen = camera_.map_to_screen_f(SDL_FPoint{right_world, bottom_world});
 
-        // Apply the same warping/parallax used during rendering so culling respects the warped grid.
         top_left_screen.y = camera_.warp_floor_screen_y(top_world, top_left_screen.y);
         bottom_right_screen.y = camera_.warp_floor_screen_y(bottom_world, bottom_right_screen.y);
 
@@ -1476,12 +1408,9 @@ bool Assets::asset_bounds_in_screen_space(const Asset* asset, SDL_FRect& out_rec
             top_screen,
             width,
             height
-        };
+};
     }
 
-    // Expand to include owned light sources so visibility/culling accounts for
-    // both the asset pixels and any emitted light textures.
-    // Treat layers as a single combined asset boundary.
     SDL_FRect combined = sprite_rect;
 
     if (asset->info && !asset->info->light_sources.empty()) {
@@ -1490,7 +1419,6 @@ bool Assets::asset_bounds_in_screen_space(const Asset* asset, SDL_FRect& out_rec
         const float sx        = combined.w / static_cast<float>(base_w_px);
         const float sy        = combined.h / static_cast<float>(base_h_px);
 
-        // Bottom-center anchor in screen space (matches light renderer anchor)
         const float base_center_x = combined.x + combined.w * 0.5f;
         const float base_center_y = combined.y + combined.h;
 
@@ -1503,7 +1431,7 @@ bool Assets::asset_bounds_in_screen_space(const Asset* asset, SDL_FRect& out_rec
             combined.y = top;
             combined.w = std::max(0.0f, right - left);
             combined.h = std::max(0.0f, bottom - top);
-        };
+};
 
         for (const auto& light : asset->info->light_sources) {
             const int raw_radius = light.radius;
@@ -1511,15 +1439,12 @@ bool Assets::asset_bounds_in_screen_space(const Asset* asset, SDL_FRect& out_rec
                 continue;
             }
 
-            // Apply horizontal flip to offset when the asset is flipped
             const float off_x = static_cast<float>(asset->flipped ? -light.offset_x : light.offset_x);
             const float off_y = static_cast<float>(light.offset_y);
 
-            // Screen-space center of the light relative to the asset
             const float cx = base_center_x + off_x * sx;
             const float cy = base_center_y + off_y * sy;
 
-            // Scale radius according to current on-screen asset scaling
             const float rx = std::max(1.0f, static_cast<float>(raw_radius) * sx);
             const float ry = std::max(1.0f, static_cast<float>(raw_radius) * sy);
 
@@ -1528,7 +1453,7 @@ bool Assets::asset_bounds_in_screen_space(const Asset* asset, SDL_FRect& out_rec
                 cy - ry,
                 rx * 2.0f,
                 ry * 2.0f
-            };
+};
 
             expand_to_include(light_rect);
         }
@@ -1601,7 +1526,7 @@ bool Assets::process_removals() {
     }
 
     invalidate_max_asset_dimensions();
-    
+
     return true;
 }
 
@@ -1610,7 +1535,6 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
         dev_controls_->render_overlays(renderer);
     }
 
-    // Render quick task popup
     if (quick_task_popup_) {
         quick_task_popup_->render(renderer);
     }
@@ -1619,7 +1543,6 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
         return;
     }
 
-    // Draw debug overlays for culled objects (if any)
     if (!culled_debug_rects_.empty()) {
         SDL_BlendMode prev_mode = SDL_BLENDMODE_NONE;
         SDL_GetRenderDrawBlendMode(renderer, &prev_mode);
@@ -1648,11 +1571,7 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
                     continue;
                 }
                 SDL_Rect draw_rect{
-                    static_cast<int>(std::floor(screen_rect.x)),
-                    static_cast<int>(std::floor(screen_rect.y)),
-                    static_cast<int>(std::ceil(screen_rect.w)),
-                    static_cast<int>(std::ceil(screen_rect.h))
-                };
+                    static_cast<int>(std::floor(screen_rect.x)), static_cast<int>(std::floor(screen_rect.y)), static_cast<int>(std::ceil(screen_rect.w)), static_cast<int>(std::ceil(screen_rect.h)) };
                 if (draw_rect.w <= 0 || draw_rect.h <= 0) {
                     continue;
                 }
@@ -1731,8 +1650,6 @@ void Assets::render_overlays(SDL_Renderer* renderer) {
     SDL_RenderCopy(renderer, texture, nullptr, &dest);
 }
 
-// Legacy chunk tiling implementation removed.
-
 SDL_Renderer* Assets::renderer() const {
     if (suppress_dev_renderer_) {
         return nullptr;
@@ -1741,8 +1658,7 @@ SDL_Renderer* Assets::renderer() const {
 }
 
 bool Assets::scene_light_map_only_mode() const {
-    // If we have a scene, report its light-map-only mode state.
-    // In that mode, SceneRenderer performs SDL_RenderPresent itself.
+
     return false;
 }
 
@@ -1754,9 +1670,8 @@ std::optional<Asset::TilingInfo> Assets::compute_tiling_for_asset(const Asset* a
         return std::nullopt;
     }
 
-    // Determine grid step
     int step = map_grid_settings_.spacing();
-    // Fallback: scaled canvas dimension if spacing not configured
+
     if (step <= 0) {
         const int raw_w = std::max(1, asset->info->original_canvas_width);
         const int raw_h = std::max(1, asset->info->original_canvas_height);
@@ -1768,7 +1683,6 @@ std::optional<Asset::TilingInfo> Assets::compute_tiling_for_asset(const Asset* a
     }
     step = std::max(1, step);
 
-    // Compute the world footprint of the non-tiled sprite (bottom-center anchor)
     const SDL_Point world_pos{ asset->pos.x, asset->pos.y };
     const int base_w = std::max(1, asset->info->original_canvas_width);
     const int base_h = std::max(1, asset->info->original_canvas_height);
@@ -1788,12 +1702,12 @@ std::optional<Asset::TilingInfo> Assets::compute_tiling_for_asset(const Asset* a
         if (step_ <= 0) return value;
         const double scaled = std::floor(static_cast<double>(value) / static_cast<double>(step_));
         return static_cast<int>(scaled * static_cast<double>(step_));
-    };
+};
     auto align_up = [](int value, int step_) {
         if (step_ <= 0) return value;
         const double scaled = std::ceil(static_cast<double>(value) / static_cast<double>(step_));
         return static_cast<int>(scaled * static_cast<double>(step_));
-    };
+};
 
     const int origin_x = align_down(left, step);
     const int origin_y = align_down(top, step);
@@ -1842,16 +1756,6 @@ bool Assets::contains_asset(const Asset* asset) const {
 
     return false;
 }
-
-/*
-Global_Light_Source* Assets::map_light_source() {
-    return nullptr;
-}
-
-const Global_Light_Source* Assets::map_light_source() const {
-    return nullptr;
-}
-*/
 
 LightMap* Assets::light_map() {
     return nullptr;
@@ -2012,11 +1916,8 @@ bool Assets::is_asset_info_editor_open() const {
 }
 
 bool Assets::is_asset_info_lighting_section_expanded() const {
-    // Reuse dev controls' lighting-section visibility logic
-    // Only true when DevControls are enabled, in RoomEditor mode,
-    // and the AssetInfo Lighting section is expanded
-    return dev_controls_ && dev_controls_->is_enabled() &&
-           dev_controls_->is_asset_info_lighting_section_expanded();
+
+    return dev_controls_ && dev_controls_->is_enabled() && dev_controls_->is_asset_info_lighting_section_expanded();
 }
 
 void Assets::clear_editor_selection() {
@@ -2026,14 +1927,14 @@ void Assets::clear_editor_selection() {
 }
 
 void Assets::handle_sdl_event(const SDL_Event& e) {
-    // Handle quick task popup first (if open)
+
     if (quick_task_popup_ && quick_task_popup_->is_open()) {
         if (quick_task_popup_->handle_event(e)) {
-            // Ensure underlying input state does not react to this event
+
             if (input) {
                 input->consumeEvent(e);
             }
-            return; // Popup consumed the event
+            return;
         }
     }
 
@@ -2120,8 +2021,7 @@ void Assets::open_animation_editor_for_asset(const std::shared_ptr<AssetInfo>& i
     }
 }
 void Assets::rebuild_active_from_screen_grid() {
-    active_points_.assign(camera_.grid_visible_points().begin(),
-                          camera_.grid_visible_points().end());
+    active_points_.assign(camera_.grid_visible_points().begin(), camera_.grid_visible_points().end());
 
     std::unordered_set<Asset*> seen;
     visible_candidate_buffer_.clear();

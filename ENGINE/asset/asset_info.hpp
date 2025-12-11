@@ -27,12 +27,11 @@ struct ChildInfo {
     nlohmann::json spawn_group;
 };
 
-// Asset-level, fire-and-forget animation child definition.
 struct AsyncChildDefinition {
-    std::string name;                  // unique id for run_async lookups
-    std::string asset;                 // child asset id
-    std::string animation;             // optional animation override on the child asset
-    std::vector<AnimationChildFrameData> frames; // per-tick offsets/visibility
+    std::string name;
+    std::string asset;
+    std::string animation;
+    std::vector<AnimationChildFrameData> frames;
 
     bool valid() const { return !name.empty() && !asset.empty() && !frames.empty(); }
 };
@@ -85,9 +84,9 @@ class AssetInfo {
     bool tillable = false;
     std::vector<std::string> tags;
     std::vector<std::string> anti_tags;
-    // Children that participate in animation frames (shared across all animations for this asset).
+
     std::vector<std::string> animation_children;
-    // Asset-scoped async children that can be triggered at runtime via run_async(name).
+
     std::vector<AsyncChildDefinition> async_children;
     bool is_light_source = false;
     bool moving_asset = false;
@@ -109,9 +108,9 @@ class AssetInfo {
         std::string kind;
         std::unique_ptr<Area> area;
         std::optional<RenderFrame> render_frame;
-        // Attachment metadata (optional): used for asset-bound areas only
-        std::string attachment_subtype; // "asset_child_attachment" or "impassable_attachment"
-        bool        attachment_is_on_top = false; // for child attachments
+
+        std::string attachment_subtype;
+        bool        attachment_is_on_top = false;
         nlohmann::json attachment_child_candidates = nlohmann::json::array();
 };
     std::vector<NamedArea> areas;
@@ -186,7 +185,6 @@ class AssetInfo {
 
     bool reload_animations_from_disk();
 
-    // Update individual animation properties immediately without manifest reload
     bool update_animation_properties(const std::string& animation_name, const nlohmann::json& properties);
 
     struct AreaCodec {
@@ -199,7 +197,6 @@ class AssetInfo {
 
     void set_spawn_groups(const nlohmann::json& groups);
 
-    // Reload a single cached light texture from disk and replace the in-memory texture.
     bool rebuild_light_texture(SDL_Renderer* renderer, std::size_t light_index);
     bool ensure_light_textures(SDL_Renderer* renderer);
 

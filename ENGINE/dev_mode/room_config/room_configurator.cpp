@@ -866,7 +866,7 @@ void RoomConfigurator::apply_panel_focus_states() {
             }
         }
         return false;
-    };
+};
 
     if (focused_panel_ && !panel_is_active(focused_panel_)) {
         focused_panel_ = nullptr;
@@ -879,7 +879,7 @@ void RoomConfigurator::apply_panel_focus_states() {
         const bool focused = (panel == focused_panel_);
         panel->set_embedded_focus_state(focused);
         panel->set_embedded_interaction_enabled(focused);
-    };
+};
 
     for (auto* panel : ordered_base_panels_) {
         apply_state(panel);
@@ -905,7 +905,7 @@ void RoomConfigurator::focus_panel(DockableCollapsible* panel) {
             }
         }
         return false;
-    };
+};
 
     DockableCollapsible* resolved = (panel && is_active(panel)) ? panel : nullptr;
     DockableCollapsible* previous = focused_panel_;
@@ -1314,7 +1314,6 @@ void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
             config = std::make_unique<SpawnGroupConfig>();
         }
 
-        // Ensure SpawnGroupConfig can query asset metadata (e.g., can_invert)
         if (manifest_store_) {
             config->set_manifest_store(manifest_store_);
         }
@@ -1494,7 +1493,7 @@ void RoomConfigurator::rebuild_spawn_rows(bool force_collapse_sections) {
                 std::string label = room_->room_name.empty() ? std::string("Room") : room_->room_name;
                 entry.set_ownership_label(label, SDL_Color{255, 224, 96, 255});
             }
-            // Linked-to-area providers removed; ownership is implicit via config context.
+
 };
 
         for (auto& entry : groups) {

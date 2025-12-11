@@ -84,10 +84,8 @@ class AnimationInspectorPanel {
     void render(SDL_Renderer* renderer) const;
     bool handle_event(const SDL_Event& e);
 
-    // Apply any pending dropdown selections inside sub-panels.
     void apply_dropdown_selections();
 
-    // External scrub control (used by FrameEditor modal)
     void set_scrub_mode(bool enable);
     void set_scrub_frame(int frame);
 
@@ -119,7 +117,7 @@ class AnimationInspectorPanel {
         kStart,
         kSourceFrames,
         kSourceAnimation,
-    };
+};
 
     std::vector<FocusTarget> focus_order() const;
     void set_focus(FocusTarget target);
@@ -167,7 +165,6 @@ class AnimationInspectorPanel {
     FocusTarget current_focus_target_ = FocusTarget::kNone;
     bool source_uses_animation_ = false;
 
-    // Animation preview state
     std::unique_ptr<PreviewTimeline> preview_timeline_;
     std::unique_ptr<DMButton> preview_play_button_;
     std::unique_ptr<DMSlider> preview_scrub_slider_;
@@ -190,15 +187,12 @@ class AnimationInspectorPanel {
     devmode::core::ManifestStore* manifest_store_ = nullptr;
     ui::WidgetRegistry widget_registry_;
 
-    // Animation preview timing variables
     mutable int current_frame_ = 0;
     mutable int frame_count_ = 1;
 
-    // External scrub state
     bool scrub_mode_ = false;
     int scrub_frame_ = 0;
 
-    // Scrolling variables
     mutable int content_height_ = 0;
     mutable ui::ScrollController scroll_controller_;
 };

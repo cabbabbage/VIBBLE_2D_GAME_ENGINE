@@ -30,7 +30,7 @@ SDL_Point world_point_for_asset(const Asset* asset) {
     return SDL_Point{asset->pos.x, asset->pos.y};
 }
 
-} // namespace
+}
 
 WorldGrid::WorldGrid(SDL_Point origin, int r_chunk)
     : origin_(origin)
@@ -287,7 +287,7 @@ Asset* WorldGrid::register_asset(std::unique_ptr<Asset> a) {
         if (it == chunk.assets.end()) {
             chunk.assets.push_back(raw);
         }
-    };
+};
 
     auto existing = residency_.find(raw);
     if (existing != residency_.end()) {
@@ -337,20 +337,6 @@ Chunk* WorldGrid::get_or_create_chunk_ij(int i, int j) {
     return &chunks_.ensure(i, j, r_chunk_, origin_);
 }
 
-/*
-std::vector<Chunk*> WorldGrid::all_chunks() const {
-    const auto& storage = chunks_.storage();
-    std::vector<Chunk*> result;
-    result.reserve(storage.size());
-    for (const auto& chunk : storage) {
-        if (chunk) {
-            result.push_back(chunk.get());
-        }
-    }
-    return result;
-}
-*/
-
 void WorldGrid::remove_from_chunk(Asset* a, Chunk* c) {
     if (!a || !c) {
         return;
@@ -382,7 +368,7 @@ Asset* WorldGrid::move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos) {
         previous = chunks_.find(old_i, old_j);
     }
     Chunk& target = chunks_.ensure(new_i, new_j, r_chunk_, origin_);
-    // Only update chunk residency if the asset actually changed chunks
+
     if (previous != &target) {
         if (previous) {
             remove_from_chunk(a, previous);
@@ -415,16 +401,16 @@ Asset* WorldGrid::move_asset(Asset* a, SDL_Point old_pos, SDL_Point new_pos) {
 
     GridPoint& point = ensure_point(new_index);
     bind_asset_to_point(a, point, new_pos, &target, SDL_Point{new_i, new_j});
-    // If the asset moved to a different grid point, transfer ownership; otherwise just rebind.
+
     if (point_changed) {
         if (owned) {
             point.occupants.push_back(std::move(owned));
         } else {
-            // Asset was not previously owned by a point (unlikely), adopt ownership now.
+
             point.occupants.push_back(std::unique_ptr<Asset>(a));
         }
     } else {
-        // Same grid point: ensure screen data will be recomputed for the new world position.
+
         point.invalidate_screen_data();
     }
     prune_empty_points();
@@ -466,9 +452,7 @@ void WorldGrid::update_active_chunks(const SDL_Rect& camera_world, int margin_px
     SDL_Rect expanded{
         camera_world.x - margin,
         camera_world.y - margin,
-        std::max(0, camera_world.w + margin * 2),
-        std::max(0, camera_world.h + margin * 2)
-    };
+        std::max(0, camera_world.w + margin * 2), std::max(0, camera_world.h + margin * 2) };
 
     const bool needs_update = !has_cached_camera_rect_ ||
         last_margin_px_ != margin_px ||
@@ -513,4 +497,4 @@ int WorldGrid::grid_resolution() const {
     return grid_resolution_;
 }
 
-} // namespace world
+}

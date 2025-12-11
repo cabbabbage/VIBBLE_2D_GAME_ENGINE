@@ -39,8 +39,6 @@ struct SpawnInfo {
 
     int edge_inset_percent = 100;
 
-    // If true, geometry should scale from saved origin room canvas
-    // dimensions to the active region area when applicable (zone assets)
     bool adjust_geometry_to_room = false;
 
     std::vector<SpawnCandidate> candidates;

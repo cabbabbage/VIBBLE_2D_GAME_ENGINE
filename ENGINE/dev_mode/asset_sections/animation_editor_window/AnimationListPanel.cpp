@@ -25,9 +25,9 @@
 namespace {
 
 constexpr int kRowHeight = 72;
-// Slightly increase indent so children read as grouped under parents
+
 constexpr int kIndentPerLevel = 16;
-// Keep a sensible floor for very deep chains
+
 constexpr float kMinSizeFactor = 0.60f;
 
 float size_factor_for_level(int level) {
@@ -36,7 +36,7 @@ float size_factor_for_level(int level) {
     }
     switch (level) {
         case 1:
-            // SFA (derived) items render slightly smaller than SFF
+
             return 0.85f;
         case 2:
             return 0.75f;
@@ -97,8 +97,6 @@ int resolve_wheel_delta(const SDL_MouseWheelEvent& wheel) {
     return delta;
 }
 
-// --- Color helpers for SFF/SFA coloring ---
-
 SDL_Color hsv_to_rgb(float hue, float saturation, float value) {
     hue = std::fmod(hue, 360.0f);
     if (hue < 0.0f) hue += 360.0f;
@@ -121,60 +119,53 @@ SDL_Color hsv_to_rgb(float hue, float saturation, float value) {
     auto to_channel = [m](float c) {
         c = std::clamp(c + m, 0.0f, 1.0f);
         return static_cast<Uint8>(std::lround(c * 255.0f));
-    };
+};
     return SDL_Color{to_channel(r), to_channel(g), to_channel(b), 230};
 }
 
 SDL_Color color_for_root_key(const std::string& key) {
-    // Generate a vivid, diverse color for each root id, avoiding the orange range
-    // so that orange can be reserved exclusively for selection state.
-    // We derive a stable pseudo-random value from the key using a simple xorshift-like mix,
-    // then map it to HSV while skipping the orange wedge (~20..45 degrees).
 
     auto mix64 = [](uint64_t x) {
-        x += 0x9e3779b97f4a7c15ull; // golden ratio seed
+        x += 0x9e3779b97f4a7c15ull;
         x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ull;
         x = (x ^ (x >> 27)) * 0x94d049bb133111ebull;
         x = x ^ (x >> 31);
         return x;
-    };
+};
 
-    // Compute a 64-bit hash from the std::hash seed
     uint64_t h = static_cast<uint64_t>(std::hash<std::string>{}(key));
     h = mix64(h);
 
     auto u01 = [&](uint64_t bits, int shift) {
-        // Produce a float in [0,1) from 24 bits
+
         uint32_t v = static_cast<uint32_t>((bits >> shift) & 0xFFFFFFull);
         return static_cast<float>(v) / static_cast<float>(0x1000000ull);
-    };
+};
 
     float r1 = u01(h, 0);
     float r2 = u01(h, 24);
     float r3 = u01(h, 48);
 
-    // Base hue from r1 across [0,360)
     float hue = r1 * 360.0f;
-    // If hue falls within orange wedge [20,45], remap it out of that range by shifting forward
+
     const float kOrangeMin = 20.0f;
     const float kOrangeMax = 45.0f;
     if (hue >= kOrangeMin && hue <= kOrangeMax) {
-        // Push into a non-orange band while keeping distribution stable
-        float span = kOrangeMax - kOrangeMin; // 25 deg
-        hue = std::fmod(kOrangeMax + (hue - kOrangeMin) + 60.0f, 360.0f); // jump past orange by +60ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°
+
+        float span = kOrangeMax - kOrangeMin;
+        hue = std::fmod(kOrangeMax + (hue - kOrangeMin) + 60.0f, 360.0f);
     }
 
-    // Prefer vivid saturation/value ranges for stronger differentiation
-    float saturation = 0.72f + 0.24f * r2; // 0.72..0.96
+    float saturation = 0.72f + 0.24f * r2;
     saturation = std::clamp(saturation, 0.70f, 0.96f);
-    float value = 0.78f + 0.18f * r3;      // 0.78..0.96
+    float value = 0.78f + 0.18f * r3;
     value = std::clamp(value, 0.78f, 0.96f);
 
     return hsv_to_rgb(hue, saturation, value);
 }
 
 SDL_Color greyscale_of(SDL_Color c) {
-    // luminance approximation
+
     int lum = static_cast<int>(std::lround(0.299f * c.r + 0.587f * c.g + 0.114f * c.b));
     lum = std::clamp(lum, 0, 255);
     return SDL_Color{static_cast<Uint8>(lum), static_cast<Uint8>(lum), static_cast<Uint8>(lum), c.a};
@@ -188,8 +179,8 @@ SDL_Color mix_color(SDL_Color a, SDL_Color b, float t) {
 
 SDL_Color grey_variant_for_level(SDL_Color root, int level) {
     if (level <= 0) return root;
-    // Increase greying with depth, clamped
-    float t = 0.35f + 0.10f * static_cast<float>(level - 1); // 0.35 at level 1
+
+    float t = 0.35f + 0.10f * static_cast<float>(level - 1);
     t = std::clamp(t, 0.0f, 0.6f);
     return mix_color(root, greyscale_of(root), t);
 }
@@ -288,16 +279,7 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
         }
         SDL_Color fill = hovered ? dm_draw::LightenColor(base, 0.08f) : base;
 
-        dm_draw::DrawBeveledRect(renderer,
-                                 rect,
-                                 DMStyles::CornerRadius(),
-                                 DMStyles::BevelDepth(),
-                                 fill,
-                                 DMStyles::HighlightColor(),
-                                 DMStyles::ShadowColor(),
-                                 false,
-                                 DMStyles::HighlightIntensity(),
-                                 DMStyles::ShadowIntensity());
+        dm_draw::DrawBeveledRect(renderer, rect, DMStyles::CornerRadius(), DMStyles::BevelDepth(), fill, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
         SDL_Color border_col = dm_draw::DarkenColor(base, 0.45f);
         int border_thickness = 1;
@@ -322,14 +304,11 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
                 int tex_h = 0;
                 SDL_QueryTexture(texture, nullptr, nullptr, &tex_w, &tex_h);
                 if (tex_w > 0 && tex_h > 0 && preview_rect.w > 0 && preview_rect.h > 0) {
-                    float scale = std::min(static_cast<float>(preview_rect.w) / static_cast<float>(tex_w),
-                                           static_cast<float>(preview_rect.h) / static_cast<float>(tex_h));
+                    float scale = std::min(static_cast<float>(preview_rect.w) / static_cast<float>(tex_w), static_cast<float>(preview_rect.h) / static_cast<float>(tex_h));
                     int draw_w = std::max(1, static_cast<int>(tex_w * scale));
                     int draw_h = std::max(1, static_cast<int>(tex_h * scale));
                     SDL_Rect dst{preview_rect.x + (preview_rect.w - draw_w) / 2,
-                                 preview_rect.y + (preview_rect.h - draw_h) / 2,
-                                 draw_w,
-                                 draw_h};
+                                 preview_rect.y + (preview_rect.h - draw_h) / 2, draw_w, draw_h};
                     SDL_RenderCopy(renderer, texture, nullptr, &dst);
                     content_x = preview_rect.x + preview_rect.w + row_padding;
                 }
@@ -350,16 +329,7 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
         if (hovered_delete_row_ && *hovered_delete_row_ == i) {
             delete_bg = delete_style.hover_bg;
         }
-        dm_draw::DrawBeveledRect(renderer,
-                                 delete_rect,
-                                 DMStyles::CornerRadius(),
-                                 1,
-                                 delete_bg,
-                                 DMStyles::HighlightColor(),
-                                 DMStyles::ShadowColor(),
-                                 false,
-                                 DMStyles::HighlightIntensity() * 0.5f,
-                                 DMStyles::ShadowIntensity() * 0.5f);
+        dm_draw::DrawBeveledRect(renderer, delete_rect, DMStyles::CornerRadius(), 1, delete_bg, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity() * 0.5f, DMStyles::ShadowIntensity() * 0.5f);
         dm_draw::DrawRoundedOutline(renderer, delete_rect, DMStyles::CornerRadius(), 1, delete_style.border);
         DMLabelStyle delete_label_style{delete_style.label.font_path, 12, delete_style.text};
         std::string delete_text{DMIcons::Close()};
@@ -391,22 +361,9 @@ void AnimationListPanel::render(SDL_Renderer* renderer) const {
                 badge_x = min_badge_x;
             }
             SDL_Rect badge_rect{badge_x, rect.y + std::max(0, (rect.h - badge_height) / 2), badge_width, badge_height};
-            dm_draw::DrawBeveledRect(renderer,
-                                     badge_rect,
-                                     DMStyles::CornerRadius(),
-                                     DMStyles::BevelDepth(),
-                                     badge_style->bg,
-                                     DMStyles::HighlightColor(),
-                                     DMStyles::ShadowColor(),
-                                     false,
-                                     DMStyles::HighlightIntensity(),
-                                     DMStyles::ShadowIntensity());
+            dm_draw::DrawBeveledRect(renderer, badge_rect, DMStyles::CornerRadius(), DMStyles::BevelDepth(), badge_style->bg, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
             dm_draw::DrawRoundedOutline(renderer, badge_rect, DMStyles::CornerRadius(), 1, badge_style->border);
-            DMFontCache::instance().draw_text(renderer,
-                                              badge_label,
-                                              it->second,
-                                              badge_rect.x + badge_padding,
-                                              badge_rect.y + (badge_rect.h - badge_size.y) / 2);
+            DMFontCache::instance().draw_text(renderer, badge_label, it->second, badge_rect.x + badge_padding, badge_rect.y + (badge_rect.h - badge_size.y) / 2);
             badge_x -= badge_padding;
         }
     }
@@ -546,7 +503,7 @@ void AnimationListPanel::rebuild_rows() {
         std::optional<std::string> parent;
         bool missing_source = false;
         std::vector<std::string> children;
-    };
+};
 
     std::unordered_map<std::string, NodeInfo> nodes;
     nodes.reserve(ids.size());
@@ -618,7 +575,6 @@ void AnimationListPanel::rebuild_rows() {
     std::unordered_set<std::string> visited;
     visited.reserve(nodes.size());
 
-    // Rebuild mapping from id -> root (top-level SFF)
     root_for_id_.clear();
 
     std::function<void(const std::string&, int, const std::string&)> visit = [&](const std::string& id, int level, const std::string& root_id) {
@@ -641,7 +597,7 @@ void AnimationListPanel::rebuild_rows() {
         for (const auto& child : info.children) {
             visit(child, level + 1, root_id);
         }
-    };
+};
 
     for (const auto& root : roots) {
         visit(root, 0, root);
@@ -713,9 +669,7 @@ void AnimationListPanel::layout_rows() {
         geometry.content_height = std::max(1, rect.h - row_padding * 2);
         const int thumb_size = geometry.content_height;
         geometry.preview_rel = SDL_Rect{geometry.content_offset_x,
-                                        std::max(0, (rect.h - thumb_size) / 2),
-                                        thumb_size,
-                                        thumb_size};
+                                        std::max(0, (rect.h - thumb_size) / 2), thumb_size, thumb_size};
         const int delete_button_size = 16;
         geometry.delete_button_rel = SDL_Rect{rect.w - row_padding - delete_button_size,
                                               row_padding,

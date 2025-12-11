@@ -121,17 +121,15 @@ int PlaybackSettingsPanel::preferred_height(int width) const {
                 height += gap;
             }
         }
-    };
+};
 
     if (derived_from_animation_) {
-        // flip X, flip Y, inherit movement (always shown)
-        // if inherit==true -> show 2 suboptions (flip movement X/Y)
-        // reverse (locked is inherited)
-        int count = 4; // flip X, flip Y, inherit, reverse
-        if (state_.inherit_source_movement) count += 2; // flip movement X/Y
+
+        int count = 4;
+        if (state_.inherit_source_movement) count += 2;
         add_checkbox_group(count);
     } else {
-        add_checkbox_group(2);  // reverse, locked
+        add_checkbox_group(2);
     }
 
     if (derived_from_animation_) {
@@ -142,7 +140,7 @@ int PlaybackSettingsPanel::preferred_height(int width) const {
     } else {
         if (random_start_visible()) {
             height += gap;
-            height += checkbox_height;  // random start
+            height += checkbox_height;
         }
     }
 
@@ -167,23 +165,23 @@ void PlaybackSettingsPanel::render(SDL_Renderer* renderer) const {
         if (visible && checkbox) {
             checkbox->render(renderer);
         }
-    };
+};
 
     const bool show_flip_controls = derived_from_animation_;
     render_checkbox(flip_checkbox_, show_flip_controls);
     render_checkbox(flip_vertical_checkbox_, show_flip_controls);
-    // Inherit movement parent checkbox (derived only)
+
     render_checkbox(inherit_movement_checkbox_, derived_from_animation_);
     const bool show_movement_flip = derived_from_animation_ && inherit_movement_checkbox_ && inherit_movement_checkbox_->value();
     render_checkbox(flip_movement_horizontal_checkbox_, show_movement_flip);
     render_checkbox(flip_movement_vertical_checkbox_, show_movement_flip);
-    // Only show reverse when derived from another animation
+
     render_checkbox(reverse_checkbox_, derived_from_animation_);
     render_checkbox(locked_checkbox_, !derived_from_animation_);
     if (!derived_from_animation_ && random_start_checkbox_ && (!locked_checkbox_ || !locked_checkbox_->value())) {
         random_start_checkbox_->render(renderer);
     }
-    // Replace instructional labels with tooltip icon/info
+
     DMWidgetTooltipRender(renderer, bounds_, info_tooltip_);
 }
 
@@ -191,7 +189,6 @@ bool PlaybackSettingsPanel::handle_event(const SDL_Event& e) {
     layout_widgets();
     bool used = false;
 
-    // Consume tooltip interactions for the info icon
     if (DMWidgetTooltipHandleEvent(e, bounds_, info_tooltip_)) {
         return true;
     }
@@ -207,17 +204,17 @@ bool PlaybackSettingsPanel::handle_event(const SDL_Event& e) {
         if (visible) {
             handle_checkbox(checkbox);
         }
-    };
+};
 
     const bool show_flip = derived_from_animation_;
     handle_checkbox_if_visible(flip_checkbox_, show_flip);
     handle_checkbox_if_visible(flip_vertical_checkbox_, show_flip);
-    // Parent inherit control
+
     handle_checkbox_if_visible(inherit_movement_checkbox_, derived_from_animation_);
     const bool show_movement_flip = derived_from_animation_ && inherit_movement_checkbox_ && inherit_movement_checkbox_->value();
     handle_checkbox_if_visible(flip_movement_horizontal_checkbox_, show_movement_flip);
     handle_checkbox_if_visible(flip_movement_vertical_checkbox_, show_movement_flip);
-    // Only handle reverse when visible (derived from animation)
+
     handle_checkbox_if_visible(reverse_checkbox_, derived_from_animation_);
     if (!derived_from_animation_) handle_checkbox(locked_checkbox_);
     if (!derived_from_animation_ && (!locked_checkbox_ || !locked_checkbox_->value())) {
@@ -279,21 +276,21 @@ void PlaybackSettingsPanel::layout_widgets() const {
         checkbox->set_rect(rect);
         y += rect.h;
         placed_any = true;
-    };
+};
 
     bool placed_any_checkbox = false;
     const bool show_flip_controls = derived_from_animation_;
     place_checkbox(flip_checkbox_.get(), show_flip_controls, placed_any_checkbox);
     place_checkbox(flip_vertical_checkbox_.get(), show_flip_controls, placed_any_checkbox);
-    // Inherit movement toggle (always visible if derived)
+
     place_checkbox(inherit_movement_checkbox_.get(), derived_from_animation_, placed_any_checkbox);
-    // Indent sub-options if inherit is enabled
+
     bool inherit_on = false;
     if (derived_from_animation_ && inherit_movement_checkbox_) {
         inherit_on = inherit_movement_checkbox_->value();
     }
     if (derived_from_animation_ && inherit_on) {
-        int indent = 16; // visual indent for sub-options
+        int indent = 16;
         int sub_x = x + indent;
         int sub_width = std::max(0, width - indent);
         if (flip_movement_horizontal_checkbox_) {
@@ -313,7 +310,7 @@ void PlaybackSettingsPanel::layout_widgets() const {
         if (flip_movement_horizontal_checkbox_) flip_movement_horizontal_checkbox_->set_rect(SDL_Rect{0,0,0,0});
         if (flip_movement_vertical_checkbox_) flip_movement_vertical_checkbox_->set_rect(SDL_Rect{0,0,0,0});
     }
-    // Only place reverse checkbox when using a source animation
+
     place_checkbox(reverse_checkbox_.get(), derived_from_animation_, placed_any_checkbox);
     place_checkbox(locked_checkbox_.get(), !derived_from_animation_, placed_any_checkbox);
 
@@ -380,7 +377,7 @@ PlaybackSettingsPanel::PlaybackState PlaybackSettingsPanel::read_controls() cons
             state.flip_movement_vertical = false;
         }
     }
-    // Reverse applies only to animations derived from another animation
+
     if (derived_from_animation_) {
         if (reverse_checkbox_) state.reverse_source = reverse_checkbox_->value();
     } else {
@@ -390,7 +387,7 @@ PlaybackSettingsPanel::PlaybackState PlaybackSettingsPanel::read_controls() cons
         if (locked_checkbox_) state.locked = locked_checkbox_->value();
     }
     if (!derived_from_animation_) {
-        // Preserve stored flip flags when controls are hidden.
+
         if (flip_checkbox_) state.flipped_source = state_.flipped_source;
         state.flip_vertical = false;
         state.flip_movement_horizontal = false;
@@ -567,7 +564,6 @@ PlaybackSettingsPanel::PlaybackState PlaybackSettingsPanel::payload_to_state(con
         }
     }
 
-    // Ensure reverse is disabled for frame-sourced animations
     if (!source_is_animation) {
         state.reverse_source = false;
     }
@@ -669,8 +665,7 @@ void PlaybackSettingsPanel::refresh_inherited_message() {
     inherited_message_rect_ = SDL_Rect{0, 0, 0, 0};
 
     if (derived_from_animation_) {
-        std::string target = derived_source_id_.empty() ? std::string("the source animation")
-                                                       : "animation '" + derived_source_id_ + "'";
+        std::string target = derived_source_id_.empty() ? std::string("the source animation") : "animation '" + derived_source_id_ + "'";
         inherited_message_lines_.push_back("Lock and starting frame inherit from " + target + ".");
         if (!inherited_modifiers_.empty()) {
             std::string joined;
@@ -687,7 +682,6 @@ void PlaybackSettingsPanel::refresh_inherited_message() {
         layout_dirty_ = true;
     }
 
-    // Update tooltip content to replace labels
     if (derived_from_animation_) {
         std::string tip;
         for (size_t i = 0; i < inherited_message_lines_.size(); ++i) {

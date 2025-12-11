@@ -20,19 +20,9 @@ public:
     void set_mode(Mode mode);
     Mode mode() const { return mode_; }
 
-    // Movement mode widgets wiring
-    void set_callbacks(std::function<void(bool)> on_toggle_smooth,
-                       std::function<void(bool)> on_toggle_curve,
-                       std::function<void(bool)> on_toggle_show_animation,
-                       std::function<void(int,int)> on_totals_changed);
-    void set_children_callbacks(std::function<void(int)> on_child_selected,
-                                std::function<void()> on_apply_to_next,
-                                std::function<void(bool)> on_visible_changed,
-                                std::function<void(int)> on_mode_changed,
-                                std::function<void(const std::string&)> on_add_or_rename,
-                                std::function<void()> on_remove_child);
+    void set_callbacks(std::function<void(bool)> on_toggle_smooth, std::function<void(bool)> on_toggle_curve, std::function<void(bool)> on_toggle_show_animation, std::function<void(int,int)> on_totals_changed);
+    void set_children_callbacks(std::function<void(int)> on_child_selected, std::function<void()> on_apply_to_next, std::function<void(bool)> on_visible_changed, std::function<void(int)> on_mode_changed, std::function<void(const std::string&)> on_add_or_rename, std::function<void()> on_remove_child);
 
-    // Keep UI in sync with editor state
     void set_totals(int dx, int dy, bool avoid_overwrite_if_editing);
     void set_show_animation(bool show);
     void set_children_state(const std::vector<std::string>& options,
@@ -42,10 +32,8 @@ public:
                             int mode_index,
                             const std::string& current_name = std::string{});
 
-    // Allow clamp/move inside FrameEditor work area
     void set_work_area_bounds(const SDL_Rect& bounds);
 
-    // Relay events and render via base
     bool handle_event(const SDL_Event& e) override;
     void render(SDL_Renderer* r) const override { DockableCollapsible::render(r); }
 
@@ -90,7 +78,6 @@ private:
     std::function<void(const std::string&)> on_child_add_or_rename_{};
     std::function<void()> on_child_remove_{};
 
-    // Track last-known values to detect edits
     std::string last_dx_text_{};
     std::string last_dy_text_{};
     bool last_smooth_value_ = false;

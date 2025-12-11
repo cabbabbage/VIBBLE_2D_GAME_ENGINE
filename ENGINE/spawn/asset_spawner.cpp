@@ -36,15 +36,14 @@ void AssetSpawner::spawn(Room& room) {
         map_grid_settings_ = room.map_grid_settings();
         run_spawning(room.planner.get(), spawn_area);
 
-        // Secondary pass: spawn area-local spawn_groups driven by area candidates
         try {
                 nlohmann::json& root = room.assets_data();
-                // Build selection counts for areas based on room-level spawn groups
+
                 std::unordered_map<std::string, int> area_selection_counts;
                 if (room.planner) {
                         const auto& queue = room.planner->get_spawn_queue();
                         for (const auto& item : queue) {
-                                // Collect area candidates and weights
+
                                 std::vector<std::string> names;
                                 std::vector<double> weights;
                                 for (const auto& cand : item.candidates) {
@@ -56,7 +55,7 @@ void AssetSpawner::spawn(Room& room) {
                                         }
                                 }
                                 if (names.empty()) continue;
-                                // If all weights are zero, use uniform weights
+
                                 bool any_positive = false;
                                 for (double w : weights) if (w > 0.0) { any_positive = true; break; }
                                 if (!any_positive) {
@@ -73,7 +72,7 @@ void AssetSpawner::spawn(Room& room) {
                 }
 
                 if (root.is_object() && root.contains("areas") && root["areas"].is_array()) {
-                        // If no area selections were requested, fall back to spawning all areas (legacy behavior)
+
                         bool selective = !area_selection_counts.empty();
                         for (auto& area_entry : root["areas"]) {
                                 if (!area_entry.is_object()) continue;
@@ -88,7 +87,7 @@ void AssetSpawner::spawn(Room& room) {
                                 if (selective) {
                                         auto ct = area_selection_counts.find(area_name);
                                         if (ct == area_selection_counts.end() || ct->second <= 0) {
-                                                continue; // skip areas not selected
+                                                continue;
                                         }
                                         times = ct->second;
                                 }
@@ -104,7 +103,7 @@ void AssetSpawner::spawn(Room& room) {
                                                 if (src.is_object() && src.contains("spawn_groups") && src["spawn_groups"].is_array()) {
                                                         area_entry["spawn_groups"] = src["spawn_groups"];
                                                 }
-                                        };
+};
 
                                         AssetSpawnPlanner area_planner(sources, *area_ptr, *asset_library_, contexts);
                                         run_spawning(&area_planner, *area_ptr);
@@ -112,7 +111,7 @@ void AssetSpawner::spawn(Room& room) {
                         }
                 }
         } catch (...) {
-                // Non-fatal; ignore
+
         }
 
         current_room_ = nullptr;
@@ -126,7 +125,7 @@ std::vector<std::unique_ptr<Asset>> AssetSpawner::spawn_boundary_from_json(const
                 return {};
         }
     std::vector<nlohmann::json> json_sources{ boundary_json };
-        // Build per-group resolution overrides from the provided JSON (using slider value)
+
         group_resolution_map_.clear();
         try {
                 if (boundary_json.contains("spawn_groups") && boundary_json["spawn_groups"].is_array()) {
@@ -140,7 +139,7 @@ std::vector<std::unique_ptr<Asset>> AssetSpawner::spawn_boundary_from_json(const
                         }
                 }
         } catch (...) {
-                // ignore malformed json; fall back to defaults
+
         }
     AssetSpawnPlanner planner(json_sources, spawn_area, *asset_library_);
         boundary_mode_ = true;
@@ -207,7 +206,7 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
         PerimeterSpawner perimeter;
         EdgeSpawner edge;
         PercentSpawner percent;
-    struct ZoneSpawnRecord { Asset* asset = nullptr; const Area* region = nullptr; bool adjust = false; };
+        struct ZoneSpawnRecord { Asset* asset = nullptr; const Area* region = nullptr; bool adjust = false; };
     std::vector<ZoneSpawnRecord> zone_spawns;
     zone_spawns.reserve(16);
 
@@ -226,8 +225,7 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                 continue;
                         }
                 }
-                // If this spawn entry only targets areas (no real asset candidates), skip here;
-                // the secondary pass will spawn area-local groups based on these selections.
+
                 if (current_room_) {
                         bool has_area = false;
                         bool has_asset = false;
@@ -323,7 +321,7 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                         const bool track_spacing = batch_ctx.track_spacing_for(result->info, enforce_spacing);
                                         batch_ctx.checker().register_asset(result, enforce_spacing, track_spacing);
                                         batch_occupancy.set_occupied(vertex, true);
-                                        // Collect zone assets for secondary pass
+
                                         if (candidate.info && candidate.info->type == std::string("zone_asset")) {
                                                 const Area* region_area = batch_ctx.clip_area() ? batch_ctx.clip_area() : &area;
                                                 zone_spawns.push_back(ZoneSpawnRecord{ result, region_area, queue_item.adjust_geometry_to_room });
@@ -352,7 +350,6 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                         random.spawn(queue_item, &area, ctx);
                 }
 
-                // If last spawn was a zone asset, capture it
                 if (!ctx.all_assets().empty()) {
                         Asset* last = ctx.all_assets().back().get();
                         if (last && last->info && last->info->type == std::string("zone_asset")) {
@@ -363,18 +360,17 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
         }
         checker_.reset_session();
 
-        // Secondary pass for Zone Assets
         if (!zone_spawns.empty()) {
                 for (const auto& rec : zone_spawns) {
                         if (!rec.asset || !rec.asset->info) continue;
                         auto info = rec.asset->info;
-                        // Resolve the zone world area
+
                         Area zone_world = rec.asset->get_area("zone");
                         if (zone_world.get_points().size() < 3) {
                                 continue;
                         }
                         const Area* region_area = rec.region ? rec.region : &area;
-                        // Adjust to region if requested
+
                         if (rec.adjust && region_area) {
                                 auto b = region_area->get_bounds();
                                 const int region_w = std::max(1, std::get<2>(b) - std::get<0>(b));
@@ -398,7 +394,6 @@ void AssetSpawner::run_spawning(AssetSpawnPlanner* planner, const Area& area) {
                                 zone_world = std::move(adjusted_world);
                         }
 
-                        // Build area lookup for this asset's named areas in world space
                         std::unordered_map<std::string, Area> area_lookup;
                         for (const auto& named : info->areas) {
                                 if (!named.area) continue;
@@ -430,7 +425,6 @@ void AssetSpawner::run_edge_spawning(const Area& area) {
         for (auto& queue_item : spawn_queue_) {
                 if (!queue_item.has_candidates()) continue;
 
-                // Resolve per-group resolution from slider value (fallback to 5)
                 int edge_resolution = 5;
                 auto it_res = group_resolution_map_.find(queue_item.spawn_id);
                 if (it_res != group_resolution_map_.end()) {

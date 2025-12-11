@@ -35,9 +35,7 @@ void Section_SpawnGroups::build() {
     DockableCollapsible::Rows rows;
     if (!info_) {
         if (!empty_state_widget_) {
-            empty_state_widget_ = std::make_unique<ReadOnlyTextBoxWidget>(
-                "",
-                "No asset selected. Select an asset from the library or scene to view and edit its information.");
+            empty_state_widget_ = std::make_unique<ReadOnlyTextBoxWidget>( "", "No asset selected. Select an asset from the library or scene to view and edit its information.");
         }
         rows.push_back({ empty_state_widget_.get() });
         set_rows(rows);
@@ -76,8 +74,8 @@ void Section_SpawnGroups::build() {
         std::weak_ptr<AssetInfo> weak_info = info_;
         configure_entry = [weak_info](SpawnGroupConfig::EntryController& entry, const nlohmann::json&) {
             (void)weak_info;
-            // Linked-to-area providers removed; nothing to configure here.
-        };
+
+};
         list_->load(groups_, on_change, std::move(on_entry_change), std::move(configure_entry));
     } else {
         const nlohmann::json& readonly = groups_;

@@ -31,7 +31,7 @@ class MapModeUI;
 class CameraUIPanel;
 class ForegroundBackgroundEffectPanel;
 class RegenerateRoomPopup;
-// Legacy chooser removed
+
 namespace animation_editor {
 class AnimationDocument;
 class PreviewProvider;
@@ -106,7 +106,6 @@ public:
     void notify_spawn_group_config_changed(const nlohmann::json& entry);
     void notify_spawn_group_removed(const std::string& spawn_id);
 
-
     const std::vector<Asset*>& get_selected_assets() const;
     const std::vector<Asset*>& get_highlighted_assets() const;
     Asset* get_hovered_asset() const;
@@ -116,17 +115,11 @@ public:
 
     void filter_active_assets(std::vector<Asset*>& assets) const;
 
-    // Grid controls (header-only scope)
     bool is_grid_overlay_enabled() const { return grid_overlay_enabled_; }
     bool is_snap_to_grid_enabled() const { return snap_to_grid_enabled_; }
     int  grid_cell_size_px() const { return grid_cell_size_px_; }
 
-    // Frame Editor session controls
-    void begin_frame_editor_session(Asset* asset,
-                                    std::shared_ptr<animation_editor::AnimationDocument> document,
-                                    std::shared_ptr<animation_editor::PreviewProvider> preview,
-                                    const std::string& animation_id,
-                                    animation_editor::AnimationEditorWindow* host_to_toggle);
+    void begin_frame_editor_session(Asset* asset, std::shared_ptr<animation_editor::AnimationDocument> document, std::shared_ptr<animation_editor::PreviewProvider> preview, const std::string& animation_id, animation_editor::AnimationEditorWindow* host_to_toggle);
     void end_frame_editor_session();
     bool is_frame_editor_session_active() const;
 
@@ -222,38 +215,31 @@ private:
 
     std::unique_ptr<SingleSpawnGroupModal> map_assets_modal_;
     std::unique_ptr<SingleSpawnGroupModal> boundary_assets_modal_;
-    // Grid header state
+
     bool grid_overlay_enabled_ = false;
     bool snap_to_grid_enabled_ = false;
     int  grid_overlay_resolution_r_ = 0;
     bool grid_overlay_resolution_user_override_ = false;
-    int  grid_cell_size_px_ = 1; // pixels per cell
+    int  grid_cell_size_px_ = 1;
 
-    // Footer depth toggle may temporarily disable camera realism.
     bool depth_effects_forced_realism_disabled_ = false;
     bool depth_effects_prev_realism_enabled_ = true;
 
-    // Grid header controls
-    // Standard ticker for grid resolution (r)
     std::unique_ptr<class DMNumericStepper> grid_resolution_stepper_;
-    // Checkbox for grid overlay toggle
+
     std::unique_ptr<class DMCheckbox> grid_overlay_checkbox_;
-    // Cached layout of header controls for event handling
+
     SDL_Rect grid_stepper_rect_{0,0,0,0};
     SDL_Rect grid_checkbox_rect_{0,0,0,0};
 
-    // In-world frame editor session
     std::unique_ptr<class FrameEditorSession> frame_editor_session_;
     bool frame_editor_prev_grid_overlay_ = false;
-    // Track AssetInfo panel visibility during Frame Editor session
+
     bool frame_editor_prev_asset_info_open_ = false;
     Asset* frame_editor_asset_for_reopen_ = nullptr;
 
-    // When true, Assets rendering is suppressed until the camera finishes
-    // the pan/zoom transition triggered by Map→Room selection.
     bool render_suppression_in_progress_ = false;
 
-    // Depth cue on-screen manipulation
     enum class DepthCueDragState { None, Foreground, Background };
     DepthCueDragState depthcue_drag_state_ = DepthCueDragState::None;
     float depthcue_drag_start_y_ = 0.0f;

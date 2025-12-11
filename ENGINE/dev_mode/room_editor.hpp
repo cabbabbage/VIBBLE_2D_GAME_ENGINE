@@ -119,7 +119,7 @@ protected:
     void handle_spawn_config_change(const nlohmann::json& entry);
 
 private:
-    // Area drag helpers
+
     void begin_area_drag_session(const std::string& area_name, const SDL_Point& world_mouse);
     void update_area_drag_session(const SDL_Point& world_mouse);
     void finalize_area_drag_session();
@@ -235,7 +235,7 @@ private:
     bool sanitize_perimeter_spawn_groups(nlohmann::json& groups);
     std::optional<PerimeterOverlay> compute_perimeter_overlay_for_drag();
     std::optional<PerimeterOverlay> compute_perimeter_overlay_for_spawn(const std::string& spawn_id);
-    // Edge helper overlay: returns inset polygon path in world coords
+
     std::optional<std::vector<SDL_Point>> compute_edge_path_for_drag();
     std::optional<std::vector<SDL_Point>> compute_edge_path_for_spawn(const std::string& spawn_id);
     void add_spawn_group_internal();
@@ -320,7 +320,7 @@ private:
     std::vector<Asset*> selected_assets_;
     std::vector<Asset*> highlighted_assets_;
     bool highlight_dirty_ = true;
-    // Snapped cursor (world coordinates), always aligned to current grid resolution
+
     SDL_Point snapped_cursor_world_{0, 0};
     int cursor_snap_resolution_ = 0;
 
@@ -337,7 +337,6 @@ private:
     int drag_perimeter_orig_h_ = 0;
     int drag_perimeter_curr_w_ = 0;
     int drag_resolution_ = 0;
-    // Snap is always enabled during drags; resolution managed by Room/Spawn settings
 
     const Area* drag_edge_area_ = nullptr;
     SDL_Point drag_edge_center_{0, 0};
@@ -349,8 +348,6 @@ private:
     std::string drag_spawn_id_;
     bool suppress_next_left_click_ = false;
 
-    // During an active drag with snap OFF, we temporarily sync the footer grid
-    // overlay resolution to the spawn group's resolution and restore it on end.
     std::optional<int> overlay_resolution_before_drag_{};
 
     int click_buffer_frames_ = 0;
@@ -363,7 +360,6 @@ private:
     bool suppress_spawn_group_close_clear_ = false;
     std::unique_ptr<SpawnGroupConfig> spawn_group_panel_{};
 
-    // Area dragging state
     bool area_dragging_ = false;
     bool area_drag_moved_ = false;
     std::string area_drag_name_;
@@ -398,7 +394,7 @@ private:
 
     RoomAssetsSavedCallback room_assets_saved_callback_;
     std::string rename_active_room(const std::string& old_name, const std::string& desired_name);
-    std::shared_ptr<AssetInfo> last_selected_from_library_;  // Last asset selected from library
+    std::shared_ptr<AssetInfo> last_selected_from_library_;
 
     friend class DevControls;
 

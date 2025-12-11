@@ -8,7 +8,7 @@ class AIController {
             PARRY,
             DEATH,
             PATROL
-        };
+};
 
     void update(float time);
     void setState(State state);

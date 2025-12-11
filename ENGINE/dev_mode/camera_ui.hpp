@@ -83,13 +83,12 @@ private:
 
     std::unique_ptr<FloatSliderWidget> foreground_texture_opacity_slider_;
     std::unique_ptr<FloatSliderWidget> background_texture_opacity_slider_;
-    // Interpolation dropdown
+
     std::unique_ptr<DMDropdown> texture_opacity_interp_dropdown_;
     std::unique_ptr<DropdownWidget> texture_opacity_interp_widget_;
     std::unique_ptr<DMButton> image_effect_button_;
     std::unique_ptr<ButtonWidget> image_effect_widget_;
 
-    // DepthCue section enable/disable
     std::unique_ptr<DiscreteSliderWidget> render_quality_slider_;
     bool visibility_section_expanded_ = true;
     bool depth_section_expanded_ = true;

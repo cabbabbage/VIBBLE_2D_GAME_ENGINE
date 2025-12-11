@@ -230,7 +230,7 @@ std::string iso_timestamp_now() {
     return oss.str();
 }
 
-} // namespace
+}
 
 bool BuildScalingProfiles(const ScalingProfileBuildOptions& options) {
     (void)options;
@@ -249,7 +249,6 @@ bool BuildScalingProfiles(const ScalingProfileBuildOptions& options) {
         return false;
     }
 
-    // Use provided asset library if available, otherwise create a new one
     std::unique_ptr<AssetLibrary> owned_library;
     const AssetLibrary* library_ptr = options.asset_library;
     if (!library_ptr) {
@@ -306,7 +305,7 @@ bool BuildScalingProfiles(const ScalingProfileBuildOptions& options) {
 
                 candidates.push_back(std::move(candidate));
             }
-        };
+};
 
         ingest_section(rooms_data, false);
         ingest_section(trails_data, true);
@@ -361,7 +360,7 @@ bool BuildScalingProfiles(const ScalingProfileBuildOptions& options) {
                 range.max_scale = std::max(range.max_scale, desired_scale);
             }
         }
-    };
+};
 
     if (manifest_data.maps.is_object()) {
         for (auto it = manifest_data.maps.begin(); it != manifest_data.maps.end(); ++it) {
@@ -424,8 +423,7 @@ bool BuildScalingProfiles(const ScalingProfileBuildOptions& options) {
 
     try {
         manifest::save_manifest(manifest_data);
-        // Reset scaling profile cache/history so the freshly-written revisions become the baseline
-        // for the current session (prevents downstream cache invalidation when dev mode starts).
+
         render_pipeline::ScalingLogic::ResetProfileHistory();
         render_pipeline::ScalingLogic::LoadPrecomputedProfiles(true);
     } catch (const std::exception& ex) {
@@ -440,4 +438,4 @@ bool BuildScalingProfiles(const ScalingProfileBuildOptions& options) {
 #endif
 }
 
-} // namespace render_pipeline
+}

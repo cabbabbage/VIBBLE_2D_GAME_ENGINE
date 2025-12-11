@@ -29,7 +29,7 @@ public:
     enum class EffectMode {
         Foreground,
         Background
-    };
+};
     explicit ForegroundBackgroundEffectPanel(Assets* assets, int x = 160, int y = 160);
     ~ForegroundBackgroundEffectPanel() override;
 
@@ -43,7 +43,6 @@ public:
 
     void open();
 
-    // Callback when panel is closed
     using CloseCallback = std::function<void()>;
     void set_close_callback(CloseCallback callback) { close_callback_ = std::move(callback); }
     void close();
@@ -76,18 +75,13 @@ private:
     void request_preview_rebuild();
     bool can_render_preview() const;
 
-    // Manifest-based loading/saving
     void save_depth_cue_settings_to_manifest();
     bool load_depth_cue_settings_from_manifest();
     void update_preview_and_manifest();
     void generate_preview_with_python(const std::string& image_path, const camera_effects::ImageEffectSettings& settings);
     void load_preview_texture(const std::string& image_path);
-    bool settings_equal(const camera_effects::ImageEffectSettings& a,
-                        const camera_effects::ImageEffectSettings& b,
-                        float epsilon = 1e-5f) const;
-    bool should_skip_preview(const std::string& source_path,
-                             EffectMode mode,
-                             const camera_effects::ImageEffectSettings& settings) const;
+    bool settings_equal(const camera_effects::ImageEffectSettings& a, const camera_effects::ImageEffectSettings& b, float epsilon = 1e-5f) const;
+    bool should_skip_preview(const std::string& source_path, EffectMode mode, const camera_effects::ImageEffectSettings& settings) const;
 
 private:
     Assets* assets_ = nullptr;
@@ -100,7 +94,6 @@ private:
 
     std::unique_ptr<Widget> header_spacer_;
 
-    // Mode toggle buttons
     std::unique_ptr<DMButton> fg_mode_button_;
     std::unique_ptr<DMButton> bg_mode_button_;
     std::unique_ptr<ButtonWidget> fg_mode_button_widget_;
@@ -109,7 +102,6 @@ private:
     std::unique_ptr<DMDropdown> asset_dropdown_;
     std::unique_ptr<DropdownWidget> asset_dropdown_widget_;
 
-    // Single set of controls for current mode
     std::unique_ptr<Widget> preview_;
     std::unique_ptr<FloatSliderWidget> contrast_;
     std::unique_ptr<FloatSliderWidget> brightness_;

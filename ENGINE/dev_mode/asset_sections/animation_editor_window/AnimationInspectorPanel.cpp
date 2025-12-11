@@ -229,9 +229,7 @@ void render_badge(SDL_Renderer* renderer, const SDL_Rect& rect, const DMButtonSt
         return;
     }
 
-    dm_draw::DrawBeveledRect(renderer, rect, DMStyles::CornerRadius(), DMStyles::BevelDepth(), style.bg,
-                             DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(),
-                             DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect(renderer, rect, DMStyles::CornerRadius(), DMStyles::BevelDepth(), style.bg, DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     int label_width = text_width(style.label, text);
     int text_x = rect.x + std::max(0, (rect.w - label_width) / 2);
@@ -409,7 +407,7 @@ int AnimationInspectorPanel::height_for_width(int width) const {
         total += added_section ? section_gap : item_gap;
         total += height;
         added_section = true;
-    };
+};
 
     add_section_height(playback_settings_.get());
     add_section_height(movement_summary_.get());
@@ -453,8 +451,7 @@ void AnimationInspectorPanel::update() {
 
 void AnimationInspectorPanel::apply_dropdown_selections() {
     if (source_config_) {
-        // Currently only SourceConfigPanel hosts dropdowns that require committing
-        // selection back into the document (e.g., Source Animation selector).
+
         source_config_->commit_animation_dropdown_selection();
     }
 }
@@ -471,16 +468,7 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     ui::draw_panel_background(renderer, bounds_);
 
-    dm_draw::DrawBeveledRect(renderer,
-                             header_rect_,
-                             DMStyles::CornerRadius(),
-                             DMStyles::BevelDepth(),
-                             DMStyles::PanelHeader(),
-                             DMStyles::HighlightColor(),
-                             DMStyles::ShadowColor(),
-                             false,
-                             DMStyles::HighlightIntensity(),
-                             DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect(renderer, header_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelHeader(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     if (name_box_) name_box_->render(renderer);
     if (start_button_) start_button_->render(renderer);
@@ -488,11 +476,7 @@ void AnimationInspectorPanel::render(SDL_Renderer* renderer) const {
     if (is_start_animation_) {
         const DMLabelStyle& style = DMStyles::Label();
         SDL_Color accent = DMStyles::AccentButton().text;
-        render_label(renderer,
-                     "Start Animation",
-                     header_rect_.x + kInspectorPadding,
-                     header_rect_.y + header_rect_.h - style.font_size - DMSpacing::small_gap(),
-                     accent);
+        render_label(renderer, "Start Animation", header_rect_.x + kInspectorPadding, header_rect_.y + header_rect_.h - style.font_size - DMSpacing::small_gap(), accent);
     }
 
     if (source_frames_button_) source_frames_button_->render(renderer);
@@ -614,7 +598,7 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
             }
         }
     } else if (e.type == SDL_TEXTINPUT) {
-        // Text input is routed through the widget registry.
+
     }
 
     if (scrollbar_visible_ && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
@@ -646,7 +630,6 @@ bool AnimationInspectorPanel::handle_event(const SDL_Event& e) {
         set_focus(clicked);
     }
 
-    // Dispatch standard widgets (buttons, text boxes, sliders)
     if (widget_registry_.handle_event(e)) {
         handled = true;
     }
@@ -956,9 +939,7 @@ void AnimationInspectorPanel::layout_widgets() const {
     if (preview_play_button_) {
         int button_width = std::min(kPreviewControlsButtonWidth, self->preview_controls_rect_.w);
         SDL_Rect button_rect{self->preview_controls_rect_.x,
-                             self->preview_controls_rect_.y + std::max(0, (controls_height - button_height) / 2),
-                             button_width,
-                             button_height};
+                             self->preview_controls_rect_.y + std::max(0, (controls_height - button_height) / 2), button_width, button_height};
         preview_play_button_->set_rect(button_rect);
         slider_rect.x = button_rect.x + button_rect.w + button_gap;
         slider_rect.w = std::max(0, self->preview_controls_rect_.w - button_rect.w - button_gap);
@@ -993,7 +974,7 @@ void AnimationInspectorPanel::layout_widgets() const {
         widget->set_bounds(rect);
         cursor.advance(section_height);
         placed_section = true;
-    };
+};
 
     place_section(playback_settings_.get(), playback_rect_);
     place_section(movement_summary_.get(), movement_rect_);
@@ -1082,16 +1063,7 @@ void AnimationInspectorPanel::render_preview(SDL_Renderer* renderer) const {
         return;
     }
 
-    dm_draw::DrawBeveledRect(renderer,
-                             preview_rect_,
-                             DMStyles::CornerRadius(),
-                             DMStyles::BevelDepth(),
-                             DMStyles::PanelHeader(),
-                             DMStyles::HighlightColor(),
-                             DMStyles::ShadowColor(),
-                             false,
-                             DMStyles::HighlightIntensity(),
-                             DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect(renderer, preview_rect_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelHeader(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     SDL_Rect preview_clip = preview_rect_;
     const int preview_inset = DMStyles::BevelDepth();
@@ -1115,9 +1087,7 @@ void AnimationInspectorPanel::render_preview(SDL_Renderer* renderer) const {
             int draw_w = std::max(1, static_cast<int>(tex_w * scale));
             int draw_h = std::max(1, static_cast<int>(tex_h * scale));
             SDL_Rect dst{preview_rect_.x + (preview_rect_.w - draw_w) / 2,
-                         preview_rect_.y + (preview_rect_.h - draw_h) / 2,
-                         draw_w,
-                         draw_h};
+                         preview_rect_.y + (preview_rect_.h - draw_h) / 2, draw_w, draw_h};
 
             SDL_RendererFlip flip_flags = SDL_FLIP_NONE;
             if (preview_flip_x_) flip_flags = static_cast<SDL_RendererFlip>(flip_flags | SDL_FLIP_HORIZONTAL);
@@ -1129,21 +1099,15 @@ void AnimationInspectorPanel::render_preview(SDL_Renderer* renderer) const {
             const std::string text = "No Preview Available";
             int label_w = text_width(style, text);
             SDL_Color color = style.color;
-            render_label(renderer,
-                         text,
-                         preview_rect_.x + (preview_rect_.w - label_w) / 2,
-                         preview_rect_.y + preview_rect_.h / 2 - style.font_size / 2,
-                         color);
+            render_label(renderer, text, preview_rect_.x + (preview_rect_.w - label_w) / 2, preview_rect_.y + preview_rect_.h / 2 - style.font_size / 2, color);
         }
 
         if (!preview_modifier_badges_.empty()) {
             SDL_Rect badge_rect{preview_rect_.x + DMSpacing::small_gap(),
-                                preview_rect_.y + DMSpacing::small_gap(),
-                                std::max(0, preview_rect_.w - DMSpacing::small_gap() * 2),
-                                DMButton::height()};
+                                preview_rect_.y + DMSpacing::small_gap(), std::max(0, preview_rect_.w - DMSpacing::small_gap() * 2), DMButton::height()};
             render_summary_badges(renderer, badge_rect, preview_modifier_badges_);
         }
-    };
+};
 
     if (preview_clip.w > 0 && preview_clip.h > 0) {
         ClipScope scope(renderer, preview_clip);
@@ -1294,7 +1258,7 @@ void AnimationInspectorPanel::apply_dependencies() {
         source_config_->set_gif_picker(gif_picker_);
         source_config_->set_png_sequence_picker(png_sequence_picker_);
         source_config_->set_status_callback(status_callback_);
-        // Ensure sibling panels refresh immediately when source changes or mode flips
+
         source_config_->set_on_source_changed([this](const std::string& id) {
             if (playback_settings_) {
                 playback_settings_->set_document(document_);
@@ -1304,17 +1268,17 @@ void AnimationInspectorPanel::apply_dependencies() {
                 movement_summary_->set_document(document_);
                 movement_summary_->set_animation_id(id);
             }
-            // Trigger immediate update of animation properties in AssetInfo
+
             if (document_) {
                 auto payload = document_->animation_payload(id);
                 if (payload.has_value()) {
-                    // Call the immediate update callback if available
+
                     if (on_animation_properties_changed_) {
                         on_animation_properties_changed_(id, *payload);
                     }
                 }
             }
-            // Trigger relayout so checkboxes/buttons appear immediately
+
             this->layout_dirty_ = true;
         });
     }
@@ -1415,7 +1379,6 @@ void AnimationInspectorPanel::refresh_preview_metadata() const {
         self->preview_flip_movement_y_ = false;
     }
 
-    // Extract frame count
     if (payload.contains("number_of_frames")) {
         self->frame_count_ = parse_int_field(payload, "number_of_frames", 1);
         if (self->frame_count_ <= 0) self->frame_count_ = 1;

@@ -48,7 +48,7 @@ bool MenuUI::wants_return_to_main_menu() const {
 }
 
 void MenuUI::game_loop() {
-	// Use high-resolution pacing consistent with MainApp::game_loop
+
         constexpr double TARGET_FPS = 60.0;
         constexpr double TARGET_FRAME_SECONDS = 1.0 / TARGET_FPS;
         const double perf_frequency = static_cast<double>(SDL_GetPerformanceFrequency());
@@ -59,7 +59,7 @@ void MenuUI::game_loop() {
         return_to_main_menu_ = false;
         double idle_counts_accum = 0.0;
         int idle_frame_counter   = 0;
-        constexpr int IDLE_REPORT_INTERVAL = 120; // keep parity with MainApp (debug only)
+        constexpr int IDLE_REPORT_INTERVAL = 120;
 
 	while (!quit) {
                 const Uint64 frame_begin = SDL_GetPerformanceCounter();
@@ -115,10 +115,6 @@ void MenuUI::game_loop() {
                         }
                 }
 
-                // Present only when needed:
-                // - If menu overlay drawn (menu_active_), we must present now.
-                // - Else, if scene is in light-map-only mode, it already presented; skip.
-                // - Otherwise (advanced pipeline), present here.
                 bool scene_presents_itself = (game_assets_ && game_assets_->scene_light_map_only_mode());
                 if (menu_active_ || !scene_presents_itself) {
                         SDL_RenderPresent(renderer_);
@@ -139,7 +135,7 @@ void MenuUI::game_loop() {
                 }
 
                 if (idle_frame_counter >= IDLE_REPORT_INTERVAL) {
-                        // Keep parity with MainApp's debug pacing logs (if enabled elsewhere)
+
                         idle_counts_accum = 0.0;
                         idle_frame_counter = 0;
                 }

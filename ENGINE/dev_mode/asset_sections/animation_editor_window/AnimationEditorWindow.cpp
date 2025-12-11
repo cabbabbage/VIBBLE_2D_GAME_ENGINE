@@ -101,26 +101,14 @@ void copy_directory_contents(const fs::path& source, const fs::path& destination
     }
     fs::create_directories(destination, ec);
     if (ec) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                    "[AnimationEditor] Failed to prepare destination '%s' for '%s': %s",
-                    destination.generic_string().c_str(),
-                    asset_name.c_str(),
-                    ec.message().c_str());
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AnimationEditor] Failed to prepare destination '%s' for '%s': %s", destination.generic_string().c_str(), asset_name.c_str(), ec.message().c_str());
         return;
     }
     for (fs::directory_iterator it(source, ec); !ec && it != fs::directory_iterator(); ++it) {
         const fs::path target = destination / it->path().filename();
-        fs::copy(it->path(),
-                 target,
-                 fs::copy_options::recursive | fs::copy_options::overwrite_existing,
-                 ec);
+        fs::copy(it->path(), target, fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
         if (ec) {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                        "[AnimationEditor] Failed to copy '%s' to '%s' for '%s': %s",
-                        it->path().generic_string().c_str(),
-                        target.generic_string().c_str(),
-                        asset_name.c_str(),
-                        ec.message().c_str());
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AnimationEditor] Failed to copy '%s' to '%s' for '%s': %s", it->path().generic_string().c_str(), target.generic_string().c_str(), asset_name.c_str(), ec.message().c_str());
             ec.clear();
         }
     }
@@ -162,11 +150,7 @@ fs::path ensure_assets_storage(const fs::path& candidate, const AssetInfo& info)
 
     fs::create_directories(preferred, ec);
     if (ec) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                    "[AnimationEditor] Failed to create assets directory '%s' for '%s': %s",
-                    preferred.generic_string().c_str(),
-                    asset_name.c_str(),
-                    ec.message().c_str());
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[AnimationEditor] Failed to create assets directory '%s' for '%s': %s", preferred.generic_string().c_str(), asset_name.c_str(), ec.message().c_str());
         return normalized_candidate.empty() ? preferred : normalized_candidate;
     }
 
@@ -259,10 +243,10 @@ nlohmann::json build_folder_payload(const std::filesystem::path& folder) {
                 {
                     {"kind", "folder"},
                     {"path", folder.generic_string()},
-                    // Use empty string for name to avoid UI code expecting a string throwing on null
+
                     {"name", ""},
                 }},
-        };
+};
         payload["number_of_frames"] = frame_count;
         return payload;
     } catch (...) {
@@ -285,7 +269,7 @@ nlohmann::json snapshot_from_asset_folders(const AssetInfo& info, const std::fil
     nlohmann::json animations = nlohmann::json::object();
     try {
         if (!asset_root.empty() && std::filesystem::exists(asset_root) && std::filesystem::is_directory(asset_root)) {
-            // 1) Collect animations from subdirectories (legacy/default behavior)
+
             for (const auto& entry : std::filesystem::directory_iterator(asset_root)) {
                 if (!entry.is_directory()) {
                     continue;
@@ -301,14 +285,12 @@ nlohmann::json snapshot_from_asset_folders(const AssetInfo& info, const std::fil
                 animations[anim_id] = std::move(payload);
             }
 
-            // 2) Also support loose image sequences directly under the asset root.
-            //    Treat them as a default/root animation if present (e.g., 0.png, 1.png, ...).
             nlohmann::json root_payload = build_folder_payload(asset_root);
             if (root_payload.is_object() && !root_payload.empty()) {
-                // Only add when a conflicting id doesn't already exist.
+
                 std::string preferred_id = "default";
                 if (animations.contains(preferred_id)) {
-                    // Fall back to a less common identifier to avoid collisions.
+
                     preferred_id = "root";
                     if (animations.contains(preferred_id)) {
                         preferred_id = info.name.empty() ? std::string{"main"} : info.name;
@@ -326,7 +308,7 @@ nlohmann::json snapshot_from_asset_folders(const AssetInfo& info, const std::fil
         snapshot["animations"] = std::move(animations);
         std::string start_id = info.start_animation;
         if (start_id.empty()) {
-            // Prefer a sensible default if present
+
             if (snapshot["animations"].contains("default")) {
                 start_id = "default";
             } else {
@@ -423,11 +405,6 @@ AnimationEditorWindow::~AnimationEditorWindow() {
 
 void AnimationEditorWindow::set_visible(bool visible, bool process_close) {
     if (!visible && visible_ && process_close) {
-        // Quick debug switch: force rebuild on panel close for testing
-        // Uncomment the following lines to enable:
-        // if (on_document_saved_) {
-        //     on_document_saved_();
-        // }
 
         if (document_ && document_->consume_dirty_flag()) {
             auto_save_pending_ = true;
@@ -436,9 +413,8 @@ void AnimationEditorWindow::set_visible(bool visible, bool process_close) {
         auto_save_timer_frames_ = 0;
         process_auto_save();
 
-        // Finalize manifest transaction when closing editor
         if (using_manifest_store_ && manifest_transaction_) {
-            // Force finalization to ensure manifest store sees changes
+
             nlohmann::json dummy;
             persist_manifest_payload(dummy, true);
         }
@@ -483,7 +459,6 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
     }
     asset_root_path_ = ensure_assets_storage(asset_root_path_, *info);
 
-    // Flush any pending auto-save before switching context
     process_auto_save();
 
     using_manifest_store_ = false;
@@ -500,10 +475,8 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
     std::function<void(const nlohmann::json&)> persist_callback;
     bool seed_transaction_with_recovery = false;
 
-    // Prefer in-memory AssetInfo data when available
     nlohmann::json info_snapshot = build_info_snapshot();
 
-    // Open manifest transaction if possible so we can persist any recovered snapshot
     if (manifest_store_) {
         if (auto key = resolve_manifest_key(*info)) {
             manifest_asset_key_ = *key;
@@ -525,7 +498,7 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
     if (has_animation_entries(info_snapshot)) {
         snapshot = std::move(info_snapshot);
         recovery_source = SnapshotRecoverySource::AssetMetadata;
-        seed_transaction_with_recovery = true; // seed manifest with authoritative in-memory data
+        seed_transaction_with_recovery = true;
         std::cerr << "[AnimationEditor] Using animations from AssetInfo for '" << info->name << "'\n";
     } else if (manifest_transaction_) {
         nlohmann::json manifest_data = manifest_transaction_.data();
@@ -555,7 +528,7 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
         if (using_manifest_store_ && has_animation_entries(payload)) {
             persist_manifest_payload(payload);
         }
-    };
+};
 
     const bool snapshot_was_empty = !has_animation_entries(snapshot);
     document_->load_from_manifest(snapshot, asset_root_path_, persist_callback);
@@ -565,7 +538,7 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
 
     if (document_->animation_ids().empty()) {
         bool recovered = false;
-        // Try AssetInfo again (might have been updated asynchronously)
+
         nlohmann::json metadata_snapshot2 = snapshot_from_asset_info(*info);
         if (has_animation_entries(metadata_snapshot2)) {
             apply_snapshot(metadata_snapshot2, SnapshotRecoverySource::AssetMetadata);
@@ -578,7 +551,7 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
             }
         }
         if (!recovered) {
-            // As a last resort, if we have a runtime asset reference, mirror its info
+
             if (target_asset_ && target_asset_->info) {
                 nlohmann::json runtime_snapshot = snapshot_from_asset_info(*target_asset_->info);
                 if (has_animation_entries(runtime_snapshot)) {
@@ -594,8 +567,7 @@ void AnimationEditorWindow::set_info(const std::shared_ptr<AssetInfo>& info) {
     }
 
     const bool seeded_default = snapshot_was_empty && recovery_source == SnapshotRecoverySource::None &&
-                                document_ && document_->animation_ids().size() == 1 &&
-                                document_->animation_ids().front() == "default";
+                                document_ && document_->animation_ids().size() == 1 && document_->animation_ids().front() == "default";
 
     if (seeded_default) {
         document_->save_to_file();
@@ -675,7 +647,6 @@ void AnimationEditorWindow::layout_children() {
 
     int y = header_rect_.y + header_gap;
     int left_x = header_rect_.x + padding;
-
 
     if (add_button_) {
         add_button_->set_rect(SDL_Rect{left_x, y, add_button_->rect().w, DMButton::height()});
@@ -881,7 +852,6 @@ void AnimationEditorWindow::handle_list_context_menu(const std::string& animatio
 void AnimationEditorWindow::update(const Input& input, int screen_w, int screen_h) {
     if (!visible_) return;
 
-    // Only consume input if the mouse is within the window bounds to allow interaction with other UIs
     int mouse_x, mouse_y;
     SDL_GetMouseState(&mouse_x, &mouse_y);
     if (mouse_x >= bounds_.x && mouse_x < bounds_.x + bounds_.w &&
@@ -939,12 +909,9 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
 
     ensure_layout();
 
-    // If any dropdown is currently active (expanded), give it global priority
-    // so option clicks outside local widgets are captured reliably.
     if (auto* active_dd = DMDropdown::active_dropdown()) {
         if (active_dd->handle_event(e)) {
-            // Ensure any selection made via the global dropdown overlay
-            // is propagated into the inspector panels.
+
             if (inspector_panel_) {
                 inspector_panel_->apply_dropdown_selections();
             }
@@ -952,7 +919,6 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
         }
     }
 
-    // Then, give any open context menu first chance
     if (list_context_menu_ && list_context_menu_->is_open()) {
         if (list_context_menu_->handle_event(e)) {
             return true;
@@ -972,7 +938,6 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
         }
     }
 
-    // If the mouse is over the inspector area, give it exclusive mouse input (incl. scroll)
     if (inspector_panel_ && selected_animation_id_) {
         if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP ||
             e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEWHEEL) {
@@ -982,18 +947,17 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
             else { mx = e.button.x; my = e.button.y; }
             SDL_Point mp{mx, my};
             if (SDL_PointInRect(&mp, &inspector_rect_)) {
-                // Forward to inspector, but consume regardless to prevent underlying panels from reacting
+
                 (void)inspector_panel_->handle_event(e);
                 return true;
             }
         }
-        // Otherwise, let the inspector handle globally significant events (e.g. overlays)
+
         if (inspector_panel_->handle_event(e)) {
             return true;
         }
     }
 
-    // Header (close / add) comes after inspector so overlays can capture clicks
     if (handle_header_event(e)) {
         return true;
     }
@@ -1021,7 +985,7 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
         if (SDL_PointInRect(&p, &bounds_)) {
             return true;
         } else {
-            // Outside bounds, do not consume
+
             return false;
         }
     }
@@ -1032,12 +996,10 @@ bool AnimationEditorWindow::handle_event(const SDL_Event& e) {
         SDL_GetMouseState(&mx, &my);
         SDL_Point p{mx, my};
 
-        // When the cursor is over the inspector area, forward the wheel event to it
         if (inspector_panel_ && selected_animation_id_ && SDL_PointInRect(&p, &inspector_rect_)) {
             return inspector_panel_->handle_event(e);
         }
 
-        // Otherwise, do not consume the wheel event here
         return false;
     }
 
@@ -1259,12 +1221,12 @@ bool AnimationEditorWindow::handle_header_event(const SDL_Event& e) {
         if (!button) return;
         bool activated = button->handle_event(e);
         if (!activated) return;
-        // Fire actions only on mouse button release to avoid double-trigger
+
         if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) {
             callback();
         }
         consumed = true;
-    };
+};
 
     handle_button(add_button_, [this]() { create_animation_via_prompt(); });
     handle_button(build_button_, [this]() {
@@ -1475,7 +1437,7 @@ Asset* AnimationEditorWindow::resolve_frame_editor_asset() {
             return false;
         }
         return animation_editor::strings::to_lower_copy(candidate->info->name) == context_name_lower;
-    };
+};
     auto pick_from = [&](const std::vector<Asset*>& candidates) -> Asset* {
         for (Asset* candidate : candidates) {
             if (matches_context(candidate)) {
@@ -1483,7 +1445,7 @@ Asset* AnimationEditorWindow::resolve_frame_editor_asset() {
             }
         }
         return nullptr;
-    };
+};
 
     if (Asset* hovered = assets_->get_hovered_asset(); hovered && matches_context(hovered)) {
         return hovered;
@@ -1516,7 +1478,7 @@ void AnimationEditorWindow::open_frame_editor(const std::string& animation_id) {
     target_asset_ = runtime_asset;
     live_frame_editor_session_active_ = true;
     assets_->begin_frame_editor_session(runtime_asset, document_, preview_provider_, animation_id, this);
-    set_visible(false, false /*suspend without closing hooks*/);
+    set_visible(false, false );
 }
 
 void AnimationEditorWindow::on_live_frame_editor_closed(const std::string& animation_id) {
@@ -1533,7 +1495,7 @@ void AnimationEditorWindow::create_animation_via_prompt() {
     const char* input = tinyfd_inputBox("Create Animation", "Enter new animation identifier", "animation");
     if (!input) return;
     std::string name = animation_editor::strings::trim_copy(input);
-    // If no name was provided (e.g., spurious callback), do not create a default.
+
     if (name.empty()) {
         return;
     }
@@ -1582,8 +1544,7 @@ void AnimationEditorWindow::reload_document() {
         }
     }
 
-    const bool seeded_default = snapshot_was_empty && document_ && document_->animation_ids().size() == 1 &&
-                                document_->animation_ids().front() == "default";
+    const bool seeded_default = snapshot_was_empty && document_ && document_->animation_ids().size() == 1 && document_->animation_ids().front() == "default";
 
     if (seeded_default) {
         document_->save_to_file();
@@ -1660,17 +1621,17 @@ bool AnimationEditorWindow::persist_manifest_payload(const nlohmann::json& paylo
 
     nlohmann::json& draft = manifest_transaction_.data();
     if (payload.is_null()) {
-        // No payload update requested; still finalize/save below to keep transaction flow.
+
     } else if (payload.is_object()) {
         if (!draft.is_object()) {
             draft = nlohmann::json::object();
         }
-        // Merge keys instead of overwriting the entire asset entry so other sections persist.
+
         for (auto it = payload.begin(); it != payload.end(); ++it) {
             draft[it.key()] = it.value();
         }
     } else {
-        // Non-object payloads should replace the draft verbatim (legacy callers expect this).
+
         draft = payload;
     }
     bool committed = finalize ? manifest_transaction_.finalize() : manifest_transaction_.save();
@@ -1820,7 +1781,6 @@ bool AnimationEditorWindow::does_controller_exist() const {
     if (sanitized.empty()) return false;
     std::string key = generate_controller_key(sanitized);
 
-    // Check file existence
     std::filesystem::path controller_dir = "ENGINE/animation_update/custom_controllers";
     std::filesystem::path hpp_path = controller_dir / (key + ".hpp");
     return std::filesystem::exists(hpp_path);
@@ -1836,7 +1796,7 @@ std::string AnimationEditorWindow::sanitize_asset_name(const std::string& name) 
             sanitized += '_';
         }
     }
-    // Remove leading/trailing underscores
+
     sanitized.erase(0, sanitized.find_first_not_of('_'));
     sanitized.erase(sanitized.find_last_not_of('_') + 1);
     return sanitized;
@@ -1849,7 +1809,7 @@ std::string AnimationEditorWindow::generate_controller_key(const std::string& as
 std::string AnimationEditorWindow::generate_class_name(const std::string& asset_name) const {
     if (asset_name.empty()) return "";
     std::string class_name = asset_name;
-    // Capitalize first letter
+
     if (!class_name.empty()) {
         class_name[0] = std::toupper(static_cast<unsigned char>(class_name[0]));
     }
@@ -1880,71 +1840,66 @@ void AnimationEditorWindow::add_controller() {
         return;
     }
 
-    // Generate .hpp
-    std::string hpp_content = "// " + key + ".hpp\n"
-                              "#pragma once\n"
-                              "#include \"asset/asset_controller.hpp\"\n"
-                              "\n"
-                              "class Assets;\n"
-                              "class Asset;\n"
-                              "class Input;\n"
-                              "\n"
-                              "class " + class_name + " : public AssetController {\n"
-                              "public:\n"
-                              "    " + class_name + "(Assets* assets, Asset* self);\n"
-                              "    ~" + class_name + "() override = default;\n"
-                              "\n"
-                              "    // One-time setup after construction (choose default anim, etc.)\n"
-                              "    void init();\n"
-                              "\n"
-                              "    // Per-frame behavior\n"
-                              "    void update(const Input& in) override;\n"
-                              "\n"
-                              "private:\n"
-                              "    Assets* assets_ = nullptr;\n"
-                              "    Asset*  self_   = nullptr;\n"
-                              "};\n";
+    std::ostringstream hpp_builder;
+    hpp_builder << "#pragma once\n"
+                << "#include \"asset/asset_controller.hpp\"\n"
+                << "\n"
+                << "class Assets;\n"
+                << "class Asset;\n"
+                << "class Input;\n"
+                << "\n"
+                << "class " << class_name << " : public AssetController {\n"
+                << "public:\n"
+                << "    " << class_name << "(Assets* assets, Asset* self);\n"
+                << "    ~" << class_name << "() override = default;\n"
+                << "\n"
+                << "    void init();\n"
+                << "\n"
+                << "    void update(const Input& in) override;\n"
+                << "\n"
+                << "private:\n"
+                << "    Assets* assets_ = nullptr;\n"
+                << "    Asset*  self_   = nullptr;\n"
+                << "};\n";
+    std::string hpp_content = hpp_builder.str();
 
-    // Generate .cpp
-    std::string cpp_content = "// " + key + ".cpp\n"
-                              "#include \"" + key + ".hpp\"\n"
-                              "\n"
-                              "#include \"asset/Asset.hpp\"\n"
-                              "#include \"asset/animation.hpp\"\n"
-                              "#include \"asset/asset_info.hpp\"\n"
-                              "#include \"animation_update/animation_update.hpp\"\n"
-                              "#include \"utils/range_util.hpp\"\n"
-                              "#include <string>\n"
-                              "\n"
-                              "" + class_name + "::" + class_name + "(Assets* assets, Asset* self)\n"
-                              "    : assets_(assets), self_(self) {}\n"
-                              "\n"
-                              "void " + class_name + "::init() {\n"
-                              "    if (!self_ || !self_->info || !self_->anim_) return;\n"
-                              "\n"
-                              "    const std::string default_anim{ animation_update::detail::kDefaultAnimation };\n"
-                              "\n"
-                              "    // If the asset defines a default animation, start it.\n"
-                              "    auto it = self_->info->animations.find(default_anim);\n"
-                              "    if (it != self_->info->animations.end() && !it->second.frames.empty()) {\n"
-                              "        self_->anim_->move(SDL_Point{0, 0}, default_anim);\n"
-                              "    }\n"
-                              "}\n"
-                              "\n"
-                              "void " + class_name + "::update(const Input& ) {\n"
-                              "    if (!self_ || !self_->info || !self_->anim_) return;\n"
-                              "\n"
-                              "    // Keep the asset on its default animation if nothing else is driving it.\n"
-                              "    const std::string default_anim{ animation_update::detail::kDefaultAnimation };\n"
-                              "    auto it = self_->info->animations.find(default_anim);\n"
-                              "    if (it == self_->info->animations.end() || it->second.frames.empty()) return;\n"
-                              "\n"
-                              "    if (self_->current_animation != default_anim || self_->current_frame == nullptr) {\n"
-                              "        self_->anim_->move(SDL_Point{0, 0}, default_anim);\n"
-                              "    }\n"
-                              "}\n";
+    std::ostringstream cpp_builder;
+    cpp_builder << "#include \"" << key << ".hpp\"\n"
+                << "\n"
+                << "#include \"asset/Asset.hpp\"\n"
+                << "#include \"asset/animation.hpp\"\n"
+                << "#include \"asset/asset_info.hpp\"\n"
+                << "#include \"animation_update/animation_update.hpp\"\n"
+                << "#include \"utils/range_util.hpp\"\n"
+                << "#include <string>\n"
+                << "\n"
+                << class_name << "::" << class_name << "(Assets* assets, Asset* self)\n"
+                << "    : assets_(assets), self_(self) {}\n"
+                << "\n"
+                << "void " << class_name << "::init() {\n"
+                << "    if (!self_ || !self_->info || !self_->anim_) return;\n"
+                << "\n"
+                << "    const std::string default_anim{ animation_update::detail::kDefaultAnimation };\n"
+                << "\n"
+                << "    auto it = self_->info->animations.find(default_anim);\n"
+                << "    if (it != self_->info->animations.end() && !it->second.frames.empty()) {\n"
+                << "        self_->anim_->move(SDL_Point{0, 0}, default_anim);\n"
+                << "    }\n"
+                << "}\n"
+                << "\n"
+                << "void " << class_name << "::update(const Input& ) {\n"
+                << "    if (!self_ || !self_->info || !self_->anim_) return;\n"
+                << "\n"
+                << "    const std::string default_anim{ animation_update::detail::kDefaultAnimation };\n"
+                << "    auto it = self_->info->animations.find(default_anim);\n"
+                << "    if (it == self_->info->animations.end() || it->second.frames.empty()) return;\n"
+                << "\n"
+                << "    if (self_->current_animation != default_anim || self_->current_frame == nullptr) {\n"
+                << "        self_->anim_->move(SDL_Point{0, 0}, default_anim);\n"
+                << "    }\n"
+                << "}\n";
+    std::string cpp_content = cpp_builder.str();
 
-    // Write files
     std::ofstream hpp_file(hpp_path);
     if (!hpp_file) {
         set_status_message("Failed to create .hpp file.", 180);
@@ -1961,12 +1916,7 @@ void AnimationEditorWindow::add_controller() {
     cpp_file << cpp_content;
     cpp_file.close();
 
-    // Note: For the controller to be used, add: #include "animation_update/custom_controllers/" + key + ".hpp"
-    // And in create_by_key: if (key == "\"" + key + "\") return std::make_unique<" + class_name + ">(assets_, self);
-
-    // Set custom_controller_key in asset
     info_ptr->custom_controller_key = key;
-    // Assume this gets persisted when manifest is committed
 
     set_status_message("Controller created.", 240);
     update_controller_button_label();
@@ -1990,7 +1940,7 @@ void AnimationEditorWindow::open_controller() {
         set_status_message("Controller file does not exist.", 180);
         return;
     }
-    // Open with default editor
+
     std::string cmd = "cmd /c start \"\" \"" + hpp_path.string() + "\"";
     int result = std::system(cmd.c_str());
     if (result != 0) {
@@ -2029,7 +1979,6 @@ bool AnimationEditorWindow::rebuild_animation_via_pipeline(const std::shared_ptr
         return false;
     }
 
-    // Refresh animation data/textures from disk/cache
     info->reload_animations_from_disk();
     info->loadAnimations(renderer);
 
@@ -2148,7 +2097,7 @@ std::vector<std::filesystem::path> AnimationEditorWindow::pick_png_sequence() co
     if (SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd)))) {
         DWORD options = 0;
         if (SUCCEEDED(pfd->GetOptions(&options))) {
-            options |= FOS_FORCEFILESYSTEM; // single selection by default
+            options |= FOS_FORCEFILESYSTEM;
             pfd->SetOptions(options);
         }
         pfd->SetTitle(L"Upload PNG");
@@ -2263,7 +2212,7 @@ std::optional<std::filesystem::path> AnimationEditorWindow::pick_audio_file() co
             {L"WAV", L"*.wav"},
             {L"OGG", L"*.ogg"},
             {L"MP3", L"*.mp3"}
-        };
+};
         pfd->SetFileTypes(4, filters);
         pfd->SetDefaultExtension(L"wav");
         if (!default_path.empty()) {

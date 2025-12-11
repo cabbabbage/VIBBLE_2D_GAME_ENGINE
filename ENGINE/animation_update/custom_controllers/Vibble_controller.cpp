@@ -51,7 +51,6 @@ void VibbleController::movement(const Input& input) {
     const float velocity_x = static_cast<float>(raw_x) * speedMultiplier * stride_count;
     const float velocity_y = static_cast<float>(raw_y) * speedMultiplier * stride_count;
 
-    // Accumulate subpixel movement so rounding does not drop motion on uneven frame times
     auto consume_axis = [](float& accumulator) -> int {
         int whole = 0;
         if (accumulator >= 1.0f) {
@@ -62,7 +61,7 @@ void VibbleController::movement(const Input& input) {
             accumulator -= static_cast<float>(whole);
         }
         return whole;
-    };
+};
 
     subpixel_x_ += velocity_x * dt;
     subpixel_y_ += velocity_y * dt;
@@ -76,7 +75,7 @@ void VibbleController::movement(const Input& input) {
 
     std::string animation_id = animation_for_direction(raw_x, raw_y);
     if (isDashing && player_->info) {
-        // Prefer a dash animation if available while dashing
+
         const auto& animations = player_->info->animations;
         if (animations.find("dash") != animations.end()) {
             animation_id = "dash";
@@ -95,7 +94,7 @@ float VibbleController::frame_dt() const {
     if (Assets* assets = player_->get_assets()) {
         const float dt = assets->frame_delta_seconds();
         if (std::isfinite(dt) && dt > 0.0f) {
-            // Clamp extreme spikes so we do not teleport on long frames
+
             return std::min(dt, 0.1f);
         }
     }
@@ -135,7 +134,7 @@ std::string VibbleController::animation_for_direction(int raw_x, int raw_y) cons
 
     auto has_animation = [&animations](const std::string& name) {
         return animations.find(name) != animations.end();
-    };
+};
 
     const std::string forward_anim   = "forward";
     const std::string backward_anim  = "backward";
@@ -177,10 +176,8 @@ std::string VibbleController::animation_for_direction(int raw_x, int raw_y) cons
 
 void VibbleController::Dash() {
     if(!canDash) return;
-    // Starting our dash
+
     canDash = false;
     isDashing = true;
-    dashEndTime = std::chrono::steady_clock::now() + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-        std::chrono::duration<float>(dashingTime)
-    ); // Ending dash within update and setting the bools back
+    dashEndTime = std::chrono::steady_clock::now() + std::chrono::duration_cast<std::chrono::steady_clock::duration>( std::chrono::duration<float>(dashingTime) );
 }

@@ -56,19 +56,15 @@ public:
     const SDL_Rect& rect() const { return rect_; }
     bool contains(int x, int y) const;
 
-    // Grid controls
     void set_grid_overlay_enabled(bool enabled);
     bool grid_overlay_enabled() const { return grid_overlay_enabled_; }
     void set_grid_resolution(int resolution);
     int grid_resolution() const { return grid_resolution_; }
 
-    // Depth effects toggle
     void set_depth_effects_enabled(bool enabled);
     void set_depth_effects_callbacks(std::function<void(bool)> cb);
 
-    // Callbacks for grid controls in footer
-    void set_grid_controls_callbacks(std::function<void(bool)> on_overlay_toggle,
-                                     std::function<void(int, bool)> on_resolution_change);
+    void set_grid_controls_callbacks(std::function<void(bool)> on_overlay_toggle, std::function<void(int, bool)> on_resolution_change);
 
 private:
     void layout();
@@ -90,10 +86,9 @@ private:
 
     std::vector<Button> buttons_;
 
-    // Grid controls
     bool grid_overlay_enabled_ = false;
     int grid_resolution_ = 0;
-    // removed snap-to-grid state (snap is always on in editor)
+
     std::unique_ptr<DMCheckbox> depth_effects_checkbox_;
     std::unique_ptr<DMCheckbox> grid_checkbox_;
     std::unique_ptr<DMNumericStepper> grid_stepper_;

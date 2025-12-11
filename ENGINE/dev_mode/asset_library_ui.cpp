@@ -473,16 +473,8 @@ struct AssetLibraryUI::AssetTileWidget : public Widget {
                 SDL_Color check = DMStyles::CheckboxCheckColor();
                 SDL_SetRenderDrawColor(r, check.r, check.g, check.b, check.a);
                 const int inset = std::max(3, button_rect.w / 5);
-                SDL_RenderDrawLine(r,
-                                   button_rect.x + inset,
-                                   button_rect.y + button_rect.h / 2,
-                                   button_rect.x + button_rect.w / 2,
-                                   button_rect.y + button_rect.h - inset + 1);
-                SDL_RenderDrawLine(r,
-                                   button_rect.x + button_rect.w / 2,
-                                   button_rect.y + button_rect.h - inset + 1,
-                                   button_rect.x + button_rect.w - inset,
-                                   button_rect.y + inset);
+                SDL_RenderDrawLine(r, button_rect.x + inset, button_rect.y + button_rect.h / 2, button_rect.x + button_rect.w / 2, button_rect.y + button_rect.h - inset + 1);
+                SDL_RenderDrawLine(r, button_rect.x + button_rect.w / 2, button_rect.y + button_rect.h - inset + 1, button_rect.x + button_rect.w - inset, button_rect.y + inset);
             }
         } else {
             const auto& delete_style = DMStyles::DeleteButton();
@@ -782,9 +774,7 @@ struct AssetLibraryUI::HashtagTileWidget : public Widget {
                         int dw = std::min(icon_w, preview_rect.w);
                         int dh = std::min(icon_h, preview_rect.h);
                         SDL_Rect dst{preview_rect.x + (preview_rect.w - dw) / 2,
-                                     preview_rect.y + (preview_rect.h - dh) / 2,
-                                     dw,
-                                     dh};
+                                     preview_rect.y + (preview_rect.h - dh) / 2, dw, dh};
                         SDL_RenderCopy(r, tex, nullptr, &dst);
                         SDL_DestroyTexture(tex);
                     }
@@ -946,7 +936,7 @@ void AssetLibraryUI::toggle() {
     floating_->set_visible(should_show);
     if (should_show) {
         floating_->set_expanded(true);
-            // Ensure at least header controls render immediately
+
         rebuild_rows();
         if (search_box_) search_box_->start_editing();
     } else if (search_box_) {
@@ -961,7 +951,7 @@ void AssetLibraryUI::open() {
     if (floating_) {
         floating_->set_visible(true);
         floating_->set_expanded(true);
-            // Build initial rows so the body isn't empty before first update()
+
         rebuild_rows();
         if (search_box_) search_box_->start_editing();
     }
@@ -1537,7 +1527,6 @@ void AssetLibraryUI::refresh_tiles(Assets& assets) {
         ));
     }
 
-    // Append Room Areas to tiles
     if (assets_owner_) {
         std::vector<std::pair<std::string, std::string>> area_refs;
         for (Room* room : assets_owner_->rooms()) {
@@ -1570,9 +1559,7 @@ void AssetLibraryUI::refresh_tiles(Assets& assets) {
 
 void AssetLibraryUI::perform_delete(const PendingDeleteInfo& pending, bool defer_multi_select_refresh) {
     const std::string asset_name = pending.name;
-    const std::filesystem::path asset_dir = pending.asset_dir.empty() && !asset_name.empty()
-        ? asset_paths::asset_folder_path(asset_name)
-        : std::filesystem::path(pending.asset_dir);
+    const std::filesystem::path asset_dir = pending.asset_dir.empty() && !asset_name.empty() ? asset_paths::asset_folder_path(asset_name) : std::filesystem::path(pending.asset_dir);
     const std::filesystem::path cache_dir = std::filesystem::path("cache") / asset_name;
 
     if (assets_owner_) {
@@ -1662,8 +1649,7 @@ void AssetLibraryUI::perform_delete(const PendingDeleteInfo& pending, bool defer
     if (!asset_dir.empty()) {
         const auto normalized_dir = asset_dir.lexically_normal();
         if (asset_paths::is_protected_asset_root(normalized_dir)) {
-            std::cerr << "[AssetLibraryUI] Refusing to remove protected asset root '" << normalized_dir.generic_string()
-                      << "'\n";
+            std::cerr << "[AssetLibraryUI] Refusing to remove protected asset root '" << normalized_dir.generic_string() << "'\n";
         } else {
             remove_directory_if_exists(normalized_dir);
         }
@@ -1861,7 +1847,6 @@ AssetLibraryUI::CreateAssetResult AssetLibraryUI::create_new_asset(const std::st
 
         const std::string asset_dir_str = dir.lexically_normal().generic_string();
 
-        // Seed a fresh default animation entry so the editor opens with a usable state.
         nlohmann::json default_anim = {
             {"loop", true},
             {"locked", false},
@@ -1873,7 +1858,7 @@ AssetLibraryUI::CreateAssetResult AssetLibraryUI::create_new_asset(const std::st
                 {"path", "default"},
                 {"name", ""}
             }}
-        };
+};
 
         nlohmann::json manifest_entry = {
             {"asset_name", name},
@@ -1881,7 +1866,7 @@ AssetLibraryUI::CreateAssetResult AssetLibraryUI::create_new_asset(const std::st
             {"animations", nlohmann::json{{"default", default_anim}}},
             {"start", "default"},
             {"asset_directory", asset_dir_str}
-        };
+};
         manifest_entry["tags"] = nlohmann::json::array();
         manifest_entry["anti_tags"] = nlohmann::json::array();
         manifest_entry["neighbor_search_distance"] = 500;
@@ -1946,7 +1931,7 @@ AssetLibraryUI::CreateAssetResult AssetLibraryUI::create_new_asset(const std::st
                 if (SDL_Renderer* renderer = assets_owner_->renderer()) {
                     library_owner_->ensureAllAnimationsLoaded(renderer);
                 }
-                // Open the asset info editor and animation editor for the new asset
+
                 auto new_info = library_owner_->get(name);
                 if (new_info) {
                     assets_owner_->open_asset_info_editor(new_info);
@@ -2303,7 +2288,7 @@ bool AssetLibraryUI::is_input_blocking_at(int mx, int my) const {
                 return true;
             }
         }
-        // Fallback to panel bounds while the delete modal is anchored to it
+
         return SDL_PointInRect(&p, &floating_->rect()) == SDL_TRUE;
     }
     return SDL_PointInRect(&p, &floating_->rect()) == SDL_TRUE;
@@ -2313,7 +2298,6 @@ bool AssetLibraryUI::is_dragging_asset() const {
     return false;
 }
 
-// Panel state helpers declared in the header
 void AssetLibraryUI::set_position(int x, int y) {
     if (floating_) {
         floating_->set_position(x, y);
@@ -2323,7 +2307,7 @@ void AssetLibraryUI::set_position(int x, int y) {
 void AssetLibraryUI::set_expanded(bool e) {
     if (floating_) {
         floating_->set_expanded(e);
-        // Keep rows consistent with expanded state
+
         rebuild_rows();
     }
 }

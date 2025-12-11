@@ -36,7 +36,7 @@ AssetSpawnPlanner::AssetSpawnPlanner(const std::vector<nlohmann::json>& json_sou
                 assets_provenance_.push_back(std::move(ref));
             }
         } catch (...) {
-            // Skip malformed spawn source to avoid crashing load
+
             continue;
         }
     }
@@ -208,7 +208,6 @@ void AssetSpawnPlanner::parse_asset_spawns(const Area& area) {
             quantity = 1;
         }
 
-        // Propagate explicit flip override to runtime via Asset static mapping
         bool explicit_flip = false;
         bool force_flipped = false;
         try {

@@ -52,7 +52,7 @@ void refresh_loaded_animation_instances(Assets* assets,
         }
 
         asset->on_scale_factor_changed();
-    };
+};
 
     for (Asset* asset : assets->all) {
         refresh(asset);
@@ -61,4 +61,4 @@ void refresh_loaded_animation_instances(Assets* assets,
     assets->mark_active_assets_dirty();
 }
 
-} // namespace devmode
+}

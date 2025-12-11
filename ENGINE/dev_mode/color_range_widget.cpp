@@ -322,13 +322,13 @@ private:
 
 void DMColorRangeWidget::Picker::render(SDL_Renderer* r) const {
     if (!r) return;
-    // Draw solid background
+
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_Color bg = DMStyles::PanelBG();
-    bg.a = 255; // Make opaque
+    bg.a = 255;
     SDL_SetRenderDrawColor(r, bg.r, bg.g, bg.b, bg.a);
     SDL_RenderFillRect(r, &rect_);
-    // Call base render
+
     DockableCollapsible::render(r);
 }
 

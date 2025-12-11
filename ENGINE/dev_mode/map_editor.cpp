@@ -109,13 +109,12 @@ void MapEditor::update(const Input& input) {
     SDL_Point map_pt{static_cast<int>(std::lround(map_pt_f.x)), static_cast<int>(std::lround(map_pt_f.y))};
     const bool pointer_over_ui = ui_blocker_ ? ui_blocker_(screen_pt.x, screen_pt.y) : false;
 
-    // Determine modifier state for Map Mode interactions
     const bool shift_down =
         input.isScancodeDown(SDL_SCANCODE_LSHIFT) || input.isScancodeDown(SDL_SCANCODE_RSHIFT);
 
     Room* area_hit = hit_test_room(map_pt);
     Room* label_hit = nullptr;
-    // Only treat label rects as interactive when Shift is held
+
     if (shift_down) {
         for (const auto& entry : label_rects_) {
             if (SDL_PointInRect(&screen_pt, &entry.second)) {
@@ -127,7 +126,6 @@ void MapEditor::update(const Input& input) {
 
     Room* hit = label_hit ? label_hit : area_hit;
 
-    // Match Room Editor pan behavior: allow click-drag panning unless Shift-clicking a target
     const bool left_down = input.isDown(Input::LEFT);
     const bool left_pressed = input.wasPressed(Input::LEFT);
     const bool pan_blocked = pointer_over_ui || (shift_down && hit != nullptr && (left_down || left_pressed));
@@ -137,7 +135,6 @@ void MapEditor::update(const Input& input) {
         return;
     }
 
-    // Only enter Room/Trail mode when Shift is held and a target is clicked
     if (input.wasClicked(Input::LEFT)) {
         if (shift_down && hit) {
             pending_selection_ = hit;
@@ -159,9 +156,7 @@ void MapEditor::render(SDL_Renderer* renderer) {
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
     label_rects_.clear();
-    // Always render room/trail geometry and labels in Map Mode
 
-    // Resolve active label bounds from provider or fall back to full screen
     active_label_bounds_ = effective_label_bounds();
 
     struct LabelInfo {
@@ -715,21 +710,21 @@ bool MapEditor::rects_overlap(const SDL_Rect& a, const SDL_Rect& b) {
 }
 
 SDL_Rect MapEditor::effective_label_bounds() const {
-    // Default to full screen if we can't compute bounds
+
     SDL_Rect fallback{0, 0, std::max(0, screen_w_), std::max(0, screen_h_)};
     if (!label_safe_area_provider_) {
         return fallback;
     }
     SDL_Rect area = label_safe_area_provider_();
-    // Sanitize area against current screen
+
     if (area.w <= 0 || area.h <= 0) return fallback;
     if (screen_w_ > 0 && screen_h_ > 0) {
-        // Clamp within screen
+
         int max_x = std::max(0, screen_w_ - area.w);
         int max_y = std::max(0, screen_h_ - area.h);
         area.x = std::clamp(area.x, 0, max_x);
         area.y = std::clamp(area.y, 0, max_y);
-        // Ensure does not exceed screen
+
         if (area.x + area.w > screen_w_) area.w = std::max(0, screen_w_ - area.x);
         if (area.y + area.h > screen_h_) area.h = std::max(0, screen_h_ - area.y);
     }

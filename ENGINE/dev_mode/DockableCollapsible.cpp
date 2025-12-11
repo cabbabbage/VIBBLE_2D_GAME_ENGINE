@@ -34,8 +34,7 @@ namespace {
         }
 
         const SDL_Color stroke = DMStyles::Border();
-        const SDL_Color body_fill = locked ? DMStyles::ButtonBaseFill()
-                                           : dm_draw::LightenColor(DMStyles::ButtonBaseFill(), 0.08f);
+        const SDL_Color body_fill = locked ? DMStyles::ButtonBaseFill() : dm_draw::LightenColor(DMStyles::ButtonBaseFill(), 0.08f);
 
         const int horizontal_padding = std::max(1, rect.w / 8);
         SDL_Rect body = rect;
@@ -85,7 +84,7 @@ namespace {
         auto draw_thick_segment = [r](int x0, int y0, int x1, int y1) {
             SDL_RenderDrawLine(r, x0, y0, x1, y1);
             SDL_RenderDrawLine(r, x0, y0 + 1, x1, y1 + 1);
-        };
+};
 
         SDL_SetRenderDrawColor(r, stroke.r, stroke.g, stroke.b, stroke.a);
 
@@ -112,17 +111,7 @@ namespace {
         }
 
         const int body_radius = std::min(DMStyles::CornerRadius(), std::min(body.w, body.h) / 3);
-        dm_draw::DrawBeveledRect(
-            r,
-            body,
-            body_radius,
-            DMStyles::BevelDepth(),
-            body_fill,
-            DMStyles::HighlightColor(),
-            DMStyles::ShadowColor(),
-            true,
-            DMStyles::HighlightIntensity(),
-            DMStyles::ShadowIntensity());
+        dm_draw::DrawBeveledRect( r, body, body_radius, DMStyles::BevelDepth(), body_fill, DMStyles::HighlightColor(), DMStyles::ShadowColor(), true, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
         const SDL_Color key_color = dm_draw::DarkenColor(body_fill, 0.45f);
         SDL_SetRenderDrawColor(r, key_color.r, key_color.g, key_color.b, key_color.a);
@@ -136,8 +125,7 @@ namespace {
 
         SDL_Rect stem{ key_center_x - std::max(1, key_radius / 3),
                        key_center_y,
-                       std::max(2, key_radius / 2),
-                       std::max(2, body.h / 3) };
+                       std::max(2, key_radius / 2), std::max(2, body.h / 3) };
         SDL_RenderFillRect(r, &stem);
     }
 

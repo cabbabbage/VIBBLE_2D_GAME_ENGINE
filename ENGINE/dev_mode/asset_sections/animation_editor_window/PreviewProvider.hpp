@@ -27,7 +27,6 @@ class PreviewProvider {
     void invalidate(const std::string& animation_id);
     void invalidate_all();
 
-    // Get the number of frames for an animation (handles recursive sourcing)
     int get_frame_count(const std::string& animation_id) const;
 
   private:
@@ -35,24 +34,24 @@ class PreviewProvider {
         SDL_Renderer* renderer = nullptr;
         std::shared_ptr<SDL_Texture> texture;
         std::string signature;
-    };
+};
 
     struct FrameCacheEntry {
         SDL_Renderer* renderer = nullptr;
         std::string signature;
         std::vector<std::shared_ptr<SDL_Texture>> textures;
-    };
+};
 
     struct FrameImageRequest {
         std::filesystem::path path;
         bool flip_x = false;
         bool flip_y = false;
-    };
+};
 
     struct ResolvedAnimation {
         std::vector<FrameImageRequest> frames;
         std::string signature;
-    };
+};
 
     std::shared_ptr<SDL_Texture> build_texture(SDL_Renderer* renderer, const std::string& animation_id, int depth = 0);
     std::shared_ptr<SDL_Texture> build_texture_from_resolved(SDL_Renderer* renderer, const ResolvedAnimation& resolved);

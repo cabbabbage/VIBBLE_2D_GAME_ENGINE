@@ -68,4 +68,4 @@ class ScrollController {
 
 void draw_panel_background(SDL_Renderer* renderer, const SDL_Rect& bounds);
 
-}  // namespace animation_editor::ui
+}

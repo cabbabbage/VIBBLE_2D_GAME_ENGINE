@@ -64,7 +64,6 @@ class AnimationEditorWindow {
 
     std::shared_ptr<AnimationDocument> document() const { return document_; }
 
-    // Wiring to in-world frame editor session
     void set_assets(Assets* assets) { assets_ = assets; }
     void set_target_asset(Asset* asset) { target_asset_ = asset; }
     void on_live_frame_editor_closed(const std::string& animation_id);
@@ -119,8 +118,7 @@ class AnimationEditorWindow {
     void persist_header_metadata(float speed_multiplier, bool crop_frames);
     std::vector<float> speed_multiplier_options() const;
     bool rebuild_animation_from_sources(const std::shared_ptr<AssetInfo>& info, const std::string& animation_id);
-    bool rebuild_animation_via_pipeline(const std::shared_ptr<AssetInfo>& info,
-                      const std::string& animation_id);
+    bool rebuild_animation_via_pipeline(const std::shared_ptr<AssetInfo>& info, const std::string& animation_id);
     bool rebuild_all_animations_via_pipeline(const std::shared_ptr<AssetInfo>& info);
 
   private:
@@ -158,7 +156,6 @@ class AnimationEditorWindow {
     std::string manifest_asset_key_;
     bool using_manifest_store_ = false;
 
-    // For in-world frame editor session
     Assets* assets_ = nullptr;
     Asset* target_asset_ = nullptr;
 

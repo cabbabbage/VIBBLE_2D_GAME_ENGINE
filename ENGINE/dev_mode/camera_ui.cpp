@@ -215,11 +215,7 @@ public:
     SectionToggleWidget(std::string label, bool expanded)
         : label_(std::move(label)),
           expanded_(expanded) {
-        button_ = std::make_unique<DMButton>(
-            "",
-            &DMStyles::HeaderButton(),
-            DockableCollapsible::kDefaultFloatingContentWidth,
-            DMButton::height());
+        button_ = std::make_unique<DMButton>( "", &DMStyles::HeaderButton(), DockableCollapsible::kDefaultFloatingContentWidth, DMButton::height());
         if (button_) {
             button_->set_tooltip_state(this->tooltip_state());
         }
@@ -282,8 +278,7 @@ private:
     void update_button_text() {
         if (!button_) return;
         const std::string indicator = expanded_
-            ? std::string(DMIcons::CollapseExpanded())
-            : std::string(DMIcons::CollapseCollapsed());
+            ? std::string(DMIcons::CollapseExpanded()) : std::string(DMIcons::CollapseCollapsed());
         button_->set_text(indicator + " " + label_);
         const DMButtonStyle* style = expanded_ ? &DMStyles::HeaderButton() : &DMStyles::FooterToggleButton();
         button_->set_style(style);
@@ -295,7 +290,6 @@ private:
     bool expanded_ = true;
     ToggleCallback on_toggle_{};
 };
-
 
 class DiscreteSliderWidget : public Widget {
 public:
@@ -520,7 +514,7 @@ private:
         SDL_Point center{0, 0};
         int radius = 0;
         int knob_size = 12;
-    };
+};
 
     DialGeometry compute_geometry() const {
         DialGeometry g{};
@@ -529,8 +523,7 @@ private:
             rect_.x,
             rect_.y + heading_h,
             rect_.w,
-            std::max(0, rect_.h - heading_h)
-        };
+            std::max(0, rect_.h - heading_h) };
         const int padding = 12;
         const int usable_w = std::max(1, g.area.w - padding * 2);
         const int usable_h = std::max(1, g.area.h - padding * 2);
@@ -555,9 +548,7 @@ private:
             for (int i = 1; i <= segments; ++i) {
                 const float theta = (static_cast<float>(i) / static_cast<float>(segments)) * 2.0f * kPi;
                 SDL_Point next{
-                    c.x + static_cast<int>(std::round(std::cos(theta) * static_cast<float>(r))),
-                    c.y + static_cast<int>(std::round(std::sin(theta) * static_cast<float>(r)))
-                };
+                    c.x + static_cast<int>(std::round(std::cos(theta) * static_cast<float>(r))), c.y + static_cast<int>(std::round(std::sin(theta) * static_cast<float>(r))) };
                 SDL_RenderDrawLine(renderer, prev.x, prev.y, next.x, next.y);
                 prev = next;
             }
@@ -576,9 +567,7 @@ private:
         const float dir_x = std::cos(rad);
         const float dir_y = -std::sin(rad);
         const SDL_Point knob{
-            g.center.x + static_cast<int>(std::round(dir_x * static_cast<float>(g.radius))),
-            g.center.y + static_cast<int>(std::round(dir_y * static_cast<float>(g.radius)))
-        };
+            g.center.x + static_cast<int>(std::round(dir_x * static_cast<float>(g.radius))), g.center.y + static_cast<int>(std::round(dir_y * static_cast<float>(g.radius))) };
         SDL_Color line_color = dragging_ ? slider_style.track_fill_active : slider_style.track_fill;
         SDL_SetRenderDrawColor(renderer, line_color.r, line_color.g, line_color.b, line_color.a);
         SDL_RenderDrawLine(renderer, g.center.x, g.center.y, knob.x, knob.y);
@@ -589,15 +578,13 @@ private:
         const float dir_x = std::cos(rad);
         const float dir_y = -std::sin(rad);
         const SDL_Point knob_center{
-            g.center.x + static_cast<int>(std::round(dir_x * static_cast<float>(g.radius))),
-            g.center.y + static_cast<int>(std::round(dir_y * static_cast<float>(g.radius)))
-        };
+            g.center.x + static_cast<int>(std::round(dir_x * static_cast<float>(g.radius))), g.center.y + static_cast<int>(std::round(dir_y * static_cast<float>(g.radius))) };
         SDL_Rect knob_rect{
             knob_center.x - g.knob_size / 2,
             knob_center.y - g.knob_size / 2,
             g.knob_size,
             g.knob_size
-        };
+};
         SDL_Color knob_col   = slider_style.knob;
         SDL_Color knob_border = slider_style.knob_border;
         if (dragging_) {
@@ -609,17 +596,7 @@ private:
         }
         const int bevel = std::min(DMStyles::BevelDepth(), std::max(1, g.knob_size / 3));
         const int radius = std::min(DMStyles::CornerRadius(), g.knob_size / 2);
-        dm_draw::DrawBeveledRect(
-            renderer,
-            knob_rect,
-            radius,
-            bevel,
-            knob_col,
-            DMStyles::HighlightColor(),
-            DMStyles::ShadowColor(),
-            true,
-            DMStyles::HighlightIntensity(),
-            DMStyles::ShadowIntensity());
+        dm_draw::DrawBeveledRect( renderer, knob_rect, radius, bevel, knob_col, DMStyles::HighlightColor(), DMStyles::ShadowColor(), true, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
         dm_draw::DrawRoundedOutline(renderer, knob_rect, radius, 1, knob_border);
     }
 
@@ -633,7 +610,7 @@ private:
             g.center.y - icon_size / 2,
             icon_size,
             icon_size
-        };
+};
         SDL_Point pivot{ icon_size / 2, icon_size / 2 };
         SDL_RenderCopyEx(renderer, icon_texture_, nullptr, &dst, -angle_deg_, &pivot, SDL_FLIP_NONE);
     }
@@ -654,9 +631,7 @@ private:
         const float dir_y = -std::sin(rad);
         const int text_radius = g.radius + g.knob_size + 12;
         SDL_Point anchor{
-            g.center.x + static_cast<int>(std::round(dir_x * static_cast<float>(text_radius))),
-            g.center.y + static_cast<int>(std::round(dir_y * static_cast<float>(text_radius)))
-        };
+            g.center.x + static_cast<int>(std::round(dir_x * static_cast<float>(text_radius))), g.center.y + static_cast<int>(std::round(dir_y * static_cast<float>(text_radius))) };
         SDL_Rect dst{ anchor.x - w / 2, anchor.y - h / 2, w, h };
         SDL_Point pivot{ w / 2, h / 2 };
         SDL_RenderCopyEx(renderer, tex, nullptr, &dst, -angle_deg_, &pivot, SDL_FLIP_NONE);
@@ -734,7 +709,7 @@ class ZoomKeyPointWidget : public Widget {
 public:
     struct Values {
         float zoom = 1.0f;
-    };
+};
 
     ZoomKeyPointWidget(std::string label, const Values& values, bool expanded, float zoom_min, float zoom_max)
         : label_(std::move(label)),
@@ -753,8 +728,7 @@ public:
         }
         set_zoom_button_ = std::make_unique<DMButton>("Set Zoom", &DMStyles::SecondaryButton(), 120, DMButton::height());
 
-        zoom_slider_ = std::make_unique<FloatSliderWidget>(
-            "Zoom", zoom_min_, zoom_max_, 0.01f, values.zoom, 2);
+        zoom_slider_ = std::make_unique<FloatSliderWidget>( "Zoom", zoom_min_, zoom_max_, 0.01f, values.zoom, 2);
         if (zoom_slider_) {
             zoom_slider_->set_tooltip("Zoom anchor for this key point.");
             zoom_slider_->set_on_value_changed([this](float) { notify_change(); });
@@ -804,7 +778,7 @@ public:
             auto add_height = [&](const Widget* wgt) {
                 if (!wgt) return;
                 height += wgt->height_for_width(width) + gap;
-            };
+};
             add_height(zoom_slider_.get());
         }
         return height;
@@ -834,7 +808,7 @@ public:
         auto handle_child = [&](Widget* w) {
             if (!w) return false;
             return w->handle_event(e);
-        };
+};
         used = handle_child(zoom_slider_.get()) || used;
         return used;
     }
@@ -863,8 +837,7 @@ private:
 
         const int header_h = DMButton::height();
         const int button_w = set_zoom_button_
-            ? std::min(width / 3, std::max(set_zoom_button_->preferred_width(), 110))
-            : 0;
+            ? std::min(width / 3, std::max(set_zoom_button_->preferred_width(), 110)) : 0;
         const int toggle_w = std::max(0, width - button_w - (button_w > 0 ? gap : 0));
 
         if (header_toggle_) {
@@ -886,7 +859,7 @@ private:
             int h = child->height_for_width(width);
             child->set_rect(SDL_Rect{ x, y, width, h });
             y += h + gap;
-        };
+};
 
         place_child(zoom_slider_.get());
     }
@@ -935,7 +908,7 @@ void CameraUIPanel::set_image_effects_panel_callback(std::function<void()> cb) {
 void CameraUIPanel::open() {
     set_visible(true);
     suppress_apply_once_ = true;
-    // Collapse all sections by default when opened
+
     visibility_section_expanded_ = false;
     depth_section_expanded_ = false;
     depthcue_section_expanded_ = false;
@@ -969,9 +942,9 @@ void CameraUIPanel::update(const Input& input, int screen_w, int screen_h) {
     DockableCollapsible::update(input, screen_w, screen_h);
     const bool currently_visible = is_visible();
     if (currently_visible && !previously_visible) {
-        // Panel might be shown via base-class helpers; always resync when this happens.
+
         suppress_apply_once_ = true;
-        // Collapse all sections by default when the panel becomes visible
+
         visibility_section_expanded_ = false;
         depth_section_expanded_ = false;
         depthcue_section_expanded_ = false;
@@ -1006,12 +979,12 @@ void CameraUIPanel::render(SDL_Renderer* renderer) const {
     if (is_visible()) {
         DockableCollapsible::render(renderer);
     }
-    // Ensure expanded dropdown options render above the panel
+
     DMDropdown::render_active_options(renderer);
 }
 
 void CameraUIPanel::layout_custom_content(int screen_w, int screen_h) const {
-    // Allow dragging the panel by clicking the banner area as well as the header
+
     if (hero_banner_widget_) {
         set_drag_handle_rect(hero_banner_widget_->rect());
     } else {
@@ -1069,9 +1042,7 @@ void CameraUIPanel::build_ui() {
     set_floating_content_width(460);
 
     header_spacer_ = std::make_unique<SpacerWidget>(DMSpacing::header_gap());
-    hero_banner_widget_ = std::make_unique<PanelBannerWidget>(
-        "Camera realism",
-        "Dial in render buffers and parallax depth without leaving the editor.");
+    hero_banner_widget_ = std::make_unique<PanelBannerWidget>( "Camera realism", "Dial in render buffers and parallax depth without leaving the editor.");
     realism_enabled_checkbox_ = std::make_unique<DMCheckbox>("Enable Realism Effects", last_realism_enabled_);
     realism_widget_ = std::make_unique<CheckboxWidget>(realism_enabled_checkbox_.get());
     realism_widget_->set_tooltip("Toggle perspective effects, grid warping, and parallax depth.");
@@ -1096,7 +1067,7 @@ void CameraUIPanel::build_ui() {
             rebuild_rows();
         });
         target->set_tooltip("Click to collapse or expand this section.");
-    };
+};
 
     configure_section(visibility_section_header_, "Visibility & Performance", &visibility_section_expanded_);
     configure_section(depth_section_header_,      "Depth & Perspective",      &depth_section_expanded_);
@@ -1108,29 +1079,20 @@ void CameraUIPanel::build_ui() {
         });
     }
 
-
     min_render_size_slider_ = std::make_unique<FloatSliderWidget>("Min On-Screen Size", 0.0f, 0.05f, 0.001f, defaults.min_visible_screen_ratio, 3);
     min_render_size_slider_->set_tooltip("Cull sprites once their height drops below this fraction of the screen (0.01 = 1%).");
     min_render_size_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
-    // Cull margin slider
     cull_margin_slider_ = std::make_unique<FloatSliderWidget>("Cull Margin (px)", 0.0f, 1000.0f, 1.0f, defaults.extra_cull_margin, 0);
     cull_margin_slider_->set_tooltip("Extra margin below the screen for culling (for perspective/warping). Increase if assets pop in/out at the bottom edge.");
     cull_margin_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
-    // Perspective distance sliders (Depth & Perspective section)
-    perspective_zero_distance_slider_ = std::make_unique<FloatSliderWidget>(
-        "Perspective Scale 0 Distance", -5000.0f, 5000.0f, 1.0f,
-        defaults.perspective_distance_at_scale_zero, 0);
-    perspective_zero_distance_slider_->set_tooltip(
-        "World-space distance at which perspective scale reaches 0 (far point).");
+    perspective_zero_distance_slider_ = std::make_unique<FloatSliderWidget>( "Perspective Scale 0 Distance", -5000.0f, 5000.0f, 1.0f, defaults.perspective_distance_at_scale_zero, 0);
+    perspective_zero_distance_slider_->set_tooltip( "World-space distance at which perspective scale reaches 0 (far point).");
     perspective_zero_distance_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
-    perspective_hundred_distance_slider_ = std::make_unique<FloatSliderWidget>(
-        "Perspective Scale 100 Distance", -5000.0f, 5000.0f, 1.0f,
-        defaults.perspective_distance_at_scale_hundred, 0);
-    perspective_hundred_distance_slider_->set_tooltip(
-        "World-space distance at which perspective scale is 100 (near point).");
+    perspective_hundred_distance_slider_ = std::make_unique<FloatSliderWidget>( "Perspective Scale 100 Distance", -5000.0f, 5000.0f, 1.0f, defaults.perspective_distance_at_scale_hundred, 0);
+    perspective_hundred_distance_slider_->set_tooltip( "World-space distance at which perspective scale is 100 (near point).");
     perspective_hundred_distance_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     render_quality_slider_ = std::make_unique<DiscreteSliderWidget>("Render Quality (%)", std::vector<int>{100, 75, 50, 25, 10}, defaults.render_quality_percent);
@@ -1140,12 +1102,7 @@ void CameraUIPanel::build_ui() {
 
     ZoomKeyPointWidget::Values zoom_in_defaults;
     zoom_in_defaults.zoom = defaults.zoom_low;
-    zoom_in_keypoint_ = std::make_unique<ZoomKeyPointWidget>(
-        "Zoomed In Settings",
-        zoom_in_defaults,
-        zoom_in_settings_expanded_,
-        0.1f,
-        WarpedScreenGrid::kMaxZoomAnchors);
+    zoom_in_keypoint_ = std::make_unique<ZoomKeyPointWidget>( "Zoomed In Settings", zoom_in_defaults, zoom_in_settings_expanded_, 0.1f, WarpedScreenGrid::kMaxZoomAnchors);
     if (zoom_in_keypoint_) {
         zoom_in_keypoint_->set_on_value_changed([this]() { on_control_value_changed(); });
         zoom_in_keypoint_->set_on_expanded_changed([this](bool expanded) {
@@ -1159,12 +1116,7 @@ void CameraUIPanel::build_ui() {
 
     ZoomKeyPointWidget::Values zoom_out_defaults;
     zoom_out_defaults.zoom = defaults.zoom_high;
-    zoom_out_keypoint_ = std::make_unique<ZoomKeyPointWidget>(
-        "Zoomed Out Settings",
-        zoom_out_defaults,
-        zoom_out_settings_expanded_,
-        0.1f,
-        WarpedScreenGrid::kMaxZoomAnchors);
+    zoom_out_keypoint_ = std::make_unique<ZoomKeyPointWidget>( "Zoomed Out Settings", zoom_out_defaults, zoom_out_settings_expanded_, 0.1f, WarpedScreenGrid::kMaxZoomAnchors);
     if (zoom_out_keypoint_) {
         zoom_out_keypoint_->set_on_value_changed([this]() { on_control_value_changed(); });
         zoom_out_keypoint_->set_on_expanded_changed([this](bool expanded) {
@@ -1178,19 +1130,16 @@ void CameraUIPanel::build_ui() {
 
     const int stored_fg_opacity = devmode::camera_prefs::load_foreground_texture_max_opacity();
     const int stored_bg_opacity = devmode::camera_prefs::load_background_texture_max_opacity();
-    foreground_texture_opacity_slider_ = std::make_unique<FloatSliderWidget>(
-        "Foreground Texture Max Opacity", 0.0f, 255.0f, 1.0f, static_cast<float>(stored_fg_opacity), 0);
+    foreground_texture_opacity_slider_ = std::make_unique<FloatSliderWidget>( "Foreground Texture Max Opacity", 0.0f, 255.0f, 1.0f, static_cast<float>(stored_fg_opacity), 0);
     foreground_texture_opacity_slider_->set_tooltip("Maximum opacity when blending the foreground texture.");
     foreground_texture_opacity_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
-    background_texture_opacity_slider_ = std::make_unique<FloatSliderWidget>(
-        "Background Texture Max Opacity", 0.0f, 255.0f, 1.0f, static_cast<float>(stored_bg_opacity), 0);
+    background_texture_opacity_slider_ = std::make_unique<FloatSliderWidget>( "Background Texture Max Opacity", 0.0f, 255.0f, 1.0f, static_cast<float>(stored_bg_opacity), 0);
     background_texture_opacity_slider_->set_tooltip("Maximum opacity when blending the background texture.");
     background_texture_opacity_slider_->set_on_value_changed([this](float) { on_control_value_changed(); });
 
     {
-        const int default_interp_index = std::clamp(
-            static_cast<int>(defaults.texture_opacity_falloff_method), 0, 4);
+        const int default_interp_index = std::clamp( static_cast<int>(defaults.texture_opacity_falloff_method), 0, 4);
         std::vector<std::string> options{ "Linear", "Quadratic", "Cubic", "Logarithmic", "Exponential" };
         texture_opacity_interp_dropdown_ = std::make_unique<DMDropdown>("Depth Cue Opacity Interpolation", options, default_interp_index);
         texture_opacity_interp_widget_   = std::make_unique<DropdownWidget>(texture_opacity_interp_dropdown_.get());
@@ -1281,12 +1230,10 @@ void CameraUIPanel::apply_settings_if_needed() {
     } guard(applying_settings_);
     WarpedScreenGrid::RealismSettings settings = read_settings_from_ui();
     const bool reported_effects_enabled = realism_enabled_checkbox_
-        ? realism_enabled_checkbox_->value()
-        : last_realism_enabled_;
+        ? realism_enabled_checkbox_->value() : last_realism_enabled_;
     const bool reported_depthcue_enabled = depthcue_checkbox_
-        ? depthcue_checkbox_->value()
-        : last_depthcue_enabled_;
-    // Temporarily keep depth perspective/depth cue toggles off while warping is removed.
+        ? depthcue_checkbox_->value() : last_depthcue_enabled_;
+
     const bool effects_enabled = WarpedScreenGrid::kForceDepthPerspectiveDisabled
         ? false
         : reported_effects_enabled;
@@ -1296,7 +1243,7 @@ void CameraUIPanel::apply_settings_if_needed() {
 
     auto differs = [](float a, float b) {
         return std::fabs(a - b) > 0.0001f;
-    };
+};
     bool changed = (effects_enabled != last_realism_enabled_) || (depthcue_enabled != last_depthcue_enabled_);
     const WarpedScreenGrid::RealismSettings& prev = last_settings_;
     changed = changed || differs(settings.zoom_low, prev.zoom_low) || differs(settings.zoom_high, prev.zoom_high);
@@ -1309,7 +1256,6 @@ void CameraUIPanel::apply_settings_if_needed() {
     }
     changed = changed || differs(settings.scale_variant_hysteresis_margin, prev.scale_variant_hysteresis_margin);
 
-    // Depth cue texture parameters
     changed = changed || (settings.foreground_texture_max_opacity != prev.foreground_texture_max_opacity);
     changed = changed || (settings.background_texture_max_opacity != prev.background_texture_max_opacity);
     changed = changed || differs(settings.foreground_plane_screen_y, prev.foreground_plane_screen_y);
@@ -1322,8 +1268,6 @@ void CameraUIPanel::apply_settings_if_needed() {
         assets_->on_camera_settings_changed();
     }
 }
-
-
 
 void CameraUIPanel::apply_settings_to_camera(const WarpedScreenGrid::RealismSettings& settings,
                                              bool effects_enabled,
@@ -1338,10 +1282,9 @@ void CameraUIPanel::apply_settings_to_camera(const WarpedScreenGrid::RealismSett
     cam.set_realism_settings(effective);
     cam.set_realism_enabled(effects_enabled);
     cam.set_parallax_enabled(effects_enabled);
-    // Force camera to update geometry immediately so pitch/perspective changes apply
+
     cam.update_geometry_cache(cam.compute_geometry());
 
-    // Keep runtime zoom inside the newly defined bounds with a small safety margin.
     const float kZoomGuard = 0.01f;
     const float span = std::max(0.0002f, effective.zoom_high - effective.zoom_low);
     const float guard = std::clamp(kZoomGuard, 0.0001f, span * 0.25f);
@@ -1393,25 +1336,21 @@ WarpedScreenGrid::RealismSettings CameraUIPanel::read_settings_from_ui() const {
         settings.zoom_high = max_values.zoom;
     }
 
-    settings.zoom_low = std::clamp(settings.zoom_low,
-                                   WarpedScreenGrid::kMinZoomAnchors,
-                                   WarpedScreenGrid::kMaxZoomAnchors);
+    settings.zoom_low = std::clamp(settings.zoom_low, WarpedScreenGrid::kMinZoomAnchors, WarpedScreenGrid::kMaxZoomAnchors);
     const float min_high = std::min(WarpedScreenGrid::kMaxZoomAnchors, settings.zoom_low + 0.0001f);
     settings.zoom_high = std::clamp(settings.zoom_high, min_high, WarpedScreenGrid::kMaxZoomAnchors);
     if (perspective_zero_distance_slider_) {
-        settings.perspective_distance_at_scale_zero = std::clamp(
-            perspective_zero_distance_slider_->value(), -5000.0f, 5000.0f);
+        settings.perspective_distance_at_scale_zero = std::clamp( perspective_zero_distance_slider_->value(), -5000.0f, 5000.0f);
     }
     if (perspective_hundred_distance_slider_) {
-        settings.perspective_distance_at_scale_hundred = std::clamp(
-            perspective_hundred_distance_slider_->value(), -5000.0f, 5000.0f);
+        settings.perspective_distance_at_scale_hundred = std::clamp( perspective_hundred_distance_slider_->value(), -5000.0f, 5000.0f);
     }
-    // Depth cue texture settings
+
     auto slider_to_opacity = [](const FloatSliderWidget* slider) -> int {
         if (!slider) return 0;
         const float clamped = std::clamp(slider->value(), 0.0f, 255.0f);
         return static_cast<int>(std::round(clamped));
-    };
+};
     settings.foreground_texture_max_opacity = slider_to_opacity(foreground_texture_opacity_slider_.get());
     settings.background_texture_max_opacity = slider_to_opacity(background_texture_opacity_slider_.get());
     auto clamp_curve_selection = [](DMDropdown* dropdown) -> WarpedScreenGrid::BlurFalloffMethod {
@@ -1419,7 +1358,7 @@ WarpedScreenGrid::RealismSettings CameraUIPanel::read_settings_from_ui() const {
         int sel = dropdown->selected();
         sel = std::clamp(sel, 0, 4);
         return static_cast<WarpedScreenGrid::BlurFalloffMethod>(sel);
-    };
+};
     settings.texture_opacity_falloff_method = clamp_curve_selection(texture_opacity_interp_dropdown_.get());
     return settings;
 }

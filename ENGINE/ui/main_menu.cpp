@@ -55,7 +55,7 @@ MainMenu::MainMenu(SDL_Renderer* renderer,
                                   << candidate << "': " << ex.what() << "\n";
                 }
                 return false;
-        };
+};
 
         if (!try_load_background(pick_loading_image())) {
                 const fs::path bg_folder = resolve_manifest_path("SRC/misc_content/backgrounds");
@@ -231,10 +231,10 @@ void MainMenu::showLoadingScreen() {
 		}
 	}
 	SDL_RenderPresent(renderer_);
-	// Keep the OS message queue responsive but ignore gameplay/menu input
+
 	SDL_Event ev;
 	while (SDL_PollEvent(&ev)) {
-		// Intentionally discard all input while the loading screen is up
+
 	}
 	if (temp_bg && bg) SDL_DestroyTexture(bg);
 }
@@ -284,7 +284,7 @@ std::vector<fs::path> MainMenu::list_loading_images(const fs::path& root, bool r
 		if (ext == ".png" || ext == ".jpg" || ext == ".jpeg") {
 			out.push_back(candidate);
 		}
-	};
+};
 
 	if (recursive) {
 		for (const auto& entry : fs::recursive_directory_iterator(root)) {
@@ -316,7 +316,7 @@ fs::path MainMenu::pick_loading_image() const {
 
 std::filesystem::path MainMenu::firstImageIn(const fs::path& folder) const {
     if (!fs::exists(folder) || !fs::is_directory(folder)) return {};
-    // Prefer PNG to avoid optional JPEG plugin dependency at runtime
+
     fs::path png_candidate;
     fs::path jpg_candidate;
     for (const auto& e : fs::directory_iterator(folder)) {

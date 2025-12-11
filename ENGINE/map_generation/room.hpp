@@ -113,7 +113,7 @@ class Room {
             int height = 0;
             SDL_Point anchor{0, 0};
             bool anchor_relative_to_center = false;
-        };
+};
         std::optional<OriginRoomMeta> origin_room;
 };
 
@@ -122,10 +122,7 @@ class Room {
     Area* find_area(const std::string& name);
     bool remove_area(const std::string& name);
     bool rename_area(const std::string& old_name, const std::string& new_name);
-    void upsert_named_area(const Area& area,
-                           bool scale_to_room,
-                           int original_room_width,
-                           int original_room_height);
+    void upsert_named_area(const Area& area, bool scale_to_room, int original_room_width, int original_room_height);
 
         private:
     nlohmann::json assets_json;

@@ -24,11 +24,9 @@ public:
     void stop();
     bool is_playing() const { return playing_; }
 
-    // Scrub to specific frame (0 to frame_count - 1)
     void set_current_frame(int frame);
     int current_frame() const;
 
-    // Returns true if frame changed this frame
     bool update();
 
 private:
@@ -41,4 +39,4 @@ private:
     bool scrubbing_ = false;
 };
 
-} // namespace animation_editor
+}

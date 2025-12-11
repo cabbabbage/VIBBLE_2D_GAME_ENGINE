@@ -48,4 +48,3 @@ inline int controller_visit_threshold(const Asset* asset) {
 
 }
 
-

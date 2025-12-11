@@ -75,7 +75,7 @@ class ChildrenTimelinesPanel : public DockableCollapsible {
         std::unique_ptr<Widget> async_widget;
         std::unique_ptr<DMButton> delete_button;
         std::unique_ptr<Widget> delete_widget;
-    };
+};
 
     std::vector<ChildRow> child_rows_;
     std::unique_ptr<DMButton> add_button_;
@@ -84,4 +84,4 @@ class ChildrenTimelinesPanel : public DockableCollapsible {
     std::string last_signature_;
 };
 
-} // namespace animation_editor
+}

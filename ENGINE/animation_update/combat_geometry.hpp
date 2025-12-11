@@ -3,13 +3,6 @@
 #include <string>
 #include <vector>
 
-// Lightweight per-frame combat geometry types used by both the runtime
-// and editor tooling. All coordinates are expressed in the asset's local
-// space at 100% scale, with (0,0) at the bottom-center of the sprite.
-// Positive X is right, positive Y is up. Callers are responsible for
-// applying scale/flip and translating from the bottom-center anchor to
-// world space.
-
 namespace animation_update {
 
 struct FrameHitGeometry {
@@ -24,7 +17,7 @@ struct FrameHitGeometry {
         bool is_empty() const {
             return half_width <= 0.0f || half_height <= 0.0f;
         }
-    };
+};
 
     std::vector<HitBox> boxes;
 
@@ -45,22 +38,20 @@ struct FrameHitGeometry {
 
 struct FrameAttackGeometry {
     struct Vector {
-        // Quadratic Bezier segment in local space, typically used as an attack ray.
+
         std::string type;
         float start_x = 0.0f;
         float start_y = 0.0f;
-        // Control point for curvature (quadratic Bezier). When equal to the
-        // midpoint between start and end, the curve appears as a straight line.
+
         float control_x = 0.0f;
         float control_y = 0.0f;
         float end_x   = 0.0f;
         float end_y   = 0.0f;
-        int   damage  = 0;    // damage value applied if this vector hits
-    };
+        int   damage  = 0;
+};
 
     std::vector<Vector> vectors;
 
-    // Returns the number of vectors matching a given type.
     std::size_t count_for_type(const std::string& type) const {
         std::size_t count = 0;
         for (const auto& v : vectors) {
@@ -71,7 +62,6 @@ struct FrameAttackGeometry {
         return count;
     }
 
-    // Retrieve the nth vector for a type (0-based). Returns nullptr if missing.
     Vector* vector_at(const std::string& type, std::size_t type_index) {
         std::size_t seen = 0;
         for (auto& v : vectors) {
@@ -96,14 +86,12 @@ struct FrameAttackGeometry {
         return nullptr;
     }
 
-    // Append a new vector for the given type and return a reference to it.
     Vector& add_vector(const std::string& type, Vector vec = {}) {
         vec.type = type;
         vectors.push_back(vec);
         return vectors.back();
     }
 
-    // Remove the nth vector for a type (0-based). Returns true if something was erased.
     bool erase_vector(const std::string& type, std::size_t type_index) {
         std::size_t seen = 0;
         for (auto it = vectors.begin(); it != vectors.end(); ++it) {
@@ -118,4 +106,4 @@ struct FrameAttackGeometry {
     }
 };
 
-} // namespace animation_update
+}

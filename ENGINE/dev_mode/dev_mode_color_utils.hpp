@@ -26,14 +26,12 @@ inline SDL_Color with_alpha(SDL_Color color, Uint8 alpha) {
     return color;
 }
 
-// Label rendering constants
 constexpr int kLabelPadding = 6;
 constexpr int kLabelVerticalOffset = 32;
 const SDL_Color kLabelBg{32, 32, 32, 200};
 const SDL_Color kLabelBorder{255, 255, 255, 96};
 const SDL_Color kLabelText{240, 240, 240, 255};
 
-// Luminance calculation for text color contrast
 inline float display_color_luminance(SDL_Color color) {
     return static_cast<float>(0.2126 * static_cast<double>(color.r) / 255.0 + 0.7152 * static_cast<double>(color.g) / 255.0 + 0.0722 * static_cast<double>(color.b) / 255.0);
 }

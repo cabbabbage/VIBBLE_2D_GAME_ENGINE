@@ -43,14 +43,12 @@ struct ChildPreviewContext {
     float document_scale = 1.0f;
 };
 
-// Lightweight in-world Frame Editor session.
-// Non-modal; anchors panels near the target asset and draws gizmos in world space.
 class FrameEditorSession {
 public:
     enum class Mode { Movement, StaticChildren, AsyncChildren, AttackGeometry, HitGeometry };
     static inline constexpr std::array<const char*, 3> kDamageTypeNames = {
         "projectile", "melee", "explosion"
-    };
+};
 
     FrameEditorSession();
     ~FrameEditorSession();
@@ -70,7 +68,6 @@ public:
     bool handle_event(const SDL_Event& e);
     void render(SDL_Renderer* renderer) const;
 
-    // External helpers
     void set_snap_resolution(int r);
     void set_grid_overlay_enabled_transient(bool enabled);
 
@@ -85,16 +82,16 @@ FRAME_EDITOR_ACCESS:
         bool visible = true;
         bool render_in_front = true;
         bool has_data = false;
-    };
+};
     struct MovementFrame {
         float dx = 0.0f;
         float dy = 0.0f;
         bool resort_z = false;
         std::vector<ChildFrame> children;
-        // Per-frame combat geometry, expressed in the asset's local space.
+
         animation_update::FrameHitGeometry    hit;
         animation_update::FrameAttackGeometry attack;
-    };
+};
     struct ChildPreviewSlot {
         std::string asset_name;
         std::shared_ptr<AssetInfo> info;
@@ -103,17 +100,15 @@ FRAME_EDITOR_ACCESS:
         SDL_Texture* texture = nullptr;
         int width = 0;
         int height = 0;
-    };
+};
 
-    // State wiring
     Assets* assets_ = nullptr;
     Asset* target_ = nullptr;
     std::shared_ptr<animation_editor::AnimationDocument> document_;
     std::shared_ptr<animation_editor::PreviewProvider> preview_;
-    animation_editor::AnimationEditorWindow* host_ = nullptr; // to re-open on Back
+    animation_editor::AnimationEditorWindow* host_ = nullptr;
     std::function<void()> on_end_{};
 
-    // Session state
     bool active_ = false;
     std::string animation_id_;
     std::vector<std::string> edited_animation_ids_;
@@ -126,7 +121,6 @@ FRAME_EDITOR_ACCESS:
     bool curve_enabled_ = false;
     int selected_child_index_ = 0;
 
-    // Camera + overlay snapshot
     bool prev_realism_enabled_ = true;
     bool prev_parallax_enabled_ = true;
     bool prev_grid_overlay_enabled_ = false;
@@ -135,11 +129,9 @@ FRAME_EDITOR_ACCESS:
     int  snap_resolution_r_ = 0;
     bool snap_resolution_override_ = false;
 
-    // Computed path data (relative positions, anchored at bottom-middle)
     std::vector<MovementFrame> frames_;
     std::vector<SDL_FPoint> rel_positions_;
 
-    // UI widgets
     mutable std::unique_ptr<DMButton> btn_back_;
     mutable std::unique_ptr<DMButton> btn_movement_;
     mutable std::unique_ptr<DMButton> btn_children_;
@@ -148,7 +140,7 @@ FRAME_EDITOR_ACCESS:
     mutable std::unique_ptr<DMButton> btn_prev_;
     mutable std::unique_ptr<DMButton> btn_next_;
     mutable std::unique_ptr<DMDropdown> dd_animation_select_;
-    // Apply-to-all buttons per-mode
+
     mutable std::unique_ptr<class DMButton> btn_apply_all_movement_;
     mutable std::unique_ptr<class DMButton> btn_apply_all_children_;
     mutable std::unique_ptr<class DMButton> btn_apply_all_hit_;
@@ -167,7 +159,7 @@ FRAME_EDITOR_ACCESS:
     mutable std::unique_ptr<class DMTextBox> tb_child_deg_;
     mutable std::unique_ptr<class DMCheckbox> cb_child_visible_;
     mutable std::unique_ptr<class DMCheckbox> cb_child_render_front_;
-    // Hit geometry widgets
+
     mutable std::unique_ptr<class DMDropdown> dd_hitbox_type_;
     mutable std::unique_ptr<class DMButton> btn_hitbox_add_remove_;
     mutable std::unique_ptr<class DMButton> btn_hitbox_copy_next_;
@@ -176,7 +168,7 @@ FRAME_EDITOR_ACCESS:
     mutable std::unique_ptr<class DMTextBox> tb_hit_width_;
     mutable std::unique_ptr<class DMTextBox> tb_hit_height_;
     mutable std::unique_ptr<class DMTextBox> tb_hit_rotation_;
-    // Attack geometry widgets
+
     mutable std::unique_ptr<class DMDropdown> dd_attack_type_;
     mutable std::unique_ptr<class DMButton> btn_attack_add_remove_;
     mutable std::unique_ptr<class DMButton> btn_attack_delete_;
@@ -188,10 +180,10 @@ FRAME_EDITOR_ACCESS:
     mutable std::unique_ptr<class DMTextBox> tb_attack_end_x_;
     mutable std::unique_ptr<class DMTextBox> tb_attack_end_y_;
     mutable std::unique_ptr<class DMTextBox> tb_attack_damage_;
-    // Editable totals fields
+
     mutable std::unique_ptr<class DMTextBox> tb_total_dx_;
     mutable std::unique_ptr<class DMTextBox> tb_total_dy_;
-    // Track last-known values to detect edits
+
     mutable std::string last_totals_dx_text_{};
     mutable std::string last_totals_dy_text_{};
     mutable bool last_show_anim_value_ = true;
@@ -217,8 +209,6 @@ FRAME_EDITOR_ACCESS:
     mutable std::string last_attack_end_y_text_{};
     mutable std::string last_attack_damage_text_{};
 
-    // UI layout (computed each frame)
-    // Panel rectangles are derived from stored top-left positions to allow dragging.
     mutable SDL_Rect directory_rect_{0,0,0,0};
     mutable SDL_Rect toolbox_rect_{0,0,0,0};
     mutable SDL_Rect toolbox_drag_rect_{0,0,0,0};
@@ -245,7 +235,6 @@ FRAME_EDITOR_ACCESS:
     mutable std::vector<SDL_Rect> thumb_rects_;
     mutable std::vector<int> thumb_indices_;
 
-    // Camera pan/zoom handler (wheel zoom enabled; panning is blocked by default)
     mutable class PanAndZoom pan_zoom_;
     std::vector<std::string> child_assets_;
     mutable std::vector<AnimationChildMode> child_modes_;
@@ -259,8 +248,7 @@ FRAME_EDITOR_ACCESS:
     mutable std::vector<std::string> hitbox_type_labels_;
     mutable std::vector<std::string> attack_type_labels_;
 
-    // Hit box editing state
-    int selected_hitbox_type_index_ = 1; // default to melee
+    int selected_hitbox_type_index_ = 1;
     enum class HitHandle { None, Move, Left, Right, Top, Bottom, Rotate };
     HitHandle active_hitbox_handle_ = HitHandle::None;
     bool hitbox_dragging_ = false;
@@ -273,7 +261,6 @@ FRAME_EDITOR_ACCESS:
     float hitbox_drag_bottom_ = 0.0f;
     bool hitbox_drag_moved_ = false;
 
-    // Attack vector editing state
     int selected_attack_type_index_ = 1;
     std::array<int, kDamageTypeNames.size()> selected_attack_vector_indices_{ { -1, -1, -1 } };
     enum class AttackHandle { None, Start, Control, End, Segment };
@@ -284,7 +271,6 @@ FRAME_EDITOR_ACCESS:
     SDL_FPoint attack_drag_start_mouse_local_{0.0f, 0.0f};
     animation_update::FrameAttackGeometry::Vector attack_drag_start_vector_;
 
-    // Track whether we have unsaved document writes
     bool pending_save_ = false;
 
 FRAME_EDITOR_ACCESS:
@@ -296,23 +282,15 @@ FRAME_EDITOR_ACCESS:
     void apply_current_mode_to_all_frames();
     void apply_frame_move_from_base(int index, SDL_FPoint desired_rel, const std::vector<SDL_FPoint>& base_rel);
     void redistribute_frames_from_middle_drag(int adjusted_index);
-    // Redistribute points after any adjustment. Keeps first and last fixed, and
-    // does not move the adjusted index. All other points are placed at even
-    // fractions between start and end in a straight line. If the adjusted
-    // index is the final point, this effectively smooths all points before it.
+
     void redistribute_frames_after_adjustment(int adjusted_index);
-    void apply_linear_smoothing(int adjusted_index,
-                                std::vector<SDL_FPoint>& redistributed,
-                                int last_index) const;
-    void apply_curved_smoothing(int adjusted_index,
-                                const std::vector<SDL_FPoint>& original,
-                                std::vector<SDL_FPoint>& redistributed,
-                                int last_index) const;
+    void apply_linear_smoothing(int adjusted_index, std::vector<SDL_FPoint>& redistributed, int last_index) const;
+    void apply_curved_smoothing(int adjusted_index, const std::vector<SDL_FPoint>& original, std::vector<SDL_FPoint>& redistributed, int last_index) const;
     void rebuild_rel_positions();
     void ensure_child_frames_initialized();
     void smooth_child_offsets(int child_index, int adjusted_index);
     void persist_changes();
-    // Persist only the section relevant to the given mode.
+
     void persist_mode_changes(Mode mode);
     void select_frame(int index);
     void select_child(int index);
@@ -340,8 +318,7 @@ FRAME_EDITOR_ACCESS:
     void clamp_scroll_offset() const;
     void ensure_selected_thumb_visible();
         void ensure_child_mode_size() const;
-    std::vector<int> build_child_index_remap(const std::vector<std::string>& previous,
-                                             const std::vector<std::string>& next) const;
+    std::vector<int> build_child_index_remap(const std::vector<std::string>& previous, const std::vector<std::string>& next) const;
     void apply_child_list_change(const std::vector<std::string>& next_children);
     void add_or_rename_child(const std::string& name);
     void remove_selected_child();
@@ -357,7 +334,7 @@ FRAME_EDITOR_ACCESS:
         int width = 0;
         int height = 0;
         int top_padding = 0;
-    };
+};
 
     struct MovementToolboxMetrics {
         int padding = 0;
@@ -372,17 +349,17 @@ FRAME_EDITOR_ACCESS:
         int totals_width = 0;
         int total_dx_height = 0;
         int total_dy_height = 0;
-    };
+};
     struct ChildrenToolboxMetrics {
         int padding = 0;
         int gap = 0;
         int width = 0;
         int height = 0;
         int drag_handle_height = 0;
-        // Dropdown row
+
         int dropdown_row_height = 0;
         int mode_row_height = 0;
-        // Movement controls row (Smooth/Curve + Totals) shared with Movement mode
+
         int movement_row_height = 0;
         int mode_dropdown_width = 0;
         int toggle_row_height = 0;
@@ -398,13 +375,13 @@ FRAME_EDITOR_ACCESS:
         int child_render_checkbox_width = 0;
         int show_parent_checkbox_width = 0;
         int show_child_checkbox_width = 0;
-        // Movement control widths mirrored from Movement metrics
+
         int smooth_checkbox_width = 0;
         int curve_checkbox_width = 0;
         int totals_width = 0;
         int total_dx_height = 0;
         int total_dy_height = 0;
-    };
+};
 
     DirectoryPanelMetrics build_directory_panel_metrics() const;
     MovementToolboxMetrics build_movement_toolbox_metrics() const;
@@ -415,9 +392,8 @@ FRAME_EDITOR_ACCESS:
         std::array<SDL_FPoint, 4> corners;
         std::array<SDL_FPoint, 4> edge_midpoints;
         SDL_FPoint rotate_handle{};
-    };
+};
 
-    // Hit geometry helpers
     animation_update::FrameHitGeometry::HitBox* current_hit_box();
     const animation_update::FrameHitGeometry::HitBox* current_hit_box() const;
     animation_update::FrameHitGeometry::HitBox* ensure_hit_box_for_type(const std::string& type);
@@ -454,11 +430,7 @@ FRAME_EDITOR_ACCESS:
     void render_hitbox_guides(SDL_Renderer* renderer, const WarpedScreenGrid& cam);
     void render_attack_guides(SDL_Renderer* renderer, const WarpedScreenGrid& cam);
     ChildPreviewContext build_child_preview_context() const;
-    SDL_FRect child_preview_rect(SDL_FPoint child_world,
-                                 int texture_w,
-                                 int texture_h,
-                                 const ChildPreviewContext& ctx,
-                                 float scale_override) const;
+    SDL_FRect child_preview_rect(SDL_FPoint child_world, int texture_w, int texture_h, const ChildPreviewContext& ctx, float scale_override) const;
     float mirrored_child_rotation(bool parent_is_flipped, float degree) const;
     void apply_child_timelines_from_payload(const nlohmann::json& payload);
     nlohmann::json build_child_timelines_payload(const nlohmann::json& existing_payload) const;
@@ -503,7 +475,7 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
             } catch (...) {}
         }
         return fallback;
-    };
+};
     auto read_int = [](const nlohmann::json& v, int fallback = 0) -> int {
         if (v.is_number_integer()) {
             try {
@@ -519,7 +491,7 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
             } catch (...) {}
         }
         return fallback;
-    };
+};
 
     auto upsert_hit_box = [&](MovementFrame& frame,
                               const std::string& type,
@@ -563,7 +535,7 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
         } else {
             frame.hit.boxes.push_back(box);
         }
-    };
+};
 
     auto append_attack_vector = [&](MovementFrame& frame,
                                     const std::string& type,
@@ -600,7 +572,7 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
             return;
         }
         frame.attack.add_vector(vec.type, vec);
-    };
+};
 
     std::size_t frame_index = 0;
     for (const auto& entry : movement) {
@@ -609,7 +581,7 @@ FrameEditorSession::parse_movement_frames_json(const std::string& payload_json) 
             if (!entry.empty() && entry[0].is_number()) f.dx = static_cast<float>(entry[0].get<double>());
             if (entry.size() > 1 && entry[1].is_number()) f.dy = static_cast<float>(entry[1].get<double>());
             if (entry.size() > 2 && entry[2].is_boolean()) f.resort_z = entry[2].get<bool>();
-            // Children can be at index 4 (after optional RGB at 3) or at index 3 when RGB is absent.
+
             const nlohmann::json* children_json = nullptr;
             if (entry.size() > 4 && entry[4].is_array()) {
                 children_json = &entry[4];

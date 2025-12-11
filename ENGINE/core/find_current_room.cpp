@@ -35,12 +35,12 @@ Room* CurrentRoomFinder::getCurrentRoom() const {
         return room &&
                room->room_area &&
                room->room_area->contains_point(SDL_Point{px, py});
-    };
+};
 
     auto is_trail_room = [](Room* room) -> bool {
         if (!room) return false;
         return vibble::strings::to_lower_copy(room->type) == "trail";
-    };
+};
 
     Room* best = nullptr;
     bool  best_is_trail = false;
@@ -59,7 +59,7 @@ Room* CurrentRoomFinder::getCurrentRoom() const {
             }
         }
         return false;
-    };
+};
 
     if (try_room(last_room_)) {
         last_room_ = best;

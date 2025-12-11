@@ -34,7 +34,7 @@ class SourceConfigPanel {
     enum class SourceMode {
         kFrames = 0,
         kAnimation,
-    };
+};
 
     void set_document(std::shared_ptr<AnimationDocument> document);
     void set_override_preview_provider(std::shared_ptr<PreviewProvider> provider);
@@ -51,7 +51,7 @@ class SourceConfigPanel {
     void set_gif_picker(PathPicker picker);
     void set_png_sequence_picker(MultiPathPicker picker);
     void set_status_callback(std::function<void(const std::string&)> callback);
-    // Notify when the source kind/selection has changed so other panels can refresh immediately
+
     void set_on_source_changed(std::function<void(const std::string&)> callback) { on_source_changed_ = std::move(callback); }
 
     void update();
@@ -62,7 +62,6 @@ class SourceConfigPanel {
 
     bool allow_out_of_bounds_pointer_events() const;
 
-    // Commit any pending animation dropdown selection to the document/source config.
     void commit_animation_dropdown_selection();
 
     SourceMode source_mode() const;
@@ -147,7 +146,6 @@ class SourceConfigPanel {
     std::vector<std::string> previous_animation_options_;
     std::function<void(const std::string&)> on_source_changed_;
 
-    // Animation preview state
     mutable Uint32 animation_start_time_ = 0;
     mutable int current_frame_ = 0;
     mutable bool is_sfa_animation_ = false;

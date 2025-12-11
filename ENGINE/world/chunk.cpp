@@ -32,7 +32,7 @@ float blend_light_components(float static_strength, float dynamic_strength, floa
     return clamp01(blended);
 }
 
-}  // namespace chunk_detail
+}
 
 namespace world {
 
@@ -65,7 +65,7 @@ void Chunk::releaseTileTextures() {
     tiles.clear();
 }
 
-}  // namespace world
+}
 
 LightMap::LightMap(Assets* assets, int screen_width, int screen_height)
     : assets_(assets)
@@ -111,10 +111,7 @@ void LightMap::update(SDL_Renderer*, std::uint32_t) {
         }
         lighting.static_strength  = chunk_detail::clamp01(lighting.static_strength);
         lighting.dynamic_strength = chunk_detail::clamp01(lighting.dynamic_strength) * map_alpha;
-        lighting.current_strength = chunk_detail::blend_light_components(lighting.static_strength,
-                                                           lighting.dynamic_strength,
-                                                           weights.first,
-                                                           weights.second);
+        lighting.current_strength = chunk_detail::blend_light_components(lighting.static_strength, lighting.dynamic_strength, weights.first, weights.second);
         lighting.needs_update = false;
     }
 }
@@ -129,10 +126,7 @@ LightMap::SampledBrightness LightMap::sample_lighting(int world_x,
 
     world::Chunk* chunk = ensure_chunk_from_world(SDL_Point{world_x, world_y});
     if (!chunk) {
-        result.blended = chunk_detail::blend_light_components(result.static_component,
-                                                              result.dynamic_component,
-                                                              weights.first,
-                                                              weights.second);
+        result.blended = chunk_detail::blend_light_components(result.static_component, result.dynamic_component, weights.first, weights.second);
         return result;
     }
 
@@ -141,10 +135,7 @@ LightMap::SampledBrightness LightMap::sample_lighting(int world_x,
     result.dynamic_component = chunk_detail::clamp01(lighting.dynamic_strength);
     result.has_color         = lighting.runtime_average_color.a > 0 && lighting.dynamic_strength < 1.0f;
     result.color             = lighting.runtime_average_color;
-    result.blended           = chunk_detail::blend_light_components(result.static_component,
-                                                                    result.dynamic_component,
-                                                                    weights.first,
-                                                                    weights.second);
+    result.blended           = chunk_detail::blend_light_components(result.static_component, result.dynamic_component, weights.first, weights.second);
     return result;
 }
 
@@ -168,44 +159,14 @@ LightMap::SampledBrightness LightMap::sample_lighting_bilinear(float world_x,
     auto lerp = [](float a, float b, float t) { return a + (b - a) * t; };
 
     SampledBrightness blended{};
-    blended.static_component = lerp(lerp(s00.static_component, s10.static_component, tx),
-                                    lerp(s01.static_component, s11.static_component, tx),
-                                    ty);
-    blended.dynamic_component = lerp(lerp(s00.dynamic_component, s10.dynamic_component, tx),
-                                     lerp(s01.dynamic_component, s11.dynamic_component, tx),
-                                     ty);
-    blended.blended = lerp(lerp(s00.blended, s10.blended, tx),
-                           lerp(s01.blended, s11.blended, tx),
-                           ty);
+    blended.static_component = lerp(lerp(s00.static_component, s10.static_component, tx), lerp(s01.static_component, s11.static_component, tx), ty);
+    blended.dynamic_component = lerp(lerp(s00.dynamic_component, s10.dynamic_component, tx), lerp(s01.dynamic_component, s11.dynamic_component, tx), ty);
+    blended.blended = lerp(lerp(s00.blended, s10.blended, tx), lerp(s01.blended, s11.blended, tx), ty);
     blended.has_color = s00.has_color || s10.has_color || s01.has_color || s11.has_color;
     if (blended.has_color) {
-        blended.color.r = static_cast<Uint8>(std::clamp(lerp(lerp(static_cast<float>(s00.color.r),
-                                                                  static_cast<float>(s10.color.r),
-                                                                  tx),
-                                                            lerp(static_cast<float>(s01.color.r),
-                                                                 static_cast<float>(s11.color.r),
-                                                                 tx),
-                                                            ty),
-                                                   0.0f,
-                                                   255.0f));
-        blended.color.g = static_cast<Uint8>(std::clamp(lerp(lerp(static_cast<float>(s00.color.g),
-                                                                  static_cast<float>(s10.color.g),
-                                                                  tx),
-                                                            lerp(static_cast<float>(s01.color.g),
-                                                                 static_cast<float>(s11.color.g),
-                                                                 tx),
-                                                            ty),
-                                                   0.0f,
-                                                   255.0f));
-        blended.color.b = static_cast<Uint8>(std::clamp(lerp(lerp(static_cast<float>(s00.color.b),
-                                                                  static_cast<float>(s10.color.b),
-                                                                  tx),
-                                                            lerp(static_cast<float>(s01.color.b),
-                                                                 static_cast<float>(s11.color.b),
-                                                                 tx),
-                                                            ty),
-                                                   0.0f,
-                                                   255.0f));
+        blended.color.r = static_cast<Uint8>(std::clamp(lerp(lerp(static_cast<float>(s00.color.r), static_cast<float>(s10.color.r), tx), lerp(static_cast<float>(s01.color.r), static_cast<float>(s11.color.r), tx), ty), 0.0f, 255.0f));
+        blended.color.g = static_cast<Uint8>(std::clamp(lerp(lerp(static_cast<float>(s00.color.g), static_cast<float>(s10.color.g), tx), lerp(static_cast<float>(s01.color.g), static_cast<float>(s11.color.g), tx), ty), 0.0f, 255.0f));
+        blended.color.b = static_cast<Uint8>(std::clamp(lerp(lerp(static_cast<float>(s00.color.b), static_cast<float>(s10.color.b), tx), lerp(static_cast<float>(s01.color.b), static_cast<float>(s11.color.b), tx), ty), 0.0f, 255.0f));
         blended.color.a = 255;
     }
     return blended;
@@ -276,13 +237,9 @@ void LightMap::render_visible_chunks(SDL_Renderer* renderer,
             const float base_f = static_cast<float>(base) / 255.0f;
             const float tint_f = static_cast<float>(tint) / 255.0f;
             return static_cast<Uint8>(std::lround(std::clamp(base_f * tint_f, 0.0f, 1.0f) * 255.0f));
-        };
+};
 
-        SDL_SetRenderDrawColor(renderer,
-                               apply_mod(255, mod.r),
-                               apply_mod(255, mod.g),
-                               apply_mod(255, mod.b),
-                               shade);
+        SDL_SetRenderDrawColor(renderer, apply_mod(255, mod.r), apply_mod(255, mod.g), apply_mod(255, mod.b), shade);
         SDL_RenderFillRect(renderer, &dest);
     }
 

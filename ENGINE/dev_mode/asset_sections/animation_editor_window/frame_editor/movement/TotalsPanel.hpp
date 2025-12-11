@@ -20,7 +20,7 @@ class TotalsPanel {
     void set_bounds(const SDL_Rect& bounds);
     void set_frames(const std::vector<MovementFrame>& frames);
     void set_selected_index(const int* selected_index);
-    void set_on_totals_changed(std::function<void(int /*dx*/, int /*dy*/)> cb) { on_totals_changed_ = std::move(cb); }
+    void set_on_totals_changed(std::function<void(int , int )> cb) { on_totals_changed_ = std::move(cb); }
 
     void update();
     void render(SDL_Renderer* renderer) const;
@@ -35,7 +35,7 @@ class TotalsPanel {
     float total_dx_ = 0.0f;
     float total_dy_ = 0.0f;
     const int* selected_index_ = nullptr;
-    // Editable widgets
+
     std::unique_ptr<DMTextBox> dx_box_;
     std::unique_ptr<DMTextBox> dy_box_;
     std::function<void(int,int)> on_totals_changed_{};

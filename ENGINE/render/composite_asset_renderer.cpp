@@ -37,12 +37,10 @@ void CompositeAssetRenderer::update(Asset* asset,
         package_scale = 1.0f;
     }
 
-    // Check if scale changed significantly
     if (std::abs(asset->composite_scale_ - package_scale) > 0.001f) {
         asset->mark_composite_dirty();
     }
 
-    // If asset is dirty, regenerate
     if (asset->is_composite_dirty()) {
         regenerate_package(asset, gp, flicker_time_seconds, package_scale, perspective_scale);
     } else {
@@ -62,7 +60,6 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
 
     asset->composite_scale_ = package_scale;
 
-    // Helper to add a render object
     auto add_render_object = [&](SDL_Texture* tex,
                                  SDL_Rect rect,
                                  SDL_Color color = {255, 255, 255, 255},
@@ -91,7 +88,7 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
         }
 
         asset->render_package.push_back({tex, rect, color, blend, angle, c, custom, flip});
-    };
+};
 
     auto add_scene_mask_light = [&](SDL_Texture* tex,
                                     SDL_Rect rect,
@@ -113,7 +110,7 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
         obj.blend_mode = blend;
         obj.flip       = flip;
         asset->scene_mask_lights.push_back(obj);
-    };
+};
 
     auto compute_light_color = [&](const LightSource& light) -> std::optional<SDL_Color> {
         const int raw_intensity = std::clamp(light.intensity, 0, 255);
@@ -124,8 +121,7 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
         const float flicker_multiplier =
             LightFlickerCalculator::compute_multiplier(light, flicker_time_seconds);
 
-        int scaled_intensity = static_cast<int>(
-            std::lround(static_cast<float>(raw_intensity) * flicker_multiplier));
+        int scaled_intensity = static_cast<int>( std::lround(static_cast<float>(raw_intensity) * flicker_multiplier));
         scaled_intensity = std::clamp(scaled_intensity, 0, 255);
         if (scaled_intensity <= 0) {
             return std::nullopt;
@@ -137,7 +133,7 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
         auto scale_channel = [&](Uint8 channel) -> Uint8 {
             const int scaled = static_cast<int>(std::lround(static_cast<float>(channel) * scale));
             return static_cast<Uint8>(std::clamp(scaled, 0, 255));
-        };
+};
 
         color.r = scale_channel(color.r);
         color.g = scale_channel(color.g);
@@ -148,9 +144,8 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
         }
 
         return color;
-    };
+};
 
-    // 1. Behind lights (and mask light bookkeeping)
     if (asset->info) {
         for (const auto& light_source : asset->info->light_sources) {
             if (light_source.behind && light_source.texture) {
@@ -167,68 +162,47 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                 int w, h;
                 SDL_QueryTexture(light_source.texture, nullptr, nullptr, &w, &h);
                 SDL_Rect dest_rect = {
-                    static_cast<int>(asset->pos.x + offset_x * package_scale),
-                    static_cast<int>(asset->pos.y + light_source.offset_y * package_scale),
-                    w,
-                    h
-                };
+                    static_cast<int>(asset->pos.x + offset_x * package_scale), static_cast<int>(asset->pos.y + light_source.offset_y * package_scale), w, h };
                 SDL_RendererFlip light_flip = asset->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
 
                 add_render_object(light_source.texture, dest_rect, *light_color, SDL_BLENDMODE_ADD, true, 0.0, std::nullopt, light_flip);
 
                 if (light_source.render_to_dark_mask) {
-                    add_scene_mask_light(light_source.texture,
-                                         dest_rect,
-                                         *light_color,
-                                         SDL_BLENDMODE_ADD,
-                                         true,
-                                         light_flip);
+                    add_scene_mask_light(light_source.texture, dest_rect, *light_color, SDL_BLENDMODE_ADD, true, light_flip);
                 }
             }
         }
     }
 
-    // 2. Child animation assets behind
     auto emit_child = [&](const Asset::AnimationChildAttachment& slot) {
         if (slot.child_index < 0 || !slot.visible || !slot.animation || !slot.current_frame) {
             return;
         }
-        
-        // Calculate child's own scale using its own scale_factor but parent's perspective
-        float child_base_scale = (slot.info && std::isfinite(slot.info->scale_factor) && slot.info->scale_factor > 0.0f)
-            ? slot.info->scale_factor
-            : 1.0f;
-        
-        // Child inherits parent's perspective_scale from grid point
+
+        float child_base_scale = (slot.info && std::isfinite(slot.info->scale_factor) && slot.info->scale_factor > 0.0f) ? slot.info->scale_factor : 1.0f;
+
         float child_current_scale = child_base_scale * perspective_scale;
-        
-        // Get camera scale
+
         float camera_scale = 1.0f;
         if (assets_) {
             camera_scale = std::max(0.0001f, assets_->getView().get_scale());
         }
-        
-        // Determine desired variant scale for child
+
         float child_desired_variant_scale = child_current_scale / camera_scale;
         if (!std::isfinite(child_desired_variant_scale) || child_desired_variant_scale <= 0.0f) {
             child_desired_variant_scale = child_current_scale;
         }
-        
-        // Choose appropriate variant using child's own scale steps
-        const auto& child_steps = (slot.info && !slot.info->scale_variants.empty())
-            ? static_cast<const std::vector<float>&>(slot.info->scale_variants)
-            : render_pipeline::ScalingLogic::DefaultScaleSteps();
-        
+
+        const auto& child_steps = (slot.info && !slot.info->scale_variants.empty()) ? static_cast<const std::vector<float>&>(slot.info->scale_variants) : render_pipeline::ScalingLogic::DefaultScaleSteps();
+
         auto child_selection = render_pipeline::ScalingLogic::Choose(child_desired_variant_scale, child_steps);
         float child_nearest_variant_scale = child_selection.stored_scale;
-        
-        // Calculate remaining adjustment for child
+
         float child_remaining_adjustment = 1.0f;
         if (child_nearest_variant_scale > 0.0f) {
             child_remaining_adjustment = child_current_scale / child_nearest_variant_scale;
         }
-        
-        // Get texture using child's own variant scale
+
         const FrameVariant* variant =
             slot.animation->get_frame(slot.current_frame, child_nearest_variant_scale);
         SDL_Texture* tex = variant ? variant->get_base_texture() : nullptr;
@@ -238,27 +212,24 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
         if (!tex) {
             return;
         }
-        
+
         int tex_w = 0;
         int tex_h = 0;
         SDL_QueryTexture(tex, nullptr, nullptr, &tex_w, &tex_h);
-        
-        // Apply child's remaining adjustment divided by perspective
+
         const float base_adjustment = child_remaining_adjustment / std::max(0.0001f, perspective_scale);
         int final_w = static_cast<int>(std::lround(static_cast<float>(tex_w) * base_adjustment));
         int final_h = static_cast<int>(std::lround(static_cast<float>(tex_h) * base_adjustment));
         final_w = std::max(1, final_w);
         final_h = std::max(1, final_h);
-        // Child attachments store world_pos as the child's base (bottom-middle) in world coordinates.
-        // The SceneRenderer centers draw rectangles around asset->pos and subtracts height to align
-        // the bottom edge, so pass the base position directly and let the renderer handle anchoring.
+
         SDL_Rect dest_rect{
             slot.world_pos.x,
             slot.world_pos.y,
             final_w,
             final_h
-        };
-        SDL_Point pivot{ final_w / 2, final_h }; // rotate around bottom-middle like the editor preview
+};
+        SDL_Point pivot{ final_w / 2, final_h };
         SDL_RendererFlip flip = asset->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
         add_render_object(tex,
                           dest_rect,
@@ -268,7 +239,7 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                           static_cast<double>(slot.rotation_degrees),
                           pivot,
                           flip);
-    };
+};
 
     for (const auto& child_attachment : asset->animation_children()) {
         if (child_attachment.render_in_front) {
@@ -277,7 +248,6 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
         emit_child(child_attachment);
     }
 
-    // 3. Base Asset and Depth Cue
     SDL_Texture* base_tex = nullptr;
 
     const Animation* anim_ptr = nullptr;
@@ -304,7 +274,7 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
     if (base_tex) {
         int w, h;
         SDL_QueryTexture(base_tex, nullptr, nullptr, &w, &h);
-        
+
         float remainder = asset->current_remaining_scale_adjustment;
         if (!std::isfinite(remainder) || remainder <= 0.0f) {
             remainder = 1.0f;
@@ -321,47 +291,14 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
             asset->pos.y,
             final_w,
             final_h
-        };
+};
         add_render_object(base_tex, dest_rect, SDL_Color{255, 255, 255, 255}, SDL_BLENDMODE_BLEND, false);
     }
 
     if (gp) {
-        // Background
-        /*
-        if (bg_tex && gp->depth_cue_background_opacity > 0.0f) {
-            int w, h;
-            SDL_QueryTexture(bg_tex, nullptr, nullptr, &w, &h);
-            SDL_Rect dest_rect = {
-                asset->pos.x,
-                asset->pos.y,
-                static_cast<int>(w * effective_scale),
-                static_cast<int>(h * effective_scale)
-            };
-            SDL_Color color = {255, 255, 255,
-                               static_cast<Uint8>(gp->depth_cue_background_opacity * 255)};
-            add_render_object(bg_tex, dest_rect, color);
-        }
-        */
 
-        // Foreground
-        /*
-        if (fg_tex && gp->depth_cue_foreground_opacity > 0.0f) {
-            int w, h;
-            SDL_QueryTexture(fg_tex, nullptr, nullptr, &w, &h);
-            SDL_Rect dest_rect = {
-                asset->pos.x,
-                asset->pos.y,
-                static_cast<int>(w * effective_scale),
-                static_cast<int>(h * effective_scale)
-            };
-            SDL_Color color = {255, 255, 255,
-                               static_cast<Uint8>(gp->depth_cue_foreground_opacity * 255)};
-            add_render_object(fg_tex, dest_rect, color);
-        }
-        */
     }
 
-    // 5. Child animation assets in front
     for (const auto& child_attachment : asset->animation_children()) {
         if (!child_attachment.render_in_front) {
             continue;
@@ -369,7 +306,6 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
         emit_child(child_attachment);
     }
 
-    // 6. In-front lights
     if (asset->info) {
         for (const auto& light_source : asset->info->light_sources) {
             if (light_source.in_front && light_source.texture) {
@@ -386,22 +322,13 @@ void CompositeAssetRenderer::regenerate_package(Asset* asset,
                 int w, h;
                 SDL_QueryTexture(light_source.texture, nullptr, nullptr, &w, &h);
                 SDL_Rect dest_rect = {
-                    static_cast<int>(asset->pos.x + offset_x * package_scale),
-                    static_cast<int>(asset->pos.y + light_source.offset_y * package_scale),
-                    w,
-                    h
-                };
+                    static_cast<int>(asset->pos.x + offset_x * package_scale), static_cast<int>(asset->pos.y + light_source.offset_y * package_scale), w, h };
                 SDL_RendererFlip light_flip = asset->flipped ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
 
                 add_render_object(light_source.texture, dest_rect, *light_color, SDL_BLENDMODE_ADD, true, 0.0, std::nullopt, light_flip);
 
                 if (light_source.render_to_dark_mask) {
-                    add_scene_mask_light(light_source.texture,
-                                         dest_rect,
-                                         *light_color,
-                                         SDL_BLENDMODE_ADD,
-                                         true,
-                                         light_flip);
+                    add_scene_mask_light(light_source.texture, dest_rect, *light_color, SDL_BLENDMODE_ADD, true, light_flip);
                 }
             }
         }
@@ -428,8 +355,6 @@ void CompositeAssetRenderer::calculate_local_bounds(Asset* asset) {
         bounds = {new_x, new_y, new_w, new_h};
     }
 
-    // The package rects are in world space relative to asset->pos.
-    // We want local space, so subtract asset->pos.
     bounds.x -= asset->pos.x;
     bounds.y -= asset->pos.y;
 

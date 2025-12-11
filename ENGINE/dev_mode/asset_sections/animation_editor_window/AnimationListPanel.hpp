@@ -44,7 +44,7 @@ class AnimationListPanel {
         std::string id;
         int level = 0;
         bool missing_source = false;
-    };
+};
 
     struct RowGeometry {
         SDL_Rect outer{0, 0, 0, 0};
@@ -53,7 +53,7 @@ class AnimationListPanel {
         int content_offset_x = 0;
         int content_offset_y = 0;
         int content_height = 0;
-    };
+};
 
     std::shared_ptr<AnimationDocument> document_;
     std::vector<RowGeometry> row_geometry_;
@@ -71,7 +71,6 @@ class AnimationListPanel {
     mutable bool layout_dirty_ = true;
     ui::ScrollController scroll_controller_;
 
-    // Maps each animation id to its root SFF id for coloring.
     std::unordered_map<std::string, std::string> root_for_id_;
 };
 

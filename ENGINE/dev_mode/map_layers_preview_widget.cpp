@@ -200,7 +200,7 @@ void MapLayersPreviewWidget::set_selected_layer(int index) {
         return;
     }
     selected_layer_index_ = index;
-    // Don't mark dirty on selection changes - only on data changes
+
     request_geometry_update();
 }
 
@@ -440,8 +440,7 @@ void MapLayersPreviewWidget::rebuild_visuals() {
 
         const auto rooms_it = layer_json.find("rooms");
         if (rooms_it != layer_json.end() && rooms_it->is_array()) {
-            // Preview requirement: show all configured room types once per layer,
-            // so users see the complete set instead of a random subset.
+
             for (const auto& candidate : *rooms_it) {
                 if (!candidate.is_object()) {
                     continue;

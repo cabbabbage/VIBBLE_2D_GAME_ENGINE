@@ -70,8 +70,7 @@ class FrameChildrenEditor {
     void ensure_child_mode_size();
     AnimationChildMode child_mode(int child_index) const;
     int child_mode_index(AnimationChildMode mode) const;
-    std::vector<int> build_child_index_remap(const std::vector<std::string>& previous,
-                         const std::vector<std::string>& next) const;
+    std::vector<int> build_child_index_remap(const std::vector<std::string>& previous, const std::vector<std::string>& next) const;
     void remap_child_indices(const std::vector<int>& remap);
     void apply_child_list_change(const std::vector<std::string>& next_children);
     bool timeline_entry_is_static(const nlohmann::json& entry) const;
@@ -87,9 +86,7 @@ class FrameChildrenEditor {
     bool point_in_canvas(int x, int y) const;
     SDL_FPoint screen_to_world(SDL_Point screen) const;
     SDL_FPoint world_to_screen(const SDL_FPoint& world) const;
-    SDL_FPoint child_screen_position(const ChildFrame& child,
-                     const SDL_FPoint& anchor_screen,
-                     float offset_scale) const;
+    SDL_FPoint child_screen_position(const ChildFrame& child, const SDL_FPoint& anchor_screen, float offset_scale) const;
     int hit_test_child(int x, int y) const;
     float canvas_pixels_per_unit() const;
     float document_scale_factor() const;
@@ -101,10 +98,7 @@ class FrameChildrenEditor {
     std::filesystem::path resolve_child_asset_directory(const std::string& child_id) const;
     std::filesystem::path resolve_child_frame_path(const std::string& child_id) const;
     std::filesystem::path find_first_frame_in_folder(const std::filesystem::path& folder) const;
-    SDL_Texture* acquire_child_texture(SDL_Renderer* renderer,
-                                       const std::string& child_id,
-                                       int* tex_w,
-                                       int* tex_h) const;
+    SDL_Texture* acquire_child_texture(SDL_Renderer* renderer, const std::string& child_id, int* tex_w, int* tex_h) const;
 
   private:
     std::shared_ptr<AnimationDocument> document_;
@@ -120,8 +114,7 @@ class FrameChildrenEditor {
     bool dragging_child_ = false;
     SDL_Point drag_start_screen_{0, 0};
     ChildFrame drag_snapshot_;
-    // Track the last-seen payload and children signature separately so we can safely
-    // detect changes without corrupting the cached JSON.
+
     std::string payload_signature_;
     std::string payload_cache_;
     std::string children_signature_cache_;
@@ -133,7 +126,7 @@ class FrameChildrenEditor {
         bool has_timestamp = false;
         int width = 0;
         int height = 0;
-    };
+};
     mutable std::unordered_map<std::string, ChildPreviewTexture> child_previews_;
     mutable std::unordered_map<std::string, std::filesystem::path> child_asset_dir_cache_;
     mutable std::filesystem::path cached_assets_root_;

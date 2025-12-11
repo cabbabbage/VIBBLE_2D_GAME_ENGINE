@@ -16,9 +16,7 @@ public:
     void request_asset(const std::string& asset_name,
                        const std::vector<std::string>& animations = {}) const;
     void request_animation(const std::string& asset_name, const std::string& animation) const;
-    void request_frame(const std::string& asset_name,
-                       const std::string& animation,
-                       int frame_index) const;
+    void request_frame(const std::string& asset_name, const std::string& animation, int frame_index) const;
 
     void request_full_light_rebuild() const;
     void request_light(const std::string& asset_name) const;
@@ -46,11 +44,9 @@ private:
     void mark_asset_lights_for_rebuild(const std::string& asset_name) const;
     void mark_light_for_rebuild(const std::string& asset_name, int light_index) const;
 
-    bool run_python_script(const std::filesystem::path& script,
-                           const std::vector<std::string>& args,
-                           const std::string& command_prefix) const;
+    bool run_python_script(const std::filesystem::path& script, const std::vector<std::string>& args, const std::string& command_prefix) const;
     bool manifest_has_needs_rebuild() const;
     bool manifest_has_light_needs_rebuild() const;
 };
 
-} // namespace vibble
+}

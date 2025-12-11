@@ -3,13 +3,7 @@
 namespace camera_effects {
 
 bool ImageEffectSettingsIsIdentity(const ImageEffectSettings& s, float epsilon) {
-    return std::abs(s.contrast - 0.0f) < epsilon &&
-           std::abs(s.brightness - 0.0f) < epsilon &&
-           std::abs(s.blur - 0.0f) < epsilon &&
-           std::abs(s.saturation_red - 0.0f) < epsilon &&
-           std::abs(s.saturation_green - 0.0f) < epsilon &&
-           std::abs(s.saturation_blue - 0.0f) < epsilon &&
-           std::abs(s.hue - 0.0f) < epsilon;
+    return std::abs(s.contrast - 0.0f) < epsilon && std::abs(s.brightness - 0.0f) < epsilon && std::abs(s.blur - 0.0f) < epsilon && std::abs(s.saturation_red - 0.0f) < epsilon && std::abs(s.saturation_green - 0.0f) < epsilon && std::abs(s.saturation_blue - 0.0f) < epsilon && std::abs(s.hue - 0.0f) < epsilon;
 }
 
 bool ImageEffectSettingsIsIdentity(const ImageEffectSettings& s) {
@@ -41,10 +35,10 @@ std::uint64_t HashImageEffectSettings(const ImageEffectSettings& s) {
 namespace image_effects {
 
 void set_global_state(const GlobalState& state) {
-    // TODO: apply to global image processor
+
     (void)state;
 }
 
-}  // namespace image_effects
+}
 
-}  // namespace camera_effects
+}

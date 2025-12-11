@@ -324,16 +324,15 @@ private:
             rows.push_back({instructions_label_.get()});
         }
 
-        // Add grid resolution slider used by Map-wide and Boundary assets
         if (!grid_resolution_slider_) {
-            constexpr int kMinResolution = 5; // enforce minimum of 5
-            constexpr int kMaxResolution = 10; // keep existing upper bound
-            int current_resolution = kMinResolution; // Default resolution
+            constexpr int kMinResolution = 5;
+            constexpr int kMaxResolution = 10;
+            int current_resolution = kMinResolution;
             if (entry_ && entry_->contains("grid_resolution")) {
                 current_resolution = std::max(kMinResolution, entry_->value("grid_resolution", kMinResolution));
             }
             grid_resolution_slider_ = std::make_unique<DMSlider>("Grid Resolution (2^r px)", kMinResolution, kMaxResolution, current_resolution);
-            // Ensure the value is persisted in the entry so spawners can read it even if user doesn't move the slider
+
             if (entry_) {
                 (*entry_)["grid_resolution"] = current_resolution;
             }

@@ -95,8 +95,7 @@ public:
     bool embedded_interaction_enabled() const { return embedded_interaction_enabled_; }
 
 protected:
-    // Allows derived panels to designate an additional draggable area
-    // (beyond the header) for initiating panel drag/reposition.
+
     void set_drag_handle_rect(const SDL_Rect& rect) const { handle_rect_ = rect; }
 
 private:
@@ -207,7 +206,7 @@ protected:
         int available_height_override;
         int last_screen_w;
         int last_screen_h;
-    };
+};
 
     void capture_snapshot(EmbeddedSnapshot& out) const;
     void apply_embedded_bounds(const SDL_Rect& bounds, int screen_w, int screen_h);

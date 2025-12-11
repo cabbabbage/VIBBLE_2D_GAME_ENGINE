@@ -42,7 +42,7 @@ float round_delta_to_pixel(float value) {
 
 SDL_FPoint snap_to_resolution(SDL_FPoint p, int resolution_r) {
     if (resolution_r < 0) {
-        // Disabled: keep pixel rounding only
+
         return SDL_FPoint{ static_cast<float>(std::round(p.x)), static_cast<float>(std::round(p.y)) };
     }
     SDL_Point world_px{ static_cast<int>(std::lround(p.x)), static_cast<int>(std::lround(p.y)) };
@@ -50,15 +50,12 @@ SDL_FPoint snap_to_resolution(SDL_FPoint p, int resolution_r) {
     return SDL_FPoint{ static_cast<float>(snapped.x), static_cast<float>(snapped.y) };
 }
 
-// Quadratic Bezier helpers for curved smoothing
 static SDL_FPoint bezier2_point(const SDL_FPoint& p0, const SDL_FPoint& p1, const SDL_FPoint& p2, double t) {
     const double u = 1.0 - t;
     const double uu = u * u;
     const double tt = t * t;
     return SDL_FPoint{
-        static_cast<float>(uu * p0.x + 2.0 * u * t * p1.x + tt * p2.x),
-        static_cast<float>(uu * p0.y + 2.0 * u * t * p1.y + tt * p2.y)
-    };
+        static_cast<float>(uu * p0.x + 2.0 * u * t * p1.x + tt * p2.x), static_cast<float>(uu * p0.y + 2.0 * u * t * p1.y + tt * p2.y) };
 }
 
 static std::vector<SDL_FPoint> bezier2_sampled_polyline(const SDL_FPoint& p0,
@@ -99,7 +96,7 @@ static SDL_FPoint interpolate_along_polyline(const std::vector<SDL_FPoint>& poly
     if (distance <= 0.0) return polyline.front();
     const double total = cumlen.back();
     if (distance >= total) return polyline.back();
-    // binary search
+
     size_t lo = 0, hi = cumlen.size() - 1;
     while (hi - lo > 1) {
         size_t mid = (lo + hi) / 2;
@@ -166,7 +163,6 @@ void MovementCanvas::render(SDL_Renderer* renderer) const {
 
     render_pixel_grid(renderer);
 
-    // Optional animation overlay anchored at current frame's bottom-center on the grid
     if (preview_provider_) {
         SDL_Texture* tex = nullptr;
         if (!animation_id_.empty()) {
@@ -185,7 +181,7 @@ void MovementCanvas::render(SDL_Renderer* renderer) const {
                     anchor_world = positions_[selected_index_];
                 }
                 SDL_FPoint anchor_screen = world_to_screen(anchor_world);
-                // Bottom-center alignment: top-left = (anchor.x - half width, anchor.y - height)
+
                 const int left   = static_cast<int>(std::round(anchor_screen.x - dst_w_px * 0.5f));
                 const int top    = static_cast<int>(std::round(anchor_screen.y - dst_h_px));
                 SDL_Rect dst{ left, top, static_cast<int>(std::round(dst_w_px)), static_cast<int>(std::round(dst_h_px)) };
@@ -231,8 +227,7 @@ void MovementCanvas::render(SDL_Renderer* renderer) const {
 }
 
 SDL_FPoint snap_to_grid_resolution(SDL_FPoint p) {
-    // Snap to the nearest major grid intersection using the current visual grid resolution.
-    // The grid overlay emphasizes major lines every kMajorGridInterval units; use that as resolution.
+
     if (kMajorGridInterval <= 1) {
         return SDL_FPoint{ static_cast<float>(std::round(p.x)), static_cast<float>(std::round(p.y)) };
     }
@@ -247,13 +242,10 @@ void MovementCanvas::render_background(SDL_Renderer* renderer) const {
 
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    dm_draw::DrawBeveledRect(renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(),
-                              DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(),
-                              DMStyles::ShadowIntensity());
+    dm_draw::DrawBeveledRect(renderer, bounds_, DMStyles::CornerRadius(), DMStyles::BevelDepth(), DMStyles::PanelBG(), DMStyles::HighlightColor(), DMStyles::ShadowColor(), false, DMStyles::HighlightIntensity(), DMStyles::ShadowIntensity());
 
     render_pixel_grid(renderer);
 
-    // Always show the animation overlay for context, but no movement points/path or gizmos
     if (preview_provider_) {
         SDL_Texture* tex = nullptr;
         if (!animation_id_.empty()) {
@@ -311,7 +303,7 @@ void MovementCanvas::render_pixel_grid(SDL_Renderer* renderer) const {
         SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
         const int sx = static_cast<int>(std::round(screen_x));
         SDL_RenderDrawLine(renderer, sx, static_cast<int>(top), sx, static_cast<int>(bottom));
-    };
+};
 
     auto draw_horizontal = [&](int y, Uint8 alpha) {
         float screen_y = center_px.y - (static_cast<float>(y) - center_world_.y) * scale;
@@ -320,7 +312,7 @@ void MovementCanvas::render_pixel_grid(SDL_Renderer* renderer) const {
         SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
         const int sy = static_cast<int>(std::round(screen_y));
         SDL_RenderDrawLine(renderer, static_cast<int>(left), sy, static_cast<int>(right), sy);
-    };
+};
 
     for (int x = start_x; x <= end_x; ++x) {
         if (x == 0) continue;
@@ -403,16 +395,16 @@ bool MovementCanvas::handle_event(const SDL_Event& e) {
             if (e.button.button == SDL_BUTTON_LEFT) {
                 update_selection_from_mouse();
                 if (hovered_index_ >= 0 && hovered_index_ == selected_index_ && selected_index_ > 0) {
-                    // Begin dragging only if clicking the currently selected point
+
                     dragging_frame_ = true;
                     drag_last_mouse_ = SDL_Point{e.button.x, e.button.y};
                     drag_target_world_ = positions_[selected_index_];
                     drag_base_positions_ = positions_;
                 } else if (selected_index_ > 0) {
-                    // Set current frame's point to the clicked position without changing selection
+
                     std::vector<SDL_FPoint> base_positions = positions_;
                     SDL_FPoint world = screen_to_world(SDL_Point{e.button.x, e.button.y});
-                    // Snap to dev grid resolution (if configured) only on click placement
+
                     world = snap_to_resolution(world, snap_resolution_);
                     apply_frame_move_from_base(selected_index_, world, base_positions);
                     drag_target_world_ = world;
@@ -556,8 +548,7 @@ void MovementCanvas::set_animation_context(std::shared_ptr<PreviewProvider> prov
     preview_provider_ = std::move(provider);
     animation_id_ = animation_id;
     base_scale_percentage_ = std::isfinite(scale_percentage) && scale_percentage > 0.0f ? scale_percentage : 100.0f;
-    // Keep world units as raw pixels; apply document scale explicitly when rendering the preview texture
-    // so positions (movement and child offsets) stay 1:1 with runtime.
+
     pixels_per_unit_ = 1.0f;
 }
 
@@ -586,14 +577,13 @@ void MovementCanvas::apply_frame_move_from_base(int index, const SDL_FPoint& new
         return;
     }
 
-    // Smoothing enabled: redistribute intermediate points to near-equal spacing
     const int n = static_cast<int>(frames_.size());
     const int k = index;
     const SDL_FPoint start = base_positions.front();
     const SDL_FPoint end   = base_positions.back();
 
     if (!smoothing_curve_enabled_) {
-        // Linear redistribution (existing behavior)
+
         const int steps1 = k;
         const double seg1_dx = static_cast<double>(new_position.x - start.x);
         const double seg1_dy = static_cast<double>(new_position.y - start.y);
@@ -633,11 +623,10 @@ void MovementCanvas::apply_frame_move_from_base(int index, const SDL_FPoint& new
             frames_[j].dy = round_delta_to_pixel(static_cast<float>(step_y));
         }
     } else {
-        // Curved redistribution: place points along quadratic Bezier approximations
+
         const int steps1 = k;
         const int steps2 = std::max(0, (n - 1) - k);
 
-        // Choose control points from base path midpoints to approximate original curvature
         SDL_FPoint ctrl1 = start;
         if (steps1 > 1) {
             int mid1 = std::clamp(k / 2, 0, k);
@@ -649,7 +638,6 @@ void MovementCanvas::apply_frame_move_from_base(int index, const SDL_FPoint& new
             ctrl2 = base_positions[static_cast<size_t>(std::clamp(mid2, 0, n - 1))];
         }
 
-        // First curve polyline and cumulative lengths
         if (steps1 > 0) {
             auto poly1 = bezier2_sampled_polyline(start, ctrl1, new_position, std::max(32, steps1 * 8));
             auto cum1  = cumulative_lengths(poly1);
@@ -672,7 +660,6 @@ void MovementCanvas::apply_frame_move_from_base(int index, const SDL_FPoint& new
             }
         }
 
-        // Second curve polyline and cumulative lengths
         if (steps2 > 0) {
             auto poly2 = bezier2_sampled_polyline(new_position, ctrl2, end, std::max(32, steps2 * 8));
             auto cum2  = cumulative_lengths(poly2);

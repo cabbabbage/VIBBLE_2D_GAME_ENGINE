@@ -5,19 +5,18 @@
 
 #include "animation_frame_variant.hpp"
 
-// Describes a single child attachment timeline (static or async) owned by an animation.
 enum class AnimationChildMode {
     Static,
     Async,
 };
 
 struct AnimationChildData {
-    std::string name;                // Logical identifier used by authoring/runtime (unique per asset).
-    std::string asset_name;          // Target asset id to spawn when this child runs.
-    std::string animation_override;  // Optional animation override for the spawned asset.
+    std::string name;
+    std::string asset_name;
+    std::string animation_override;
     AnimationChildMode mode = AnimationChildMode::Static;
-    bool auto_start = false;         // Should this child auto-start at frame 0 (static) when animation begins?
-    std::vector<AnimationChildFrameData> frames;  // Per-frame offsets/visibility for this child.
+    bool auto_start = false;
+    std::vector<AnimationChildFrameData> frames;
 
     bool valid() const { return !name.empty() && !asset_name.empty(); }
     bool is_static() const { return mode == AnimationChildMode::Static; }
