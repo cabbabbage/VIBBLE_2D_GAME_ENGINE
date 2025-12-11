@@ -43,13 +43,116 @@
     <p>Beyond assets and rendering, <code>Assets</code> tracks selection/highlight state, persists <code>map_info_json</code> changes, and exposes helpers for room config panels, asset library popups, and quick task notifications. <code>Asset::set_hidden()</code> and <code>collectDistantAssets()</code> in <code>AssetLoader</code> gate assets far from the camera, while <code>RebuildQueueCoordinator</code> ensures rebuild scripts finish before the main loop runs; <code>DevControls</code> and <code>MapLightPanel</code> rely on this to edit and persist data safely.</p>
 
     <h1>Dev Mode Toolkit</h1>
-    <h2>Activation, manifest store, and settings</h2>
-    <p>Dev Mode is enabled manually via <code>Ctrl+D</code> or automatically when a map lacks a player asset. <code>MainApp</code> flips the flag on <code>Assets</code>, drops rendering quality (via <code>SDL_HINT_RENDER_SCALE_QUALITY</code>), and hands control to <code>DevControls</code>. <code>DevControls</code> maintains a <code>ManifestStore</code> that reloads <code>manifest.json</code>, keeps <code>dev_mode_settings.json</code> for UI layout/filter preferences, and streams edits back into the manifest through <code>AssetLibrary</code> once the user saves.</p>
-    <h2>Editors and panels</h2>
-    <p>Dev Mode surfaces multiple editor surfaces: the <code>AssetLibraryUI</code> lets you drag metadata into the world, <code>AssetInfoUI</code> edits tags/lighting/animations, and the <code>AnimationEditorWindow</code> mirrors <code>AnimationDocument</code> payloads for frame-level tweaks. Map-focused tools include <code>RoomEditor</code>, <code>MapEditor</code>, <code>CameraUIPanel</code>, <code>ForegroundBackgroundEffectPanel</code>, trail editors, and spawn group modals. Lighting adjustments happen through <code>MapLightPanel</code>, which writes back to the manifest and can trigger <code>light_tool.py</code> rebuilds. The frame editor session lets artists scrub assets while the rest of the engine continues running.</p>
-    <h2>Workflows, visualization, and debugging</h2>
-    <p><code>DevControls</code> manages filters, grid overlays, snap-to-grid toggles, and quick-task popups so you can focus on assets of interest. The toolbar exposes room and map configuration panels, map grid controls, and lighting overrides, while overlays show shader bounds, asset depth cues, and spawn group coverage. Mouse-driven asset dragging dispatches manifest updates once you drop a change, and <code>DevControls</code> broadcasts notices via the quick task widget so the user knows when persistence succeeds or fails. Custom controllers, lighting tweaks, and spawn edits benefit from these visual helpers before they are flushed to disk.</p>
-    <h3>Debugging utilities</h3>
-    <p>The toolkit also ships with debugging tiles that highlight collider zones, boundary assets, and spawn overlays, and it keeps a history of camera focus changes for replay. On-demand rebuilds of asset and light caches (triggered by <code>tools/asset_tool.py</code>, <code>tools/light_tool.py</code>, and <code>RebuildQueueCoordinator</code>) link the runtime experience with the developer tooling so changes in Dev Mode propagate immediately.</p>
+    <p>Dev Mode flips the engine into an editor-ready state, reduces render quality for responsiveness, and wires <code>DevControls</code> to <code>ManifestStore</code> so user edits persist back to <code>manifest.json</code>. The toolkit is reachable via <code>Ctrl+D</code> (or by launching a map that has no player asset), and it keeps dev-specific layout filters in <code>dev_mode_settings.json</code> while streaming changes into the shared <code>AssetLibrary</code>.</p>
+
+    <h2>Workspace &amp; navigation</h2>
+    <h3>Main screen</h3>
+    <figure>
+        <img src="dev mode photos/devmode_main_screen.jpg" alt="Dev Mode main screen showing panels and toolbar" />
+        <figcaption>The primary workspace layers the world view with floating headers, quick access buttons, and revealable panels that drive most editing workflows.</figcaption>
+    </figure>
+    <h3>Page grid overview</h3>
+    <figure>
+        <img src="dev mode photos/devmode_main_pagegrid_ui.jpg" alt="Grid-based overview of Dev Mode page layout" />
+        <figcaption>Page-grid UI helps you track the current overlay state, tool focus, and modal dialogs so navigation stays consistent when multiple editors are open.</figcaption>
+    </figure>
+    <h3>Header and footer bar</h3>
+    <figure>
+        <img src="dev mode photos/devmode_header_footer_bar.jpg" alt="Header and footer compose the Dev Mode toolbar" />
+        <figcaption>The header exposes toggles for room/map/lighting modes while the footer shows notifications, quick tasks, and camera shortcuts.</figcaption>
+    </figure>
+
+    <h2>Asset configuration panels</h2>
+    <h3>Asset library panel</h3>
+    <figure>
+        <img src="dev mode photos/devmode_asset_library_panel.jpg" alt="Asset library panel listing shared assets" />
+        <figcaption>Browse every manifest asset, drag entries into the world, and open detailed editors directly from this floating catalog.</figcaption>
+    </figure>
+    <h3>Asset info overview</h3>
+    <figure>
+        <img src="dev mode photos/devmode_asset_info_overview.jpg" alt="Asset info editor showing metadata panels" />
+        <figcaption>AssetInfoUI exposes core properties, spawn groups, lighting hints, and animation hooks that are saved back to <code>SRC</code> and the manifest.</figcaption>
+    </figure>
+    <h3>Basic info and tags</h3>
+    <figure>
+        <img src="dev mode photos/devmode_asset_info_basic_tags.jpg" alt="Asset info tags and basic info panels" />
+        <figcaption>Basic info panels manage tags, anti-tags, start animations, scale variants, and mover settings for the selected asset.</figcaption>
+    </figure>
+    <h3>Spacing panel</h3>
+    <figure>
+        <img src="dev mode photos/devmode_asset_info_spacing_panel.jpg" alt="Asset info spacing controls" />
+        <figcaption>Spacing controls guard minimum distance between instances and let you exclude assets from density-aware spawn groups.</figcaption>
+    </figure>
+
+    <h2>Camera, lighting, and map overlay tools</h2>
+    <h3>Camera panel</h3>
+    <figure>
+        <img src="dev mode photos/devmode_camera_panel.jpg" alt="Camera control panel in Dev Mode" />
+        <figcaption>Adjust zoom, focus, and smoothing parameters so the warped screen grid clips to the desired play area while debugging.</figcaption>
+    </figure>
+    <h3>Map light panel</h3>
+    <figure>
+        <img src="dev mode photos/devmode_map_light_panel.jpg" alt="Map light editor panel" />
+        <figcaption>MapLightPanel lets you edit light orbit settings, chunk resolutions, and color pairings, reflagging <code>needs_rebuild</code> for <code>light_tool.py</code> when done.</figcaption>
+    </figure>
+    <h3>Map-mode lighting</h3>
+    <figure>
+        <img src="dev mode photos/devmode_map_mode_lighting.jpg" alt="Map mode lighting overlay" />
+        <figcaption>The map mode offers a bird’s-eye view of lighting previews, asset depth cues, and interactive orbit handles.</figcaption>
+    </figure>
+    <h3>Map-mode assets</h3>
+    <figure>
+        <img src="dev mode photos/devmode_map_mode_assets.jpg" alt="Map mode asset layout view" />
+        <figcaption>View spawn groups, trails, and boundary assets within the layered map canvas before committing new content.</figcaption>
+    </figure>
+
+    <h2>Room and spawn editors</h2>
+    <h3>Room editor collapsed</h3>
+    <figure>
+        <img src="dev mode photos/devmode_room_editor_collapsed.jpg" alt="Collapsed room editor panel" />
+        <figcaption>When unused, the room editor minimizes itself, keeping the play view clean while still allowing a single click expansion.</figcaption>
+    </figure>
+    <h3>Room layers</h3>
+    <figure>
+        <img src="dev mode photos/devmode_room_layers.jpg" alt="Room layers display panel" />
+        <figcaption>Layer controls define how many rooms per level, required children, and guiding geometry for procedurally generated layouts.</figcaption>
+    </figure>
+    <h3>Room configuration expanded</h3>
+    <figure>
+        <img src="dev mode photos/devmode_room_config_expanded.jpg" alt="Expanded room configuration UI" />
+        <figcaption>Room configuration exposes spawn areas, areas types, and channel-specific metadata so manual edits stay in sync with the manifest.</figcaption>
+    </figure>
+    <h3>Spawn group configuration</h3>
+    <figure>
+        <img src="dev mode photos/devmode_spawn_group_config.jpg" alt="Spawn group configurator" />
+        <figcaption>SpawnGroupConfig aggregates spawners, probability weights, and grid resolution so you can audition map-specific spawn rules.</figcaption>
+    </figure>
+
+    <h2>Animation and frame editors</h2>
+    <h3>Animation editor</h3>
+    <figure>
+        <img src="dev mode photos/devmode_animation_editor.jpg" alt="Animation editor window" />
+        <figcaption>The animation editor mirrors the manifest payload, showing timelines, playback settings, and child attachments in a dockable window.</figcaption>
+    </figure>
+    <h3>Movement panel</h3>
+    <figure>
+        <img src="dev mode photos/devmode_frame_editor_movement_panel.jpg" alt="Frame editor movement panel" />
+        <figcaption>MovementCanvas and totals panels reveal how root motion translates to grid coordinates so controllers stay in sync with physics.</figcaption>
+    </figure>
+    <h3>Hitbox panel</h3>
+    <figure>
+        <img src="dev mode photos/devmode_frame_editor_hitbox_panel.jpg" alt="Frame editor hitbox panel" />
+        <figcaption>The hitbox panel visualizes collision bounds per frame, making it easier to fine-tune area-based interactions.</figcaption>
+    </figure>
+    <h3>Attack geometry</h3>
+    <figure>
+        <img src="dev mode photos/devmode_frame_editor_attack_geometry.jpg" alt="Frame editor attack geometry" />
+        <figcaption>Attack geometry preview lets you tweak reach, damage zones, and animation timing for combat assets.</figcaption>
+    </figure>
+    <h3>Children panel</h3>
+    <figure>
+        <img src="dev mode photos/devmode_frame_editor_children_panel.jpg" alt="Frame editor children panel" />
+        <figcaption>Child attachments and timelines stay readable in this panel, which also shows parenting links and spawn behaviors.</figcaption>
+    </figure>
 </body>
 </html>
