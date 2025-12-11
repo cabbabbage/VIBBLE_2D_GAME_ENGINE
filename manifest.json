@@ -2534,8 +2534,10 @@
       "start": "Default"
     },
     "Gary": {
+      "animation_children": [],
       "animations": {
         "back": {
+          "child_timelines": [],
           "crop_frames": false,
           "flipped_source": false,
           "frames": [
@@ -2631,11 +2633,33 @@
           "speed_multiplier": 1.0
         },
         "default": {
+          "attack_geometry": [
+            {
+              "explosion": [],
+              "melee": [],
+              "projectile": []
+            }
+          ],
+          "child_timelines": [],
           "crop_frames": false,
           "flipped_source": false,
           "frames": [
             {
               "needs_rebuild": false
+            }
+          ],
+          "hit_geometry": [
+            {
+              "explosion": null,
+              "melee": {
+                "center_x": -1.1640625,
+                "center_y": 127.775390625,
+                "half_height": 89.521484375,
+                "half_width": 40.0,
+                "rotation": 0.0,
+                "type": "melee"
+              },
+              "projectile": null
             }
           ],
           "inherit_source_movement": false,
@@ -2644,7 +2668,8 @@
           "movement": [
             [
               0,
-              0
+              0,
+              false
             ]
           ],
           "movement_total": {
@@ -2663,6 +2688,7 @@
           "speed_multiplier": 1.0
         },
         "forward": {
+          "child_timelines": [],
           "crop_frames": false,
           "flipped_source": false,
           "frames": [
@@ -2730,6 +2756,7 @@
           "speed_multiplier": 1.0
         },
         "left": {
+          "child_timelines": [],
           "crop_frames": false,
           "derived_modifiers": {
             "flipMovementX": false,
@@ -2845,6 +2872,7 @@
           "speed_multiplier": 1.0
         },
         "right": {
+          "child_timelines": [],
           "crop_frames": false,
           "flipped_source": false,
           "frames": [
@@ -4693,6 +4721,7 @@
       "animation_children": [],
       "animations": {
         "backward": {
+          "child_timelines": [],
           "crop_frames": false,
           "derived_modifiers": {
             "flipMovementX": false,
@@ -4766,6 +4795,7 @@
           "speed_multiplier": 1.0
         },
         "default": {
+          "child_timelines": [],
           "crop_frames": false,
           "flipped_source": false,
           "frames": [
@@ -4972,6 +5002,7 @@
               "projectile": null
             }
           ],
+          "child_timelines": [],
           "crop_frames": true,
           "flipped_source": false,
           "frames": [
@@ -5184,6 +5215,7 @@
               "projectile": null
             }
           ],
+          "child_timelines": [],
           "crop_frames": false,
           "flipped_source": false,
           "frames": [
@@ -5507,6 +5539,7 @@
               "projectile": null
             }
           ],
+          "child_timelines": [],
           "children": [],
           "crop_frames": false,
           "derived_modifiers": {
@@ -5733,6 +5766,7 @@
           "speed_multiplier": 1.0
         },
         "right": {
+          "child_timelines": [],
           "crop_frames": false,
           "derived_modifiers": {
             "flipMovementX": true,
@@ -7043,7 +7077,7 @@
           },
           {
             "brightness": 1.0,
-            "offset": 658.9600219726562,
+            "offset": 658.9600219726563,
             "opacity": 7.659999847412109,
             "scale": 6.590000152587891
           }
