@@ -617,7 +617,8 @@
       "start": "default",
       "tags": [],
       "tillable": false,
-      "update_radius": 0
+      "update_radius": 0,
+      "z_threshold": -19
     },
     "Bush_1": {
       "animations": {
@@ -3269,7 +3270,7 @@
       "tags": [],
       "tillable": false,
       "update_radius": 0,
-      "z_threshold": -288
+      "z_threshold": -276
     },
     "Town_Hall": {
       "animation_children": [],
@@ -7107,8 +7108,8 @@
         "bar": {
           "curvyness": 2,
           "display_color": [
+            148,
             242,
-            45,
             36,
             255
           ],
@@ -7127,9 +7128,9 @@
         "fountain": {
           "curvyness": 2,
           "display_color": [
+            36,
             242,
-            242,
-            85,
+            148,
             255
           ],
           "edge_smoothness": 43,
@@ -7180,9 +7181,9 @@
         "rnd": {
           "curvyness": 2,
           "display_color": [
-            31,
-            96,
-            204,
+            242,
+            124,
+            36,
             255
           ],
           "edge_smoothness": 2,
@@ -7230,9 +7231,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            242,
-            85,
-            153,
+            36,
+            224,
+            34,
             255
           ],
           "edge_smoothness": 101,
@@ -7580,8 +7581,8 @@
                 }
               ],
               "display_name": "Vibble",
-              "dx": -1038,
-              "dy": -654,
+              "dx": -708,
+              "dy": -836,
               "enforce_spacing": false,
               "explicit_flip": false,
               "force_flipped": false,
@@ -7592,7 +7593,7 @@
               "origional_width": 6904,
               "position": "Exact",
               "priority": 11,
-              "resolution": 7,
+              "resolution": 3,
               "resolve_geometry_to_room_size": true,
               "resolve_quantity_to_room_size": false,
               "spawn_id": "spn-e8e9caae35da"
