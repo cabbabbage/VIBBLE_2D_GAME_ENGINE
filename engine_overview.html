@@ -8,151 +8,151 @@
     <h1>Content Loading Pipeline</h1>
     <h2>Manifest, Storage Roots, and Cache Layers</h2>
     <h3>Manifest-driven project layout</h3>
-    <p>The engine keeps every asset and map definition out of the binary by relying on <code>manifest.json</code>, which is read and written via <code>manifest::load_manifest()</code>/<code>manifest::save_manifest()</code> in <code>ENGINE/core/manifest/manifest_loader.cpp</code>. The loader guarantees the folder structure under <code>project/SRC</code>, so the engine can later discover assets, loading screens, and other shared content without manual setup.</p>
+    <p>The engine reads and writes a single manifest.json file instead of baking content into the build. At startup it makes sure the expected folders under project/SRC exist so assets, loading screens, and shared content can be found without extra setup.</p>
     <h3>Storage roots and regenerated caches</h3>
-    <p>While <code>SRC/assets</code> and the manifest store the human-authored content, the runnable engine resolves a per-map <code>content_root</code> (defaulting to <code>content/&lt;map&gt;</code>) during <code>MainApp::setup()</code>. Generated frames live inside the <code>cache/</code> hierarchy, so the SDL renderer reuses scaled/filtered textures across maps instead of re-encoding them every launch. The cache is refreshed by <code>tools/asset_tool.py</code> and <code>tools/light_tool.py</code> whenever <code>needs_rebuild</code> flags in the manifest are set, while <code>RebuildQueueCoordinator</code> (invoked from <code>main()</code>) forwards queued work to those scripts before running the game.</p>
+    <p>Human-made files live in SRC/assets and in the manifest. When the game starts it picks a content folder for the current map (content/&lt;map&gt; by default) and reads ready-to-run files from there. Prebuilt textures and light maps live in cache/ so the renderer can reuse them instead of reprocessing images every launch. asset_tool.py and light_tool.py rebuild the cache when the manifest flags a change, and the rebuild queue runs these tools before the game begins.</p>
     <h2>Asset Library and Texture Pooling</h2>
     <h3>AssetInfo metadata and shared caching</h3>
-    <p><code>AssetLibrary</code> synchronizes <code>manifest.json</code> with discovered folders under <code>SRC/assets</code> (see <code>ENGINE/asset/asset_library.cpp</code>), creating <code>AssetInfo</code> instances that capture animation groups, light sources, spawn settings, and shading hints. These <code>AssetInfo</code> objects hold texture paths and animation children, so <code>AssetLoader</code> can instantiate assets without re-reading JSON on every spawn. Once the SDL renderer is ready, either the shared asset library or the per-map loader preloads animation variants via <code>AssetInfo::loadAnimations()</code>, ensuring there is a pool of GPU-backed frames cached before assets are registered in the world grid.</p>
+    <p>The AssetLibrary keeps the manifest and the SRC/assets folders in sync. It builds AssetInfo records that describe animations, lights, spawn rules, and texture paths. Assets use this shared data so new spawns do not keep rereading JSON. Once rendering is ready, the library or the map loader preloads animation variants so GPU-ready frames are available before assets enter the world grid.</p>
     <h3>Python-powered texture pipelines</h3>
-    <p><code>tools/asset_tool.py</code> is the explicit texture pipeline: it reads the manifest, inspects source frames inside <code>SRC/assets/&lt;asset&gt;</code>, scales them down to fixed variants, applies the configured fg/bg effects, and stores the resulting PNGs in <code>cache/&lt;asset&gt;</code>. A similar <code>tools/light_tool.py</code> rebuilds per-asset light masks when <code>lighting_info[].needs_rebuild</code> is true. Both tools honor the manifest metadata so the runtime never has to run heavyweight image effects; it simply reads prepared scale steps and light textures from <code>cache/</code>.</p>
+    <p>asset_tool.py reads the manifest, looks at source frames in SRC/assets/&lt;asset&gt;, scales them to the needed sizes, applies simple effects, and writes ready PNGs into cache/&lt;asset&gt;. light_tool.py rebuilds light masks when the manifest marks them stale. Because these tools follow the manifest, the game only reads prepared files and never spends frame time on heavy image work.</p>
     <h2>Map, Room, and Trail Construction</h2>
     <h3>Manifest map layers, rooms, and trails</h3>
-    <p>The manifest’s <code>maps</code> entry comprises <code>map_layers</code>, <code>map_assets_data</code>, <code>map_boundary_data</code>, <code>rooms_data</code>, <code>trails_data</code>, and <code>map_grid_settings</code>. <code>AssetLoader::load_from_manifest()</code> populates these fields and deduces <code>map_radius</code>, <code>layer_radii</code>, and slice-specific spawn controls. Missing layers trigger a synthesized spawn room so the engine always has a playable area.</p>
+    <p>Each map entry in the manifest lists layers, room data, trails, boundaries, assets, and grid settings. The loader reads these values, figures out map size, and fills in spawn controls. If required layers are missing it creates a simple fallback room so there is always somewhere to play.</p>
     <h3>Room geometry, spawn groups, and trails</h3>
-    <p><code>GenerateRooms</code> uses the parsed layers to produce <code>Room</code> instances, each with its <code>Area</code> geometry, spawn groups, and inherits/spawns rules. <code>SpawnContext</code> (with <code>AssetSpawnPlanner</code>) samples the rooms and trails, respects spacing filters, and calls <code>AssetLoader::spawnAsset</code> to create <code>Asset</code> objects that are later finalized. Trails share the same infrastructure but reuse trail-specific <code>Area</code> definitions to control spawn and visibility.</p>
+    <p>The room generator turns layer data into rooms with shapes, spawn groups, and rules on how children inherit properties. The spawn planner samples rooms and trails, respects spacing filters, and creates assets that are finalized once placed. Trails use the same system but rely on path-shaped areas to control where things appear.</p>
     <h3>Grid settings and caching</h3>
-    <p>Each map provides <code>MapGridSettings</code> (resolution, chunk size, etc.), which guide <code>AssetLoader::createAssets()</code> when it initializes the <code>world::WorldGrid</code> chunk resolution and calls <code>grid::chunk</code> helpers to build z-indexed tiles. Room-specific <code>MapGridSettings</code> also feed the <code>Asset</code> spawn helpers so that collision, depth sorting, and camera culling stay consistent with the layout.</p>
+    <p>Map grid settings define resolution and chunk sizes. The loader uses them to build the world grid and to set how assets handle collision, depth sorting, and camera culling so the layout stays consistent across rooms.</p>
 
     <h1>Scene &amp; Asset Structure</h1>
     <h2>World Grid, Chunks, and Rooms</h2>
-    <p>The <code>world::WorldGrid</code> keeps assets bucketed into chunks and grid points so spatial queries, collision checks, and active-asset selection stay fast. Each chunk is created lazily via <code>ensure_chunk_from_world()</code>, and assets register via <code>create_asset_at_point()</code>. The grid tracks both chunk residency and per-point occupancy, enabling <code>Assets::update_active_assets()</code> to restrict updates to visible regions.</p>
+    <p>The world grid keeps assets in chunks and points so collision and visibility checks stay fast. Chunks appear when needed and assets register themselves at exact points. The active set only covers what the camera can see.</p>
     <h2>Asset metadata, child assets, and tiling</h2>
-    <p>An <code>Asset</code> instance owns a shared <code>AssetInfo</code>, spawn identifiers, animation runtime, and optional tiling metadata. <code>AssetInfo</code> describes light sources, shadow masks, animation children, and spawn groups, and the runtime uses this metadata for shading, lighting, and relationship wiring. Child assets and timeline entries attach via <code>Asset::animation_children()</code>, while <code>Asset::TilingInfo</code> lets large rooms re-use an asset across a coverage rect.</p>
+    <p>Each asset carries shared info, a spawn id, animation state, and optional tiling data. The shared info lists lights, shadows, child assets, and spawn groups. Child assets attach through animation timelines, and tiling lets a single asset repeat across a larger area without creating many copies.</p>
     <h2>Animation runtime and custom controllers</h2>
-    <p>The animation stack centers on <code>AnimationRuntime</code> and <code>AnimationUpdate</code>. <code>AnimationUpdate</code> exposes path planning helpers like <code>auto_move()</code>, <code>move()</code>, and <code>set_animation()</code> to both default and custom controllers. <code>AnimationRuntime</code> steps the animation frames, evaluates root motion against the grid, and advances child timelines while the <code>MovementPlanExecutor</code> and <code>GetBestPath</code> helpers keep checkpoints sane. Custom logic lives in factories under <code>ENGINE/animation_update/custom_controllers</code> and implements the <code>AssetController</code> interface; controllers are chosen via <code>ControllerFactory::create_by_key()</code> when the manifest attaches a <code>custom_controller_key</code> to an asset.</p>
+    <p>The animation runtime advances frames, moves assets, and works with controllers. The update layer offers helpers for pathing, movement, and animation changes. Controllers can be built-in or custom and are picked by a key set in the manifest.</p>
 
     <h1>Runtime Flow &amp; Rendering</h1>
     <h2>Main loop, input, and asset updates</h2>
-    <p><code>MainApp::game_loop()</code> ties everything together at 60 FPS: SDL events feed <code>Input</code>, <code>Assets::handle_sdl_event()</code>, and, if a player exists, the controller system. <code>Assets::update()</code> then advances <code>Asset::update()</code>, which applies controller logic, runs <code>AnimationRuntime::update()</code>, and marks render packages dirty when animations or lighting change. During setup <code>MainApp</code> also initializes audio via <code>AudioEngine::instance().init()</code> and decides whether to start in Dev Mode when no player asset appears.</p>
+    <p>The main loop runs around 60 frames per second. It reads input, forwards events to assets and the player controller, then updates each asset. Updates run controller logic, advance animations, and flag render data when visuals or lighting change. During setup the app also starts audio and drops into Dev Mode if no player asset is present.</p>
     <h2>Screen grid, camera, and lighting</h2>
-    <p><code>WarpedScreenGrid</code> maintains the screen-oriented camera: it rewrites map coordinates to screen space, smooths zoom/pan via <code>TransformSmoothingState</code>, and enforces <code>realism_settings</code> (e.g., horizon fade, parallax, render quality). The grid rebuilds itself against the <code>WorldGrid</code> each frame so <code>grid_point_for_asset()</code> stays accurate, and <code>Assets</code> exposes the camera via <code>getView()</code> together with lighting toggles such as map light overlays, dark mask, and depth effects. <code>LightMap</code> and <code>MapLightPanel</code> coordinate lighting updates that feed both the renderer and the Dev Mode UI.</p>
+    <p>The warped screen grid keeps the camera aligned with the map and smooths zoom and pan. It rebuilds itself from the world grid each frame so the map-to-screen link stays correct. Camera details and lighting toggles feed both gameplay and Dev Mode. Light updates flow through the light map tools that serve the renderer and editor panels.</p>
     <h2>Rendering pipeline and composite packages</h2>
-    <p><code>SceneRenderer</code> orchestrates the drawing pass. It clears the screen, renders background fog/sky textures, and delegates to <code>CompositeAssetRenderer</code> to build an asset’s <code>render_package</code>. A composite package collects scaled textures, child attachments, and lighting masks in the desired draw order; <code>CompositeAssetRenderer::regenerate_package()</code> also handles scene mask lights and flickering intensity from <code>LightFlickerCalculator</code>. After assembling packages, the renderer sorts assets by depth, draws map lighting, and optionally blits depth cues, dark masks, and postprocessing textures.</p>
+    <p>The scene renderer clears the screen, draws background layers, and asks the composite renderer to assemble each asset's render package. Packages collect textures, child attachments, and lighting in the right order. Afterward the renderer sorts by depth, draws lighting, and adds depth cues, dark masks, and any post effects.</p>
     <h2>Auxiliary runtime systems</h2>
-    <p>Beyond assets and rendering, <code>Assets</code> tracks selection/highlight state, persists <code>map_info_json</code> changes, and exposes helpers for room config panels, asset library popups, and quick task notifications. <code>Asset::set_hidden()</code> and <code>collectDistantAssets()</code> in <code>AssetLoader</code> gate assets far from the camera, while <code>RebuildQueueCoordinator</code> ensures rebuild scripts finish before the main loop runs; <code>DevControls</code> and <code>MapLightPanel</code> rely on this to edit and persist data safely.</p>
+    <p>Beyond rendering, the Assets module tracks selection, saves map info changes, and serves the editor panels. Hidden or distant assets can be skipped to save work. The rebuild queue waits for asset and light tools to finish before the main loop so Dev Mode edits stay safe.</p>
 
     <h1>Dev Mode Toolkit</h1>
-    <p>Dev Mode flips the engine into an editor-ready state, reduces render quality for responsiveness, and wires <code>DevControls</code> to <code>ManifestStore</code> so user edits persist back to <code>manifest.json</code>. The toolkit is reachable via <code>Ctrl+D</code> (or by launching a map that has no player asset), and it keeps dev-specific layout filters in <code>dev_mode_settings.json</code> while streaming changes into the shared <code>AssetLibrary</code>.</p>
+    <p>Dev Mode turns the engine into an editor. It favors responsiveness over visual polish and saves edits back to the manifest. Open it with Ctrl+D or by loading a map without a player asset. Layout preferences live in dev_mode_settings.json, and changes flow into the shared asset library.</p>
 
     <h2>Workspace &amp; navigation</h2>
     <h3>Main screen</h3>
     <figure>
         <img src="dev mode photos/devmode_main_screen.jpg" alt="Dev Mode main screen showing panels and toolbar" />
-        <figcaption>The primary workspace layers the world view with floating headers, quick access buttons, and revealable panels that drive most editing workflows.</figcaption>
+        <figcaption>The main workspace layers the world view with floating headers, quick buttons, and panels that drive most editing tasks.</figcaption>
     </figure>
     <h3>Page grid overview</h3>
     <figure>
         <img src="dev mode photos/devmode_main_pagegrid_ui.jpg" alt="Grid-based overview of Dev Mode page layout" />
-        <figcaption>Page-grid UI helps you track the current overlay state, tool focus, and modal dialogs so navigation stays consistent when multiple editors are open.</figcaption>
+        <figcaption>The page grid shows which overlays and dialogs are active so navigation stays predictable when several editors are open.</figcaption>
     </figure>
     <h3>Header and footer bar</h3>
     <figure>
         <img src="dev mode photos/devmode_header_footer_bar.jpg" alt="Header and footer compose the Dev Mode toolbar" />
-        <figcaption>The header exposes toggles for room/map/lighting modes while the footer shows notifications, quick tasks, and camera shortcuts.</figcaption>
+        <figcaption>The header switches between room, map, and lighting modes. The footer shows notifications, quick tasks, and camera shortcuts.</figcaption>
     </figure>
 
     <h2>Asset configuration panels</h2>
     <h3>Asset library panel</h3>
     <figure>
         <img src="dev mode photos/devmode_asset_library_panel.jpg" alt="Asset library panel listing shared assets" />
-        <figcaption>Browse every manifest asset, drag entries into the world, and open detailed editors directly from this floating catalog.</figcaption>
+        <figcaption>Browse manifest assets, drag them into the world, and open detailed editors from this floating catalog.</figcaption>
     </figure>
     <h3>Asset info overview</h3>
     <figure>
         <img src="dev mode photos/devmode_asset_info_overview.jpg" alt="Asset info editor showing metadata panels" />
-        <figcaption>AssetInfoUI exposes core properties, spawn groups, lighting hints, and animation hooks that are saved back to <code>SRC</code> and the manifest.</figcaption>
+        <figcaption>Asset info panels cover core properties, spawn groups, lighting hints, and animation hooks saved back to SRC and the manifest.</figcaption>
     </figure>
     <h3>Basic info and tags</h3>
     <figure>
         <img src="dev mode photos/devmode_asset_info_basic_tags.jpg" alt="Asset info tags and basic info panels" />
-        <figcaption>Basic info panels manage tags, anti-tags, start animations, scale variants, and mover settings for the selected asset.</figcaption>
+        <figcaption>Basic info panels manage tags, start animations, scale variants, and movement settings for the selected asset.</figcaption>
     </figure>
     <h3>Spacing panel</h3>
     <figure>
         <img src="dev mode photos/devmode_asset_info_spacing_panel.jpg" alt="Asset info spacing controls" />
-        <figcaption>Spacing controls guard minimum distance between instances and let you exclude assets from density-aware spawn groups.</figcaption>
+        <figcaption>Spacing controls set minimum distance between instances and let you exclude assets from dense spawn groups.</figcaption>
     </figure>
 
     <h2>Camera, lighting, and map overlay tools</h2>
     <h3>Camera panel</h3>
     <figure>
         <img src="dev mode photos/devmode_camera_panel.jpg" alt="Camera control panel in Dev Mode" />
-        <figcaption>Adjust zoom, focus, and smoothing parameters so the warped screen grid clips to the desired play area while debugging.</figcaption>
+        <figcaption>Adjust zoom, focus, and smoothing so the warped screen grid fits the play area while you debug.</figcaption>
     </figure>
     <h3>Map light panel</h3>
     <figure>
         <img src="dev mode photos/devmode_map_light_panel.jpg" alt="Map light editor panel" />
-        <figcaption>MapLightPanel lets you edit light orbit settings, chunk resolutions, and color pairings, reflagging <code>needs_rebuild</code> for <code>light_tool.py</code> when done.</figcaption>
+        <figcaption>Edit light orbits, chunk resolutions, and color pairings here. Changes mark light_tool.py for a rebuild.</figcaption>
     </figure>
     <h3>Map-mode lighting</h3>
     <figure>
         <img src="dev mode photos/devmode_map_mode_lighting.jpg" alt="Map mode lighting overlay" />
-        <figcaption>The map mode offers a bird’s-eye view of lighting previews, asset depth cues, and interactive orbit handles.</figcaption>
+        <figcaption>Map mode gives a top-down view of lighting previews, depth cues, and orbit handles.</figcaption>
     </figure>
     <h3>Map-mode assets</h3>
     <figure>
         <img src="dev mode photos/devmode_map_mode_assets.jpg" alt="Map mode asset layout view" />
-        <figcaption>View spawn groups, trails, and boundary assets within the layered map canvas before committing new content.</figcaption>
+        <figcaption>See spawn groups, trails, and boundary assets on the layered map canvas before committing changes.</figcaption>
     </figure>
 
     <h2>Room and spawn editors</h2>
     <h3>Room editor collapsed</h3>
     <figure>
         <img src="dev mode photos/devmode_room_editor_collapsed.jpg" alt="Collapsed room editor panel" />
-        <figcaption>When unused, the room editor minimizes itself, keeping the play view clean while still allowing a single click expansion.</figcaption>
+        <figcaption>The room editor collapses when idle to keep the play view clear and expands with one click.</figcaption>
     </figure>
     <h3>Room layers</h3>
     <figure>
         <img src="dev mode photos/devmode_room_layers.jpg" alt="Room layers display panel" />
-        <figcaption>Layer controls define how many rooms per level, required children, and guiding geometry for procedurally generated layouts.</figcaption>
+        <figcaption>Layer controls set how many rooms appear per level, required children, and guide shapes for procedural layouts.</figcaption>
     </figure>
     <h3>Room configuration expanded</h3>
     <figure>
         <img src="dev mode photos/devmode_room_config_expanded.jpg" alt="Expanded room configuration UI" />
-        <figcaption>Room configuration exposes spawn areas, areas types, and channel-specific metadata so manual edits stay in sync with the manifest.</figcaption>
+        <figcaption>Room configuration shows spawn areas, area types, and metadata so manual edits stay in sync with the manifest.</figcaption>
     </figure>
     <h3>Spawn group configuration</h3>
     <figure>
         <img src="dev mode photos/devmode_spawn_group_config.jpg" alt="Spawn group configurator" />
-        <figcaption>SpawnGroupConfig aggregates spawners, probability weights, and grid resolution so you can audition map-specific spawn rules.</figcaption>
+        <figcaption>Spawn group settings combine spawners, weights, and grid resolution so you can test map-specific rules.</figcaption>
     </figure>
 
     <h2>Animation and frame editors</h2>
     <h3>Animation editor</h3>
     <figure>
         <img src="dev mode photos/devmode_animation_editor.jpg" alt="Animation editor window" />
-        <figcaption>The animation editor mirrors the manifest payload, showing timelines, playback settings, and child attachments in a dockable window.</figcaption>
+        <figcaption>The animation editor mirrors the manifest, showing timelines, playback settings, and child attachments in a dockable window.</figcaption>
     </figure>
     <h3>Movement panel</h3>
     <figure>
         <img src="dev mode photos/devmode_frame_editor_movement_panel.jpg" alt="Frame editor movement panel" />
-        <figcaption>MovementCanvas and totals panels reveal how root motion translates to grid coordinates so controllers stay in sync with physics.</figcaption>
+        <figcaption>Movement panels reveal how motion translates to grid coordinates so controllers stay in sync with physics.</figcaption>
     </figure>
     <h3>Hitbox panel</h3>
     <figure>
         <img src="dev mode photos/devmode_frame_editor_hitbox_panel.jpg" alt="Frame editor hitbox panel" />
-        <figcaption>The hitbox panel visualizes collision bounds per frame, making it easier to fine-tune area-based interactions.</figcaption>
+        <figcaption>The hitbox panel shows collision bounds per frame to fine-tune interactions.</figcaption>
     </figure>
     <h3>Attack geometry</h3>
     <figure>
         <img src="dev mode photos/devmode_frame_editor_attack_geometry.jpg" alt="Frame editor attack geometry" />
-        <figcaption>Attack geometry preview lets you tweak reach, damage zones, and animation timing for combat assets.</figcaption>
+        <figcaption>Attack geometry previews reach, damage zones, and timing for combat assets.</figcaption>
     </figure>
     <h3>Children panel</h3>
     <figure>
         <img src="dev mode photos/devmode_frame_editor_children_panel.jpg" alt="Frame editor children panel" />
-        <figcaption>Child attachments and timelines stay readable in this panel, which also shows parenting links and spawn behaviors.</figcaption>
+        <figcaption>Child attachments and timelines stay readable here, along with parenting links and spawn behaviors.</figcaption>
     </figure>
 </body>
 </html>
