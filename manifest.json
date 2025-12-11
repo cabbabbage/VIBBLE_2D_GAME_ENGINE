@@ -7074,7 +7074,7 @@
           "curvyness": 2,
           "display_color": [
             242,
-            241,
+            45,
             36,
             255
           ],
@@ -7094,8 +7094,8 @@
           "curvyness": 2,
           "display_color": [
             242,
-            45,
-            36,
+            242,
+            85,
             255
           ],
           "edge_smoothness": 43,
@@ -7146,9 +7146,9 @@
         "rnd": {
           "curvyness": 2,
           "display_color": [
-            108,
-            204,
             31,
+            96,
+            204,
             255
           ],
           "edge_smoothness": 2,
@@ -7196,9 +7196,9 @@
         "spawn": {
           "curvyness": 2,
           "display_color": [
-            204,
-            31,
-            46,
+            242,
+            85,
+            153,
             255
           ],
           "edge_smoothness": 101,

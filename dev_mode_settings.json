@@ -40,7 +40,7 @@
     "dev_ui": {
         "camera": {
             "background_texture_max_opacity": 0.0,
-            "depthcue_enabled": true,
+            "depthcue_enabled": false,
             "foreground_texture_max_opacity": 0.0
         },
         "lighting": {
