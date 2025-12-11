@@ -1,24 +1,24 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version='1.0' encoding='UTF-8'?>
 <mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36" version="29.2.7">
   <diagram id="4_JYmeCipBGX9XNcjFr7" name="Page-1">
     <mxGraphModel dx="1281" dy="1092" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <mxCell id="2" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=16;" value="WorldGrid&#xa;Spatial manager that owns chunk cache, routes queries through GridPoints, and keeps runtime Assets bound to the grid so updating and rendering can find entities quickly." vertex="1">
+        <mxCell id="2" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;WorldGrid&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Spatial manager that owns chunk cache, routes queries through GridPoints, and keeps runtime Assets bound to the grid so updating and rendering can find entities quickly.&lt;/span&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="170" width="510" x="1848.8055687850483" as="geometry" />
         </mxCell>
-        <mxCell id="3" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="chunks_&#xa;Map keyed by chunk coordinates holding the active chunk state used to load, unload, and query regions." vertex="1">
-          <mxGeometry height="54" width="117" x="1544.5011713995173" y="240" as="geometry" />
+        <mxCell id="3" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;chunks_&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Map keyed by chunk coordinates holding the active chunk state used to load, unload, and query regions.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1544.5011713995173" y="240" as="geometry" />
         </mxCell>
-        <mxCell id="4" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="points_&#xa;Dense GridPoint array covering the same world span so WorldGrid can answer which assets occupy every coordinate." vertex="1">
-          <mxGeometry height="54" width="112" x="2325.25996617058" y="270" as="geometry" />
+        <mxCell id="4" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;points_&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Dense GridPoint array covering the same world span so WorldGrid can answer which assets occupy every coordinate.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2325.25996617058" y="270" as="geometry" />
         </mxCell>
-        <mxCell id="9" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=16;" value="Chunk&#xa;Block of GridPoints plus tile and asset metadata used to stream localized sections of the world." vertex="1">
-          <mxGeometry height="54" width="104" x="1495.5218417980038" y="499" as="geometry" />
+        <mxCell id="9" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;Chunk&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Block of GridPoints plus tile and asset metadata used to stream localized sections of the world.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="150.0" width="260.0" x="1495.5218417980038" y="499" as="geometry" />
         </mxCell>
-        <mxCell id="14" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="tiles&#xa;Chunk keeps its GridTile definitions here to describe the geometry and lighting of each cell." vertex="1">
-          <mxGeometry height="54" width="91" x="1166.3142875142798" y="728" as="geometry" />
+        <mxCell id="14" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;tiles&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Chunk keeps its GridTile definitions here to describe the geometry and lighting of each cell.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1166.3142875142798" y="728" as="geometry" />
         </mxCell>
         <mxCell id="r-J4RqB1GObzojSzGF0T-354" edge="1" parent="1" source="15" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;noEdgeStyle=1;orthogonal=1;" target="43">
           <mxGeometry relative="1" as="geometry">
@@ -28,14 +28,14 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="15" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="assets&#xa;Chunk stores the runtime Assets inside its bounds to batch updates, residency checks, and unloading." vertex="1">
-          <mxGeometry height="54" width="103" x="1551.5" y="728" as="geometry" />
+        <mxCell id="15" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;assets&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Chunk stores the runtime Assets inside its bounds to batch updates, residency checks, and unloading.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1551.5" y="728" as="geometry" />
         </mxCell>
-        <mxCell id="23" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=16;" value="GridTile&#xa;Static tile descriptor that captures bounds, textures, and lighting for a single grid cell." vertex="1">
-          <mxGeometry height="54" width="117" x="816.4744397634958" y="949" as="geometry" />
+        <mxCell id="23" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;GridTile&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Static tile descriptor that captures bounds, textures, and lighting for a single grid cell.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="150.0" width="260.0" x="816.4744397634958" y="949" as="geometry" />
         </mxCell>
-        <mxCell id="24" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="world_rect&#xa;World-space rectangle used to determine whether the tile sits inside the camera bounds." vertex="1">
-          <mxGeometry height="54" width="273.5" x="485.75" y="1275" as="geometry" />
+        <mxCell id="24" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;world_rect&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;World-space rectangle used to determine whether the tile sits inside the camera bounds.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="273.5" x="485.75" y="1275" as="geometry" />
         </mxCell>
         <mxCell id="r-J4RqB1GObzojSzGF0T-351" edge="1" parent="1" source="25" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;noEdgeStyle=1;orthogonal=1;" target="r-J4RqB1GObzojSzGF0T-345">
           <mxGeometry relative="1" as="geometry">
@@ -45,8 +45,8 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="25" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=16;" value="texture&#xa;Light texture overlay object that paints the tile illumination and blends with the base color." vertex="1">
-          <mxGeometry height="54" width="113" x="2248" y="2637" as="geometry" />
+        <mxCell id="25" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;texture&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Light texture overlay object that paints the tile illumination and blends with the base color.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="150.0" width="260.0" x="2248" y="2637" as="geometry" />
         </mxCell>
         <mxCell id="r-J4RqB1GObzojSzGF0T-355" edge="1" parent="1" source="26" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;noEdgeStyle=1;orthogonal=1;" target="15">
           <mxGeometry relative="1" as="geometry">
@@ -56,53 +56,53 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="26" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=16;" value="GridPoint&#xa;Shared cell structure that holds world/chunk coordinates, render offsets, and references to occupying Assets." vertex="1">
+        <mxCell id="26" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;GridPoint&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Shared cell structure that holds world/chunk coordinates, render offsets, and references to occupying Assets.&lt;/span&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="204" width="589" x="2362.8394313401295" y="424" as="geometry" />
         </mxCell>
-        <mxCell id="27" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="id&#xa;Unique handle for each GridPoint so residency and caching layers can reference it directly." vertex="1">
-          <mxGeometry height="54" width="73" x="1684.5" y="728" as="geometry" />
+        <mxCell id="27" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;id&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Unique handle for each GridPoint so residency and caching layers can reference it directly.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1684.5" y="728" as="geometry" />
         </mxCell>
-        <mxCell id="28" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="grid_index&#xa;Flat index inside the overall grid array so lookups can be performed with a single pointer." vertex="1">
-          <mxGeometry height="54" width="135" x="1787.5" y="728" as="geometry" />
+        <mxCell id="28" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;grid_index&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Flat index inside the overall grid array so lookups can be performed with a single pointer.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1787.5" y="728" as="geometry" />
         </mxCell>
-        <mxCell id="29" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="chunk_index&#xa;Index linking the point back to its owning chunk for chunk-level invalidation or streaming." vertex="1">
-          <mxGeometry height="54" width="150" x="1952.5" y="728" as="geometry" />
+        <mxCell id="29" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;chunk_index&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Index linking the point back to its owning chunk for chunk-level invalidation or streaming.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1952.5" y="728" as="geometry" />
         </mxCell>
-        <mxCell id="30" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="world&#xa;World-space coordinate pair that locates this GridPoint inside the scene." vertex="1">
-          <mxGeometry height="54" width="100" x="2132.5" y="728" as="geometry" />
+        <mxCell id="30" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;world&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;World-space coordinate pair that locates this GridPoint inside the scene.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2132.5" y="728" as="geometry" />
         </mxCell>
-        <mxCell id="31" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="chunk&#xa;Chunk identifier or pointer letting the GridPoint know which chunk contains it." vertex="1">
-          <mxGeometry height="54" width="102" x="1766.75" y="2162" as="geometry" />
+        <mxCell id="31" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;chunk&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Chunk identifier or pointer letting the GridPoint know which chunk contains it.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1766.75" y="2162" as="geometry" />
         </mxCell>
-        <mxCell id="32" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="screen&#xa;Latest screen-space data used by the renderer to draw assets anchored to this grid point." vertex="1">
-          <mxGeometry height="54" width="107" x="2292.5" y="728" as="geometry" />
+        <mxCell id="32" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;screen&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Latest screen-space data used by the renderer to draw assets anchored to this grid point.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2292.5" y="728" as="geometry" />
         </mxCell>
-        <mxCell id="33" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="parallax_dx&#xa;Horizontal offset used to nudge assets for parallax layers when the camera moves." vertex="1">
-          <mxGeometry height="54" width="143" x="2429.5" y="728" as="geometry" />
+        <mxCell id="33" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;parallax_dx&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Horizontal offset used to nudge assets for parallax layers when the camera moves.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2429.5" y="728" as="geometry" />
         </mxCell>
-        <mxCell id="34" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="tilt_radians&#xa;Tilt value applied when simulating perspective so the point distorts correctly." vertex="1">
-          <mxGeometry height="54" width="142" x="2602.5" y="728" as="geometry" />
+        <mxCell id="34" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;tilt_radians&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Tilt value applied when simulating perspective so the point distorts correctly.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2602.5" y="728" as="geometry" />
         </mxCell>
-        <mxCell id="35" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="perspective_scale&#xa;Scale factor used to shrink or enlarge attached assets based on distance or perspective." vertex="1">
-          <mxGeometry height="54" width="188" x="2774.5" y="728" as="geometry" />
+        <mxCell id="35" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;perspective_scale&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Scale factor used to shrink or enlarge attached assets based on distance or perspective.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2774.5" y="728" as="geometry" />
         </mxCell>
-        <mxCell id="36" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="horizon_fade_alpha&#xa;Alpha value applied when the point nears the horizon to fade assets gracefully." vertex="1">
-          <mxGeometry height="54" width="201" x="2992.5" y="728" as="geometry" />
+        <mxCell id="36" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;horizon_fade_alpha&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Alpha value applied when the point nears the horizon to fade assets gracefully.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2992.5" y="728" as="geometry" />
         </mxCell>
-        <mxCell id="37" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="distance_to_camera&#xa;Cached distance metric so rendering and shading can adjust level of detail." vertex="1">
-          <mxGeometry height="54" width="205" x="3223.5" y="728" as="geometry" />
+        <mxCell id="37" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;distance_to_camera&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Cached distance metric so rendering and shading can adjust level of detail.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3223.5" y="728" as="geometry" />
         </mxCell>
-        <mxCell id="38" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="vertical_scale&#xa;Vertical stretch factor that adjusts assets when the camera tilts up or down." vertex="1">
-          <mxGeometry height="54" width="159" x="3458.5" y="728" as="geometry" />
+        <mxCell id="38" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;vertical_scale&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Vertical stretch factor that adjusts assets when the camera tilts up or down.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3458.5" y="728" as="geometry" />
         </mxCell>
-        <mxCell id="39" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="on_screen&#xa;Flag indicating whether the cell is inside the camera view." vertex="1">
-          <mxGeometry height="54" width="133" x="3647.5" y="728" as="geometry" />
+        <mxCell id="39" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;on_screen&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Flag indicating whether the cell is inside the camera view.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3647.5" y="728" as="geometry" />
         </mxCell>
-        <mxCell id="40" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="screen_data_frame_updated&#xa;Frame counter noting if the screen layout data has been recomputed this update." vertex="1">
-          <mxGeometry height="54" width="266" x="3810.5" y="728" as="geometry" />
+        <mxCell id="40" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;screen_data_frame_updated&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Frame counter noting if the screen layout data has been recomputed this update.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="266" x="3810.5" y="728" as="geometry" />
         </mxCell>
-        <mxCell id="41" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="screen_data_valid&#xa;Boolean that confirms the cached screen data can be used instead of forcing a rebuild." vertex="1">
-          <mxGeometry height="54" width="190" x="4106.5" y="728" as="geometry" />
+        <mxCell id="41" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;screen_data_valid&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Boolean that confirms the cached screen data can be used instead of forcing a rebuild.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="4106.5" y="728" as="geometry" />
         </mxCell>
         <mxCell id="r-J4RqB1GObzojSzGF0T-356" edge="1" parent="1" source="43" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;noEdgeStyle=1;orthogonal=1;" target="91">
           <mxGeometry relative="1" as="geometry">
@@ -112,248 +112,248 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="43" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=16;" value="Asset&#xa;Runtime object that carries position, animation, render caches, controller, and child references so the engine can update and draw it." vertex="1">
+        <mxCell id="43" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;Asset&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Runtime object that carries position, animation, render caches, controller, and child references so the engine can update and draw it.&lt;/span&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="188" width="311" x="2975.31" y="882" as="geometry" />
         </mxCell>
-        <mxCell id="44" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="spawn_fields&#xa;Spawn metadata that tells the asset what slots or triggers to use when it is instantiated." vertex="1">
-          <mxGeometry height="54" width="152" x="849.25" y="1275" as="geometry" />
+        <mxCell id="44" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;spawn_fields&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Spawn metadata that tells the asset what slots or triggers to use when it is instantiated.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="849.25" y="1275" as="geometry" />
         </mxCell>
-        <mxCell id="45" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="pointer_fields&#xa;Pointers the asset keeps to controllers, timers, or external references required during updates." vertex="1">
-          <mxGeometry height="54" width="160" x="1031.25" y="1275" as="geometry" />
+        <mxCell id="45" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;pointer_fields&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Pointers the asset keeps to controllers, timers, or external references required during updates.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1031.25" y="1275" as="geometry" />
         </mxCell>
-        <mxCell id="46" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="state_fields&#xa;Stateful data such as flags, counters, or timers that tracks what the asset is doing currently." vertex="1">
-          <mxGeometry height="54" width="144" x="1221.25" y="1275" as="geometry" />
+        <mxCell id="46" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;state_fields&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Stateful data such as flags, counters, or timers that tracks what the asset is doing currently.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1221.25" y="1275" as="geometry" />
         </mxCell>
-        <mxCell id="47" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="cached_grid_residency_&#xa;Cache of the set of grid points and chunks the asset has touched for quicker residency checks." vertex="1">
-          <mxGeometry height="54" width="232" x="1395.25" y="1275" as="geometry" />
+        <mxCell id="47" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;cached_grid_residency_&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Cache of the set of grid points and chunks the asset has touched for quicker residency checks.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="232" x="1395.25" y="1275" as="geometry" />
         </mxCell>
-        <mxCell id="48" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="smoothing_states&#xa;Smoothing data used to interpolate motion or state transitions across frames." vertex="1">
-          <mxGeometry height="54" width="185" x="1657.25" y="1275" as="geometry" />
+        <mxCell id="48" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;smoothing_states&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Smoothing data used to interpolate motion or state transitions across frames.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1657.25" y="1275" as="geometry" />
         </mxCell>
-        <mxCell id="49" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="anim_runtime_&#xa;Runtime animation data that tracks which animation is playing and its progress." vertex="1">
-          <mxGeometry height="54" width="168" x="1872.25" y="1275" as="geometry" />
+        <mxCell id="49" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;anim_runtime_&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Runtime animation data that tracks which animation is playing and its progress.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1872.25" y="1275" as="geometry" />
         </mxCell>
-        <mxCell id="50" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="current_frame&#xa;Pointer to the animation frame currently displayed for this asset." vertex="1">
-          <mxGeometry height="54" width="164" x="2070.25" y="1275" as="geometry" />
+        <mxCell id="50" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;current_frame&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Pointer to the animation frame currently displayed for this asset.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2070.25" y="1275" as="geometry" />
         </mxCell>
-        <mxCell id="51" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="frame_progress&#xa;Progress metric between animation frames used to interpolate motion." vertex="1">
-          <mxGeometry height="54" width="171" x="1281" y="1688" as="geometry" />
+        <mxCell id="51" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;frame_progress&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Progress metric between animation frames used to interpolate motion.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1281" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="52" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="animation_children_&#xa;List of animation-driven child attachments that follow the parent asset." vertex="1">
-          <mxGeometry height="54" width="207" x="2264.25" y="1275" as="geometry" />
+        <mxCell id="52" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;animation_children_&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;List of animation-driven child attachments that follow the parent asset.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2264.25" y="1275" as="geometry" />
         </mxCell>
-        <mxCell id="53" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="render_package&#xa;Prepared render resources such as textures, masks, and geometry that the renderer pulls per frame." vertex="1">
-          <mxGeometry height="54" width="174" x="2501.25" y="1275" as="geometry" />
+        <mxCell id="53" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;render_package&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Prepared render resources such as textures, masks, and geometry that the renderer pulls per frame.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2501.25" y="1275" as="geometry" />
         </mxCell>
-        <mxCell id="54" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="mask_render_metadata_&#xa;Metadata for mask drawing so shadow and lighting passes can reuse computed masks." vertex="1">
-          <mxGeometry height="54" width="238" x="2705.25" y="1275" as="geometry" />
+        <mxCell id="54" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;mask_render_metadata_&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Metadata for mask drawing so shadow and lighting passes can reuse computed masks.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="238" x="2705.25" y="1275" as="geometry" />
         </mxCell>
-        <mxCell id="55" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="tiling_info_&#xa;Info about how this asset tiles across the grid, including origins and coverage." vertex="1">
-          <mxGeometry height="54" width="142" x="2973.25" y="1275" as="geometry" />
+        <mxCell id="55" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;tiling_info_&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Info about how this asset tiles across the grid, including origins and coverage.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2973.25" y="1275" as="geometry" />
         </mxCell>
-        <mxCell id="56" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="shadow_mask_cache_&#xa;Cached shadow textures this asset uses when lighting or occlusion conditions remain stable." vertex="1">
-          <mxGeometry height="54" width="216" x="2609.5" y="2470" as="geometry" />
+        <mxCell id="56" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;shadow_mask_cache_&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Cached shadow textures this asset uses when lighting or occlusion conditions remain stable.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2609.5" y="2470" as="geometry" />
         </mxCell>
-        <mxCell id="57" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="cast_shadow_cache_&#xa;Cache of the shadow silhouettes cast by the asset for reuse by the light system." vertex="1">
-          <mxGeometry height="54" width="209" x="2855.5" y="2470" as="geometry" />
+        <mxCell id="57" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;cast_shadow_cache_&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Cache of the shadow silhouettes cast by the asset for reuse by the light system.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2855.5" y="2470" as="geometry" />
         </mxCell>
-        <mxCell id="59" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="asset_children&#xa;Explicit child asset instances owned by this asset for layered graphics or composite entities." vertex="1">
-          <mxGeometry height="54" width="163" x="1031" y="1534" as="geometry" />
+        <mxCell id="59" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;asset_children&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Explicit child asset instances owned by this asset for layered graphics or composite entities.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1031" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="60" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="controller_&#xa;Reference to the controller that drives input, AI, or scripted behavior for the asset." vertex="1">
-          <mxGeometry height="54" width="139" x="3235.25" y="1275" as="geometry" />
+        <mxCell id="60" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;controller_&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Reference to the controller that drives input, AI, or scripted behavior for the asset.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3235.25" y="1275" as="geometry" />
         </mxCell>
-        <mxCell id="61" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="neighbors&#xa;Nearby GridPoint handles the asset can query for collision, pathing, or spread effects." vertex="1">
-          <mxGeometry height="54" width="129" x="3404.25" y="1275" as="geometry" />
+        <mxCell id="61" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;neighbors&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Nearby GridPoint handles the asset can query for collision, pathing, or spread effects.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3404.25" y="1275" as="geometry" />
         </mxCell>
-        <mxCell id="62" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="impassable_neighbors&#xa;Subset of neighbors that block traversal so movement logic can respect obstacles." vertex="1">
-          <mxGeometry height="54" width="216" x="3563.25" y="1275" as="geometry" />
+        <mxCell id="62" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;impassable_neighbors&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Subset of neighbors that block traversal so movement logic can respect obstacles.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3563.25" y="1275" as="geometry" />
         </mxCell>
-        <mxCell id="64" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="angle_from_camera&#xa;Angular difference between the camera and the asset used to tweak shading or occlusion." vertex="1">
-          <mxGeometry height="54" width="202" x="3809.25" y="1275" as="geometry" />
+        <mxCell id="64" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;angle_from_camera&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Angular difference between the camera and the asset used to tweak shading or occlusion.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3809.25" y="1275" as="geometry" />
         </mxCell>
-        <mxCell id="65" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="last_scale_usage_&#xa;Cache of the last scale pulled from AssetInfo so the asset knows when to refresh visuals." vertex="1">
-          <mxGeometry height="54" width="188" x="4041.25" y="1275" as="geometry" />
+        <mxCell id="65" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;last_scale_usage_&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Cache of the last scale pulled from AssetInfo so the asset knows when to refresh visuals.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="4041.25" y="1275" as="geometry" />
         </mxCell>
-        <mxCell id="66" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="scale_variant_state_&#xa;Current scale variant applied to the asset, guiding which textures or transforms to use." vertex="1">
-          <mxGeometry height="54" width="208" x="4259.25" y="1275" as="geometry" />
+        <mxCell id="66" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;scale_variant_state_&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Current scale variant applied to the asset, guiding which textures or transforms to use.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="4259.25" y="1275" as="geometry" />
         </mxCell>
-        <mxCell id="67" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="grid_id_&#xa;Identifier tying the asset back to the grid cell for quick residency lookups." vertex="1">
-          <mxGeometry height="54" width="118" x="4497.25" y="1275" as="geometry" />
+        <mxCell id="67" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;grid_id_&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Identifier tying the asset back to the grid cell for quick residency lookups.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="4497.25" y="1275" as="geometry" />
         </mxCell>
-        <mxCell id="68" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="anim_&#xa;Reference to the current animation definition the asset is playing." vertex="1">
-          <mxGeometry height="54" width="103" x="4645.25" y="1275" as="geometry" />
+        <mxCell id="68" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;anim_&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Reference to the current animation definition the asset is playing.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="4645.25" y="1275" as="geometry" />
         </mxCell>
-        <mxCell id="70" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=16;" value="AnimationChildAttachment&#xa;Links child assets to their parent with offsets and timing information for animation-driven setups." vertex="1">
-          <mxGeometry height="54" width="253" x="60" y="1534" as="geometry" />
+        <mxCell id="70" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;AnimationChildAttachment&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Links child assets to their parent with offsets and timing information for animation-driven setups.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="150.0" width="260.0" x="60" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="71" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="child_index&#xa;Index identifying which attachment slot this child occupies." vertex="1">
-          <mxGeometry height="54" width="142" x="521" y="1688" as="geometry" />
+        <mxCell id="71" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;child_index&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Index identifying which attachment slot this child occupies.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="521" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="72" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="asset_name&#xa;Name of the child asset that will be spawned or controlled." vertex="1">
-          <mxGeometry height="54" width="144" x="693" y="1688" as="geometry" />
+        <mxCell id="72" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;asset_name&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Name of the child asset that will be spawned or controlled.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="693" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="73" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="animation_ref&#xa;Pointer to the animation resource the child should follow." vertex="1">
-          <mxGeometry height="54" width="161" x="867" y="1688" as="geometry" />
+        <mxCell id="73" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;animation_ref&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Pointer to the animation resource the child should follow.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="867" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="74" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="current_frame_ref&#xa;Reference to the child current frame so it stays in sync with the parent." vertex="1">
-          <mxGeometry height="54" width="193" x="1058" y="1688" as="geometry" />
+        <mxCell id="74" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;current_frame_ref&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Reference to the child current frame so it stays in sync with the parent.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1058" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="75" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="world_pos&#xa;World-space offset applied when the child is attached to the parent." vertex="1">
-          <mxGeometry height="54" width="133" x="1482" y="1688" as="geometry" />
+        <mxCell id="75" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;world_pos&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;World-space offset applied when the child is attached to the parent.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1482" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="76" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="visible&#xa;Flag indicating whether the child should be rendered." vertex="1">
-          <mxGeometry height="54" width="106" x="1645" y="1688" as="geometry" />
+        <mxCell id="76" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;visible&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Flag indicating whether the child should be rendered.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1645" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="77" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="spawned_asset&#xa;Runtime asset handle representing the actual spawned child." vertex="1">
-          <mxGeometry height="54" width="167" x="1781" y="1688" as="geometry" />
+        <mxCell id="77" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;spawned_asset&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Runtime asset handle representing the actual spawned child.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1781" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="78" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="timeline&#xa;Timing data that dictates when the child appears, disappears, or updates." vertex="1">
-          <mxGeometry height="54" width="120" x="1978" y="1688" as="geometry" />
+        <mxCell id="78" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;timeline&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Timing data that dictates when the child appears, disappears, or updates.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1978" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="79" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=16;" value="RenderObject&#xa;Structure produced by the Asset before handing data to the renderer, capturing geometry, masks, and blend settings." vertex="1">
-          <mxGeometry height="54" width="159" x="343" y="1534" as="geometry" />
+        <mxCell id="79" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;RenderObject&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Structure produced by the Asset before handing data to the renderer, capturing geometry, masks, and blend settings.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="150.0" width="260.0" x="343" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="80" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="screen_rect&#xa;Screen-space rectangle used for clipping and visibility checks." vertex="1">
-          <mxGeometry height="54" width="144" x="2158" y="1688" as="geometry" />
+        <mxCell id="80" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;screen_rect&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Screen-space rectangle used for clipping and visibility checks.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2158" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="81" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="color_mod&#xa;Color tint applied to the rendered object." vertex="1">
-          <mxGeometry height="54" width="135" x="2332" y="1688" as="geometry" />
+        <mxCell id="81" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;color_mod&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Color tint applied to the rendered object.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2332" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="82" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="blend_mode&#xa;Blend mode controlling how the object composites with others." vertex="1">
-          <mxGeometry height="54" width="148" x="2497" y="1688" as="geometry" />
+        <mxCell id="82" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;blend_mode&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Blend mode controlling how the object composites with others.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2497" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="83" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="last_mask_texture&#xa;Most recent mask texture so the renderer can reuse it until inputs change." vertex="1">
-          <mxGeometry height="54" width="192" x="532" y="1534" as="geometry" />
+        <mxCell id="83" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;last_mask_texture&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Most recent mask texture so the renderer can reuse it until inputs change.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="532" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="84" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="mask_defaults&#xa;Fallback mask parameters used when the asset does not provide a custom mask." vertex="1">
-          <mxGeometry height="54" width="163" x="2227.5" y="2470" as="geometry" />
+        <mxCell id="84" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;mask_defaults&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Fallback mask parameters used when the asset does not provide a custom mask.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2227.5" y="2470" as="geometry" />
         </mxCell>
-        <mxCell id="85" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="base_defaults&#xa;Default rendering settings used until richer data becomes available." vertex="1">
-          <mxGeometry height="54" width="159" x="2420.5" y="2470" as="geometry" />
+        <mxCell id="85" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;base_defaults&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Default rendering settings used until richer data becomes available.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2420.5" y="2470" as="geometry" />
         </mxCell>
-        <mxCell id="86" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=16;" value="TilingInfo&#xa;Data describing how tiling is laid out so assets can snap to the grid." vertex="1">
-          <mxGeometry height="54" width="127" x="814" y="1534" as="geometry" />
+        <mxCell id="86" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;TilingInfo&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Data describing how tiling is laid out so assets can snap to the grid.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="150.0" width="260.0" x="814" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="87" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="grid_origin&#xa;Origin coordinate for the tiling pattern." vertex="1">
-          <mxGeometry height="54" width="137" x="2735" y="1688" as="geometry" />
+        <mxCell id="87" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;grid_origin&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Origin coordinate for the tiling pattern.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2735" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="88" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="tile_size&#xa;Dimensions used when tiling textures or aligning assets." vertex="1">
-          <mxGeometry height="54" width="120" x="2902" y="1688" as="geometry" />
+        <mxCell id="88" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;tile_size&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Dimensions used when tiling textures or aligning assets.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2902" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="89" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="coverage&#xa;Coverage ratios describing how much of the grid is filled." vertex="1">
-          <mxGeometry height="54" width="124" x="3052" y="1688" as="geometry" />
+        <mxCell id="89" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;coverage&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Coverage ratios describing how much of the grid is filled.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3052" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="90" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="anchor&#xa;Anchor point used when aligning tiles to a grid origin." vertex="1">
-          <mxGeometry height="54" width="109" x="3206" y="1688" as="geometry" />
+        <mxCell id="90" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;anchor&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Anchor point used when aligning tiles to a grid origin.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3206" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="91" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=16;" value="AssetInfo&#xa;Data record describing asset animations, tags, lighting, and spawn rules so the runtime can configure each Asset." vertex="1">
+        <mxCell id="91" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;AssetInfo&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Data record describing asset animations, tags, lighting, and spawn rules so the runtime can configure each Asset.&lt;/span&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="264" width="493" x="4778.25" y="1170" as="geometry" />
         </mxCell>
-        <mxCell id="92" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="animations&#xa;List of available Animation definitions for this AssetInfo." vertex="1">
-          <mxGeometry height="54" width="138" x="1224" y="1534" as="geometry" />
+        <mxCell id="92" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;animations&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;List of available Animation definitions for this AssetInfo.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1224" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="93" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="animation_children&#xa;Child definitions that follow specific animations." vertex="1">
-          <mxGeometry height="54" width="199" x="1392" y="1534" as="geometry" />
+        <mxCell id="93" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;animation_children&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Child definitions that follow specific animations.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1392" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="94" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="async_children&#xa;Definitions for children that start or stop asynchronously." vertex="1">
-          <mxGeometry height="54" width="166" x="1621" y="1534" as="geometry" />
+        <mxCell id="94" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;async_children&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Definitions for children that start or stop asynchronously.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1621" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="95" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="scale_factor&#xa;Base scale applied to Assets using this info when no variant overrides exist." vertex="1">
-          <mxGeometry height="54" width="148" x="1817" y="1534" as="geometry" />
+        <mxCell id="95" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;scale_factor&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Base scale applied to Assets using this info when no variant overrides exist.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1817" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="96" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="smooth_scaling&#xa;Flag enabling interpolation whenever the asset scale changes." vertex="1">
-          <mxGeometry height="54" width="169" x="1995" y="1534" as="geometry" />
+        <mxCell id="96" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;smooth_scaling&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Flag enabling interpolation whenever the asset scale changes.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1995" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="97" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="scale_variants&#xa;Alternative scale bundles the runtime can swap in for different contexts." vertex="1">
-          <mxGeometry height="54" width="162" x="2194" y="1534" as="geometry" />
+        <mxCell id="97" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;scale_variants&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Alternative scale bundles the runtime can swap in for different contexts.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2194" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="98" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="tillable&#xa;Flag that indicates whether the asset can tile horizontally or vertically." vertex="1">
-          <mxGeometry height="54" width="111" x="2386" y="1534" as="geometry" />
+        <mxCell id="98" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;tillable&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Flag that indicates whether the asset can tile horizontally or vertically.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2386" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="99" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="z_threshold&#xa;Threshold controlling when the asset renders in front or behind other elements." vertex="1">
-          <mxGeometry height="54" width="143" x="2527" y="1534" as="geometry" />
+        <mxCell id="99" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;z_threshold&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Threshold controlling when the asset renders in front or behind other elements.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2527" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="100" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="flipable&#xa;Flag that marks whether the asset can flip horizontally." vertex="1">
-          <mxGeometry height="54" width="115" x="2700" y="1534" as="geometry" />
+        <mxCell id="100" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;flipable&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Flag that marks whether the asset can flip horizontally.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2700" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="101" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="apply_distance_scaling&#xa;Enables automatic scaling based on distance to the camera." vertex="1">
-          <mxGeometry height="54" width="225" x="2845" y="1534" as="geometry" />
+        <mxCell id="101" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;apply_distance_scaling&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Enables automatic scaling based on distance to the camera.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="225" x="2845" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="102" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="apply_vertical_scaling&#xa;Enables scaling adjustments driven by vertical offsets." vertex="1">
-          <mxGeometry height="54" width="219" x="3100" y="1534" as="geometry" />
+        <mxCell id="102" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;apply_vertical_scaling&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Enables scaling adjustments driven by vertical offsets.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3100" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="103" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="is_shaded&#xa;Controls whether the AssetInfo participates in shading passes." vertex="1">
-          <mxGeometry height="54" width="130" x="3349" y="1534" as="geometry" />
+        <mxCell id="103" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;is_shaded&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Controls whether the AssetInfo participates in shading passes.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3349" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="104" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="shadow_mask_settings&#xa;Settings that configure how this asset casts or receives shadow masks." vertex="1">
-          <mxGeometry height="54" width="222" x="3509" y="1534" as="geometry" />
+        <mxCell id="104" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;shadow_mask_settings&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Settings that configure how this asset casts or receives shadow masks.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="222" x="3509" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="105" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="shading_parallax_amount&#xa;Parallax multiplier used during shading to create depth." vertex="1">
-          <mxGeometry height="54" width="243" x="3761" y="1534" as="geometry" />
+        <mxCell id="105" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;shading_parallax_amount&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Parallax multiplier used during shading to create depth.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="243" x="3761" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="106" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="shading_screen_brightness_multiplier&#xa;Brightness multiplier applied to the screen-space shading result." vertex="1">
-          <mxGeometry height="54" width="330" x="4034" y="1534" as="geometry" />
+        <mxCell id="106" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;shading_screen_brightness_multiplier&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Brightness multiplier applied to the screen-space shading result.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="330" x="4034" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="107" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="shading_opacity_multiplier&#xa;Opacity multiplier that darkens or lightens shading overlays." vertex="1">
-          <mxGeometry height="54" width="254" x="4394" y="1534" as="geometry" />
+        <mxCell id="107" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;shading_opacity_multiplier&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Opacity multiplier that darkens or lightens shading overlays.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="254" x="4394" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="108" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="light_sources&#xa;Local light sources tied to the asset for self-illumination or effects." vertex="1">
-          <mxGeometry height="54" width="154" x="4678" y="1534" as="geometry" />
+        <mxCell id="108" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;light_sources&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Local light sources tied to the asset for self-illumination or effects.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="4678" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="109" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="name&#xa;Canonical name used for lookups and tooling." vertex="1">
-          <mxGeometry height="54" width="99" x="3291.7" y="2162" as="geometry" />
+        <mxCell id="109" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;name&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Canonical name used for lookups and tooling.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3291.7" y="2162" as="geometry" />
         </mxCell>
-        <mxCell id="110" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="type&#xa;General type or category tag that drives logic branches." vertex="1">
-          <mxGeometry height="54" width="92" x="4032" y="1925" as="geometry" />
+        <mxCell id="110" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;type&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;General type or category tag that drives logic branches.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="4032" y="1925" as="geometry" />
         </mxCell>
-        <mxCell id="111" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="custom_controller_key&#xa;Key that maps to custom controller collections." vertex="1">
-          <mxGeometry height="54" width="224" x="4922" y="1534" as="geometry" />
+        <mxCell id="111" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;custom_controller_key&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Key that maps to custom controller collections.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="224" x="4922" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="112" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="tags&#xa;Positive tags used to find this AssetInfo when spawning or filtering content." vertex="1">
-          <mxGeometry height="54" width="89" x="5176" y="1534" as="geometry" />
+        <mxCell id="112" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;tags&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Positive tags used to find this AssetInfo when spawning or filtering content.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="5176" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="113" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="anti_tags&#xa;Negative tags preventing this asset from appearing in incompatible contexts." vertex="1">
-          <mxGeometry height="54" width="126" x="5295" y="1534" as="geometry" />
+        <mxCell id="113" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;anti_tags&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Negative tags preventing this asset from appearing in incompatible contexts.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="5295" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="114" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="areas&#xa;Named areas where this asset can spawn or operate." vertex="1">
-          <mxGeometry height="54" width="98" x="5451" y="1534" as="geometry" />
+        <mxCell id="114" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;areas&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Named areas where this asset can spawn or operate.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="5451" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="115" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="preview_texture&#xa;Texture used in editors or previews to represent the asset." vertex="1">
-          <mxGeometry height="54" width="178" x="5579" y="1534" as="geometry" />
+        <mxCell id="115" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;preview_texture&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Texture used in editors or previews to represent the asset.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="5579" y="1534" as="geometry" />
         </mxCell>
-        <mxCell id="116" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=16;" value="Animation&#xa;Defines a sequence of frames and optional audio that assets can play." vertex="1">
-          <mxGeometry height="54" width="133" x="3559" y="1688" as="geometry" />
+        <mxCell id="116" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;Animation&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Defines a sequence of frames and optional audio that assets can play.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="150.0" width="260.0" x="3559" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="117" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="frames&#xa;Ordered AnimationFrame entries the runtime cycles through." vertex="1">
-          <mxGeometry height="54" width="109" x="2381" y="1925" as="geometry" />
+        <mxCell id="117" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;frames&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Ordered AnimationFrame entries the runtime cycles through.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2381" y="1925" as="geometry" />
         </mxCell>
-        <mxCell id="118" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="audio_data&#xa;Attached audio cues that play when the animation is active." vertex="1">
-          <mxGeometry height="54" width="140" x="1883" y="1925" as="geometry" />
+        <mxCell id="118" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;audio_data&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Attached audio cues that play when the animation is active.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1883" y="1925" as="geometry" />
         </mxCell>
-        <mxCell id="119" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="source&#xa;Source data or file path that contains the animation frames." vertex="1">
-          <mxGeometry height="54" width="107" x="2053" y="1925" as="geometry" />
+        <mxCell id="119" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;source&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Source data or file path that contains the animation frames.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2053" y="1925" as="geometry" />
         </mxCell>
-        <mxCell id="120" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="frame_cache_&#xa;Cache structure storing rendered frames for reuse." vertex="1">
-          <mxGeometry height="54" width="161" x="2190" y="1925" as="geometry" />
+        <mxCell id="120" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;frame_cache_&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Cache structure storing rendered frames for reuse.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2190" y="1925" as="geometry" />
         </mxCell>
-        <mxCell id="121" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=16;" value="AnimationFrame&#xa;Single frame definition within an animation, including variants and child data." vertex="1">
-          <mxGeometry height="54" width="178" x="3083.7" y="2162" as="geometry" />
+        <mxCell id="121" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;AnimationFrame&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Single frame definition within an animation, including variants and child data.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="150.0" width="260.0" x="3083.7" y="2162" as="geometry" />
         </mxCell>
-        <mxCell id="122" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="variants&#xa;List of variant textures or geometry for this frame." vertex="1">
-          <mxGeometry height="54" width="117" x="3032.5" y="2316" as="geometry" />
+        <mxCell id="122" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;variants&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;List of variant textures or geometry for this frame.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3032.5" y="2316" as="geometry" />
         </mxCell>
-        <mxCell id="123" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="hit_geometry&#xa;Geometry used for hit detection while this frame is playing." vertex="1">
-          <mxGeometry height="54" width="156" x="3179.5" y="2316" as="geometry" />
+        <mxCell id="123" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;hit_geometry&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Geometry used for hit detection while this frame is playing.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3179.5" y="2316" as="geometry" />
         </mxCell>
-        <mxCell id="124" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="attack_geometry&#xa;Geometry marking where attacks or damage should originate from." vertex="1">
-          <mxGeometry height="54" width="182" x="3365.5" y="2316" as="geometry" />
+        <mxCell id="124" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;attack_geometry&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Geometry marking where attacks or damage should originate from.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3365.5" y="2316" as="geometry" />
         </mxCell>
-        <mxCell id="125" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="children&#xa;Child frame or asset definitions that activate during this frame." vertex="1">
-          <mxGeometry height="54" width="119" x="3577.5" y="2316" as="geometry" />
+        <mxCell id="125" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;children&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Child frame or asset definitions that activate during this frame.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3577.5" y="2316" as="geometry" />
         </mxCell>
-        <mxCell id="126" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=16;" value="FrameVariant&#xa;Variant package that swaps textures, masks, and paths per animation frame." vertex="1">
-          <mxGeometry height="54" width="156" x="3124.5" y="2470" as="geometry" />
+        <mxCell id="126" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;FrameVariant&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Variant package that swaps textures, masks, and paths per animation frame.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="150.0" width="260.0" x="3124.5" y="2470" as="geometry" />
         </mxCell>
         <mxCell id="r-J4RqB1GObzojSzGF0T-346" edge="1" parent="1" source="127" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;noEdgeStyle=1;orthogonal=1;" target="r-J4RqB1GObzojSzGF0T-345">
           <mxGeometry relative="1" as="geometry">
@@ -363,11 +363,11 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="127" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="varient&#xa;Identifier used to choose this variant set." vertex="1">
-          <mxGeometry height="54" width="111" x="2391" y="2637" as="geometry" />
+        <mxCell id="127" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;varient&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Identifier used to choose this variant set.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2391" y="2637" as="geometry" />
         </mxCell>
-        <mxCell id="128" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="base_texture&#xa;Primary texture for this variant." vertex="1">
-          <mxGeometry height="54" width="154" x="2532" y="2637" as="geometry" />
+        <mxCell id="128" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;base_texture&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Primary texture for this variant.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2532" y="2637" as="geometry" />
         </mxCell>
         <mxCell id="r-J4RqB1GObzojSzGF0T-348" edge="1" parent="1" source="129" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;noEdgeStyle=1;orthogonal=1;" target="r-J4RqB1GObzojSzGF0T-345">
           <mxGeometry relative="1" as="geometry">
@@ -377,8 +377,8 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="129" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="foreground_texture&#xa;Foreground overlay texture applied while this variant is active." vertex="1">
-          <mxGeometry height="54" width="200" x="2716" y="2637" as="geometry" />
+        <mxCell id="129" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;foreground_texture&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Foreground overlay texture applied while this variant is active.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2716" y="2637" as="geometry" />
         </mxCell>
         <mxCell id="r-J4RqB1GObzojSzGF0T-349" edge="1" parent="1" source="130" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;noEdgeStyle=1;orthogonal=1;" target="r-J4RqB1GObzojSzGF0T-345">
           <mxGeometry relative="1" as="geometry">
@@ -388,8 +388,8 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="130" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="background_texture&#xa;Background overlay texture applied while this variant is active." vertex="1">
-          <mxGeometry height="54" width="204" x="2946" y="2637" as="geometry" />
+        <mxCell id="130" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;background_texture&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Background overlay texture applied while this variant is active.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2946" y="2637" as="geometry" />
         </mxCell>
         <mxCell id="r-J4RqB1GObzojSzGF0T-350" edge="1" parent="1" source="131" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;noEdgeStyle=1;orthogonal=1;" target="r-J4RqB1GObzojSzGF0T-345">
           <mxGeometry relative="1" as="geometry">
@@ -399,101 +399,101 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="131" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="shadow_mask_texture&#xa;Shadow mask texture used for the variant." vertex="1">
-          <mxGeometry height="54" width="219" x="3180" y="2637" as="geometry" />
+        <mxCell id="131" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;shadow_mask_texture&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Shadow mask texture used for the variant.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3180" y="2637" as="geometry" />
         </mxCell>
-        <mxCell id="132" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="path&#xa;Path or asset identifier where the variant textures come from." vertex="1">
-          <mxGeometry height="54" width="92" x="2070.75" y="2162" as="geometry" />
+        <mxCell id="132" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;path&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Path or asset identifier where the variant textures come from.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2070.75" y="2162" as="geometry" />
         </mxCell>
-        <mxCell id="133" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="volume&#xa;Volume level for any sound tied to this variant." vertex="1">
-          <mxGeometry height="54" width="112" x="1928.75" y="2162" as="geometry" />
+        <mxCell id="133" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;volume&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Volume level for any sound tied to this variant.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1928.75" y="2162" as="geometry" />
         </mxCell>
-        <mxCell id="134" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="kind&#xa;Category or intent label for this variant such as idle or attack." vertex="1">
-          <mxGeometry height="54" width="90" x="4184" y="1925" as="geometry" />
+        <mxCell id="134" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;kind&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Category or intent label for this variant such as idle or attack.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="4184" y="1925" as="geometry" />
         </mxCell>
-        <mxCell id="135" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=16;" value="FrameCache&#xa;Stores rendered textures for animation frames so they can be reused without re-creating GPU resources." vertex="1">
-          <mxGeometry height="54" width="148" x="2446.9" y="2162" as="geometry" />
+        <mxCell id="135" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;FrameCache&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Stores rendered textures for animation frames so they can be reused without re-creating GPU resources.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="150.0" width="260.0" x="2446.9" y="2162" as="geometry" />
         </mxCell>
-        <mxCell id="136" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="textures&#xa;Cached textures for the frame cache." vertex="1">
-          <mxGeometry height="54" width="120" x="2210.5" y="2316" as="geometry" />
+        <mxCell id="136" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;textures&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Cached textures for the frame cache.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2210.5" y="2316" as="geometry" />
         </mxCell>
-        <mxCell id="137" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="foreground_textures&#xa;Cached foreground overlays." vertex="1">
-          <mxGeometry height="54" width="207" x="2360.5" y="2316" as="geometry" />
+        <mxCell id="137" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;foreground_textures&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Cached foreground overlays.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2360.5" y="2316" as="geometry" />
         </mxCell>
-        <mxCell id="138" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="background_textures&#xa;Cached background overlays." vertex="1">
-          <mxGeometry height="54" width="211" x="2597.5" y="2316" as="geometry" />
+        <mxCell id="138" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;background_textures&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Cached background overlays.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2597.5" y="2316" as="geometry" />
         </mxCell>
-        <mxCell id="139" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="mask_textures&#xa;Cached mask textures used during shading." vertex="1">
-          <mxGeometry height="54" width="164" x="2838.5" y="2316" as="geometry" />
+        <mxCell id="139" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;mask_textures&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Cached mask textures used during shading.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2838.5" y="2316" as="geometry" />
         </mxCell>
-        <mxCell id="140" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=16;" value="AsyncChildDefinition&#xa;Definition for a child asset that activates asynchronously." vertex="1">
-          <mxGeometry height="54" width="208" x="3722" y="1688" as="geometry" />
+        <mxCell id="140" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;AsyncChildDefinition&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Definition for a child asset that activates asynchronously.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="150.0" width="260.0" x="3722" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="141" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="asset&#xa;AssetInfo reference that describes the async child." vertex="1">
-          <mxGeometry height="54" width="96" x="2550" y="1925" as="geometry" />
+        <mxCell id="141" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;asset&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;AssetInfo reference that describes the async child.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2550" y="1925" as="geometry" />
         </mxCell>
-        <mxCell id="142" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="animation&#xa;Animation reference the async child will play." vertex="1">
-          <mxGeometry height="54" width="132" x="2676" y="1925" as="geometry" />
+        <mxCell id="142" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;animation&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Animation reference the async child will play.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2676" y="1925" as="geometry" />
         </mxCell>
-        <mxCell id="143" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=16;" value="ChildInfo&#xa;Details describing how a child asset should align or offset." vertex="1">
-          <mxGeometry height="54" width="124" x="3405" y="1688" as="geometry" />
+        <mxCell id="143" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;ChildInfo&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Details describing how a child asset should align or offset.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="150.0" width="260.0" x="3405" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="144" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="area_name&#xa;Name of the area the child should remain in." vertex="1">
-          <mxGeometry height="54" width="139" x="1383" y="1925" as="geometry" />
+        <mxCell id="144" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;area_name&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Name of the area the child should remain in.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1383" y="1925" as="geometry" />
         </mxCell>
-        <mxCell id="145" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="z_offset&#xa;Vertical offset applied while rendering the child." vertex="1">
-          <mxGeometry height="54" width="118" x="1552" y="1925" as="geometry" />
+        <mxCell id="145" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;z_offset&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Vertical offset applied while rendering the child.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="1552" y="1925" as="geometry" />
         </mxCell>
-        <mxCell id="146" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=16;" value="spawn_group&#xa;Spawn configuration block controlling how groups of assets spread across the map." vertex="1">
-          <mxGeometry height="220" width="153" x="1700" y="1842" as="geometry" />
+        <mxCell id="146" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;spawn_group&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Spawn configuration block controlling how groups of assets spread across the map.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="220" width="260.0" x="1700" y="1842" as="geometry" />
         </mxCell>
-        <mxCell id="147" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="expansion_ratio&#xa;Ratio the group uses to grow spawn radius as assets spawn." vertex="1">
-          <mxGeometry height="54" width="174" x="3960" y="1688" as="geometry" />
+        <mxCell id="147" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;expansion_ratio&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Ratio the group uses to grow spawn radius as assets spawn.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3960" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="148" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="blur_scale&#xa;Softness factor controlling how the spawn group distributes assets." vertex="1">
-          <mxGeometry height="54" width="133" x="4164" y="1688" as="geometry" />
+        <mxCell id="148" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;blur_scale&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Softness factor controlling how the spawn group distributes assets.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="4164" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="149" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="falloff_start&#xa;Distance where spawn density begins to taper." vertex="1">
-          <mxGeometry height="54" width="146" x="4327" y="1688" as="geometry" />
+        <mxCell id="149" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;falloff_start&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Distance where spawn density begins to taper.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="4327" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="150" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="falloff_exponent&#xa;Exponent applied to sharpen or flatten density falloff." vertex="1">
-          <mxGeometry height="54" width="179" x="4503" y="1688" as="geometry" />
+        <mxCell id="150" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;falloff_exponent&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Exponent applied to sharpen or flatten density falloff.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="4503" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="151" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="alpha_multiplier&#xa;Multiplier applied to spawn opacity or strength." vertex="1">
-          <mxGeometry height="54" width="178" x="4712" y="1688" as="geometry" />
+        <mxCell id="151" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;alpha_multiplier&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Multiplier applied to spawn opacity or strength.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="4712" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="152" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=16;" value="LightSource&#xa;Light definition used to shade assets and grid points." vertex="1">
-          <mxGeometry height="54" width="144" x="4920" y="1688" as="geometry" />
+        <mxCell id="152" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;LightSource&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Light definition used to shade assets and grid points.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="150.0" width="260.0" x="4920" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="153" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="intensity&#xa;Brightness value of the light." vertex="1">
-          <mxGeometry height="54" width="122" x="2838" y="1925" as="geometry" />
+        <mxCell id="153" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;intensity&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Brightness value of the light.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2838" y="1925" as="geometry" />
         </mxCell>
-        <mxCell id="154" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="radius&#xa;Radius over which the light affects assets." vertex="1">
-          <mxGeometry height="54" width="103" x="2990" y="1925" as="geometry" />
+        <mxCell id="154" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;radius&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Radius over which the light affects assets.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="2990" y="1925" as="geometry" />
         </mxCell>
-        <mxCell id="155" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="fall_off&#xa;Curve value describing how the light dims with distance." vertex="1">
-          <mxGeometry height="54" width="113" x="3123" y="1925" as="geometry" />
+        <mxCell id="155" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;fall_off&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Curve value describing how the light dims with distance.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3123" y="1925" as="geometry" />
         </mxCell>
-        <mxCell id="156" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="color&#xa;RGB color of the light." vertex="1">
-          <mxGeometry height="54" width="96" x="3266" y="1925" as="geometry" />
+        <mxCell id="156" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;color&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;RGB color of the light.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3266" y="1925" as="geometry" />
         </mxCell>
-        <mxCell id="157" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="flicker_speed&#xa;Speed at which the light twinkles or flickers." vertex="1">
-          <mxGeometry height="54" width="156" x="3392" y="1925" as="geometry" />
+        <mxCell id="157" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;flicker_speed&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Speed at which the light twinkles or flickers.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3392" y="1925" as="geometry" />
         </mxCell>
-        <mxCell id="158" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="in_front&#xa;Flag saying whether the light renders in front of geometry." vertex="1">
-          <mxGeometry height="54" width="118" x="3578" y="1925" as="geometry" />
+        <mxCell id="158" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;in_front&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Flag saying whether the light renders in front of geometry.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3578" y="1925" as="geometry" />
         </mxCell>
-        <mxCell id="159" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="render_to_dark_mask&#xa;Flag indicating whether this light writes to the darkness mask." vertex="1">
-          <mxGeometry height="54" width="216" x="3726" y="1925" as="geometry" />
+        <mxCell id="159" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;render_to_dark_mask&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Flag indicating whether this light writes to the darkness mask.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="3726" y="1925" as="geometry" />
         </mxCell>
-        <mxCell id="160" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=16;" value="NamedArea&#xa;Named region that spawn data or animations can reference." vertex="1">
-          <mxGeometry height="54" width="142" x="5154" y="1688" as="geometry" />
+        <mxCell id="160" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b5394;strokeColor=#062d62;fontColor=#ffffff;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;NamedArea&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Named region that spawn data or animations can reference.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="150.0" width="260.0" x="5154" y="1688" as="geometry" />
         </mxCell>
-        <mxCell id="161" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="area&#xa;Geometry or tag that defines the named region." vertex="1">
-          <mxGeometry height="54" width="92" x="4304" y="1925" as="geometry" />
+        <mxCell id="161" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;area&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Geometry or tag that defines the named region.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="4304" y="1925" as="geometry" />
         </mxCell>
-        <mxCell id="162" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=16;" value="render_frame&#xa;Render frame used for previewing the area." vertex="1">
-          <mxGeometry height="54" width="158" x="5146" y="1925" as="geometry" />
+        <mxCell id="162" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#f4a261;strokeColor=#c96b05;fontColor=#2f1b0c;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;render_frame&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Render frame used for previewing the area.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="110.0" width="220.0" x="5146" y="1925" as="geometry" />
         </mxCell>
         <mxCell id="163" edge="1" parent="1" source="2" style="curved=1;startArrow=none;endArrow=block;exitX=1;exitY=0.6;entryX=0.5;entryY=0;labelBackgroundColor=none;fontColor=default;strokeColor=#E07A5F;noEdgeStyle=1;orthogonal=1;" target="3" value="">
           <mxGeometry relative="1" as="geometry">
@@ -1848,7 +1848,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="r-J4RqB1GObzojSzGF0T-345" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#1f2933;strokeColor=#0f172a;fontColor=#f8fafc;rounded=1;fontSize=18;" value="RENDERER&#xa;Visual label denoting the renderer section of the diagram." vertex="1">
+        <mxCell id="r-J4RqB1GObzojSzGF0T-345" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#1f2933;strokeColor=#0f172a;fontColor=#f8fafc;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;RENDERER&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Visual label denoting the renderer section of the diagram.&lt;/span&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="420" width="420" x="2606" y="2804" as="geometry" />
         </mxCell>
         <mxCell id="r-J4RqB1GObzojSzGF0T-347" edge="1" parent="1" source="128" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.667;entryY=0.014;entryDx=0;entryDy=0;entryPerimeter=0;noEdgeStyle=1;orthogonal=1;" target="r-J4RqB1GObzojSzGF0T-345">
@@ -1867,8 +1867,8 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="r-J4RqB1GObzojSzGF0T-352" parent="1" style="whiteSpace=wrap;strokeWidth=2;labelBackgroundColor=none;fillColor=#1f2933;strokeColor=#0f172a;fontColor=#f8fafc;rounded=1;fontSize=18;" value="Background color&#xa;Label that highlights where the renderer background color is controlled." vertex="1">
-          <mxGeometry height="80" width="80" x="3429" y="2624" as="geometry" />
+        <mxCell id="r-J4RqB1GObzojSzGF0T-352" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#1f2933;strokeColor=#0f172a;fontColor=#f8fafc;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;Background color&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Label that highlights where the renderer background color is controlled.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="120.0" width="210.0" x="3429" y="2624" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
