@@ -1,0 +1,20 @@
+{
+  "background": {
+    "blur": 0.7999999523162842,
+    "brightness": 0.019999980926513672,
+    "contrast": 0.10000002384185791,
+    "hue": 0.0,
+    "saturation_blue": 0.559999942779541,
+    "saturation_green": 0.2200000286102295,
+    "saturation_red": -0.3400000333786011
+  },
+  "foreground": {
+    "blur": 0.7799999713897705,
+    "brightness": -0.2800000309944153,
+    "contrast": 0.24000000953674316,
+    "hue": 119.0,
+    "saturation_blue": 0.3799999952316284,
+    "saturation_green": 0.31999993324279785,
+    "saturation_red": -0.25999999046325684
+  }
+}
