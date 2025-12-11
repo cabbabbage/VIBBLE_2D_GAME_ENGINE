@@ -1835,26 +1835,44 @@
         <mxCell id="flowLoadingHeader" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0b1220;strokeColor=#0f172a;fontColor=#f8fafc;rounded=1;fontSize=18;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:22px;font-weight:bold;&#39;&gt;Loading Pipeline&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Pre-runtime steps that prepare assets, textures, and rooms before handing control to the runtime loop.&lt;/span&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="120" width="900" x="-2990" y="1191.6" as="geometry" />
         </mxCell>
-        <mxCell id="flowManifestRead" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#2563eb;strokeColor=#1d4ed8;fontColor=#ffffff;rounded=1;fontSize=16;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Manifest Read&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Load manifest files that describe rooms, assets, lighting, and spawn data.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+        <mxCell id="flowFileDiscovery" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#2563eb;strokeColor=#1d4ed8;fontColor=#ffffff;rounded=1;fontSize=16;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;File Discovery&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Scan content roots, SRC/assets directories, and manifest-specified folders to collect asset, audio, lighting, and spawn resources before parsing data.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="180" width="260" x="-2930" y="1399.5" as="geometry" />
+        </mxCell>
+        <mxCell id="flowManifestRead" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#2563eb;strokeColor=#1d4ed8;fontColor=#ffffff;rounded=1;fontSize=16;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Manifest Read&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Read the manifest, resolve the requested map entry or fallback descriptor, normalize the content_root, and capture layers, trails, spawn, and lighting metadata for the map.&lt;/span&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="180" width="260" x="-2580" y="1399.5" as="geometry" />
         </mxCell>
-        <mxCell id="flowCacheCheck" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#2563eb;strokeColor=#1d4ed8;fontColor=#ffffff;rounded=1;fontSize=16;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Cache Check&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Verify cache entries so unchanged data can be reused without reloading.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+        <mxCell id="flowCacheCheck" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#2563eb;strokeColor=#1d4ed8;fontColor=#ffffff;rounded=1;fontSize=16;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Cache Check&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Check cache/ for prebuilt textures and light masks named by the manifest so unchanged resources can be reused before triggering rebuilds.&lt;/span&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="180" width="260" x="-2230" y="1399.5" as="geometry" />
         </mxCell>
-        <mxCell id="flowPythonTextures" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#2563eb;strokeColor=#1d4ed8;fontColor=#ffffff;rounded=1;fontSize=16;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Python Texture Gen&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Execute Python pipelines to generate or update procedural textures before loading assets.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+        <mxCell id="flowPythonTextures" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#2563eb;strokeColor=#1d4ed8;fontColor=#ffffff;rounded=1;fontSize=16;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Python Texture Gen&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Run asset_tool.py, light_tool.py, or other Python pipelines to rebuild textures, masks, or animation variants when manifest flags request it.&lt;/span&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="180" width="260" x="-1880" y="1399.5" as="geometry" />
         </mxCell>
-        <mxCell id="flowAssetLoad" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#2563eb;strokeColor=#1d4ed8;fontColor=#ffffff;rounded=1;fontSize=16;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Asset Load&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Deserialize assets and register them with AssetInfo so runtime state can be built quickly.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+        <mxCell id="flowAssetMetadata" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#2563eb;strokeColor=#1d4ed8;fontColor=#ffffff;rounded=1;fontSize=16;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Asset Metadata Build&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;AssetLibrary syncs manifest entries with SRC/assets, builds AssetInfo records covering animation, lighting, controller, and spawn hints, and warms cached animation data.&lt;/span&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="180" width="260" x="-1530" y="1399.5" as="geometry" />
         </mxCell>
-        <mxCell id="flowRoomTrailLoad" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#2563eb;strokeColor=#1d4ed8;fontColor=#ffffff;rounded=1;fontSize=16;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Room/Trail Load&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Load rooms, trails, and spawn configurations to reconstruct the map topology.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+        <mxCell id="flowAssetLoad" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#2563eb;strokeColor=#1d4ed8;fontColor=#ffffff;rounded=1;fontSize=16;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Asset Load&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;AssetLoader deserializes asset instances from room and spawn data, attaches AssetInfo references, warms animation/light metadata, finalizes each asset, and readies them for registration with the world grid.&lt;/span&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="180" width="260" x="-1180" y="1399.5" as="geometry" />
         </mxCell>
-        <mxCell id="Z97nJ7mlNoWdLQ9hPTn0-343" edge="1" parent="1" source="flowEngineHandoff" style="edgeStyle=orthogonalEdgeStyle;curved=1;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="flow2">
+        <mxCell id="flowRoomTrailLoad" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#2563eb;strokeColor=#1d4ed8;fontColor=#ffffff;rounded=1;fontSize=16;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Room/Trail Generation&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Generate rooms, trails, boundaries, named areas, spawn groups, and grid settings from map data, with a fallback spawn room when needed.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="180" width="260" x="-830" y="1399.5" as="geometry" />
+        </mxCell>
+        <mxCell id="flowSpawnPlanner" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#2563eb;strokeColor=#1d4ed8;fontColor=#ffffff;rounded=1;fontSize=16;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Spawn Planner&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;AssetSpawnPlanner merges spawn_groups across manifest, rooms, and trails, assigns spawn IDs/priorities, resolves tag-based candidates, and scales quantities to room size.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="180" width="260" x="-480" y="1399.5" as="geometry" />
+        </mxCell>
+        <mxCell id="flowSpawnExecutor" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#2563eb;strokeColor=#1d4ed8;fontColor=#ffffff;rounded=1;fontSize=16;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Spawn Executor&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;AssetSpawner runs the queue through exact/center/random/perimeter/percent/edge spawners, handles zone assets, child attachments, and boundary passes to build `Asset` instances in rooms.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="180" width="260" x="-130" y="1399.5" as="geometry" />
+        </mxCell>
+        <mxCell id="Z97nJ7mlNoWdLQ9hPTn0-343" edge="1" parent="1" source="flowEngineHandoff" style="edgeStyle=orthogonalEdgeStyle;curved=1;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="flowRuntimeBootstrap">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="flowEngineHandoff" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#2563eb;strokeColor=#1d4ed8;fontColor=#ffffff;rounded=1;fontSize=16;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Engine Handoff&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Pass prepared rooms, assets, and textures down to the runtime entry point (main).&lt;/span&gt;&lt;/div&gt;" vertex="1">
-          <mxGeometry height="180" width="260" x="-830" y="1399.5" as="geometry" />
+        <mxCell id="flowEngineHandoff" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#2563eb;strokeColor=#1d4ed8;fontColor=#ffffff;rounded=1;fontSize=16;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Engine Handoff&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Pass curated rooms, spawn assets, world grid chunks, map settings, and the AssetLibrary into the bootstrap that creates the runtime `Assets` manager.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="180" width="260" x="220" y="1399.5" as="geometry" />
+        </mxCell>
+        <mxCell id="flowRuntimeBootstrap" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#2563eb;strokeColor=#1d4ed8;fontColor=#ffffff;rounded=1;fontSize=16;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Runtime Bootstrap&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Assets, SceneRenderer, and InitializeAssets wire the camera, world grid, and active assets before handing control to main&#39;s game loop.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="180" width="260" x="570" y="1399.5" as="geometry" />
+        </mxCell>
+        <mxCell id="flowEdgeDiscoveryManifest" edge="1" parent="1" source="flowFileDiscovery" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;" target="flowManifestRead" value="">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="flowEdgeManifestCache" edge="1" parent="1" source="flowManifestRead" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;" target="flowCacheCheck" value="">
           <mxGeometry relative="1" as="geometry" />
@@ -1862,13 +1880,28 @@
         <mxCell id="flowEdgeCacheTextures" edge="1" parent="1" source="flowCacheCheck" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;" target="flowPythonTextures" value="">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="flowEdgeTexturesAssets" edge="1" parent="1" source="flowPythonTextures" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;" target="flowAssetLoad" value="">
+        <mxCell id="flowEdgeTexturesMetadata" edge="1" parent="1" source="flowPythonTextures" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;" target="flowAssetMetadata" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flowEdgeMetadataAssets" edge="1" parent="1" source="flowAssetMetadata" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;" target="flowAssetLoad" value="">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="flowEdgeAssetsRooms" edge="1" parent="1" source="flowAssetLoad" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;" target="flowRoomTrailLoad" value="">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="flowEdgeRoomsHandoff" edge="1" parent="1" source="flowRoomTrailLoad" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;" target="flowEngineHandoff" value="">
+        <mxCell id="flowEdgeRoomsSpawnPlanner" edge="1" parent="1" source="flowRoomTrailLoad" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;" target="flowSpawnPlanner" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flowEdgeSpawnPlannerExecutor" edge="1" parent="1" source="flowSpawnPlanner" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;" target="flowSpawnExecutor" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flowEdgeSpawnExecutorHandoff" edge="1" parent="1" source="flowSpawnExecutor" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;" target="flowEngineHandoff" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flowEdgeHandoffBootstrap" edge="1" parent="1" source="flowEngineHandoff" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;" target="flowRuntimeBootstrap" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flowEdgeBootstrapMain" edge="1" parent="1" source="flowRuntimeBootstrap" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;endArrow=block;startArrow=none;orthogonal=1;" target="flow2" value="">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="flow3" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#475569;strokeColor=#0b1220;fontColor=#f8fafc;rounded=1;fontSize=18;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:22px;font-weight:bold;&#39;&gt;Runtime Architecture&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;High-level runtime overview of the engine subsystems and data flow.&lt;/span&gt;&lt;/div&gt;" vertex="1">
@@ -1886,16 +1919,19 @@
         <mxCell id="j_sh6dpdp3yC2QXuFCHX-342" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#111827;strokeColor=#0ea5e9;fontColor=#e0f2fe;rounded=1;fontSize=14;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Clear &amp; Setup&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Clear buffers, recompute camera transforms, and prepare lighting/compositor state.&lt;/span&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="180" width="260" x="-2540" y="2405" as="geometry" />
         </mxCell>
-        <mxCell id="j_sh6dpdp3yC2QXuFCHX-343" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#111827;strokeColor=#0ea5e9;fontColor=#e0f2fe;rounded=1;fontSize=14;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Background &amp; Depth&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Draw sky, parallax layers, and static tiles while priming depth before asset rendering.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+        <mxCell id="j_sh6dpdp3yC2QXuFCHX-343" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#111827;strokeColor=#0ea5e9;fontColor=#e0f2fe;rounded=1;fontSize=14;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Background &amp; Depth&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Clear depth, draw the sky layer and parallax backgrounds, then render static chunk tiles through GridTileRenderer to prime depth before assets are drawn.&lt;/span&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="180" width="260" x="-2120" y="2405" as="geometry" />
         </mxCell>
         <mxCell id="j_sh6dpdp3yC2QXuFCHX-344" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#111827;strokeColor=#0ea5e9;fontColor=#e0f2fe;rounded=1;fontSize=14;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Asset Render Packages&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Bundle each asset&#39;s textures, masks, lighting hints, and child layers for batching.&lt;/span&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="180" width="260" x="-1700" y="2405" as="geometry" />
         </mxCell>
-        <mxCell id="j_sh6dpdp3yC2QXuFCHX-345" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#111827;strokeColor=#0ea5e9;fontColor=#e0f2fe;rounded=1;fontSize=14;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Lighting &amp; Composite&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Sort packages, apply shading and lighting masks, and blend them respecting depth order.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+        <mxCell id="j_sh6dpdp3yC2QXuFCHX-355" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#111827;strokeColor=#0ea5e9;fontColor=#e0f2fe;rounded=1;fontSize=14;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Asset Draw &amp; Masks&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;SceneRenderer iterates active assets, applies transforms, draws each render_package entry with SDL_RenderCopy, and records scene_mask_lights for later darkness compositing.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="180" width="260" x="-1460" y="2405" as="geometry" />
+        </mxCell>
+        <mxCell id="j_sh6dpdp3yC2QXuFCHX-345" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#111827;strokeColor=#0ea5e9;fontColor=#e0f2fe;rounded=1;fontSize=14;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Lighting &amp; Composite&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Sort packages, apply shading and lighting masks while collecting scene_mask_lights, blend them respecting depth, and prepare dark mask sprites for render_dynamic_darkness_overlay.&lt;/span&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="180" width="260" x="-1280" y="2405" as="geometry" />
         </mxCell>
-        <mxCell id="j_sh6dpdp3yC2QXuFCHX-346" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#111827;strokeColor=#0ea5e9;fontColor=#e0f2fe;rounded=1;fontSize=14;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Post &amp; Present&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Apply dark masks, post effects, and swap buffers to display the finished frame.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+        <mxCell id="j_sh6dpdp3yC2QXuFCHX-346" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#111827;strokeColor=#0ea5e9;fontColor=#e0f2fe;rounded=1;fontSize=14;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;Post &amp; Present&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Apply render_dynamic_darkness_overlay, run blur and post effects, and call SDL_RenderPresent to swap buffers for the final frame.&lt;/span&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="180" width="260" x="-860" y="2405" as="geometry" />
         </mxCell>
         <mxCell id="j_sh6dpdp3yC2QXuFCHX-347" edge="1" parent="1" source="j_sh6dpdp3yC2QXuFCHX-341" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;endArrow=block;startArrow=none;orthogonal=1;" target="j_sh6dpdp3yC2QXuFCHX-342" value="">
@@ -1922,13 +1958,16 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="j_sh6dpdp3yC2QXuFCHX-350" edge="1" parent="1" source="j_sh6dpdp3yC2QXuFCHX-344" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;endArrow=block;startArrow=none;orthogonal=1;" target="j_sh6dpdp3yC2QXuFCHX-345" value="">
+        <mxCell id="j_sh6dpdp3yC2QXuFCHX-350" edge="1" parent="1" source="j_sh6dpdp3yC2QXuFCHX-344" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;endArrow=block;startArrow=none;orthogonal=1;" target="j_sh6dpdp3yC2QXuFCHX-355" value="">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="-1440" y="2495" />
               <mxPoint x="-1280" y="2495" />
             </Array>
           </mxGeometry>
+        </mxCell>
+        <mxCell id="j_sh6dpdp3yC2QXuFCHX-352" edge="1" parent="1" source="j_sh6dpdp3yC2QXuFCHX-355" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;endArrow=block;startArrow=none;orthogonal=1;" target="j_sh6dpdp3yC2QXuFCHX-345" value="">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="j_sh6dpdp3yC2QXuFCHX-351" edge="1" parent="1" source="j_sh6dpdp3yC2QXuFCHX-345" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;endArrow=block;startArrow=none;orthogonal=1;" target="j_sh6dpdp3yC2QXuFCHX-346" value="">
           <mxGeometry relative="1" as="geometry">
