@@ -2267,6 +2267,9 @@
         <mxCell id="flow147" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#5b21b6;strokeColor=#0f172a;fontColor=#e2e8f0;rounded=1;fontSize=16;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;Background color&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Label that highlights where the renderer background color is controlled.&lt;/span&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="150" width="240" y="39240" as="geometry" />
         </mxCell>
+        <mxCell id="flowLegend" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#e2e8f0;strokeColor=#475569;fontColor=#0f172a;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;Color Key&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;&lt;span style='display:inline-block;width:14px;height:14px;background:#1f3f72;border:1px solid #0f172a;margin-right:6px;'&gt;&lt;/span&gt;World / spatial grid&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;&lt;span style='display:inline-block;width:14px;height:14px;background:#166534;border:1px solid #0f172a;margin-right:6px;'&gt;&lt;/span&gt;Assets &amp; animation runtime&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;&lt;span style='display:inline-block;width:14px;height:14px;background:#b45309;border:1px solid #0f172a;margin-right:6px;'&gt;&lt;/span&gt;Asset definitions&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;&lt;span style='display:inline-block;width:14px;height:14px;background:#5b21b6;border:1px solid #0f172a;margin-right:6px;'&gt;&lt;/span&gt;Rendering / renderer&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;&lt;span style='display:inline-block;width:14px;height:14px;background:#a16207;border:1px solid #0f172a;margin-right:6px;'&gt;&lt;/span&gt;Lighting&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;&lt;span style='display:inline-block;width:14px;height:14px;background:#4d7c0f;border:1px solid #0f172a;margin-right:6px;'&gt;&lt;/span&gt;Spawn / areas&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry x="50" y="0" width="520" height="240" as="geometry" />
+        </mxCell>
         <mxCell id="flowEdge1" edge="1" parent="1" source="flow4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;noEdgeStyle=1;orthogonal=1;" target="flow5" value="">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
@@ -2288,6 +2291,67 @@
             <Array as="points">
               <mxPoint x="252" y="4793.333333333333" />
               <mxPoint x="328" y="5000" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="renderFlowTitle" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0f172a;strokeColor=#6366f1;fontColor=#e0f2fe;rounded=1;fontSize=18;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:22px;font-weight:bold;'&gt;Render Process&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Horizontal flow outlining how the renderer builds each frame from start to presentation.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="140" width="2400" x="520" y="39600" as="geometry" />
+        </mxCell>
+        <mxCell id="renderStage1" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#111827;strokeColor=#0ea5e9;fontColor=#e0f2fe;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;Frame Start&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Collect delta time, input, camera, and chunk updates before drawing begins.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="180" width="260" x="600" y="40150" as="geometry" />
+        </mxCell>
+        <mxCell id="renderStage2" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#111827;strokeColor=#0ea5e9;fontColor=#e0f2fe;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;Clear &amp; Setup&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Clear buffers, recompute camera transforms, and prepare lighting/compositor state.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="180" width="260" x="1020" y="40150" as="geometry" />
+        </mxCell>
+        <mxCell id="renderStage3" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#111827;strokeColor=#0ea5e9;fontColor=#e0f2fe;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;Background &amp; Depth&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Draw sky, parallax layers, and static tiles while priming depth before asset rendering.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="180" width="260" x="1440" y="40150" as="geometry" />
+        </mxCell>
+        <mxCell id="renderStage4" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#111827;strokeColor=#0ea5e9;fontColor=#e0f2fe;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;Asset Render Packages&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Bundle each asset's textures, masks, lighting hints, and child layers for batching.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="180" width="260" x="1860" y="40150" as="geometry" />
+        </mxCell>
+        <mxCell id="renderStage5" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#111827;strokeColor=#0ea5e9;fontColor=#e0f2fe;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;Lighting &amp; Composite&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Sort packages, apply shading and lighting masks, and blend them respecting depth order.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="180" width="260" x="2280" y="40150" as="geometry" />
+        </mxCell>
+        <mxCell id="renderStage6" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#111827;strokeColor=#0ea5e9;fontColor=#e0f2fe;rounded=1;fontSize=14;" value="&lt;div style='text-align:left;'&gt;&lt;span style='font-size:18px;font-weight:bold;'&gt;Post &amp; Present&lt;/span&gt;&lt;br/&gt;&lt;span style='font-size:14px;'&gt;Apply dark masks, post effects, and swap buffers to display the finished frame.&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="180" width="260" x="2700" y="40150" as="geometry" />
+        </mxCell>
+        <mxCell id="renderEdge1" edge="1" parent="1" source="renderStage1" target="renderStage2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;endArrow=block;startArrow=none;orthogonal=1;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="860" y="40240" />
+              <mxPoint x="1020" y="40240" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="renderEdge2" edge="1" parent="1" source="renderStage2" target="renderStage3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;endArrow=block;startArrow=none;orthogonal=1;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1280" y="40240" />
+              <mxPoint x="1440" y="40240" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="renderEdge3" edge="1" parent="1" source="renderStage3" target="renderStage4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;endArrow=block;startArrow=none;orthogonal=1;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1700" y="40240" />
+              <mxPoint x="1860" y="40240" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="renderEdge4" edge="1" parent="1" source="renderStage4" target="renderStage5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;endArrow=block;startArrow=none;orthogonal=1;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="2120" y="40240" />
+              <mxPoint x="2280" y="40240" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="renderEdge5" edge="1" parent="1" source="renderStage5" target="renderStage6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0f172a;strokeWidth=2;endArrow=block;startArrow=none;orthogonal=1;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="2540" y="40240" />
+              <mxPoint x="2700" y="40240" />
             </Array>
           </mxGeometry>
         </mxCell>
