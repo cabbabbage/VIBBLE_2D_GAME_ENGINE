@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36" version="29.2.7">
   <diagram id="4_JYmeCipBGX9XNcjFr7" name="Page-1">
-    <mxGraphModel dx="1507" dy="814" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="10540" dy="4613" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -1816,7 +1816,7 @@
           <mxGeometry height="120" width="210" x="5184" y="2440" as="geometry" />
         </mxCell>
         <mxCell id="flow1" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0f172a;strokeColor=#0b1220;fontColor=#f8fafc;rounded=1;fontSize=18;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:22px;font-weight:bold;&#39;&gt;Runtime Architecture&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;High-level runtime overview of the engine subsystems and data flow.&lt;/span&gt;&lt;/div&gt;" vertex="1">
-          <mxGeometry height="140" width="1000" y="5170" as="geometry" />
+          <mxGeometry height="140" width="1000" x="-1790" y="1851.8899999999999" as="geometry" />
         </mxCell>
         <mxCell id="flow2" parent="1" style="whiteSpace=wrap;html=1;strokeWidth=2;labelBackgroundColor=none;fillColor=#0ea5e9;strokeColor=#0369a1;fontColor=#e0f2fe;rounded=1;fontSize=16;" value="&lt;div style=&#39;text-align:left;&#39;&gt;&lt;span style=&#39;font-size:18px;font-weight:bold;&#39;&gt;main&lt;/span&gt;&lt;br/&gt;&lt;span style=&#39;font-size:14px;&#39;&gt;Entry point that wires grid management, assets, and rendering into the runtime loop.&lt;/span&gt;&lt;/div&gt;" vertex="1">
           <mxGeometry height="140" width="240" y="4680" as="geometry" />
