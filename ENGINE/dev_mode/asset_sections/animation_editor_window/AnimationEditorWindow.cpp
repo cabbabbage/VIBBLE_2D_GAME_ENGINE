@@ -1619,10 +1619,19 @@ bool AnimationEditorWindow::persist_manifest_payload(const nlohmann::json& paylo
         using_manifest_store_ = true;
     }
 
-    nlohmann::json& draft = manifest_transaction_.data();
-    if (payload.is_null()) {
+    auto refresh_draft_from_store = [&]() {
+        auto view = manifest_store_->get_asset(manifest_asset_key_);
+        if (view && view.data && view.data->is_object()) {
+            manifest_transaction_.data() = *view.data;
+        }
+    };
 
-    } else if (payload.is_object()) {
+    // Always rebase on the latest manifest entry so external live edits (e.g., frame editor)
+    // cannot be overwritten by a stale transaction snapshot when finalizing.
+    refresh_draft_from_store();
+
+    nlohmann::json& draft = manifest_transaction_.data();
+    if (payload.is_object()) {
         if (!draft.is_object()) {
             draft = nlohmann::json::object();
         }
@@ -1630,7 +1639,7 @@ bool AnimationEditorWindow::persist_manifest_payload(const nlohmann::json& paylo
         for (auto it = payload.begin(); it != payload.end(); ++it) {
             draft[it.key()] = it.value();
         }
-    } else {
+    } else if (!payload.is_null()) {
 
         draft = payload;
     }

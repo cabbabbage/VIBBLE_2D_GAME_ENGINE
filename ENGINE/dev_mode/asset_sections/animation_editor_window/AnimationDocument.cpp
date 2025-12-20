@@ -739,20 +739,32 @@ void AnimationDocument::save_to_file(bool fire_callback) const {
         root["start"] = start_animation_.has_value() ? *start_animation_ : std::string{};
     }
 
+    auto write_root_to_disk = [&](const std::filesystem::path& path) {
+        if (path.empty()) return;
+        std::ofstream out(path);
+        if (!out.good()) {
+            SDL_Log("AnimationDocument: failed to open %s for writing", path.string().c_str());
+            return;
+        }
+        out << root.dump(4);
+    };
+
     if (persist_callback_) {
         persist_callback_(root);
         base_data_ = root;
+
+        // Persist to a concrete file as well so external consumers (e.g., game reload) see changes.
+        if (!info_path_.empty()) {
+            write_root_to_disk(info_path_);
+        } else if (!asset_root_.empty()) {
+            write_root_to_disk(asset_root_ / "manifest.json");
+        }
     } else {
         if (info_path_.empty()) {
             SDL_Log("AnimationDocument: no info path available for saving.");
             return;
         }
-        std::ofstream out(info_path_);
-        if (!out.good()) {
-            SDL_Log("AnimationDocument: failed to open %s for writing", info_path_.string().c_str());
-            return;
-        }
-        out << root.dump(4);
+        write_root_to_disk(info_path_);
         base_data_ = root;
     }
     dirty_ = false;

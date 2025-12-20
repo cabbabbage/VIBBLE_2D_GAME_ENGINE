@@ -1,0 +1,37 @@
+{
+    "animation_children": [],
+    "animations": {
+        "default": {
+            "child_timelines": [],
+            "crop_frames": false,
+            "flipped_source": false,
+            "inherit_source_movement": false,
+            "locked": false,
+            "loop": true,
+            "movement": [
+                [
+                    0,
+                    0
+                ]
+            ],
+            "movement_total": {
+                "dx": 0,
+                "dy": 0
+            },
+            "number_of_frames": 1,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "folder",
+                "name": "",
+                "path": "default"
+            },
+            "speed_multiplier": 1.0
+        }
+    },
+    "asset_directory": "SRC/assets/skull_1",
+    "asset_name": "skull_1",
+    "asset_type": "object",
+    "start": "default"
+}

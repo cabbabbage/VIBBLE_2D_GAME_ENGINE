@@ -289,7 +289,7 @@ FRAME_EDITOR_ACCESS:
     void rebuild_rel_positions();
     void ensure_child_frames_initialized();
     void smooth_child_offsets(int child_index, int adjusted_index);
-    void persist_changes();
+    void persist_changes(bool rebuild_animation = false);
 
     void persist_mode_changes(Mode mode);
     void select_frame(int index);

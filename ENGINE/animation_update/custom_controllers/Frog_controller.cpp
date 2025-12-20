@@ -1,18 +1,15 @@
 #include "Frog_controller.hpp"
+
+#include "animation_update/custom_controllers/controller_path_utils.hpp"
+#include "animation_update/custom_controllers/controller_visit_threshold.hpp"
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
-#include "utils/log.hpp"
-
-#include <sstream>
-#include <iostream>
 
 FrogController::FrogController(Assets* assets, Asset* self)
     : assets_(assets), self_(self) {
     if (self_ && self_->anim_) {
         self_->anim_->set_debug_enabled(false);
         self_->needs_target = true;
-        vibble::log::info("[FrogController] initialized (needs_target=true)");
-        std::cout << "[FrogController] initialized (needs_target=true)" << std::endl;
     }
 }
 
@@ -26,12 +23,21 @@ void FrogController::update(const Input&) {
         return;
     }
 
-    if (self_->anim_->debug_enabled()) {
-        std::ostringstream oss;
-        oss << "[FrogController] pursuing player asset="
-            << (player->info ? player->info->name : "<unknown>") << " (needs_target=" << (self_->needs_target ? "true" : "false") << ")";
-        vibble::log::info(oss.str());
-        std::cout << oss.str() << std::endl;
+    constexpr int kFleeThresholdPx = 64;
+    const int distance_sq = (self_->pos.x - player->pos.x) * (self_->pos.x - player->pos.x) +
+                            (self_->pos.y - player->pos.y) * (self_->pos.y - player->pos.y);
+
+    if (distance_sq <= (kFleeThresholdPx * kFleeThresholdPx)) {
+        if (!self_->needs_target) {
+            return;
+        }
+        const auto path = controller_paths::flee_path(self_, player);
+        if (path.empty()) {
+            return;
+        }
+        const int visit_threshold = controller_utils::controller_visit_threshold(self_, path);
+        self_->anim_->auto_move(path, visit_threshold);
+        return;
     }
 
     self_->anim_->auto_move(player);

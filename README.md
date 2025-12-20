@@ -1,21 +1,22 @@
-# VIBBLE - 2D Game Engine
+# VIBBLE - 2D Game Engine (Departed Affairs and Co.)
 
 ## Links
-- Engine overview: `engine_overview.html`
-- Manifest and content config: `manifest.json`
-- Auto setup and launch: `run.bat`
-- Dev mode settings: `dev_mode_settings.json`
-- License: `LICENSE`
+- Engine and Dev Mode design overview video:<br>
+  <a href="https://youtu.be/QaqOHtNQzZs" target="_blank">
+    <img src="https://img.youtube.com/vi/QaqOHtNQzZs/0.jpg" alt="Watch the design overview on YouTube" width="560">
+  </a>
+- Take a look at the flow chart of the game structure:
+  ![Game structure flow chart](SRC/misc_content/engine.drawio.svg)
+  [flow chart](https://app.diagrams.net/#Hcabbabbage%2FVIBBLE_2D_GAME_ENGINE%2Fplayer_fix%2Fengine.drawio.xml#%7B%22pageId%22%3A%224_JYmeCipBGX9XNcjFr7%22%7D)
+
 
 ## Installation
 ### Quick start (Windows)
 1. Clone the repo.
-2. Run `run.bat` from the project root.
+2. Run `setup.bat` from the project root if you wish to build and compile compile.
 
 The script installs build tools (Git, MSVC build tools, CMake, Ninja, vcpkg), fetches dependencies, configures a RelWithDebInfo build, compiles, and launches the engine. Requires Windows 10/11, internet, and admin rights are recommended for tool installs.
 
-### Manual setup (optional)
-Install Git, Visual Studio Build Tools (or VS 2022) with MSVC + Windows SDK, CMake 3.16+, and vcpkg. Then configure and build with CMake presets (for example `cmake --build --preset windows-vcpkg-release`).
 
 ## Overview
 - SDL2-based 2D engine; content lives in external JSON-driven files for maps, assets, lighting, and animations.
@@ -34,7 +35,8 @@ Install Git, Visual Studio Build Tools (or VS 2022) with MSVC + Windows SDK, CMa
 
 ## Running
 - Preferred: run `run.bat` to configure, build, and start the engine.
-- Repeat runs reuse the configured build; rerun `run.bat` after pulling dependency changes.
+- To build fresh run `compile_and_run.bat`; it launches `release\engine.exe` produced by the build.
+- Repeat runs reuse the configured build; rerun `compile_and_run.bat` after pulling dependency changes.
 
 ## Dev Mode
 - Toggle with `Ctrl+D` or through the pause menu (`Esc`), or it auto-enables when a map lacks a player.

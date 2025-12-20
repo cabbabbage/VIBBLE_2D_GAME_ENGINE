@@ -1,0 +1,891 @@
+{
+    "animation_children": [
+        "Vibble_eyes",
+        "Candle"
+    ],
+    "animations": {
+        "attack": {
+            "child_timelines": [
+                {
+                    "animation": "",
+                    "asset": "Vibble_eyes",
+                    "child": 0,
+                    "child_index": 0,
+                    "frames": [
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        },
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        },
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        },
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        },
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        },
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        }
+                    ],
+                    "mode": "static"
+                },
+                {
+                    "animation": "",
+                    "asset": "Candle",
+                    "child": 1,
+                    "child_index": 1,
+                    "frames": [
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        },
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        },
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        },
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        },
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        },
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        }
+                    ],
+                    "mode": "async"
+                }
+            ],
+            "children": [
+                "Vibble_eyes",
+                "Candle"
+            ],
+            "crop_frames": false,
+            "flipped_source": false,
+            "frames": [
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                }
+            ],
+            "inherit_source_movement": false,
+            "locked": false,
+            "loop": true,
+            "movement": [
+                [
+                    0,
+                    0,
+                    [
+                        [
+                            0,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ],
+                        [
+                            1,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ]
+                    ]
+                ],
+                [
+                    0,
+                    0,
+                    [
+                        [
+                            0,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ],
+                        [
+                            1,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ]
+                    ]
+                ],
+                [
+                    0,
+                    0,
+                    [
+                        [
+                            0,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ],
+                        [
+                            1,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ]
+                    ]
+                ],
+                [
+                    0,
+                    0,
+                    [
+                        [
+                            0,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ],
+                        [
+                            1,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ]
+                    ]
+                ],
+                [
+                    0,
+                    0,
+                    [
+                        [
+                            0,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ],
+                        [
+                            1,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ]
+                    ]
+                ],
+                [
+                    0,
+                    0,
+                    [
+                        [
+                            0,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ],
+                        [
+                            1,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ]
+                    ]
+                ]
+            ],
+            "movement_total": {
+                "dx": 0,
+                "dy": 0
+            },
+            "number_of_frames": 6,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "folder",
+                "name": "",
+                "path": "attack"
+            },
+            "speed_multiplier": 1.0
+        },
+        "backward": {
+            "child_timelines": [
+                {
+                    "animation": "",
+                    "asset": "Vibble_eyes",
+                    "child": 0,
+                    "child_index": 0,
+                    "frames": [
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        }
+                    ],
+                    "mode": "static"
+                },
+                {
+                    "animation": "",
+                    "asset": "Candle",
+                    "child": 1,
+                    "child_index": 1,
+                    "frames": [
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        }
+                    ],
+                    "mode": "static"
+                }
+            ],
+            "children": [
+                "Vibble_eyes",
+                "Candle"
+            ],
+            "crop_frames": false,
+            "derived_modifiers": {
+                "flipMovementX": false,
+                "flipMovementY": false,
+                "flipX": false,
+                "flipY": false,
+                "reverse": false
+            },
+            "flipped_source": false,
+            "frames": [
+                {
+                    "needs_rebuild": true
+                }
+            ],
+            "inherit_source_movement": false,
+            "loop": true,
+            "movement": [
+                [
+                    0,
+                    0,
+                    [
+                        [
+                            0,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ],
+                        [
+                            1,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ]
+                    ]
+                ]
+            ],
+            "movement_total": {
+                "dx": 0,
+                "dy": 0
+            },
+            "number_of_frames": 1,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "animation",
+                "name": "forward",
+                "path": ""
+            },
+            "speed_multiplier": 1.0
+        },
+        "default": {
+            "attack_geometry": [
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                }
+            ],
+            "child_timelines": [
+                {
+                    "animation": "",
+                    "asset": "Vibble_eyes",
+                    "child": 0,
+                    "child_index": 0,
+                    "frames": [
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        }
+                    ],
+                    "mode": "static"
+                },
+                {
+                    "animation": "",
+                    "asset": "Candle",
+                    "child": 1,
+                    "child_index": 1,
+                    "frames": [
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        }
+                    ],
+                    "mode": "static"
+                }
+            ],
+            "children": [
+                "Vibble_eyes",
+                "Candle"
+            ],
+            "crop_frames": true,
+            "flipped_source": false,
+            "frames": [
+                {
+                    "needs_rebuild": false
+                }
+            ],
+            "hit_geometry": [
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                }
+            ],
+            "inherit_source_movement": false,
+            "locked": false,
+            "loop": true,
+            "movement": [
+                [
+                    0,
+                    0,
+                    false,
+                    [
+                        [
+                            0,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ],
+                        [
+                            1,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ]
+                    ]
+                ]
+            ],
+            "movement_total": {
+                "dx": 0,
+                "dy": 0
+            },
+            "number_of_frames": 1,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "folder",
+                "name": "",
+                "path": "default"
+            },
+            "speed_multiplier": 1.0
+        },
+        "forward": {
+            "attack_geometry": [
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                }
+            ],
+            "child_timelines": [
+                {
+                    "animation": "",
+                    "asset": "Vibble_eyes",
+                    "child": 0,
+                    "child_index": 0,
+                    "frames": [
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        }
+                    ],
+                    "mode": "static"
+                },
+                {
+                    "animation": "",
+                    "asset": "Candle",
+                    "child": 1,
+                    "child_index": 1,
+                    "frames": [
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        }
+                    ],
+                    "mode": "static"
+                }
+            ],
+            "children": [
+                "Vibble_eyes",
+                "Candle"
+            ],
+            "crop_frames": false,
+            "flipped_source": false,
+            "frames": [
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                }
+            ],
+            "hit_geometry": [
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                }
+            ],
+            "inherit_source_movement": false,
+            "locked": false,
+            "loop": true,
+            "movement": [
+                [
+                    0,
+                    0,
+                    false,
+                    [
+                        [
+                            0,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ],
+                        [
+                            1,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ]
+                    ]
+                ]
+            ],
+            "movement_total": {
+                "dx": 0,
+                "dy": 0
+            },
+            "number_of_frames": 1,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "folder",
+                "name": "",
+                "path": "forward"
+            },
+            "speed_multiplier": 1.0
+        },
+        "left": {
+            "child_timelines": [
+                {
+                    "animation": "",
+                    "asset": "Vibble_eyes",
+                    "child": 0,
+                    "child_index": 0,
+                    "frames": [
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        }
+                    ],
+                    "mode": "static"
+                },
+                {
+                    "animation": "",
+                    "asset": "Candle",
+                    "child": 1,
+                    "child_index": 1,
+                    "frames": [
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        }
+                    ],
+                    "mode": "static"
+                }
+            ],
+            "children": [
+                "Vibble_eyes",
+                "Candle"
+            ],
+            "crop_frames": false,
+            "flipped_source": false,
+            "frames": [
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                }
+            ],
+            "inherit_source_movement": false,
+            "locked": false,
+            "loop": true,
+            "movement": [
+                [
+                    0,
+                    0,
+                    [],
+                    [],
+                    [
+                        [
+                            0,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ],
+                        [
+                            1,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ]
+                    ]
+                ]
+            ],
+            "movement_total": {
+                "dx": 0,
+                "dy": 0
+            },
+            "number_of_frames": 1,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "folder",
+                "name": "",
+                "path": "left"
+            },
+            "speed_multiplier": 1.0
+        },
+        "right": {
+            "child_timelines": [
+                {
+                    "animation": "",
+                    "asset": "Vibble_eyes",
+                    "child": 0,
+                    "child_index": 0,
+                    "frames": [
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        }
+                    ],
+                    "mode": "static"
+                },
+                {
+                    "animation": "",
+                    "asset": "Candle",
+                    "child": 1,
+                    "child_index": 1,
+                    "frames": [
+                        {
+                            "degree": 0.0,
+                            "dx": 0,
+                            "dy": 0,
+                            "render_in_front": true,
+                            "visible": false
+                        }
+                    ],
+                    "mode": "static"
+                }
+            ],
+            "children": [
+                "Vibble_eyes",
+                "Candle"
+            ],
+            "crop_frames": false,
+            "derived_modifiers": {
+                "flipMovementX": false,
+                "flipMovementY": false,
+                "flipX": true,
+                "flipY": false,
+                "reverse": false
+            },
+            "flipped_source": true,
+            "frames": [
+                {
+                    "needs_rebuild": true
+                }
+            ],
+            "inherit_source_movement": false,
+            "loop": true,
+            "movement": [
+                [
+                    0,
+                    0,
+                    [
+                        [
+                            0,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ],
+                        [
+                            1,
+                            0,
+                            0,
+                            0.0,
+                            true,
+                            true
+                        ]
+                    ]
+                ]
+            ],
+            "movement_total": {
+                "dx": 0,
+                "dy": 0
+            },
+            "number_of_frames": 1,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "animation",
+                "name": "left",
+                "path": ""
+            },
+            "speed_multiplier": 1.0
+        }
+    },
+    "asset_directory": "SRC/assets/Vibble",
+    "asset_name": "Vibble",
+    "asset_type": "player",
+    "start": "default"
+}

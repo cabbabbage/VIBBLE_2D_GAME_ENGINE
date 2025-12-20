@@ -1,0 +1,824 @@
+{
+    "animation_children": [],
+    "animations": {
+        "default": {
+            "attack_geometry": [
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                }
+            ],
+            "child_timelines": [],
+            "crop_frames": false,
+            "flipped_source": false,
+            "frames": [
+                {
+                    "needs_rebuild": false
+                }
+            ],
+            "hit_geometry": [
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                }
+            ],
+            "inherit_source_movement": false,
+            "locked": true,
+            "loop": true,
+            "movement": [
+                [
+                    0,
+                    0
+                ]
+            ],
+            "movement_total": {
+                "dx": 0,
+                "dy": 0
+            },
+            "number_of_frames": 1,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "folder",
+                "name": "",
+                "path": "default"
+            },
+            "speed_multiplier": 1.0
+        },
+        "down_left": {
+            "attack_geometry": [
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                }
+            ],
+            "child_timelines": [],
+            "crop_frames": false,
+            "derived_modifiers": {
+                "flipMovementX": false,
+                "flipMovementY": false,
+                "flipX": false,
+                "flipY": false,
+                "reverse": false
+            },
+            "flipped_source": false,
+            "frames": [
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                }
+            ],
+            "hit_geometry": [
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                }
+            ],
+            "inherit_source_movement": false,
+            "loop": true,
+            "movement": [
+                [
+                    0,
+                    0
+                ],
+                [
+                    -13,
+                    12
+                ],
+                [
+                    -13,
+                    12
+                ],
+                [
+                    -13,
+                    12
+                ],
+                [
+                    -13,
+                    12
+                ],
+                [
+                    -13,
+                    12
+                ]
+            ],
+            "movement_total": {
+                "dx": -65,
+                "dy": 60
+            },
+            "number_of_frames": 6,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "animation",
+                "name": "left",
+                "path": ""
+            },
+            "speed_multiplier": 1.0
+        },
+        "down_right": {
+            "attack_geometry": [
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                }
+            ],
+            "child_timelines": [],
+            "crop_frames": false,
+            "derived_modifiers": {
+                "flipMovementX": false,
+                "flipMovementY": false,
+                "flipX": false,
+                "flipY": false,
+                "reverse": false
+            },
+            "flipped_source": false,
+            "frames": [
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                }
+            ],
+            "hit_geometry": [
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                }
+            ],
+            "inherit_source_movement": false,
+            "loop": true,
+            "movement": [
+                [
+                    0,
+                    0
+                ],
+                [
+                    16,
+                    7
+                ],
+                [
+                    -1,
+                    14
+                ],
+                [
+                    33,
+                    0
+                ],
+                [
+                    -17,
+                    24
+                ],
+                [
+                    15,
+                    10
+                ]
+            ],
+            "movement_total": {
+                "dx": 46,
+                "dy": 55
+            },
+            "number_of_frames": 6,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "animation",
+                "name": "right",
+                "path": ""
+            },
+            "speed_multiplier": 1.0
+        },
+        "left": {
+            "attack_geometry": [
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                }
+            ],
+            "child_timelines": [],
+            "crop_frames": false,
+            "flipped_source": false,
+            "frames": [
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                },
+                {
+                    "needs_rebuild": false
+                }
+            ],
+            "hit_geometry": [
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                }
+            ],
+            "inherit_source_movement": false,
+            "locked": true,
+            "loop": true,
+            "movement": [
+                [
+                    0,
+                    0,
+                    false
+                ],
+                [
+                    -17,
+                    -1,
+                    false
+                ],
+                [
+                    -21,
+                    -3,
+                    false
+                ],
+                [
+                    -25,
+                    -5,
+                    false
+                ],
+                [
+                    -24,
+                    7,
+                    false
+                ],
+                [
+                    -23,
+                    2,
+                    false
+                ]
+            ],
+            "movement_total": {
+                "dx": -110,
+                "dy": 0
+            },
+            "number_of_frames": 6,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "folder",
+                "name": "",
+                "path": "left"
+            },
+            "speed_multiplier": 1.0
+        },
+        "right": {
+            "attack_geometry": [
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                }
+            ],
+            "child_timelines": [],
+            "crop_frames": false,
+            "derived_modifiers": {
+                "flipMovementX": true,
+                "flipMovementY": false,
+                "flipX": true,
+                "flipY": false,
+                "reverse": false
+            },
+            "flipped_source": true,
+            "frames": [
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                }
+            ],
+            "hit_geometry": [
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                }
+            ],
+            "inherit_source_movement": true,
+            "loop": true,
+            "number_of_frames": 6,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "animation",
+                "name": "left",
+                "path": ""
+            },
+            "speed_multiplier": 1.0
+        },
+        "up_left": {
+            "attack_geometry": [
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                }
+            ],
+            "child_timelines": [],
+            "crop_frames": false,
+            "derived_modifiers": {
+                "flipMovementX": false,
+                "flipMovementY": false,
+                "flipX": false,
+                "flipY": false,
+                "reverse": false
+            },
+            "flipped_source": false,
+            "frames": [
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                }
+            ],
+            "hit_geometry": [
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                }
+            ],
+            "inherit_source_movement": false,
+            "loop": true,
+            "movement": [
+                [
+                    0,
+                    0
+                ],
+                [
+                    -11,
+                    -11
+                ],
+                [
+                    -11,
+                    -11
+                ],
+                [
+                    -11,
+                    -11
+                ],
+                [
+                    -11,
+                    -11
+                ],
+                [
+                    -11,
+                    -11
+                ]
+            ],
+            "movement_total": {
+                "dx": -55,
+                "dy": -55
+            },
+            "number_of_frames": 6,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "animation",
+                "name": "left",
+                "path": ""
+            },
+            "speed_multiplier": 1.0
+        },
+        "up_right": {
+            "attack_geometry": [
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                },
+                {
+                    "explosion": [],
+                    "melee": [],
+                    "projectile": []
+                }
+            ],
+            "child_timelines": [],
+            "crop_frames": false,
+            "derived_modifiers": {
+                "flipMovementX": true,
+                "flipMovementY": false,
+                "flipX": false,
+                "flipY": false,
+                "reverse": false
+            },
+            "flipped_source": false,
+            "frames": [
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                },
+                {
+                    "needs_rebuild": true
+                }
+            ],
+            "hit_geometry": [
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                },
+                {
+                    "explosion": null,
+                    "melee": null,
+                    "projectile": null
+                }
+            ],
+            "inherit_source_movement": true,
+            "loop": true,
+            "number_of_frames": 6,
+            "on_end": "default",
+            "reverse_source": false,
+            "rnd_start": false,
+            "source": {
+                "kind": "animation",
+                "name": "right",
+                "path": ""
+            },
+            "speed_multiplier": 1.0
+        }
+    },
+    "asset_directory": "SRC/assets/spider",
+    "asset_name": "spider",
+    "asset_type": "object",
+    "start": "default"
+}

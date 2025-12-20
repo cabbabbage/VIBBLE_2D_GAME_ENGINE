@@ -292,6 +292,9 @@ void AssetLibrary::load_all_from_SRC() {
                 return;
         }
 
+        const auto manifest_path = std::filesystem::absolute(std::filesystem::path(manifest::manifest_path()));
+        vibble::log::info(std::string("[FrameData] Loading animations manifest from ") + manifest_path.generic_string());
+
         if (!manifest.assets.is_object()) {
                 vibble::log::error("[AssetLibrary] Manifest assets section is missing or malformed.");
                 return;

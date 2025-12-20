@@ -64,6 +64,7 @@ void MenuUI::game_loop() {
 	while (!quit) {
                 const Uint64 frame_begin = SDL_GetPerformanceCounter();
 		while (SDL_PollEvent(&e)) {
+                        const bool menu_was_active = menu_active_;
 			if (e.type == SDL_QUIT) {
 					quit = true;
 			}
@@ -85,9 +86,16 @@ void MenuUI::game_loop() {
                                         doToggleDevMode();
                                 }
                         }
+                        if (menu_active_) {
+                                handle_event(e);
+                                continue;
+                        }
+                        if (menu_was_active) {
+                                // Don't let the closing event fall through to gameplay handlers.
+                                continue;
+                        }
                         if (input_) input_->handleEvent(e);
                         if (game_assets_) game_assets_->handle_sdl_event(e);
-                        if (menu_active_) handle_event(e);
                 }
 
                 if (game_assets_ && input_) {

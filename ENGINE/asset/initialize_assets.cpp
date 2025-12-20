@@ -88,6 +88,7 @@ void InitializeAssets::find_player(Assets& assets) {
         for (Asset* asset : assets.all) {
                 if (asset && asset->info && asset->info->type == asset_types::player) {
 			assets.player = asset;
+			assets.player->active = true;
                         vibble::log::debug("[InitializeAssets] Found player asset: " + assets.player->info->name);
                         break;
                 }

@@ -12,6 +12,7 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <utility>
+#include <filesystem>
 
 #include "animation_update/animation_update.hpp"
 #include "animation_update/child_attachment_math.hpp"
@@ -20,6 +21,9 @@
 #include "asset/animation_frame_variant.hpp"
 #include "asset/asset_info.hpp"
 #include "core/AssetsManager.hpp"
+#include "core/manifest/manifest_loader.hpp"
+#include "dev_mode/core/dev_json_store.hpp"
+#include "dev_mode/core/manifest_store.hpp"
 #include "dev_mode/asset_sections/animation_editor_window/AnimationDocument.hpp"
 #include "dev_mode/asset_sections/animation_editor_window/AnimationEditorWindow.hpp"
 #include "dev_mode/asset_sections/animation_editor_window/PreviewProvider.hpp"
@@ -216,6 +220,34 @@ void FrameEditorSession::begin(Assets* assets,
         snap_resolution_r_ = vibble::grid::clamp_resolution(std::max(0, assets_->map_grid_settings().resolution));
     }
 
+    // Ensure the document is hydrated from the manifest store so edits map to the real, persisted entry.
+    if (assets_ && target_ && target_->info) {
+        if (auto* store = assets_->manifest_store()) {
+            auto view = store->get_asset(target_->info->name);
+            if (view && view.data) {
+                std::filesystem::path asset_root;
+                try {
+                    asset_root = target_->info->asset_dir_path();
+                } catch (...) {
+                    asset_root.clear();
+                }
+                auto upsert_manifest = [store](const std::string& asset_name, const nlohmann::json& payload) {
+                    auto tx = store->begin_asset_transaction(asset_name, true);
+                    if (!tx) return;
+                    nlohmann::json& draft = tx.data();
+                    if (!draft.is_object()) draft = nlohmann::json::object();
+                    draft = payload;
+                    tx.finalize();
+                    store->flush();
+                };
+                document_->load_from_manifest(*view.data, asset_root,
+                    [upsert_manifest, asset_name = target_->info->name](const nlohmann::json& payload) {
+                        upsert_manifest(asset_name, payload);
+                    });
+            }
+        }
+    }
+
     WarpedScreenGrid& cam = assets_->getView();
     prev_realism_enabled_ = cam.realism_enabled();
     prev_parallax_enabled_ = cam.parallax_enabled();
@@ -397,7 +429,10 @@ void FrameEditorSession::end() {
 
     const bool target_alive = target_is_alive();
 
-    persist_changes();
+    persist_changes(true);
+    if (target_alive && target_ && target_->info) {
+        target_->info->reload_animations_from_disk();
+    }
 
     if (assets_ != nullptr) {
         WarpedScreenGrid& cam = assets_->getView();
@@ -765,8 +800,6 @@ bool FrameEditorSession::handle_event(const SDL_Event& e) {
 };
 
     if (handle_button(btn_back_, [this]() {
-
-            this->persist_changes();
             this->end();
         })) return true;
     if (handle_button(btn_movement_, [this]() {
@@ -4066,23 +4099,28 @@ void FrameEditorSession::select_child(int index) {
     }
 }
 
-void FrameEditorSession::persist_changes() {
+void FrameEditorSession::persist_changes(bool rebuild_animation) {
     if (!document_ || animation_id_.empty()) {
         return;
     }
     ensure_child_frames_initialized();
 
+    // Keep the runtime Animation object in sync with the edited JSON so that
+    // any fallbacks that read from the live asset (e.g., on restart) see the
+    // latest frames, without forcing a full preview rebuild unless requested.
     apply_frames_to_animation();
-    if (target_is_alive() && target_->info) {
-        target_->info->set_animation_children(child_assets_);
-        for (auto& entry : target_->info->animations) {
-            entry.second.child_assets() = child_assets_;
+    if (rebuild_animation) {
+        if (target_is_alive() && target_->info) {
+            target_->info->set_animation_children(child_assets_);
+            for (auto& entry : target_->info->animations) {
+                entry.second.child_assets() = child_assets_;
+            }
+            target_->initialize_animation_children_recursive();
+            target_->mark_composite_dirty();
         }
-        target_->initialize_animation_children_recursive();
-        target_->mark_composite_dirty();
-    }
-    if (assets_) {
-        assets_->mark_active_assets_dirty();
+        if (assets_) {
+            assets_->mark_active_assets_dirty();
+        }
     }
 
     nlohmann::json payload = nlohmann::json::object();
@@ -4097,63 +4135,108 @@ void FrameEditorSession::persist_changes() {
     } else {
         payload["children"] = child_assets_;
     }
-    nlohmann::json movement = nlohmann::json::array();
-    nlohmann::json hit_geometry = nlohmann::json::array();
-    nlohmann::json attack_geometry = nlohmann::json::array();
-    for (size_t i = 0; i < frames_.size(); ++i) {
+
+    const std::size_t frame_count = frames_.size();
+    std::unordered_set<int> touched_frames;
+
+    // Movement: update in place so untouched frames stay byte-for-byte identical (including any
+    // extra fields such as child data or needs_rebuild flags).
+    nlohmann::json movement = (payload.contains("movement") && payload["movement"].is_array())
+                                  ? payload["movement"]
+                                  : nlohmann::json::array();
+    if (movement.size() < frame_count) {
+        movement.get_ref<nlohmann::json::array_t&>().resize(frame_count, nlohmann::json::array({0, 0}));
+    } else if (movement.size() > frame_count) {
+        movement.erase(movement.begin() + static_cast<std::ptrdiff_t>(frame_count), movement.end());
+    }
+
+    for (std::size_t i = 0; i < frame_count; ++i) {
         const MovementFrame& f = frames_[i];
+        nlohmann::json previous = movement[static_cast<nlohmann::json::array_t::size_type>(i)];
         int dx = static_cast<int>(std::lround(f.dx));
         int dy = static_cast<int>(std::lround(f.dy));
-        nlohmann::json entry = nlohmann::json::array({dx, dy});
 
-        entry.push_back(f.resort_z);
-        if (!child_assets_.empty()) {
-            while (entry.size() < 4) {
-                entry.push_back(nlohmann::json());
-            }
-            nlohmann::json child_entries = nlohmann::json::array();
-            if (!f.children.empty()) {
-                for (const auto& child : f.children) {
-                    if (child.child_index < 0 ||
-                        child.child_index >= static_cast<int>(child_assets_.size())) {
-                        continue;
-                    }
-                    nlohmann::json child_json = nlohmann::json::array();
-                    child_json.push_back(child.child_index);
-                    child_json.push_back(static_cast<int>(std::lround(child.dx)));
-                    child_json.push_back(static_cast<int>(std::lround(child.dy)));
-                    child_json.push_back(static_cast<double>(child.degree));
-                    child_json.push_back(child.visible);
-                    child_json.push_back(child.render_in_front);
-                    child_entries.push_back(std::move(child_json));
-                }
-            }
-            entry.push_back(std::move(child_entries));
+        nlohmann::json entry = movement[static_cast<nlohmann::json::array_t::size_type>(i)];
+        if (!entry.is_array()) {
+            entry = nlohmann::json::array();
         }
-        movement.push_back(entry);
+        if (entry.size() < 2) {
+            entry = nlohmann::json::array({0, 0});
+        }
+        entry[0] = dx;
+        entry[1] = dy;
 
-        nlohmann::json hit_entry = nlohmann::json::object();
+        // Preserve any existing fields beyond index 2 (child data, etc.).
+        if (entry.size() < 3 && f.resort_z) {
+            entry.insert(entry.begin() + 2, f.resort_z);
+        } else if (entry.size() >= 3) {
+            entry[2] = f.resort_z;
+        }
+        if (entry != previous) {
+            touched_frames.insert(static_cast<int>(i));
+        }
+        movement[static_cast<nlohmann::json::array_t::size_type>(i)] = std::move(entry);
+    }
+
+    // hit_geometry: preserve unknown fields/needs_rebuild, only update hit box numbers.
+    nlohmann::json hit_geometry = (payload.contains("hit_geometry") && payload["hit_geometry"].is_array())
+                                      ? payload["hit_geometry"]
+                                      : nlohmann::json::array();
+    if (hit_geometry.size() < frame_count) {
+        hit_geometry.get_ref<nlohmann::json::array_t&>().resize(frame_count, nlohmann::json::object());
+    } else if (hit_geometry.size() > frame_count) {
+        hit_geometry.erase(hit_geometry.begin() + static_cast<std::ptrdiff_t>(frame_count), hit_geometry.end());
+    }
+    for (std::size_t i = 0; i < frame_count; ++i) {
+        const MovementFrame& f = frames_[i];
+        nlohmann::json existing = hit_geometry[static_cast<nlohmann::json::array_t::size_type>(i)];
+        nlohmann::json previous = existing;
+        if (!existing.is_object()) existing = nlohmann::json::object();
+        auto preserved_needs_rebuild = existing.contains("needs_rebuild") ? existing["needs_rebuild"] : nlohmann::json();
+
         for (const char* type : kDamageTypeNames) {
             const auto* box = f.hit.find_box(type);
             if (!box || box->is_empty() ||
                 !std::isfinite(box->center_x) || !std::isfinite(box->center_y) ||
                 !std::isfinite(box->half_width) || !std::isfinite(box->half_height) ||
                 !std::isfinite(box->rotation_degrees)) {
-                hit_entry[type] = nullptr;
+                existing[type] = nullptr;
                 continue;
             }
-            hit_entry[type] = nlohmann::json{
+            existing[type] = nlohmann::json{
                 {"center_x", box->center_x},
                 {"center_y", box->center_y},
                 {"half_width", box->half_width},
                 {"half_height", box->half_height},
                 {"rotation", box->rotation_degrees},
                 {"type", type}
-};
+            };
         }
-        hit_geometry.push_back(std::move(hit_entry));
+        if (preserved_needs_rebuild.is_boolean()) {
+            existing["needs_rebuild"] = preserved_needs_rebuild;
+        }
+        if (existing != previous) {
+            touched_frames.insert(static_cast<int>(i));
+        }
+        hit_geometry[static_cast<nlohmann::json::array_t::size_type>(i)] = std::move(existing);
+    }
 
-        nlohmann::json attack_entry = nlohmann::json::object();
+    // attack_geometry: preserve unknown fields/needs_rebuild, only update vector data.
+    nlohmann::json attack_geometry = (payload.contains("attack_geometry") && payload["attack_geometry"].is_array())
+                                         ? payload["attack_geometry"]
+                                         : nlohmann::json::array();
+    if (attack_geometry.size() < frame_count) {
+        attack_geometry.get_ref<nlohmann::json::array_t&>().resize(frame_count, nlohmann::json::object());
+    } else if (attack_geometry.size() > frame_count) {
+        attack_geometry.erase(attack_geometry.begin() + static_cast<std::ptrdiff_t>(frame_count), attack_geometry.end());
+    }
+    for (std::size_t i = 0; i < frame_count; ++i) {
+        const MovementFrame& f = frames_[i];
+        nlohmann::json existing = attack_geometry[static_cast<nlohmann::json::array_t::size_type>(i)];
+        nlohmann::json previous = existing;
+        if (!existing.is_object()) existing = nlohmann::json::object();
+        auto preserved_needs_rebuild = existing.contains("needs_rebuild") ? existing["needs_rebuild"] : nlohmann::json();
+
         for (const char* type : kDamageTypeNames) {
             nlohmann::json type_array = nlohmann::json::array();
             for (const auto& vec : f.attack.vectors) {
@@ -4174,12 +4257,33 @@ void FrameEditorSession::persist_changes() {
                     {"type", vec.type}
                 });
             }
-            attack_entry[type] = std::move(type_array);
+            existing[type] = std::move(type_array);
         }
-        attack_geometry.push_back(std::move(attack_entry));
+        if (preserved_needs_rebuild.is_boolean()) {
+            existing["needs_rebuild"] = preserved_needs_rebuild;
+        }
+        if (existing != previous) {
+            touched_frames.insert(static_cast<int>(i));
+        }
+        attack_geometry[static_cast<nlohmann::json::array_t::size_type>(i)] = std::move(existing);
     }
-    if (movement.empty()) movement.push_back(nlohmann::json::array({0,0}));
+
+    // Recompute totals based on the updated movement entries only.
+    int total_dx = 0;
+    int total_dy = 0;
+    for (std::size_t i = 1; i < movement.size(); ++i) {
+        const auto& entry = movement[i];
+        if (entry.is_array()) {
+            if (entry.size() > 0 && entry[0].is_number_integer()) total_dx += entry[0].get<int>();
+            else if (entry.size() > 0 && entry[0].is_number()) total_dx += static_cast<int>(std::lround(entry[0].get<double>()));
+            if (entry.size() > 1 && entry[1].is_number_integer()) total_dy += entry[1].get<int>();
+            else if (entry.size() > 1 && entry[1].is_number()) total_dy += static_cast<int>(std::lround(entry[1].get<double>()));
+        }
+    }
+
+    if (movement.empty()) movement.push_back(nlohmann::json::array({0, 0}));
     payload["movement"] = std::move(movement);
+    payload["movement_total"] = nlohmann::json{{"dx", total_dx}, {"dy", total_dy}};
     payload["hit_geometry"] = std::move(hit_geometry);
     payload["attack_geometry"] = std::move(attack_geometry);
     if (child_assets_.empty()) {
@@ -4206,6 +4310,68 @@ void FrameEditorSession::persist_changes() {
     }
 
     document_->save_to_file(false);
+    devmode::core::DevJsonStore::instance().flush_all();
+
+    // Aggressively mirror into the manifest store so reloads always see the latest edits.
+    if (assets_ && target_ && target_->info) {
+        if (auto* store = assets_->manifest_store()) {
+            auto tx = store->begin_asset_transaction(target_->info->name, true);
+            if (tx) {
+                nlohmann::json& draft = tx.data();
+                if (!draft.is_object()) draft = nlohmann::json::object();
+
+                auto update_animation_entry = [&](nlohmann::json& container) {
+                    if (!container.is_object()) {
+                        container = nlohmann::json::object();
+                    }
+                    container[animation_id_] = payload;
+                };
+
+                if (draft.contains("animations") && draft["animations"].is_object() &&
+                    draft["animations"].contains("animations") && draft["animations"]["animations"].is_object()) {
+                    update_animation_entry(draft["animations"]["animations"]);
+                    if (!draft["animations"].contains("start") || !draft["animations"]["start"].is_string()) {
+                        draft["animations"]["start"] = animation_id_;
+                    }
+                } else {
+                    if (!draft.contains("animations") || !draft["animations"].is_object()) {
+                        draft["animations"] = nlohmann::json::object();
+                    }
+                    update_animation_entry(draft["animations"]);
+                    if (!draft.contains("start") || !draft["start"].is_string()) {
+                        draft["start"] = animation_id_;
+                    }
+                }
+
+                tx.finalize();
+                store->flush();
+            }
+        }
+    }
+
+    const std::filesystem::path manifest_path = std::filesystem::absolute(std::filesystem::path(manifest::manifest_path()));
+    std::vector<int> touched_sorted(touched_frames.begin(), touched_frames.end());
+    std::sort(touched_sorted.begin(), touched_sorted.end());
+    if (touched_sorted.empty()) {
+        if (frame_count > 0) {
+            touched_sorted.push_back(std::clamp(selected_index_, 0, static_cast<int>(frame_count) - 1));
+        } else {
+            touched_sorted.push_back(0);
+        }
+    }
+    std::ostringstream frame_label;
+    for (std::size_t i = 0; i < touched_sorted.size(); ++i) {
+        frame_label << touched_sorted[i];
+        if (i + 1 < touched_sorted.size()) {
+            frame_label << ',';
+        }
+    }
+    const std::string asset_name = (target_ && target_->info) ? target_->info->name : std::string{};
+    SDL_Log("[FrameEditor] Wrote %s::%s frame(s) [%s] to %s",
+            asset_name.empty() ? "<unknown>" : asset_name.c_str(),
+            animation_id_.c_str(),
+            frame_label.str().c_str(),
+            manifest_path.string().c_str());
 }
 
 void FrameEditorSession::remap_child_indices(const std::vector<int>& remap) {
