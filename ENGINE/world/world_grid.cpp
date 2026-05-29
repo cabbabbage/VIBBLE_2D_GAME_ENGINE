@@ -50,13 +50,30 @@ void WorldGrid::set_chunk_resolution(int r) {
     if (clamped == r_chunk_) {
         return;
     }
+
     r_chunk_ = clamped;
-    invalidate_active_cache();
+    if (!points_.empty()) {
+        rebuild_chunks();
+    } else {
+        residency_.clear();
+        chunks_.reset();
+        invalidate_active_cache();
+    }
 }
 
 void WorldGrid::set_origin(SDL_Point origin) {
+    if (origin_.x == origin.x && origin_.y == origin.y) {
+        return;
+    }
+
     origin_ = origin;
-    invalidate_active_cache();
+    if (!points_.empty()) {
+        rebuild_chunks();
+    } else {
+        residency_.clear();
+        chunks_.reset();
+        invalidate_active_cache();
+    }
 }
 
 void WorldGrid::invalidate_active_cache() {
