@@ -408,22 +408,61 @@ void AssetLoader::createAssets(world::WorldGrid& grid) {
         registered_assets.reserve(extracted_assets.size());
         vibble::log::info(std::string("[AssetLoader] Extracted ") + std::to_string(extracted_assets.size()) + " visible assets from rooms");
 
+        std::size_t skipped_null = 0;
+        std::size_t failed_register = 0;
         for (auto& asset_up : extracted_assets) {
-                if (!asset_up) continue;
-                Asset* asset = grid.create_asset_at_point(std::move(asset_up));
-                if (asset) {
-                        registered_assets.push_back(asset);
+                if (!asset_up) {
+                        ++skipped_null;
+                        continue;
+                }
+
+                const std::string asset_name = asset_up->info ? asset_up->info->name : std::string{"<no info>"};
+                try {
+                        Asset* asset = grid.create_asset_at_point(std::move(asset_up));
+                        if (asset) {
+                                registered_assets.push_back(asset);
+                        } else {
+                                ++failed_register;
+                                vibble::log::warn(std::string("[AssetLoader] World grid rejected asset '") + asset_name + "'.");
+                        }
+                } catch (const std::exception& ex) {
+                        ++failed_register;
+                        vibble::log::error(std::string("[AssetLoader] Exception while registering asset '") + asset_name + "': " + ex.what());
+                } catch (...) {
+                        ++failed_register;
+                        vibble::log::error(std::string("[AssetLoader] Unknown exception while registering asset '") + asset_name + "'.");
                 }
         }
-        vibble::log::debug(std::string("[AssetLoader] Registered assets: total=") + std::to_string(registered_assets.size()));
+
+        std::string registration_summary = std::string("[AssetLoader] Registered assets: total=") + std::to_string(registered_assets.size());
+        if (skipped_null > 0) {
+                registration_summary += ", skipped_null=" + std::to_string(skipped_null);
+        }
+        if (failed_register > 0) {
+                registration_summary += ", failed=" + std::to_string(failed_register);
+        }
+        vibble::log::debug(registration_summary);
+
+        if (registered_assets.empty() && !extracted_assets.empty()) {
+                throw std::runtime_error("No visible room assets could be registered into the world grid.");
+        }
 
         const auto t1 = std::chrono::steady_clock::now();
 
-        {
-            loader_tiles::build_grid_tiles(renderer_, grid, map_grid_settings_, registered_assets);
+        try {
+                vibble::log::debug("[AssetLoader] Building grid tile cache...");
+                loader_tiles::build_grid_tiles(renderer_, grid, map_grid_settings_, registered_assets);
+        } catch (const std::exception& ex) {
+                vibble::log::warn(std::string("[AssetLoader] Grid tile cache warmup skipped after error: ") + ex.what());
+        } catch (...) {
+                vibble::log::warn("[AssetLoader] Grid tile cache warmup skipped after unknown error.");
         }
 
-        vibble::log::debug(std::string("[AssetLoader] createAssets total ") + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()) + "ms");
+        const auto t2 = std::chrono::steady_clock::now();
+        vibble::log::debug(std::string("[AssetLoader] createAssets registration ") +
+                           std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()) +
+                           "ms, tile warmup " +
+                           std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count()) + "ms");
 }
 
 std::vector<const Area*> AssetLoader::getAllRoomAndTrailAreas() const {

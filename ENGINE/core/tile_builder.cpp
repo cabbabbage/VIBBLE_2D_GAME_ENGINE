@@ -3,9 +3,11 @@
 #include <algorithm>
 #include <cmath>
 #include <optional>
+#include <string>
 #include <unordered_map>
 #include <vector>
 #include <cstdint>
+#include <cstddef>
 
 #include <SDL.h>
 
@@ -13,6 +15,7 @@
 #include "asset/asset_types.hpp"
 #include "tiling/grid_tile.hpp"
 #include "utils/map_grid_settings.hpp"
+#include "utils/log.hpp"
 #include "world/chunk.hpp"
 #include "world/world_grid.hpp"
 #include "utils/grid.hpp"
@@ -193,16 +196,33 @@ void build_grid_tiles(SDL_Renderer* renderer,
                       const std::vector<Asset*>& all_assets) {
     if (!renderer) return;
 
+    if (SDL_RenderTargetSupported(renderer) != SDL_TRUE) {
+        vibble::log::warn("[TileBuilder] Renderer does not support target textures; skipping grid tile warmup.");
+        return;
+    }
+
+    SDL_RendererInfo renderer_info{};
+    if (SDL_GetRendererInfo(renderer, &renderer_info) != 0) {
+        vibble::log::warn(std::string("[TileBuilder] Unable to query renderer limits: ") + SDL_GetError());
+    }
+
     const int step       = std::max(1, settings.spacing());
     const int chunk_step = 1 << std::clamp(grid.chunk_resolution(), 0, vibble::grid::kMaxResolution);
     if (chunk_step <= 0) {
         return;
     }
+    if ((renderer_info.max_texture_width > 0 && step > renderer_info.max_texture_width) ||
+        (renderer_info.max_texture_height > 0 && step > renderer_info.max_texture_height)) {
+        vibble::log::warn(std::string("[TileBuilder] Grid tile size ") + std::to_string(step) +
+                          " exceeds renderer target texture limit; skipping grid tile warmup.");
+        return;
+    }
     const SDL_Point grid_origin = grid.origin();
 
-    std::vector<ChunkTileAsset>                        asset_contexts;
+    std::vector<ChunkTileAsset> asset_contexts;
     asset_contexts.reserve(all_assets.size());
-    std::unordered_map<std::uint64_t, std::vector<const ChunkTileAsset*>> chunk_tilers;
+    std::unordered_map<std::uint64_t, std::vector<std::size_t>> chunk_tilers;
+    std::size_t candidate_tilers = 0;
 
     for (Asset* a : all_assets) {
         if (!a || !a->info || !a->info->tillable) continue;
@@ -229,7 +249,8 @@ void build_grid_tiles(SDL_Renderer* renderer,
         ctx.flipped      = a->flipped;
 
         asset_contexts.push_back(ctx);
-        const ChunkTileAsset* stored_ctx = &asset_contexts.back();
+        const std::size_t stored_ctx_index = asset_contexts.size() - 1;
+        ++candidate_tilers;
 
         const int coverage_right  = tiling->coverage.x + tiling->coverage.w;
         const int coverage_bottom = tiling->coverage.y + tiling->coverage.h;
@@ -241,13 +262,22 @@ void build_grid_tiles(SDL_Renderer* renderer,
         for (int cj = chunk_j_min; cj <= chunk_j_max; ++cj) {
             for (int ci = chunk_i_min; ci <= chunk_i_max; ++ci) {
                 grid.get_or_create_chunk_ij(ci, cj);
-                chunk_tilers[chunk_key(ci, cj)].push_back(stored_ctx);
+                chunk_tilers[chunk_key(ci, cj)].push_back(stored_ctx_index);
             }
         }
     }
 
+    if (candidate_tilers == 0 || chunk_tilers.empty()) {
+        return;
+    }
+
     std::vector<world::Chunk*> chunks = grid.all_chunks();
     if (chunks.empty()) return;
+
+    std::size_t generated_tiles = 0;
+    std::size_t skipped_tiles = 0;
+    std::size_t create_failures = 0;
+    constexpr std::size_t kMaxCreateFailures = 32;
 
     for (world::Chunk* chunk : chunks) {
         if (!chunk) continue;
@@ -281,10 +311,11 @@ void build_grid_tiles(SDL_Renderer* renderer,
                 SDL_Rect tile_world{ x, y, step, step };
 
                 bool any = false;
-                for (const ChunkTileAsset* ctx : tilers) {
-                    if (!ctx) continue;
+                for (const std::size_t ctx_index : tilers) {
+                    if (ctx_index >= asset_contexts.size()) continue;
+                    const ChunkTileAsset& ctx = asset_contexts[ctx_index];
                     SDL_Rect sprite_inter{};
-                    if (SDL_IntersectRect(&ctx->sprite_world, &tile_world, &sprite_inter) && sprite_inter.w > 0 &&
+                    if (SDL_IntersectRect(&ctx.sprite_world, &tile_world, &sprite_inter) && sprite_inter.w > 0 &&
                         sprite_inter.h > 0) {
                         any = true;
                         break;
@@ -293,13 +324,25 @@ void build_grid_tiles(SDL_Renderer* renderer,
                 if (!any) continue;
 
                 SDL_Texture* tile_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, tile_world.w, tile_world.h);
-                if (!tile_tex) continue;
+                if (!tile_tex) {
+                    ++create_failures;
+                    ++skipped_tiles;
+                    if (create_failures == 1 || create_failures == kMaxCreateFailures) {
+                        vibble::log::warn(std::string("[TileBuilder] Failed to allocate grid tile texture: ") + SDL_GetError());
+                    }
+                    if (create_failures >= kMaxCreateFailures) {
+                        vibble::log::warn("[TileBuilder] Too many tile texture allocation failures; stopping grid tile warmup for this load.");
+                        return;
+                    }
+                    continue;
+                }
                 SDL_SetTextureBlendMode(tile_tex, SDL_BLENDMODE_BLEND);
                 SDL_SetTextureScaleMode(tile_tex, SDL_ScaleModeLinear);
                 SDL_Texture* prev = SDL_GetRenderTarget(renderer);
                 if (SDL_SetRenderTarget(renderer, tile_tex) != 0) {
                     SDL_DestroyTexture(tile_tex);
                     SDL_SetRenderTarget(renderer, prev);
+                    ++skipped_tiles;
                     continue;
                 }
 
@@ -307,10 +350,11 @@ void build_grid_tiles(SDL_Renderer* renderer,
                 SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
                 SDL_RenderClear(renderer);
 
-                for (const ChunkTileAsset* ctx : tilers) {
-                    if (!ctx) continue;
+                for (const std::size_t ctx_index : tilers) {
+                    if (ctx_index >= asset_contexts.size()) continue;
+                    const ChunkTileAsset& ctx = asset_contexts[ctx_index];
                     SDL_Rect sprite_inter{};
-                    if (!SDL_IntersectRect(&ctx->sprite_world, &tile_world, &sprite_inter) || sprite_inter.w <= 0 ||
+                    if (!SDL_IntersectRect(&ctx.sprite_world, &tile_world, &sprite_inter) || sprite_inter.w <= 0 ||
                         sprite_inter.h <= 0) {
                         continue;
                     }
@@ -321,12 +365,12 @@ void build_grid_tiles(SDL_Renderer* renderer,
                         sprite_inter.w,
                         sprite_inter.h
 };
-                    SDL_Rect src = compute_source_rect(*ctx, sprite_inter);
+                    SDL_Rect src = compute_source_rect(ctx, sprite_inter);
                     if (src.w <= 0 || src.h <= 0) {
                         continue;
                     }
 
-                    SDL_RenderCopy(renderer, ctx->texture, &src, &dest);
+                    SDL_RenderCopy(renderer, ctx.texture, &src, &dest);
                 }
 
                 SDL_SetRenderTarget(renderer, prev);
@@ -335,9 +379,15 @@ void build_grid_tiles(SDL_Renderer* renderer,
                 tile.world_rect = tile_world;
                 tile.texture    = tile_tex;
                 chunk->tiles.push_back(tile);
+                ++generated_tiles;
             }
         }
     }
+
+    vibble::log::debug(std::string("[TileBuilder] Grid tile warmup complete: tilers=") +
+                       std::to_string(candidate_tilers) + ", chunks=" + std::to_string(chunk_tilers.size()) +
+                       ", tiles=" + std::to_string(generated_tiles) +
+                       (skipped_tiles > 0 ? std::string(", skipped=") + std::to_string(skipped_tiles) : std::string{}));
 }
 
 }
