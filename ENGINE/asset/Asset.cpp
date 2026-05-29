@@ -367,6 +367,11 @@ void Asset::finalize_setup() {
         if (assets_ && !controller_) {
                 ControllerFactory cf(assets_);
                 controller_ = cf.create_for_asset(this);
+                if (!controller_ && info && !info->custom_controller_key.empty()) {
+                        vibble::log::debug("[Asset] Continuing without custom controller '" +
+                                           info->custom_controller_key + "' for asset '" +
+                                           info->name + "'.");
+                }
         }
         NeighborSearchRadius = info->NeighborSearchRadius;
         refresh_cached_dimensions();
@@ -565,10 +570,10 @@ void Asset::set_assets(Assets* a) {
         assets_->track_asset_for_grid(this);
     }
     ensure_animation_runtime(false);
-    if (!controller_ && assets_) {
-            ControllerFactory cf(assets_);
-            controller_ = cf.create_for_asset(this);
-    }
+    // Controller construction is intentionally deferred to finalize_setup().
+    // set_assets() is also used while wiring ownership and child assets, so
+    // constructing controllers here can recurse or allocate before the asset is
+    // fully finalized.
     neighbors.reset();
     impassable_naighbors = nullptr;
     neighbor_lists_initialized_ = false;
