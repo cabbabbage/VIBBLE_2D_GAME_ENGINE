@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <algorithm>
 #include <cmath>
@@ -10,7 +10,7 @@ class Asset;
 
 namespace controller_utils {
 
-inline int controller_visit_threshold(const Asset* asset, const std::vector<SDL_Point>& planned_path) {
+inline int controller_visit_threshold(const Asset* asset, const std::vector<axis::WorldPos>& planned_path) {
     if (!asset) {
         return 0;
     }
@@ -22,9 +22,9 @@ inline int controller_visit_threshold(const Asset* asset, const std::vector<SDL_
     const int base_threshold = std::max(0, controller_paths::default_visit_threshold(asset));
 
     long long max_step_sq = 0;
-    for (const SDL_Point& step : planned_path) {
+    for (const axis::WorldPos& step : planned_path) {
         const long long dx = static_cast<long long>(step.x);
-        const long long dy = static_cast<long long>(step.y);
+        const long long dy = static_cast<long long>(step.z);
         const long long step_sq = dx * dx + dy * dy;
         if (step_sq > max_step_sq) {
             max_step_sq = step_sq;

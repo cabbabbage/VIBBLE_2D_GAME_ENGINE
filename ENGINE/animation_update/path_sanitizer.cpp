@@ -104,37 +104,39 @@ static SDL_Point walk_back_to_perimeter(SDL_Point start,
     return best;
 }
 
-std::vector<SDL_Point> PathSanitizer::sanitize(const Asset& self,
-                                               const std::vector<SDL_Point>& absolute_checkpoints,
+std::vector<axis::WorldPos> PathSanitizer::sanitize(const Asset& self,
+                                               const std::vector<axis::WorldPos>& absolute_checkpoints,
                                                int visited_thresh_px) const {
-    std::vector<SDL_Point> sanitized;
+    std::vector<axis::WorldPos> sanitized;
     if (absolute_checkpoints.empty()) {
         return sanitized;
     }
 
     const auto collision_areas = gather_collision_areas(self);
-    const SDL_Point origin     = self.pos;
+    const axis::WorldPos origin = axis::from_xz(self.pos, 0);
     const int       thresh_sq  = visited_thresh_px * visited_thresh_px;
     const Assets*   assets     = self.get_assets();
 
-    for (const SDL_Point& checkpoint : absolute_checkpoints) {
-        SDL_Point anchor = sanitized.empty() ? origin : sanitized.back();
-        if (thresh_sq > 0 && animation_update::detail::distance_sq(anchor, checkpoint) <= thresh_sq) {
+    for (const axis::WorldPos& checkpoint : absolute_checkpoints) {
+        axis::WorldPos anchor = sanitized.empty() ? origin : sanitized.back();
+        SDL_Point anchor_xz = axis::project_xz(anchor);
+        SDL_Point checkpoint_xz = axis::project_xz(checkpoint);
+        if (thresh_sq > 0 && animation_update::detail::distance_sq(anchor_xz, checkpoint_xz) <= thresh_sq) {
             continue;
         }
 
-        SDL_Point candidate = checkpoint;
+        SDL_Point candidate = checkpoint_xz;
         for (const auto& entry : collision_areas) {
             if (entry.area.contains_point(candidate)) {
                 candidate = nudge_outside(candidate, entry.area);
             }
         }
 
-        if (segment_hits_any(anchor, candidate, collision_areas)) {
-            candidate = walk_back_to_perimeter(anchor, candidate, collision_areas);
+        if (segment_hits_any(anchor_xz, candidate, collision_areas)) {
+            candidate = walk_back_to_perimeter(anchor_xz, candidate, collision_areas);
         }
 
-        const SDL_Point anchor_bottom    = animation_update::detail::bottom_middle_for(self, anchor);
+        const SDL_Point anchor_bottom    = animation_update::detail::bottom_middle_for(self, anchor_xz);
         const SDL_Point candidate_bottom = animation_update::detail::bottom_middle_for(self, candidate);
         if (!animation_update::detail::bottom_point_inside_playable_area(assets, candidate_bottom)) {
             continue;
@@ -143,11 +145,11 @@ std::vector<SDL_Point> PathSanitizer::sanitize(const Asset& self,
             continue;
         }
 
-        if (thresh_sq > 0 && animation_update::detail::distance_sq(anchor, candidate) <= thresh_sq) {
+        if (thresh_sq > 0 && animation_update::detail::distance_sq(anchor_xz, candidate) <= thresh_sq) {
             continue;
         }
 
-        sanitized.push_back(candidate);
+        sanitized.push_back(axis::from_xz(candidate, checkpoint.y));
     }
 
     return sanitized;

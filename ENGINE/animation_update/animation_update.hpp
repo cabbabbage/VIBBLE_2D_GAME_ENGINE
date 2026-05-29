@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <optional>
 #include <string>
@@ -68,13 +68,13 @@ public:
     void set_debug_enabled(bool enabled);
     bool debug_enabled() const;
 
-    void auto_move(const std::vector<SDL_Point>& rel_checkpoints, int visited_thresh_px, std::optional<int> checkpoint_resolution = std::nullopt, bool override_non_locked = true);
-    void auto_move(SDL_Point rel_checkpoint, int visited_thresh_px = 0, std::optional<int> checkpoint_resolution = std::nullopt, bool override_non_locked = true);
-    void auto_move(Asset* target_asset, int visited_thresh_px = 0, bool override_non_locked = true);
+    void auto_move(const std::vector<axis::WorldPos>& rel_checkpoints, int visited_thresh_px, std::optional<int> checkpoint_resolution = std::nullopt, bool override_non_locked = true);
+    void auto_move(axis::WorldPos rel_checkpoint, int visited_thresh_px = 0, std::optional<int> checkpoint_resolution = std::nullopt, bool override_non_locked = true);
+    void auto_move_to(axis::WorldPos target_world, int visited_thresh_px = 0, bool override_non_locked = true);
 
     int visit_threshold_px() const { return visited_thresh_; }
 
-    void move(SDL_Point delta, const std::string& animation, bool               resort_z            = true, bool               override_non_locked = true);
+    void move(axis::WorldPos delta, const std::string& animation, bool               resort_z            = true, bool               override_non_locked = true);
 
     void set_animation(const std::string& animation_id);
 
@@ -82,13 +82,15 @@ public:
 
     const Plan* current_plan() const { return &plan_; }
 
+    axis::WorldPos current_world_position() const;
+
     void cancel_all_movement();
 
 private:
 
     bool has_pending_move() const { return move_pending_; }
     struct MoveRequest {
-        SDL_Point    delta{0, 0};
+        axis::WorldPos delta{};
         std::string  animation_id;
         bool         resort_z = true;
         bool         override_non_locked = true;
@@ -106,7 +108,7 @@ private:
     void clear_movement_plan();
     std::size_t path_index_for(const std::string& anim_id) const;
     AnimationPlayer& player() { return player_; }
-    SDL_Point final_dest{0, 0};
+    axis::WorldPos final_dest{};
 
     AnimationPlayer player_{};
 

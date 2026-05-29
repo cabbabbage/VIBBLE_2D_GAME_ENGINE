@@ -40,5 +40,5 @@ void FrogController::update(const Input&) {
         return;
     }
 
-    self_->anim_->auto_move(player);
+    self_->anim_->auto_move_to(controller_paths::engagement_point(self_, player, 28, 18, 48));
 }

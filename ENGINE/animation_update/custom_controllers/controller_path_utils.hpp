@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <SDL.h>
 
@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "asset/Asset.hpp"
+#include "animation_update/stride_types.hpp"
 
 namespace controller_paths {
 
@@ -55,20 +56,20 @@ inline SDL_Point clamp_delta(SDL_Point delta, int radius) {
     return SDL_Point{ clamped.x, clamped.y };
 }
 
-inline std::vector<SDL_Point> to_relative(const SDL_Point& origin, const std::vector<SDL_Point>& absolute_points) {
-    std::vector<SDL_Point> result;
+inline std::vector<axis::WorldPos> to_relative(const SDL_Point& origin, const std::vector<SDL_Point>& absolute_points) {
+    std::vector<axis::WorldPos> result;
     result.reserve(absolute_points.size());
     SDL_Point cursor = origin;
     for (const SDL_Point& pt : absolute_points) {
         SDL_Point delta{ pt.x - cursor.x, pt.y - cursor.y };
-        result.push_back(delta);
+        result.push_back(axis::from_xz(delta, 0));
         cursor = pt;
     }
     return result;
 }
 
-inline std::vector<SDL_Point> idle_path(const Asset* asset, int rest_ratio) {
-    std::vector<SDL_Point> relative;
+inline std::vector<axis::WorldPos> idle_path(const Asset* asset, int rest_ratio) {
+    std::vector<axis::WorldPos> relative;
     if (!asset) {
         return relative;
     }
@@ -76,7 +77,7 @@ inline std::vector<SDL_Point> idle_path(const Asset* asset, int rest_ratio) {
     const SDL_Point origin = asset->pos;
     const int       radius = neighbor_radius(asset);
     if (radius <= 0) {
-        relative.push_back(SDL_Point{ 0, 0 });
+        relative.push_back(axis::WorldPos{});
         return relative;
     }
 
@@ -93,8 +94,8 @@ inline std::vector<SDL_Point> idle_path(const Asset* asset, int rest_ratio) {
     return to_relative(origin, absolute);
 }
 
-inline std::vector<SDL_Point> pursue_path(const Asset* asset, const Asset* target) {
-    std::vector<SDL_Point> relative;
+inline std::vector<axis::WorldPos> pursue_path(const Asset* asset, const Asset* target) {
+    std::vector<axis::WorldPos> relative;
     if (!asset || !target) {
         return relative;
     }
@@ -103,13 +104,13 @@ inline std::vector<SDL_Point> pursue_path(const Asset* asset, const Asset* targe
     const int       radius = neighbor_radius(asset);
 
     SDL_Point desired = clamp_to_radius(origin, target->pos, radius);
-    relative.push_back(SDL_Point{ desired.x - origin.x, desired.y - origin.y });
+    relative.push_back(axis::WorldPos{ desired.x - origin.x, 0, desired.y - origin.y });
 
     return relative;
 }
 
-inline std::vector<SDL_Point> flee_path(const Asset* asset, const Asset* threat) {
-    std::vector<SDL_Point> relative;
+inline std::vector<axis::WorldPos> flee_path(const Asset* asset, const Asset* threat) {
+    std::vector<axis::WorldPos> relative;
     if (!asset) {
         return relative;
     }
@@ -117,7 +118,7 @@ inline std::vector<SDL_Point> flee_path(const Asset* asset, const Asset* threat)
     const SDL_Point origin = asset->pos;
     const int       radius = neighbor_radius(asset);
     if (radius <= 0) {
-        relative.push_back(SDL_Point{ 0, 0 });
+        relative.push_back(axis::WorldPos{});
         return relative;
     }
 
@@ -136,12 +137,12 @@ inline std::vector<SDL_Point> flee_path(const Asset* asset, const Asset* threat)
                        origin.y + static_cast<int>(std::round(direction.y * scale)) };
 
     desired = clamp_to_radius(origin, desired, radius);
-    relative.push_back(SDL_Point{ desired.x - origin.x, desired.y - origin.y });
+    relative.push_back(axis::WorldPos{ desired.x - origin.x, 0, desired.y - origin.y });
 
     return relative;
 }
 
-inline std::vector<SDL_Point> orbit_path(const Asset* asset, const Asset* center, int radius, int steps = 8) {
+inline std::vector<axis::WorldPos> orbit_path(const Asset* asset, const Asset* center, int radius, int steps = 8) {
     if (!asset || !center) {
         return {};
     }
@@ -184,6 +185,39 @@ inline std::vector<SDL_Point> orbit_path(const Asset* asset, const Asset* center
     }
 
     return to_relative(origin, absolute);
+}
+
+inline axis::WorldPos engagement_point(const Asset* asset,
+                                       const Asset* target,
+                                       int desired_range,
+                                       int min_approach_range,
+                                       int max_approach_range) {
+    if (!asset || !target) {
+        return axis::WorldPos{};
+    }
+
+    const SDL_Point self_pos = asset->pos;
+    const SDL_Point target_pos = target->pos;
+    double dx = static_cast<double>(self_pos.x - target_pos.x);
+    double dz = static_cast<double>(self_pos.y - target_pos.y);
+    double distance = std::sqrt(dx * dx + dz * dz);
+    if (distance <= 1e-6) {
+        dx = 1.0;
+        dz = 0.0;
+        distance = 1.0;
+    }
+
+    const int radius_limit = neighbor_radius(asset);
+    const int clamped_desired = std::clamp(desired_range,
+                                           std::max(0, min_approach_range),
+                                           std::max(min_approach_range, max_approach_range));
+    const double inv = 1.0 / distance;
+    SDL_Point desired{ target_pos.x + static_cast<int>(std::round(dx * inv * clamped_desired)),
+                       target_pos.y + static_cast<int>(std::round(dz * inv * clamped_desired)) };
+    if (radius_limit > 0) {
+        desired = clamp_to_radius(self_pos, desired, radius_limit);
+    }
+    return axis::from_xz(desired, 0);
 }
 
 inline int default_visit_threshold(const Asset* asset) {

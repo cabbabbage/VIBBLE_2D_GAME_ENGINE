@@ -1,4 +1,4 @@
-﻿#include "animation_update.hpp"
+#include "animation_update.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -240,35 +240,48 @@ AnimationUpdate::AnimationUpdate(Asset* self, Assets* assets)
     }
 }
 
-void AnimationUpdate::auto_move(SDL_Point rel_checkpoint,
+axis::WorldPos AnimationUpdate::current_world_position() const {
+    return self_ ? axis::from_xz(self_->pos, 0) : axis::WorldPos{};
+}
+
+void AnimationUpdate::auto_move(axis::WorldPos rel_checkpoint,
                                 int visited_thresh_px,
                                 std::optional<int> checkpoint_resolution,
                                 bool override_non_locked) {
-    std::vector<SDL_Point> rel{ rel_checkpoint };
+    std::vector<axis::WorldPos> rel{ rel_checkpoint };
     auto_move(rel, visited_thresh_px, checkpoint_resolution, override_non_locked);
 }
 
-void AnimationUpdate::auto_move(Asset* target_asset,
-                                int visited_thresh_px,
-                                bool override_non_locked) {
-    if (!self_ || !target_asset) {
+void AnimationUpdate::auto_move_to(axis::WorldPos target_world,
+                                   int visited_thresh_px,
+                                   bool override_non_locked) {
+    if (!self_) {
         return;
     }
-    if (self_) {
-        self_->target_reached = false;
+    self_->target_reached = false;
+    const axis::WorldPos here = current_world_position();
+    axis::WorldPos delta{ target_world.x - here.x, target_world.y - here.y, target_world.z - here.z };
+    if (debug_enabled_) {
+        const double dx = static_cast<double>(delta.x);
+        const double dy = static_cast<double>(delta.y);
+        const double dz = static_cast<double>(delta.z);
+        std::ostringstream oss;
+        oss << "[AnimationUpdate] 3d engagement intent asset="
+            << (self_->info ? self_->info->name : std::string{"<unknown>"})
+            << " distance3d=" << std::sqrt(dx * dx + dy * dy + dz * dz)
+            << " target=(" << target_world.x << "," << target_world.y << "," << target_world.z << ")"
+            << " delta=(" << delta.x << "," << delta.y << "," << delta.z << ")";
+        vibble::log::info(oss.str());
     }
-    SDL_Point delta{ target_asset->pos.x - self_->pos.x, target_asset->pos.y - self_->pos.y };
-    if (delta.x == 0 && delta.y == 0) {
-        if (self_) {
-            self_->target_reached = true;
-            self_->needs_target = true;
-        }
+    if (delta.x == 0 && delta.y == 0 && delta.z == 0) {
+        self_->target_reached = true;
+        self_->needs_target = true;
         return;
     }
     auto_move(delta, visited_thresh_px, std::nullopt, override_non_locked);
 }
 
-void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
+void AnimationUpdate::auto_move(const std::vector<axis::WorldPos>& rel_checkpoints,
                                 int visited_thresh_px,
                                 std::optional<int> checkpoint_resolution,
                                 bool override_non_locked) {
@@ -292,33 +305,36 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
         vibble::log::info(oss.str());
     }
 
-    std::vector<SDL_Point> absolute;
+    std::vector<axis::WorldPos> absolute;
     absolute.reserve(rel_checkpoints.size());
     vibble::grid::Grid& grid_service = grid();
     SDL_Point           cursor_index = grid_service.world_to_index(self_->pos, resolution);
-    for (const SDL_Point& delta : rel_checkpoints) {
-        SDL_Point delta_indices = grid_service.convert_resolution(delta, 0, resolution);
+    int                 cursor_y = current_world_position().y;
+    for (const axis::WorldPos& delta : rel_checkpoints) {
+        SDL_Point delta_xz{ delta.x, delta.z };
+        SDL_Point delta_indices = grid_service.convert_resolution(delta_xz, 0, resolution);
         cursor_index.x += delta_indices.x;
         cursor_index.y += delta_indices.y;
+        cursor_y += delta.y;
         SDL_Point next_world = grid_service.index_to_world(cursor_index, resolution);
-        absolute.push_back(next_world);
+        absolute.push_back(axis::from_xz(next_world, cursor_y));
     }
 
     plan_      = planner_(*self_, sanitizer_.sanitize(*self_, absolute, visited_thresh_), visited_thresh_, grid());
     final_dest = plan_.final_dest;
-    plan_.world_start = self_->pos;
+    plan_.world_start = current_world_position();
     plan_.override_non_locked = override_non_locked;
     if (debug_logging) {
         std::ostringstream oss;
         oss << "[AnimationUpdate] auto_move plan asset=" << asset_name
-            << " final_dest=(" << final_dest.x << "," << final_dest.y << ")"
+            << " final_dest=(" << final_dest.x << "," << final_dest.y << "," << final_dest.z << ")"
             << " sanitized_points=" << plan_.sanitized_checkpoints.size() << " strides=" << plan_.strides.size();
         vibble::log::info(oss.str());
     }
 
     if (plan_.strides.empty()) {
         if (debug_logging) {
-            vibble::log::info("[AnimationUpdate] auto_move plan produced no strides for asset=" + asset_name);
+            vibble::log::info("[AnimationUpdate] auto_move plan produced no strides for asset=" + asset_name + " reason=empty_or_stuck_3d_plan");
         }
         if (self_) {
             self_->needs_target = true;
@@ -336,7 +352,7 @@ void AnimationUpdate::auto_move(const std::vector<SDL_Point>& rel_checkpoints,
     }
 }
 
-void AnimationUpdate::move(SDL_Point delta,
+void AnimationUpdate::move(axis::WorldPos delta,
                            const std::string& animation,
                            bool               resort_z,
                            bool               override_non_locked) {
@@ -357,7 +373,7 @@ void AnimationUpdate::clear_movement_plan() {
     const bool debug_logging = debug_enabled_;
     plan_.strides.clear();
     plan_.sanitized_checkpoints.clear();
-    plan_.final_dest = self_ ? self_->pos : SDL_Point{ 0, 0 };
+    plan_.final_dest = self_ ? current_world_position() : axis::WorldPos{};
     plan_.override_non_locked = true;
     final_dest       = plan_.final_dest;
     input_event_     = true;
@@ -365,7 +381,7 @@ void AnimationUpdate::clear_movement_plan() {
     if (debug_logging) {
         std::ostringstream oss;
         oss << "[AnimationUpdate] clear_movement_plan asset=" << asset_name
-            << " final_dest=(" << final_dest.x << "," << final_dest.y << ")";
+            << " final_dest=(" << final_dest.x << "," << final_dest.y << "," << final_dest.z << ")";
         vibble::log::info(oss.str());
     }
 
@@ -379,7 +395,7 @@ void AnimationUpdate::clear_movement_plan() {
 
 void AnimationUpdate::cancel_all_movement() {
     clear_movement_plan();
-    move(SDL_Point{0, 0}, animation_update::detail::kDefaultAnimation, true, true);
+    move(axis::WorldPos{}, animation_update::detail::kDefaultAnimation, true, true);
 }
 
 std::size_t AnimationUpdate::path_index_for(const std::string& anim_id) const {

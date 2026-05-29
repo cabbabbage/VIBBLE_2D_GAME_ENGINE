@@ -23,7 +23,7 @@ void BartenderController::init() {
 
     auto it = self_->info->animations.find(default_anim);
     if (it != self_->info->animations.end() && !it->second.frames.empty()) {
-        self_->anim_->move(SDL_Point{0, 0}, default_anim);
+        self_->anim_->move(axis::WorldPos{}, default_anim);
     }
 }
 

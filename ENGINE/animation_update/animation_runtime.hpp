@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <cstddef>
 #include <optional>
@@ -42,6 +42,7 @@ public:
     bool path_blocked(SDL_Point from, SDL_Point to, const Asset* ignored, std::vector<const Asset*>* blockers = nullptr) const;
     bool handle_blocked_path(SDL_Point from, SDL_Point to, const std::vector<const Asset*>& blockers);
     void refresh_z_index();
+    void apply_resolved_world_position(axis::WorldPos destination, bool resort_z);
     void mark_progress_toward_checkpoints();
     bool advance(AnimationFrame*& frame);
     void switch_to(const std::string& anim_id, std::size_t path_index = 0);
@@ -54,7 +55,7 @@ public:
 
 private:
     int        effective_grid_resolution(std::optional<int> override_resolution) const;
-    SDL_Point  convert_delta_to_world(SDL_Point delta, int resolution) const;
+    axis::WorldPos convert_delta_to_world(axis::WorldPos delta, int resolution) const;
     SDL_Point  bottom_middle(SDL_Point pos) const;
     bool       point_in_impassable(SDL_Point pt, const Asset* ignored) const;
     bool       attempt_unstick(SDL_Point from, SDL_Point to, const std::vector<const Asset*>& blockers);
