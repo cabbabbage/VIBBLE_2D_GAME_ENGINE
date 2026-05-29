@@ -898,22 +898,36 @@ void AnimationLoader::load(Animation& animation,
                                 break;
                         }
 
+                        const auto optional_sequence_present = [](const std::string& folder) {
+                                std::error_code ec;
+                                return fs::exists(fs::path(folder) / "0.png", ec) && !ec;
+                        };
+
                         std::vector<SDL_Surface*> fg_loaded;
-                        if (CacheManager::load_surface_sequence(paths.foreground_folder, frame_count, fg_loaded) &&
+                        if (optional_sequence_present(paths.foreground_folder) &&
+                            CacheManager::load_surface_sequence(paths.foreground_folder, frame_count, fg_loaded) &&
                             static_cast<int>(fg_loaded.size()) == frame_count) {
                                 foreground_surfaces[idx] = std::move(fg_loaded);
                         }
 
                         std::vector<SDL_Surface*> bg_loaded;
-                        if (CacheManager::load_surface_sequence(paths.background_folder, frame_count, bg_loaded) &&
+                        if (optional_sequence_present(paths.background_folder) &&
+                            CacheManager::load_surface_sequence(paths.background_folder, frame_count, bg_loaded) &&
                             static_cast<int>(bg_loaded.size()) == frame_count) {
                                 background_surfaces[idx] = std::move(bg_loaded);
                         }
 
                         std::vector<SDL_Surface*> mask_loaded;
-                        if (CacheManager::load_surface_sequence(paths.mask_folder, frame_count, mask_loaded) &&
-                            static_cast<int>(mask_loaded.size()) == frame_count) {
-                                mask_surfaces[idx] = std::move(mask_loaded);
+                        if (optional_sequence_present(paths.mask_folder)) {
+                                if (CacheManager::load_surface_sequence(paths.mask_folder, frame_count, mask_loaded) &&
+                                    static_cast<int>(mask_loaded.size()) == frame_count) {
+                                        mask_surfaces[idx] = std::move(mask_loaded);
+                                } else if (needs_masks) {
+                                        all_surfaces_loaded = false;
+                                        std::cout << "[AnimationLoader] " << info.name << "::" << trigger
+                                                  << " failed to load masks for variant " << idx << " at " << paths.mask_folder << "\n";
+                                        break;
+                                }
                         } else if (needs_masks) {
                                 all_surfaces_loaded = false;
                                 std::cout << "[AnimationLoader] " << info.name << "::" << trigger

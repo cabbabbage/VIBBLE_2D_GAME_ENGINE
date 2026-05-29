@@ -21,8 +21,10 @@ from shadow_mask import ShadowMaskGenerator, ShadowMaskSettings
 
 
 def normalize_variant_steps(steps):
-    # Always use fixed variants: 100%, 75%, 50%, 25%, 10%.
-    return [1.0, 0.75, 0.5, 0.25, 0.1]
+    # The runtime now loads a single prebuilt size variant and applies any
+    # remaining scale adjustment at render time. Keep the asset pipeline in
+    # lockstep so rebuilt caches only contain scale_100.
+    return [1.0]
 
 
 def _configure_logger() -> logging.Logger:
@@ -291,7 +293,8 @@ class AssetTool:
         self.executor = ProcessPoolExecutor(max_workers=self.max_workers)
 
     def get_normalized_steps_for_asset(self, asset_name):
-        # Manifest-driven scaling profiles are disabled; always use fixed variants.
+        # Manifest-driven scaling profiles are disabled; always use the single
+        # runtime variant.
         return normalize_variant_steps([])
 
     def load_manifest(self) -> Dict:
