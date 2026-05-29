@@ -1,4 +1,5 @@
-﻿#include "Bomb_controller.hpp"
+#include "Bomb_controller.hpp"
+#include "animation_update/custom_controllers/controller_path_utils.hpp"
 #include "asset/Asset.hpp"
 #include "core/AssetsManager.hpp"
 
@@ -28,6 +29,6 @@ void BombController::update(const Input&) {
         }
     }
     else if (self_->needs_target) {
-        self_->anim_->auto_move(player);
+        self_->anim_->auto_move_to(controller_paths::engagement_point(self_, player, 28, 18, 48));
     }
 }

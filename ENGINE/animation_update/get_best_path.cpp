@@ -149,14 +149,15 @@ struct SmallestStride {
 }
 
 Plan GetBestPath::operator()(const Asset& self,
-                             const std::vector<SDL_Point>& sanitized_checkpoints,
+                             const std::vector<axis::WorldPos>& sanitized_checkpoints,
                              int visited_thresh_px,
                              const vibble::grid::Grid& grid) const {
     Plan plan;
     plan.sanitized_checkpoints = sanitized_checkpoints;
 
     SDL_Point cursor = self.pos;
-    plan.final_dest  = cursor;
+    int cursor_y = 0;
+    plan.final_dest  = axis::from_xz(cursor, cursor_y);
 
     if (!self.info) {
         return plan;
@@ -185,7 +186,8 @@ Plan GetBestPath::operator()(const Asset& self,
     }
 
     bool aborted = false;
-    for (const SDL_Point& checkpoint : sanitized_checkpoints) {
+    for (const axis::WorldPos& checkpoint_world : sanitized_checkpoints) {
+        SDL_Point checkpoint = axis::project_xz(checkpoint_world);
         if (visited_sq > 0 && animation_update::detail::distance_sq(cursor, checkpoint) <= visited_sq) {
             continue;
         }
@@ -269,7 +271,8 @@ Plan GetBestPath::operator()(const Asset& self,
                     if (fallback_dist_sq < current_dist_sq) {
                         plan.strides.push_back(Stride{ min_stride.anim_id, 1, min_stride.path_index });
                         cursor = fallback_next;
-                        plan.final_dest = cursor;
+                        cursor_y = checkpoint_world.y;
+                        plan.final_dest = axis::from_xz(cursor, cursor_y);
                     } else {
                         aborted = true;
                         break;
@@ -281,7 +284,8 @@ Plan GetBestPath::operator()(const Asset& self,
             } else {
                 plan.strides.push_back(Stride{ best.animation_id, best.frames, best.path_index });
                 cursor = best.end_position;
-                plan.final_dest = cursor;
+                cursor_y = checkpoint_world.y;
+                plan.final_dest = axis::from_xz(cursor, cursor_y);
             }
 
             if (++safeguard > 256) {

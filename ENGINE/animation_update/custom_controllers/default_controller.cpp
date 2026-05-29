@@ -1,4 +1,4 @@
-﻿#include "default_controller.hpp"
+#include "default_controller.hpp"
 #include "asset/Asset.hpp"
 #include "asset/animation.hpp"
 #include "asset/asset_info.hpp"
@@ -22,7 +22,7 @@ void DefaultController::update(const Input& ) {
     }
 
     if (self_->current_animation != default_anim || self_->current_frame == nullptr) {
-        self_->anim_->move(SDL_Point{ 0, 0 }, default_anim);
+        self_->anim_->move(axis::WorldPos{}, default_anim);
         return;
     }
 

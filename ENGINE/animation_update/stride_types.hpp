@@ -6,6 +6,28 @@
 
 #include <SDL.h>
 
+namespace axis {
+
+struct WorldPos {
+    int x = 0;
+    int y = 0;
+    int z = 0;
+};
+
+inline WorldPos make_world_pos(int x, int y, int z) {
+    return WorldPos{ x, y, z };
+}
+
+inline SDL_Point project_xz(WorldPos pos) {
+    return SDL_Point{ pos.x, pos.z };
+}
+
+inline WorldPos from_xz(SDL_Point point, int world_y = 0) {
+    return WorldPos{ point.x, world_y, point.y };
+}
+
+} // namespace axis
+
 struct Stride {
     std::string animation_id;
     int         frames = 0;
@@ -13,9 +35,9 @@ struct Stride {
 };
 
 struct Plan {
-    std::vector<SDL_Point> sanitized_checkpoints;
+    std::vector<axis::WorldPos> sanitized_checkpoints;
     std::vector<Stride>    strides;
-    SDL_Point              final_dest{0, 0};
-    SDL_Point              world_start{0, 0};
+    axis::WorldPos         final_dest{};
+    axis::WorldPos         world_start{};
     bool                   override_non_locked = true;
 };

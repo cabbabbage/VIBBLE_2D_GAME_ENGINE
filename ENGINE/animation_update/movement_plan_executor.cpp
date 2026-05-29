@@ -19,7 +19,7 @@ bool MovementPlanExecutor::tick(AnimationRuntime& up, Plan& plan,
         if (self && up.planner_iface_) {
             const int visited_thresh = up.planner_iface_->visit_threshold_px();
             const int visited_thresh_squared = visited_thresh * visited_thresh;
-            const int dist_sq = (self->pos.x - plan.final_dest.x) * (self->pos.x - plan.final_dest.x) + (self->pos.y - plan.final_dest.y) * (self->pos.y - plan.final_dest.y);
+            const int dist_sq = (self->pos.x - plan.final_dest.x) * (self->pos.x - plan.final_dest.x) + (self->pos.y - plan.final_dest.z) * (self->pos.y - plan.final_dest.z);
             if (dist_sq <= visited_thresh_squared) {
                 self->target_reached = true;
             }
@@ -37,7 +37,7 @@ bool MovementPlanExecutor::tick(AnimationRuntime& up, Plan& plan,
     auto abort_plan = [&]() {
         plan.strides.clear();
         plan.sanitized_checkpoints.clear();
-        plan.final_dest = self->pos;
+        plan.final_dest = axis::from_xz(self->pos, plan.final_dest.y);
         stride_index    = 0;
         stride_frame_counter = 0;
         up.switch_to(animation_update::detail::kDefaultAnimation, 0);
@@ -104,10 +104,7 @@ bool MovementPlanExecutor::tick(AnimationRuntime& up, Plan& plan,
     }
 
     if (delta.x != 0 || delta.y != 0) {
-        self->pos = to;
-        if (!frame || frame->z_resort) {
-            up.refresh_z_index();
-        }
+        up.apply_resolved_world_position(axis::from_xz(to, plan.final_dest.y), !frame || frame->z_resort);
         up.mark_progress_toward_checkpoints();
     }
 

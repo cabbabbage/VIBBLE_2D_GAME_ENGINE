@@ -1,4 +1,4 @@
-﻿#include "Vibble_controller.hpp"
+#include "Vibble_controller.hpp"
 
 #include "animation_update/animation_update.hpp"
 #include "asset/Asset.hpp"
@@ -32,7 +32,7 @@ void VibbleController::movement(const Input& input) {
     if (raw_x == 0 && raw_y == 0) {
         subpixel_x_ = 0.0f;
         subpixel_y_ = 0.0f;
-        player_->anim_->move(SDL_Point{ 0, 0 }, animation_update::detail::kDefaultAnimation);
+        player_->anim_->move(axis::WorldPos{}, animation_update::detail::kDefaultAnimation);
         return;
     }
 
@@ -82,7 +82,7 @@ void VibbleController::movement(const Input& input) {
         }
     }
 
-    player_->anim_->move(SDL_Point{ dx_, dy_ }, animation_id);
+    player_->anim_->move(axis::WorldPos{ dx_, 0, dy_ }, animation_id);
 
 }
 

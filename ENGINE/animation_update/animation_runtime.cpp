@@ -1,4 +1,4 @@
-﻿#include "animation_runtime.hpp"
+#include "animation_runtime.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -162,18 +162,18 @@ void AnimationRuntime::apply_pending_move() {
     const auto req = planner_iface_->consume_move_request();
     const int  resolution = effective_grid_resolution(std::nullopt);
     const SDL_Point from{ self_->pos.x, self_->pos.y };
-    SDL_Point world_delta = convert_delta_to_world(req.delta, resolution);
-    const SDL_Point to{ from.x + world_delta.x, from.y + world_delta.y };
+    axis::WorldPos world_delta = convert_delta_to_world(req.delta, resolution);
+    const SDL_Point to{ from.x + world_delta.x, from.y + world_delta.z };
 
     SDL_Point final_position = from;
-    if (world_delta.x != 0 || world_delta.y != 0) {
+    if (world_delta.x != 0 || world_delta.z != 0) {
         if (!path_blocked(from, to, self_, nullptr)) {
             final_position = to;
         } else {
-            const int steps = std::max(std::abs(world_delta.x), std::abs(world_delta.y));
+            const int steps = std::max(std::abs(world_delta.x), std::abs(world_delta.z));
             if (steps > 0) {
                 const double step_x = static_cast<double>(world_delta.x) / static_cast<double>(steps);
-                const double step_y = static_cast<double>(world_delta.y) / static_cast<double>(steps);
+                const double step_y = static_cast<double>(world_delta.z) / static_cast<double>(steps);
                 double       accum_x = static_cast<double>(from.x);
                 double       accum_y = static_cast<double>(from.y);
                 SDL_Point    current = from;
@@ -191,17 +191,14 @@ void AnimationRuntime::apply_pending_move() {
     }
 
     if (final_position.x != self_->pos.x || final_position.y != self_->pos.y) {
-        self_->pos = final_position;
-        if (req.resort_z) {
-            refresh_z_index();
-        }
+        apply_resolved_world_position(axis::from_xz(final_position, req.delta.y), req.resort_z);
         suppress_root_motion_frames_ = std::max(2, suppress_root_motion_frames_);
         if (planner_iface_) {
             planner_iface_->clear_movement_plan();
         }
     }
 
-    planner_iface_->final_dest = self_->pos;
+    planner_iface_->final_dest = axis::from_xz(self_->pos, req.delta.y);
 
     const std::string resolved = resolve_animation(*self_, req.animation_id);
     if (self_->current_animation != resolved) {
@@ -1140,7 +1137,8 @@ void AnimationRuntime::mark_progress_toward_checkpoints() {
     const int visited_thresh = planner_iface_->visited_thresh_;
     const int visited_sq     = visited_thresh * visited_thresh;
     while (next_checkpoint_index_ < planner_iface_->plan_.sanitized_checkpoints.size()) {
-        const SDL_Point target  = planner_iface_->plan_.sanitized_checkpoints[next_checkpoint_index_];
+        const axis::WorldPos target_world = planner_iface_->plan_.sanitized_checkpoints[next_checkpoint_index_];
+        const SDL_Point target = axis::project_xz(target_world);
         const int       dist_sq = animation_update::detail::distance_sq(self_->pos, target);
         bool reached = false;
         if (visited_thresh == 0) {
@@ -1160,7 +1158,8 @@ bool AnimationRuntime::adjust_next_checkpoint(const std::vector<const Asset*>& b
         return false;
     }
     mark_progress_toward_checkpoints();
-    SDL_Point target = (next_checkpoint_index_ < planner_iface_->plan_.sanitized_checkpoints.size()) ? planner_iface_->plan_.sanitized_checkpoints[next_checkpoint_index_] : planner_iface_->final_dest;
+    axis::WorldPos target_world = (next_checkpoint_index_ < planner_iface_->plan_.sanitized_checkpoints.size()) ? planner_iface_->plan_.sanitized_checkpoints[next_checkpoint_index_] : planner_iface_->final_dest;
+    SDL_Point target = axis::project_xz(target_world);
     SDL_Point bottom_target = animation_update::detail::bottom_middle_for(*self_, target);
     SDL_Point push{0, 0};
     std::vector<const Asset*> influencing_neighbors;
@@ -1223,14 +1222,14 @@ bool AnimationRuntime::adjust_next_checkpoint(const std::vector<const Asset*>& b
         add_direction(directions, SDL_Point{ primary.y, -primary.x });
         add_direction(directions, SDL_Point{ -primary.y, primary.x });
     }
-    std::vector<SDL_Point> tail;
+    std::vector<axis::WorldPos> tail;
     for (std::size_t i = next_checkpoint_index_ + 1; i < planner_iface_->plan_.sanitized_checkpoints.size(); ++i) {
         tail.push_back(planner_iface_->plan_.sanitized_checkpoints[i]);
     }
-    if (tail.empty() || !same_point(tail.back(), planner_iface_->final_dest)) {
+    if (tail.empty() || !same_point(axis::project_xz(tail.back()), axis::project_xz(planner_iface_->final_dest))) {
         tail.push_back(planner_iface_->final_dest);
     }
-    auto try_plan_with_targets = [&](const std::vector<SDL_Point>& targets) {
+    auto try_plan_with_targets = [&](const std::vector<axis::WorldPos>& targets) {
         if (targets.empty()) return false;
         auto sanitized = sanitizer_.sanitize(*self_, targets, planner_iface_->visited_thresh_);
         if (sanitized.empty()) return false;
@@ -1254,10 +1253,10 @@ bool AnimationRuntime::adjust_next_checkpoint(const std::vector<const Asset*>& b
             SDL_Point bottom_next = animation_update::detail::bottom_middle_for(*self_, next);
             if (point_in_impassable(bottom_next, self_)) break;
             candidate = next;
-            std::vector<SDL_Point> attempt_targets;
-            attempt_targets.push_back(candidate);
+            std::vector<axis::WorldPos> attempt_targets;
+            attempt_targets.push_back(axis::from_xz(candidate, target_world.y));
             auto it_begin = tail.begin();
-            if (!tail.empty() && same_point(tail.front(), candidate)) {
+            if (!tail.empty() && same_point(axis::project_xz(tail.front()), candidate)) {
                 ++it_begin;
             }
             attempt_targets.insert(attempt_targets.end(), it_begin, tail.end());
@@ -1290,15 +1289,15 @@ bool AnimationRuntime::replan_to_destination() {
         return false;
     }
     const int visited_sq = planner_iface_->visited_thresh_ * planner_iface_->visited_thresh_;
-    if (visited_sq > 0 && animation_update::detail::distance_sq(self_->pos, planner_iface_->final_dest) <= visited_sq) {
+    if (visited_sq > 0 && animation_update::detail::distance_sq(self_->pos, axis::project_xz(planner_iface_->final_dest)) <= visited_sq) {
         return false;
     }
     mark_progress_toward_checkpoints();
-    std::vector<SDL_Point> checkpoints;
+    std::vector<axis::WorldPos> checkpoints;
     for (std::size_t i = next_checkpoint_index_; i < planner_iface_->plan_.sanitized_checkpoints.size(); ++i) {
         checkpoints.push_back(planner_iface_->plan_.sanitized_checkpoints[i]);
     }
-    if (checkpoints.empty() || !same_point(checkpoints.back(), planner_iface_->final_dest)) {
+    if (checkpoints.empty() || !same_point(axis::project_xz(checkpoints.back()), axis::project_xz(planner_iface_->final_dest))) {
         checkpoints.push_back(planner_iface_->final_dest);
     }
     auto sanitized = sanitizer_.sanitize(*self_, checkpoints, planner_iface_->visited_thresh_);
@@ -1330,9 +1329,23 @@ int AnimationRuntime::effective_grid_resolution(std::optional<int> override_reso
     return 0;
 }
 
-SDL_Point AnimationRuntime::convert_delta_to_world(SDL_Point delta, int resolution) const {
+axis::WorldPos AnimationRuntime::convert_delta_to_world(axis::WorldPos delta, int resolution) const {
     (void)resolution;
     return delta;
+}
+
+void AnimationRuntime::apply_resolved_world_position(axis::WorldPos destination, bool resort_z) {
+    if (!self_) {
+        return;
+    }
+    const SDL_Point projected = axis::project_xz(destination);
+    if (self_->pos.x == projected.x && self_->pos.y == projected.y) {
+        return;
+    }
+    self_->pos = projected;
+    if (resort_z) {
+        refresh_z_index();
+    }
 }
 
 void AnimationRuntime::refresh_z_index() {

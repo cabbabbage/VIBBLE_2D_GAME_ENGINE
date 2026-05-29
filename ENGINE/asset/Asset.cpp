@@ -468,7 +468,7 @@ void Asset::update() {
             if (def == info->animations.end()) def = info->animations.begin();
             if (def != info->animations.end()) {
                 if (anim_) {
-                    anim_->move(SDL_Point{ 0, 0 }, def->first);
+                    anim_->move(axis::WorldPos{}, def->first);
                 } else {
                     current_animation = def->first;
                     Animation& anim   = def->second;

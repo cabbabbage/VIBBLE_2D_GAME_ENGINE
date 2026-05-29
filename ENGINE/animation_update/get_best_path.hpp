@@ -11,5 +11,5 @@ class Asset;
 
 class GetBestPath {
 public:
-    Plan operator()(const Asset& self, const std::vector<SDL_Point>& sanitized_checkpoints, int visited_thresh_px, const vibble::grid::Grid& grid) const;
+    Plan operator()(const Asset& self, const std::vector<axis::WorldPos>& sanitized_checkpoints, int visited_thresh_px, const vibble::grid::Grid& grid) const;
 };
