@@ -91,14 +91,15 @@ struct ScalingLogic {
         bool has_custom_steps() const { return !steps.empty(); }
 };
 
-    static constexpr ::std::size_t kMaxVariantCount     = 5;
+    static constexpr ::std::size_t kMaxVariantCount     = 1;
     static constexpr ::std::size_t kDefaultVariantCount = kMaxVariantCount;
     static inline const ScaleSteps& DefaultScaleSteps() {
-        static const ScaleSteps kDefaultSteps = {1.00f, 0.75f, 0.50f, 0.25f, 0.10f};
+        static const ScaleSteps kDefaultSteps = {1.00f};
         return kDefaultSteps;
     }
 
     static inline void NormalizeVariantSteps(ScaleSteps& steps) {
+        steps.clear();
         const auto& defaults = DefaultScaleSteps();
         steps.assign(defaults.begin(), defaults.end());
     }
