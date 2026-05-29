@@ -354,14 +354,37 @@ class AssetTool:
                 indices.append(idx)
         return indices
 
+    def _cache_sequence_complete(
+        self,
+        anim_cache_root: Path,
+        scale_pcts: List[int],
+        frame_count: int,
+        mask_enabled: bool,
+    ) -> bool:
+        if frame_count <= 0 or not scale_pcts:
+            return False
+
+        required_layers = ["normal", "foreground", "background"]
+        if mask_enabled:
+            required_layers.append("mask")
+
+        for scale_pct in scale_pcts:
+            scale_dir = anim_cache_root / f"scale_{scale_pct}"
+            for layer in required_layers:
+                layer_dir = scale_dir / layer
+                for frame_idx in range(frame_count):
+                    if not (layer_dir / f"{frame_idx}.png").is_file():
+                        return False
+        return True
+
     def generate_animation_cache_for_asset(self, asset_name: str, asset_meta: Dict) -> bool:
         """Regenerate animations for a single asset. Returns True if any work was done."""
         start_time = time.time()
         asset_src_dir = self._resolve_asset_src_dir(asset_name, asset_meta)
 
         if not asset_src_dir.exists():
-            LOGGER.error(
-                "Source directory for asset '%s' does not exist: %s",
+            LOGGER.warning(
+                "Source directory for asset '%s' does not exist: %s; cache generation skipped for this asset.",
                 asset_name,
                 asset_src_dir,
             )
@@ -411,20 +434,6 @@ class AssetTool:
             existing_len = len(anim_meta_root.get("frames", [])) if isinstance(anim_meta_root, dict) else 0
             frames_meta = self._ensure_frame_metadata(anim_meta_root, max(len(frame_paths), existing_len))
             flagged_frames = self._frames_requiring_rebuild(frames_meta)
-            if not flagged_frames:
-                continue
-
-            try:
-                with Image.open(frame_paths[0]) as img:
-                    orig_w, orig_h = img.size
-            except Exception as exc:
-                LOGGER.warning(
-                    "Failed to read first frame for asset '%s' animation '%s': %s",
-                    asset_name,
-                    anim_id,
-                    exc,
-                )
-                continue
 
             speed_multiplier = read_speed_multiplier(anim_meta_root)
             crop_requested = read_crop_frames(anim_meta_root)
@@ -439,6 +448,34 @@ class AssetTool:
                 )
                 continue
 
+            anim_cache_root = asset_cache_root / anim_id
+            cache_complete = self._cache_sequence_complete(
+                anim_cache_root,
+                scale_pcts,
+                output_frame_count,
+                mask_enabled,
+            )
+            if not flagged_frames and cache_complete:
+                continue
+            if not cache_complete:
+                LOGGER.info(
+                    "Cache for asset '%s' animation '%s' is missing or incomplete; rebuilding.",
+                    asset_name,
+                    anim_id,
+                )
+
+            try:
+                with Image.open(frame_paths[0]) as img:
+                    orig_w, orig_h = img.size
+            except Exception as exc:
+                LOGGER.warning(
+                    "Failed to read first frame for asset '%s' animation '%s': %s",
+                    asset_name,
+                    anim_id,
+                    exc,
+                )
+                continue
+
             crop_bounds = compute_crop_bounds(frame_paths) if crop_requested else None
             if crop_requested and crop_bounds is None:
                 LOGGER.warning(
@@ -447,7 +484,6 @@ class AssetTool:
                     anim_id,
                 )
 
-            anim_cache_root = asset_cache_root / anim_id
             if anim_cache_root.exists():
                 shutil.rmtree(anim_cache_root)
 

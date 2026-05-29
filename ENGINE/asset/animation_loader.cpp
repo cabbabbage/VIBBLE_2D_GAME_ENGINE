@@ -898,27 +898,36 @@ void AnimationLoader::load(Animation& animation,
                                 break;
                         }
 
-                        const auto optional_sequence_present = [](const std::string& folder) {
-                                std::error_code ec;
-                                return fs::exists(fs::path(folder) / "0.png", ec) && !ec;
+                        const auto sequence_complete = [frame_count](const std::string& folder) {
+                                if (frame_count <= 0) {
+                                        return false;
+                                }
+                                for (int frame_idx = 0; frame_idx < frame_count; ++frame_idx) {
+                                        std::error_code ec;
+                                        const fs::path frame_path = fs::path(folder) / (std::to_string(frame_idx) + ".png");
+                                        if (!fs::exists(frame_path, ec) || ec) {
+                                                return false;
+                                        }
+                                }
+                                return true;
                         };
 
                         std::vector<SDL_Surface*> fg_loaded;
-                        if (optional_sequence_present(paths.foreground_folder) &&
+                        if (sequence_complete(paths.foreground_folder) &&
                             CacheManager::load_surface_sequence(paths.foreground_folder, frame_count, fg_loaded) &&
                             static_cast<int>(fg_loaded.size()) == frame_count) {
                                 foreground_surfaces[idx] = std::move(fg_loaded);
                         }
 
                         std::vector<SDL_Surface*> bg_loaded;
-                        if (optional_sequence_present(paths.background_folder) &&
+                        if (sequence_complete(paths.background_folder) &&
                             CacheManager::load_surface_sequence(paths.background_folder, frame_count, bg_loaded) &&
                             static_cast<int>(bg_loaded.size()) == frame_count) {
                                 background_surfaces[idx] = std::move(bg_loaded);
                         }
 
                         std::vector<SDL_Surface*> mask_loaded;
-                        if (optional_sequence_present(paths.mask_folder)) {
+                        if (sequence_complete(paths.mask_folder)) {
                                 if (CacheManager::load_surface_sequence(paths.mask_folder, frame_count, mask_loaded) &&
                                     static_cast<int>(mask_loaded.size()) == frame_count) {
                                         mask_surfaces[idx] = std::move(mask_loaded);
@@ -931,7 +940,7 @@ void AnimationLoader::load(Animation& animation,
                         } else if (needs_masks) {
                                 all_surfaces_loaded = false;
                                 std::cout << "[AnimationLoader] " << info.name << "::" << trigger
-                                          << " missing masks for variant " << idx << " at " << paths.mask_folder << "\n";
+                                          << " missing complete mask sequence for variant " << idx << " at " << paths.mask_folder << "\n";
                                 break;
                         }
                 }
